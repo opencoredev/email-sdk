@@ -1,0 +1,3 @@
+{
+  "extends": "@email-sdk/config/tsconfig.base.json"
+}

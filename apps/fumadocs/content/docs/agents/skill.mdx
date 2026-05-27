@@ -1,0 +1,34 @@
+---
+title: Agent skill
+description: Use the repo-local Email SDK skill when agents add or review email integrations.
+icon: Bot
+---
+
+This repo includes an agent skill at:
+
+```txt
+skills/email-sdk/SKILL.md
+```
+
+Use it when an agent wires Email SDK into an app, reviews adapter setup, or updates these docs.
+
+## What it tells agents
+
+- Use `bun` and `bunx`.
+- Keep adapter credentials in environment variables.
+- Import adapters from their own entry points.
+- Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
+- Use fallbacks only when the backup adapter can send the same class of email.
+- Add idempotency keys for externally visible transactional sends.
+- Run a narrow validation before calling the work done.
+
+## Prompt example
+
+```txt
+Use the repo-local Email SDK skill at skills/email-sdk/SKILL.md.
+Wire Resend as the primary adapter and SMTP as fallback.
+Keep secrets in environment variables.
+Add one narrow test around the send path.
+```
+
+The skill is short on purpose. It should guide implementation without turning a small email task into a large framework change.

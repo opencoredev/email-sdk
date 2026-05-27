@@ -1,0 +1,75 @@
+---
+title: Message
+description: Reference for EmailMessage, addresses, attachments, headers, and tags.
+icon: Mail
+---
+
+## `EmailMessage`
+
+```ts
+type EmailMessage = {
+  from: EmailAddress;
+  to: EmailAddress | EmailAddress[];
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: EmailAddress | EmailAddress[];
+  bcc?: EmailAddress | EmailAddress[];
+  replyTo?: EmailAddress | EmailAddress[];
+  headers?: Record<string, string> | EmailHeader[];
+  attachments?: EmailAttachment[];
+  tags?: EmailTag[];
+  metadata?: Record<string, string | number | boolean | null>;
+  idempotencyKey?: string;
+};
+```
+
+Every message must include:
+
+- `from`
+- at least one `to`
+- `subject`
+- `html` or `text`
+
+## Addresses
+
+An address can be a string or an object with a display name.
+
+```ts
+const from = "Acme <hello@acme.com>";
+
+const to = {
+  email: "user@example.com",
+  name: "Ada Lovelace",
+};
+```
+
+## Attachments
+
+```ts
+type EmailAttachment = {
+  filename: string;
+  content?: string | Uint8Array | ArrayBuffer | Blob;
+  contentEncoding?: "raw" | "base64";
+  path?: string;
+  contentType?: string;
+  contentId?: string;
+  disposition?: "attachment" | "inline";
+};
+```
+
+Use `content` for in-memory attachments. String content is treated as raw content and encoded to Base64 for API providers that require it. Use `contentEncoding: "base64"` when the string is already Base64.
+
+Use `path` when you want Email SDK to read a local file before sending. See <a href="/docs/adapters/field-support">field support</a> for adapter-specific attachment support.
+
+## Headers and tags
+
+Headers can be an object or a list:
+
+```ts
+headers: {
+  "X-Order-ID": "ord_123";
+}
+```
+
+Tags are provider-specific. Resend accepts `tags`. Postmark maps the first tag to its `Tag` field.

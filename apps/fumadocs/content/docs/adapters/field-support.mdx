@@ -1,0 +1,104 @@
+---
+title: SDK field support
+description: See which EmailMessage fields Email SDK maps for each adapter.
+icon: Table
+---
+
+Email SDK keeps one message shape, but email APIs do not all expose the same features. This page documents what each Email SDK adapter maps today. Stable adapters either map a field or reject it with a validation error. They should not silently drop message data.
+
+## How to read this page
+
+- `Yes` means the adapter maps that `EmailMessage` field.
+- `No` means the adapter rejects that field before calling the provider.
+- `Values` means Email SDK sends each tag's value to the provider.
+- `First tag` means only the first tag can be represented by that provider API.
+
+## Best fits
+
+| Need                             | Start with                                         |
+| -------------------------------- | -------------------------------------------------- |
+| Most complete API field mapping  | Postmark, SendGrid, Mailgun, Brevo                 |
+| Resend-style DX with attachments | Resend                                             |
+| Cheap or self-managed delivery   | SMTP                                               |
+| Product/event email              | Loops, Plunk                                       |
+| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark |
+| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend    |
+
+## API adapters
+
+These adapters cover most transactional email fields. They are the best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.
+
+| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags      | Attachments |
+| ----------------------- | --- | --- | -------- | ------- | -------- | --------- | ----------- |
+| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes       | Yes         |
+| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | First tag | Yes         |
+| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
+| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
+| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values    | Yes         |
+| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
+| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values    | Yes         |
+| Mailtrap                | Yes | Yes | No       | Yes     | No       | First tag | Yes         |
+
+## Narrow adapters
+
+These adapters are useful, but their public APIs do not match the full `EmailMessage` shape. Email SDK keeps them stable by rejecting fields it cannot represent.
+
+| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments |
+| --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- |
+| SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
+| Loops     | No  | No  | No       | No      | Yes      | No     | No          |
+| Plunk     | No  | No  | No       | No      | Yes      | No     | No          |
+| Scaleway  | Yes | Yes | No       | Yes     | No       | No     | No          |
+| ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         |
+| MailPace  | Yes | Yes | Yes      | No      | No       | No     | No          |
+
+## SMTP transport
+
+SMTP is built in and does not use Nodemailer. It maps address fields and headers directly to the SMTP message, but it does not map provider-only concepts like tags or metadata.
+
+| Adapter | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments |
+| ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- |
+| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          |
+
+## Validation behavior
+
+Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. That keeps production behavior boring: if a field matters, you find out before the provider request.
+
+## Attachment rules
+
+Attachment `content` is treated as raw content by default and encoded to Base64 for API adapters that require Base64.
+
+```ts
+attachments: [
+  {
+    filename: "receipt.txt",
+    content: "Thanks for your order.",
+    contentType: "text/plain",
+  },
+];
+```
+
+If you already have Base64 content, mark it:
+
+```ts
+attachments: [
+  {
+    filename: "receipt.pdf",
+    content: base64Pdf,
+    contentEncoding: "base64",
+    contentType: "application/pdf",
+  },
+];
+```
+
+Adapters that support attachments can also read a local path:
+
+```ts
+attachments: [
+  {
+    filename: "receipt.pdf",
+    path: "./receipt.pdf",
+    contentType: "application/pdf",
+  },
+];
+```

@@ -1,0 +1,26 @@
+---
+title: MailPace
+description: Configure the MailPace send API adapter.
+icon: mailpace
+---
+
+<ProviderBadge adapter="mailpace" />
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { mailpace } from "email-sdk/mailpace";
+
+const email = createEmailClient({
+  adapters: [mailpace({ apiKey: process.env.MAILPACE_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                          |
+| --------- | -------------- | -------- | ---------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | MailPace server token.                         |
+| `baseUrl` | `string`       | No       | Defaults to `https://app.mailpace.com/api/v1`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
+
+MailPace supports CC, BCC, and reply-to. Unsupported fields throw before the API call.

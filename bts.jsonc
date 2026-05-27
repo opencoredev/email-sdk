@@ -1,0 +1,31 @@
+// Better-T-Stack
+//
+// Website: https://www.better-t-stack.dev/
+// Stack Builder: https://www.better-t-stack.dev/new
+// Analytics: https://www.better-t-stack.dev/analytics
+// Showcase: https://www.better-t-stack.dev/showcase
+// Sponsor: https://github.com/sponsors/AmanVarshney01
+//
+// Add new addons with: bun create better-t-stack add
+// This file is safe to delete
+
+{
+  "$schema": "https://r2.better-t-stack.dev/schema.json",
+  "version": "3.30.3",
+  "createdAt": "2026-05-27T19:36:49.133Z",
+  "reproducibleCommand": "bun create better-t-stack@latest email-sdk --frontend none --backend none --runtime none --database none --orm none --api none --auth none --payments none --addons fumadocs oxlint turborepo --examples none --db-setup none --web-deploy none --server-deploy none --no-git --package-manager bun --install",
+  "database": "none",
+  "orm": "none",
+  "backend": "none",
+  "runtime": "none",
+  "frontend": [],
+  "addons": ["fumadocs", "oxlint", "turborepo"],
+  "examples": [],
+  "auth": "none",
+  "payments": "none",
+  "packageManager": "bun",
+  "dbSetup": "none",
+  "api": "none",
+  "webDeploy": "none",
+  "serverDeploy": "none",
+}

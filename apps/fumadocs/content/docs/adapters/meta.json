@@ -1,0 +1,22 @@
+{
+  "title": "Adapters",
+  "pages": [
+    "index",
+    "field-support",
+    "resend",
+    "postmark",
+    "sendgrid",
+    "mailgun",
+    "mailersend",
+    "brevo",
+    "mailchimp",
+    "sparkpost",
+    "loops",
+    "plunk",
+    "mailtrap",
+    "scaleway",
+    "zeptomail",
+    "mailpace",
+    "smtp"
+  ]
+}

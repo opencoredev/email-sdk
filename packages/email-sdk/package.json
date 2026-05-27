@@ -1,0 +1,101 @@
+{
+  "name": "email-sdk",
+  "version": "0.1.0",
+  "description": "A lightweight TypeScript SDK for unified email sending.",
+  "license": "MIT",
+  "bin": {
+    "email-sdk": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./resend": {
+      "types": "./dist/resend.d.ts",
+      "import": "./dist/resend.js"
+    },
+    "./postmark": {
+      "types": "./dist/postmark.d.ts",
+      "import": "./dist/postmark.js"
+    },
+    "./sendgrid": {
+      "types": "./dist/sendgrid.d.ts",
+      "import": "./dist/sendgrid.js"
+    },
+    "./mailgun": {
+      "types": "./dist/mailgun.d.ts",
+      "import": "./dist/mailgun.js"
+    },
+    "./mailersend": {
+      "types": "./dist/mailersend.d.ts",
+      "import": "./dist/mailersend.js"
+    },
+    "./brevo": {
+      "types": "./dist/brevo.d.ts",
+      "import": "./dist/brevo.js"
+    },
+    "./mailchimp": {
+      "types": "./dist/mailchimp.d.ts",
+      "import": "./dist/mailchimp.js"
+    },
+    "./sparkpost": {
+      "types": "./dist/sparkpost.d.ts",
+      "import": "./dist/sparkpost.js"
+    },
+    "./loops": {
+      "types": "./dist/loops.d.ts",
+      "import": "./dist/loops.js"
+    },
+    "./plunk": {
+      "types": "./dist/plunk.d.ts",
+      "import": "./dist/plunk.js"
+    },
+    "./mailtrap": {
+      "types": "./dist/mailtrap.d.ts",
+      "import": "./dist/mailtrap.js"
+    },
+    "./scaleway": {
+      "types": "./dist/scaleway.d.ts",
+      "import": "./dist/scaleway.js"
+    },
+    "./zeptomail": {
+      "types": "./dist/zeptomail.d.ts",
+      "import": "./dist/zeptomail.js"
+    },
+    "./mailpace": {
+      "types": "./dist/mailpace.d.ts",
+      "import": "./dist/mailpace.js"
+    },
+    "./smtp": {
+      "types": "./dist/smtp.d.ts",
+      "import": "./dist/smtp.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./agent-tools": {
+      "types": "./dist/agent-tools.d.ts",
+      "import": "./dist/agent-tools.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.4"
+  },
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=20.0.0"
+  }
+}

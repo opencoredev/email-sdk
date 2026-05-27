@@ -1,0 +1,48 @@
+---
+title: Resend
+description: Configure the fetch-based Resend adapter.
+icon: resend
+---
+
+The Resend adapter calls the Resend Email API directly. It does not add a runtime dependency.
+
+<ProviderBadge adapter="resend" />
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { resend } from "email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Welcome",
+    html: "<p>Your workspace is ready.</p>",
+    tags: [{ name: "type", value: "welcome" }],
+  },
+  {
+    idempotencyKey: "welcome:user_123",
+  },
+);
+```
+
+## Options
+
+| Option    | Type                     | Required | Notes                                 |
+| --------- | ------------------------ | -------- | ------------------------------------- |
+| `apiKey`  | `string`                 | Yes      | Resend API key.                       |
+| `baseUrl` | `string`                 | No       | Defaults to `https://api.resend.com`. |
+| `fetch`   | `typeof fetch`           | No       | Useful for tests or custom runtimes.  |
+| `headers` | `Record<string, string>` | No       | Extra request headers.                |
+
+## Response
+
+The adapter returns the Resend `id` as `id` and `messageId`.

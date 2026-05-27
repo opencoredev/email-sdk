@@ -1,0 +1,32 @@
+---
+title: Mailgun
+description: Configure the Mailgun Messages API adapter.
+icon: mailgun
+---
+
+<ProviderBadge adapter="mailgun" />
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { mailgun } from "email-sdk/mailgun";
+
+const email = createEmailClient({
+  adapters: [
+    mailgun({
+      apiKey: process.env.MAILGUN_API_KEY!,
+      domain: process.env.MAILGUN_DOMAIN!,
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                                                                              |
+| --------- | -------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Mailgun API key.                                                                                   |
+| `domain`  | `string`       | Yes      | Sending domain.                                                                                    |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.mailgun.net`. Use the EU API base URL if your domain is in the EU region. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.                                                               |
+
+Mailgun sends attachments as multipart form data. See <a href="/docs/adapters/field-support">field support</a> for the full mapping.

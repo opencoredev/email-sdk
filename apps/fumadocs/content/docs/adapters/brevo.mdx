@@ -1,0 +1,26 @@
+---
+title: Brevo
+description: Configure the Brevo transactional email adapter.
+icon: brevo
+---
+
+<ProviderBadge adapter="brevo" />
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { brevo } from "email-sdk/brevo";
+
+const email = createEmailClient({
+  adapters: [brevo({ apiKey: process.env.BREVO_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                |
+| --------- | -------------- | -------- | ------------------------------------ |
+| `apiKey`  | `string`       | Yes      | Brevo API key.                       |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.brevo.com`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes. |
+
+See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
