@@ -179,7 +179,7 @@ function signAwsRequest(input: {
   const canonicalRequest = [
     input.method,
     input.url.pathname,
-    input.url.searchParams.toString(),
+    canonicalQueryString(input.url.searchParams),
     canonicalHeaders.map(([name, value]) => `${name}:${value}\n`).join(""),
     signedHeaders,
     payloadHash,
@@ -209,6 +209,23 @@ function toAmzDate(date: Date) {
 
 function sha256Hex(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function canonicalQueryString(searchParams: URLSearchParams) {
+  return [...searchParams.entries()]
+    .map(([key, value]) => [awsEncode(key), awsEncode(value)] as const)
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+      const keyOrder = leftKey.localeCompare(rightKey);
+      return keyOrder === 0 ? leftValue.localeCompare(rightValue) : keyOrder;
+    })
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+}
+
+function awsEncode(value: string) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 function hmac(key: string | Buffer, value: string) {
