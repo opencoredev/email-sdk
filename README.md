@@ -11,12 +11,12 @@ A lightweight TypeScript SDK for unified email sending. One clean API, swappable
 ## Quickstart
 
 ```bash
-bun add email-sdk
+bun add @opencoredev/email-sdk
 ```
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -42,6 +42,10 @@ bun run check-types
 bun test
 bun run build
 ```
+
+## Releases
+
+Releases use Changesets, Depot-backed GitHub Actions runners, npm, and the repo-local Homebrew formula. See [docs/release/release-process.md](docs/release/release-process.md).
 
 Do not run the docs dev server unless you actually want a local preview:
 
