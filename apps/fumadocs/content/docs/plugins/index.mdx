@@ -1,0 +1,88 @@
+---
+title: Plugins
+description: Built-in plugins and extension points for Email SDK.
+icon: PackagePlus
+---
+
+Plugins package reusable Email SDK behavior. Use them when a send path needs shared defaults, redacted observability, test capture, adapter registration, or a small typed helper on the returned client.
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { defaultsPlugin } from "email-sdk/plugins/defaults";
+import { observabilityPlugin } from "email-sdk/plugins/observability";
+import { resend } from "email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      headers: { "X-App": "billing" },
+      sendMetadata: { service: "billing" },
+    }),
+    observabilityPlugin({
+      log(event) {
+        console.log(event.type, event.provider);
+      },
+    }),
+  ],
+});
+```
+
+## Built-in plugins
+
+| Plugin        | Entry point                       | What it is for                                                                                 |
+| ------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Defaults      | `email-sdk/plugins/defaults`      | Add headers, tags, metadata, reply-to, or idempotency defaults before validation.              |
+| Observability | `email-sdk/plugins/observability` | Emit redacted log, metric, or trace events for sent, retry, and error paths.                   |
+| Capture       | `email-sdk/plugins/capture`       | Record attempted sends, responses, retries, and errors in tests without replacing the adapter. |
+
+## Plugin jobs
+
+- Register one or more adapters.
+- Run `beforeSend` middleware before message validation.
+- Run `afterSend` and `onError` middleware around provider attempts.
+- Compose hooks before user-level `hooks`.
+- Add small typed client extensions such as `email.capture`.
+
+## What plugins do not do
+
+Email SDK plugins do not add databases, migrations, HTTP endpoints, route middleware, rate limits, or server/client plugin pairs. Those are framework-level concerns. Email SDK keeps plugins focused on email sending and local developer ergonomics.
+
+## Order
+
+Plugin order is deterministic.
+
+1. Direct `adapters` register first.
+2. Plugins run in array order.
+3. Plugin adapters register in plugin order.
+4. Duplicate plugin IDs throw.
+5. Duplicate adapter names throw.
+6. `beforeSend` middleware runs before message validation.
+7. Plugin hooks run before user `hooks`.
+
+Built-in plugins use stable IDs like `defaults`, `observability`, and `capture`. Pass a custom `id` when you need more than one instance of the same plugin type. If a plugin extends the client, also give each instance a distinct extension key. For example, `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })` exposes `email.auditCapture`.
+
+## Choose a page
+
+<Cards>
+  <Card
+    title="Defaults"
+    href="/docs/plugins/defaults"
+    description="Apply shared message and send-option defaults."
+  />
+  <Card
+    title="Observability"
+    href="/docs/plugins/observability"
+    description="Send redacted email events to logs, metrics, or traces."
+  />
+  <Card
+    title="Capture"
+    href="/docs/plugins/capture"
+    description="Record email behavior in tests."
+  />
+  <Card
+    title="Writing plugins"
+    href="/docs/plugins/writing-plugins"
+    description="Create adapter plugins, policy plugins, and community packages."
+  />
+</Cards>

@@ -1,0 +1,145 @@
+---
+title: Writing plugins
+description: Create adapter plugins, policy plugins, and community plugin packages.
+icon: Blocks
+---
+
+Write a plugin when behavior should be reused across clients or apps. A plugin can be adapter-only, middleware-only, hook-only, or a combination.
+
+## Adapter plugin
+
+Adapter plugins are the publishing shape for community providers.
+
+```ts
+import type { EmailPlugin } from "email-sdk";
+
+export function communityMailProvider(options: { apiKey: string }): EmailPlugin {
+  return {
+    id: "community-mail",
+    adapters: [
+      {
+        name: "community-mail",
+        async send(message, context) {
+          const response = await fetch("https://api.example.com/send", {
+            method: "POST",
+            signal: context.signal,
+            headers: {
+              Authorization: `Bearer ${options.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(message),
+          });
+
+          const body = await response.json();
+
+          return {
+            provider: "community-mail",
+            id: body.id,
+            messageId: body.id,
+            raw: body,
+          };
+        },
+      },
+    ],
+  };
+}
+```
+
+Use it like any other plugin:
+
+```ts
+const email = createEmailClient({
+  plugins: [communityMailProvider({ apiKey: process.env.COMMUNITY_MAIL_API_KEY! })],
+});
+```
+
+## Programmatic adapter registration
+
+Adapter factories may return adapters, call `ctx.addAdapter`, or both with the same adapter object.
+
+```ts
+export function multiRegionProvider(options: RegionOptions): EmailPlugin {
+  return {
+    id: "multi-region-mail",
+    adapters(ctx) {
+      const primary = createRegionAdapter("mail-us", options.us);
+      const backup = createRegionAdapter("mail-eu", options.eu);
+
+      ctx.addAdapter(primary);
+      ctx.addAdapter(backup);
+
+      return [];
+    },
+  };
+}
+```
+
+Duplicate adapter names still throw. That protects application routing from hidden collisions.
+
+## Policy plugin
+
+Policy plugins usually use `beforeSend` middleware because thrown errors should block the send.
+
+```ts
+import type { EmailPlugin } from "email-sdk";
+
+export function requireMetadataPlugin(key: string): EmailPlugin {
+  return {
+    id: `require-metadata:${key}`,
+    middleware: [
+      {
+        beforeSend(event) {
+          if (!event.options?.metadata?.[key]) {
+            throw new Error(`Missing email metadata: ${key}`);
+          }
+        },
+      },
+    ],
+  };
+}
+```
+
+## Client extension plugin
+
+Use `extendClient` for small helpers that belong next to the email client.
+
+```ts
+export function templatesPlugin(): EmailPlugin<{
+  sendWelcome(to: string): Promise<void>;
+}> {
+  return {
+    id: "templates",
+    extendClient(ctx) {
+      return {
+        async sendWelcome(to) {
+          await ctx.adapters.get(ctx.defaultAdapter)?.send(
+            {
+              from: "hello@example.com",
+              to,
+              subject: "Welcome",
+              text: "Your account is ready.",
+            },
+            { attempt: 1 },
+          );
+        },
+      };
+    },
+  };
+}
+```
+
+Keep extensions small. If a helper grows into a templating system, queue, or campaign workflow, put that logic in your app and call Email SDK at the boundary.
+
+## Community adapter checklist
+
+- Use a stable plugin `id` and adapter `name`.
+- Keep credentials in plugin options.
+- Support `context.signal` when making network requests.
+- Pass `context.idempotencyKey` when the provider supports idempotency.
+- Return normalized `id`, `messageId`, `accepted`, or `rejected` fields when available.
+- Put provider responses in `raw` when useful for debugging.
+- Map every supported `EmailMessage` field.
+- Reject unsupported fields clearly before calling the provider.
+- Test with injected `fetch` or a local test server.
+
+Community adapters can also export a plain provider factory for direct use with `adapters`. The plugin shape is best when the package should feel like a one-call extension point.

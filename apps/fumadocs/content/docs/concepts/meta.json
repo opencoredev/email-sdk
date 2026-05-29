@@ -1,4 +1,4 @@
 {
   "title": "Concepts",
-  "pages": ["adapter-model", "plugin-system", "fallbacks-and-retries", "hooks"]
+  "pages": ["adapter-model", "fallbacks-and-retries", "hooks"]
 }

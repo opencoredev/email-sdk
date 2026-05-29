@@ -1,0 +1,83 @@
+---
+title: Observability plugin
+description: Emit redacted email events to logs, metrics, and traces.
+icon: Activity
+---
+
+The observability plugin reports email lifecycle events without exposing recipient addresses or message body content by default.
+
+```ts
+import { observabilityPlugin } from "email-sdk/plugins/observability";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    observabilityPlugin({
+      log(event) {
+        console.log(event.type, event.provider, event.message.subject);
+      },
+      metric(event) {
+        statsd.increment(event.type, {
+          provider: event.provider,
+        });
+      },
+    }),
+  ],
+});
+```
+
+## Events
+
+| Event         | When it fires                                   | Includes                                                                   |
+| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| `email.sent`  | After a provider returns a normalized response. | Provider, attempt, redacted message, response IDs, metadata.               |
+| `email.retry` | Before a retry delay.                           | Provider, attempt, next attempt, delay, error, redacted message, metadata. |
+| `email.error` | After a provider attempt fails.                 | Provider, attempt, error, redacted message, metadata.                      |
+
+## Default redaction
+
+The default redacted message keeps operational shape without raw PII.
+
+```ts
+type RedactedEmailMessage = {
+  subject: string;
+  toCount: number;
+  ccCount: number;
+  bccCount: number;
+  hasHtml: boolean;
+  hasText: boolean;
+  attachmentCount: number;
+  tagNames: string[];
+  metadataKeys: string[];
+};
+```
+
+Recipients, body content, attachment content, and metadata values are not included by default.
+
+## Custom redaction
+
+Use `redactMessage` when your logging policy needs a different shape.
+
+```ts
+observabilityPlugin({
+  redactMessage(message) {
+    return {
+      subject: message.subject,
+      toCount: Array.isArray(message.to) ? message.to.length : 1,
+      template: message.metadata?.template ?? "unknown",
+      hasAttachments: Boolean(message.attachments?.length),
+    };
+  },
+  trace(event) {
+    tracer.event("email", event);
+  },
+});
+```
+
+Keep raw recipient addresses, body HTML, body text, tokens, and provider secrets out of logs unless your application has a specific approved reason to store them.
+
+## Callback behavior
+
+`log`, `metric`, and `trace` callbacks can be sync or async. They run as observability callbacks, so thrown errors are swallowed and do not mask provider behavior. That matches the normal hook behavior in Email SDK.
+
+Use `beforeSend` middleware in a custom plugin when you need policy enforcement that can block a send.

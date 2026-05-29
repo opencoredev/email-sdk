@@ -1,0 +1,93 @@
+---
+title: Defaults plugin
+description: Add shared message and send-option defaults before validation.
+icon: SlidersHorizontal
+---
+
+The defaults plugin fills common fields before Email SDK validates a message. It is useful for app headers, route tags, metadata, reply-to addresses, and idempotency key prefixes that should appear on many sends.
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { defaultsPlugin } from "email-sdk/plugins/defaults";
+import { resend } from "email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      headers: {
+        "X-App": "billing",
+      },
+      tags: [{ name: "service", value: "billing" }],
+      sendMetadata: {
+        service: "billing",
+      },
+      replyTo: "support@example.com",
+      idempotencyKeyPrefix: "billing_",
+    }),
+  ],
+});
+```
+
+## What it can set
+
+| Option                 | Applies to               | Behavior                                                                 |
+| ---------------------- | ------------------------ | ------------------------------------------------------------------------ |
+| `headers`              | `EmailMessage.headers`   | Merged before existing message headers. Message headers win on conflict. |
+| `tags`                 | `EmailMessage.tags`      | Prepended before message tags.                                           |
+| `metadata`             | `EmailMessage.metadata`  | Merged before existing message metadata. Message metadata wins.          |
+| `sendMetadata`         | `SendOptions.metadata`   | Merged before per-send metadata. Per-send metadata wins.                 |
+| `replyTo`              | `EmailMessage.replyTo`   | Used only when the message does not already set `replyTo`.               |
+| `idempotencyKey`       | Message and send options | Used only when no idempotency key is already present.                    |
+| `idempotencyKeyPrefix` | Message and send options | Added when the chosen key does not already start with the prefix.        |
+
+## Per-send overrides
+
+Defaults are intentionally soft. The message or send call can override them.
+
+```ts
+await email.send(
+  {
+    from: "billing@example.com",
+    to: "user@example.com",
+    subject: "Receipt",
+    text: "Thanks for your order.",
+    headers: {
+      "X-App": "checkout",
+    },
+  },
+  {
+    metadata: {
+      route: "checkout.receipt",
+    },
+  },
+);
+```
+
+In this example, `X-App: checkout` wins over the default `X-App: billing`, while other default headers and metadata remain.
+
+## Multiple defaults plugins
+
+Use a custom `id` when you want more than one defaults layer.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      id: "defaults:app",
+      headers: { "X-App": "acme" },
+    }),
+    defaultsPlugin({
+      id: "defaults:billing",
+      tags: [{ name: "team", value: "billing" }],
+    }),
+  ],
+});
+```
+
+Plugins run in array order, so later defaults see the message returned by earlier defaults.
+
+## Provider support still matters
+
+The defaults plugin does not bypass adapter validation. If a default adds tags and the selected adapter cannot send tags, Email SDK throws before calling the provider. Check the field support guide before using defaults across fallback routes with different capabilities.

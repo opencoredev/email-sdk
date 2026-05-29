@@ -1,0 +1,83 @@
+---
+title: Capture plugin
+description: Record send attempts, retries, responses, and errors in tests.
+icon: ClipboardList
+---
+
+The capture plugin is for tests. It records the send pipeline while still letting the configured adapter run.
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { capturePlugin } from "email-sdk/plugins/capture";
+import { memoryProvider } from "email-sdk/testing";
+
+const memory = memoryProvider();
+const email = createEmailClient({
+  adapters: [memory],
+  plugins: [capturePlugin()],
+});
+
+await email.send({
+  from: "test@example.com",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Hello",
+});
+
+expect(email.capture.events).toHaveLength(2);
+expect(memory.raw.sent).toHaveLength(1);
+```
+
+## Captured events
+
+| Event        | When it is recorded                             |
+| ------------ | ----------------------------------------------- |
+| `beforeSend` | Before validation and before the adapter call.  |
+| `afterSend`  | After a provider returns a normalized response. |
+| `retry`      | When Email SDK schedules another attempt.       |
+| `error`      | After a provider attempt fails.                 |
+
+Captured events include the message, provider name where available, attempt number where available, metadata, response, or error.
+
+## Clear the store
+
+The default plugin exposes `email.capture`.
+
+```ts
+email.capture.clear();
+```
+
+You can also create and pass a store yourself.
+
+```ts
+import { capturePlugin, createEmailCaptureStore } from "email-sdk/plugins/capture";
+
+const store = createEmailCaptureStore();
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [capturePlugin(store)],
+});
+```
+
+## Multiple capture stores
+
+Use both a custom plugin `id` and a custom `clientKey` when mounting more than one capture plugin.
+
+```ts
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [
+    capturePlugin({ id: "capture:primary", clientKey: "primaryCapture" }),
+    capturePlugin({ id: "capture:audit", clientKey: "auditCapture" }),
+  ],
+});
+
+email.primaryCapture.clear();
+email.auditCapture.clear();
+```
+
+The `clientKey` is reflected in TypeScript when it is passed as a string literal.
+
+## When to use memoryProvider too
+
+`capturePlugin` records events, but it does not replace the adapter. Use `memoryProvider()` when a test should avoid external email provider calls. Use `capturePlugin()` when you also want to assert middleware, retry, or error behavior around that adapter.

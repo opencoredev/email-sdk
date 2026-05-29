@@ -1,0 +1,4 @@
+{
+  "title": "Plugins",
+  "pages": ["index", "defaults", "observability", "capture", "writing-plugins", "api"]
+}

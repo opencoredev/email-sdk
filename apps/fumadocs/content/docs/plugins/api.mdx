@@ -1,0 +1,95 @@
+---
+title: Plugin API
+description: Type reference for EmailPlugin and EmailSendMiddleware.
+icon: Workflow
+---
+
+The plugin API is intentionally small. A plugin can register adapters, add lifecycle hooks, add send middleware, or extend the returned client.
+
+## EmailPlugin
+
+```ts
+type EmailPlugin<TExtension extends object = object> = {
+  id: string;
+  adapters?: EmailProvider[] | ((ctx: EmailPluginContext) => EmailProvider[]);
+  hooks?: EmailHooks;
+  middleware?: EmailSendMiddleware[];
+  extendClient?: (ctx: EmailPluginContext) => TExtension;
+};
+```
+
+| Field          | Notes                                                          |
+| -------------- | -------------------------------------------------------------- |
+| `id`           | Required stable plugin ID. Duplicate IDs throw.                |
+| `adapters`     | Optional providers to register. Duplicate adapter names throw. |
+| `hooks`        | Observability callbacks composed before user `hooks`.          |
+| `middleware`   | Send-pipeline middleware.                                      |
+| `extendClient` | Adds non-conflicting helper properties to the client.          |
+
+`createEmailClient` is synchronous, so plugin adapter factories must return adapters synchronously.
+
+## EmailPluginContext
+
+```ts
+type EmailPluginContext = {
+  adapters: ReadonlyMap<string, EmailProvider>;
+  defaultAdapter: string;
+  addAdapter(adapter: EmailProvider): void;
+};
+```
+
+Use `addAdapter` when a plugin needs to register adapters programmatically. Adapter factories may either return adapters or call `addAdapter`. If a factory does both with the same adapter object, Email SDK only registers it once.
+
+## EmailSendMiddleware
+
+```ts
+type EmailSendMiddleware = {
+  beforeSend?: (event: EmailBeforeSendEvent) => MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?: (event: EmailAfterSendEvent) => MaybePromise<void>;
+  onError?: (event: EmailErrorEvent) => MaybePromise<void>;
+};
+```
+
+## beforeSend
+
+Runs before message validation and before any adapter is called. Return an update to replace the message or send options.
+
+```ts
+beforeSend(event) {
+  return {
+    message: {
+      ...event.message,
+      headers: { "X-App": "billing" },
+    },
+    options: {
+      metadata: { template: "receipt" },
+    },
+  };
+}
+```
+
+Errors thrown from `beforeSend` stop the send. Use this for policy and validation plugins.
+
+## afterSend
+
+Runs after a provider returns a normalized response.
+
+```ts
+afterSend(event) {
+  console.log(event.provider, event.response.id);
+}
+```
+
+Errors thrown from `afterSend` are swallowed. Use it for observability, not policy enforcement.
+
+## onError
+
+Runs after a provider attempt fails.
+
+```ts
+onError(event) {
+  console.error(event.provider, event.error);
+}
+```
+
+Fallback adapters can still run after `onError`. Errors thrown from `onError` are swallowed so observability problems do not hide provider failures.
