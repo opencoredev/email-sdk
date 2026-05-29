@@ -330,6 +330,21 @@ describe("email plugins", () => {
     expect(provider.raw.sent[0]?.message.tags).toEqual([{ name: "route", value: "welcome" }]);
     expect(client.capture.events).toHaveLength(2);
   });
+
+  test("capture plugins can use custom client extension keys", async () => {
+    const client = createEmailClient({
+      adapters: [memoryProvider()],
+      plugins: [
+        capturePlugin({ id: "capture:primary", clientKey: "primaryCapture" }),
+        capturePlugin({ id: "capture:audit", clientKey: "auditCapture" }),
+      ],
+    });
+
+    await client.send(message);
+
+    expect(client.primaryCapture.events).toHaveLength(2);
+    expect(client.auditCapture.events).toHaveLength(2);
+  });
 });
 
 function adapterPlugin(id: string, provider: EmailProvider): EmailPlugin {

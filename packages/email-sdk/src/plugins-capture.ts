@@ -41,6 +41,7 @@ export type EmailCaptureStore = {
 export type EmailCapturePluginOptions = {
   id?: string;
   store?: EmailCaptureStore;
+  clientKey?: string;
 };
 
 export function createEmailCaptureStore(): EmailCaptureStore {
@@ -54,16 +55,27 @@ export function createEmailCaptureStore(): EmailCaptureStore {
   };
 }
 
+export function capturePlugin(): EmailPlugin<{ capture: EmailCaptureStore }>;
+export function capturePlugin(
+  store: EmailCaptureStore,
+): EmailPlugin<{ capture: EmailCaptureStore }>;
+export function capturePlugin(
+  options: EmailCapturePluginOptions & { clientKey?: undefined },
+): EmailPlugin<{ capture: EmailCaptureStore }>;
+export function capturePlugin<const TClientKey extends string>(
+  options: EmailCapturePluginOptions & { clientKey: TClientKey },
+): EmailPlugin<Record<TClientKey, EmailCaptureStore>>;
 export function capturePlugin(
   optionsOrStore: EmailCaptureStore | EmailCapturePluginOptions = {},
-): EmailPlugin<{ capture: EmailCaptureStore }> {
+): EmailPlugin<Record<string, EmailCaptureStore>> {
   const options = isCaptureStore(optionsOrStore) ? { store: optionsOrStore } : optionsOrStore;
   const store = options.store ?? createEmailCaptureStore();
+  const clientKey = options.clientKey ?? "capture";
 
   return {
     id: options.id ?? "capture",
     extendClient() {
-      return { capture: store };
+      return { [clientKey]: store };
     },
     hooks: {
       onRetry(event) {

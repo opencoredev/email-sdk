@@ -55,4 +55,4 @@ Email SDK applies plugins in the order you pass them.
 
 This lets application code keep using the same `send` call while plugins add reusable behavior around it.
 
-Built-in plugins use stable IDs like `defaults`, `observability`, and `capture`. Pass a custom `id` when you need more than one instance of the same plugin type.
+Built-in plugins use stable IDs like `defaults`, `observability`, and `capture`. Pass a custom `id` when you need more than one instance of the same plugin type. If the plugin extends the client, also give each instance a distinct extension key. For example, `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })` exposes `email.auditCapture`.
