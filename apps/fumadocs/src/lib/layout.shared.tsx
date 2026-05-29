@@ -7,7 +7,7 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <span className="flex items-center gap-2.5">
-          <span className="grid size-6 place-items-center rounded-md border border-fd-border bg-fd-card">
+          <span className="grid size-8 place-items-center">
             <EmailSdkLogoIcon />
           </span>
           <span>{appName}</span>
@@ -20,12 +20,7 @@ export function baseOptions(): BaseLayoutProps {
 
 function EmailSdkLogoIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      className="size-3.5 text-fd-primary"
-      fill="none"
-      viewBox="0 0 1024 1024"
-    >
+    <svg aria-hidden="true" className="size-6 text-fd-primary" fill="none" viewBox="0 0 1024 1024">
       <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="52">
         <rect height="292" rx="62" width="366" x="126" y="326" />
         <path d="M164 376L309 500L454 376" />

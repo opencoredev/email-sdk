@@ -1,6 +1,7 @@
 # Email SDK
 
-A lightweight TypeScript SDK for unified email sending. One clean API, swappable adapters, fallbacks, hooks, a Bun CLI, and Fumadocs documentation.
+A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters
+you actually send through, and keep provider-specific field support visible in the docs.
 
 ## Packages
 
