@@ -10,8 +10,6 @@ export const Route = createFileRoute("/sitemap.xml")({
         const urls = [
           "/",
           "/docs",
-          "/llms.txt",
-          "/llms-full.txt",
           ...source.getPages().flatMap((page) => [page.url, getPageMarkdownUrl(page.slugs).url]),
         ];
 
@@ -37,5 +35,10 @@ ${[...new Set(urls)]
 });
 
 function escapeXml(value: string) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
