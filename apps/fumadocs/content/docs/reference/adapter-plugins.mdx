@@ -1,0 +1,52 @@
+---
+title: Adapter plugins
+description: Package providers as plugins for application or community reuse.
+icon: Plug
+---
+
+Adapter plugins register one or more `EmailProvider` objects.
+
+```ts
+import type { EmailPlugin } from "email-sdk";
+
+export function communityMailProvider(options: { apiKey: string }): EmailPlugin {
+  return {
+    id: "community-mail",
+    adapters: [
+      {
+        name: "community-mail",
+        async send(message, context) {
+          const response = await fetch("https://api.example.com/send", {
+            method: "POST",
+            signal: context.signal,
+            headers: {
+              Authorization: `Bearer ${options.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(message),
+          });
+
+          const body = await response.json();
+
+          return {
+            provider: "community-mail",
+            id: body.id,
+            messageId: body.id,
+            raw: body,
+          };
+        },
+      },
+    ],
+  };
+}
+```
+
+Use it like any other plugin:
+
+```ts
+const email = createEmailClient({
+  plugins: [communityMailProvider({ apiKey: process.env.COMMUNITY_MAIL_API_KEY! })],
+});
+```
+
+Adapter plugins follow the same field-support rule as built-in adapters: map a normalized `EmailMessage` field or reject it clearly before calling the provider.

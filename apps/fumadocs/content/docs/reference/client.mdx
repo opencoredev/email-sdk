@@ -15,20 +15,22 @@ const email = createEmailClient({
   fallback,
   retry,
   hooks,
+  plugins,
 });
 ```
 
 | Option            | Type               | Default              |
 | ----------------- | ------------------ | -------------------- |
-| `adapters`        | `EmailProvider[]`  | Required             |
+| `adapters`        | `EmailProvider[]`  | `[]`                 |
 | `providers`       | `EmailProvider[]`  | Alias for `adapters` |
 | `defaultAdapter`  | `string`           | First adapter        |
 | `defaultProvider` | `string`           | First adapter        |
 | `fallback`        | `string[]`         | `[]`                 |
 | `retry`           | `EmailRetryConfig` | No retries           |
 | `hooks`           | `EmailHooks`       | No hooks             |
+| `plugins`         | `EmailPlugin[]`    | `[]`                 |
 
-Routing names must be unique.
+Routing names must be unique. At least one adapter must be registered directly or through a plugin.
 
 ## `email.send(message, options?)`
 

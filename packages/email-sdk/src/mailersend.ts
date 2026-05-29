@@ -5,6 +5,7 @@ import {
   base64Attachments,
   commonHeadersArray,
   optionalApiAddresses,
+  optionalSingleApiAddress,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 import { assertSupportedMessageFields } from "./utils.js";
@@ -40,7 +41,7 @@ export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ 
         to: apiAddresses(message.to),
         cc: optionalApiAddresses(message.cc),
         bcc: optionalApiAddresses(message.bcc),
-        reply_to: optionalApiAddresses(message.replyTo)?.[0],
+        reply_to: optionalSingleApiAddress("mailersend", "replyTo", message.replyTo),
         subject: message.subject,
         html: message.html,
         text: message.text,

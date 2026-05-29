@@ -1,0 +1,60 @@
+---
+title: EmailSendMiddleware
+description: Reference for send-pipeline middleware.
+icon: Workflow
+---
+
+Middleware runs around the shared `send` path.
+
+```ts
+const policyPlugin = {
+  id: "policy",
+  middleware: [
+    {
+      beforeSend(event) {
+        if (!event.message.subject.startsWith("[billing]")) {
+          throw new Error("Billing emails must include a subject prefix.");
+        }
+      },
+    },
+  ],
+} satisfies EmailPlugin;
+```
+
+## Type
+
+```ts
+type EmailSendMiddleware = {
+  beforeSend?: (event: EmailBeforeSendEvent) => MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?: (event: EmailAfterSendEvent) => MaybePromise<void>;
+  onError?: (event: EmailErrorEvent) => MaybePromise<void>;
+};
+```
+
+## `beforeSend`
+
+Runs before message validation and before any adapter is called. Return a partial update to replace the message or send options.
+
+```ts
+beforeSend(event) {
+  return {
+    message: {
+      ...event.message,
+      headers: { "X-App": "billing" },
+    },
+    options: {
+      metadata: { template: "receipt" },
+    },
+  };
+}
+```
+
+Errors thrown from `beforeSend` stop the send.
+
+## `afterSend`
+
+Runs after a provider returns a normalized response.
+
+## `onError`
+
+Runs after a provider attempt fails. Fallback adapters can still run after this callback.

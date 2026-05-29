@@ -1,4 +1,15 @@
 {
   "title": "Reference",
-  "pages": ["client", "message", "adapter-contract", "errors", "cli"]
+  "pages": [
+    "client",
+    "message",
+    "adapter-contract",
+    "email-plugin",
+    "email-send-middleware",
+    "adapter-plugins",
+    "general-plugins",
+    "community-adapters",
+    "errors",
+    "cli"
+  ]
 }

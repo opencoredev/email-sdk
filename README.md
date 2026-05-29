@@ -2,16 +2,15 @@
 
 [![skills.sh](https://skills.sh/b/opencoredev/email-sdk)](https://skills.sh/opencoredev/email-sdk)
 
-A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters
-you actually send through, and keep provider-specific field support visible in the docs.
+A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters you actually send through, add plugins for shared behavior, and keep provider-specific field support visible in the docs.
 
-## Packages
+## What Is Here
 
-- `packages/email-sdk` - core SDK, adapters, CLI, tests
+- `packages/email-sdk` - core SDK, adapters, plugins, CLI, tests, and package README
 - `apps/fumadocs` - documentation site
 - `skills/email-sdk` - repo-local agent skill for Email SDK integrations
 
-## Quickstart
+## Install
 
 ```bash
 bun add @opencoredev/email-sdk
@@ -36,9 +35,27 @@ await email.send({
 });
 ```
 
-SMTP is built in and does not require Nodemailer.
+## SDK Surface
 
-Adapters are stable by contract: they map supported `EmailMessage` fields and reject unsupported fields instead of silently dropping them.
+- One normalized `EmailMessage` shape.
+- Direct provider adapters through `adapters`.
+- Adapter plugins through `plugins`.
+- Fallbacks, retries, hooks, and per-send routing.
+- Built-in `defaults`, `observability`, and `capture` plugins.
+- Built-in SMTP transport without Nodemailer.
+- Fail-fast adapter validation for fields a provider cannot represent.
+
+See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage examples.
+
+## Adapter Entry Points
+
+`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
+
+Plugin entry points:
+
+- `@opencoredev/email-sdk/plugins/defaults`
+- `@opencoredev/email-sdk/plugins/observability`
+- `@opencoredev/email-sdk/plugins/capture`
 
 ## CLI
 
@@ -68,25 +85,27 @@ The skill is stored in `skills/email-sdk/SKILL.md`. It tells agents to refresh t
 
 ```bash
 bun install
-bun run check-types
 bun test
+bun run check-types
 bun run build
 ```
+
+Useful workspace scripts:
+
+- `bun run build` - build packages and apps through Turbo
+- `bun run check-types` - run TypeScript checks across the workspace
+- `bun test` - run package tests
+- `bun run check` - run Oxlint and Oxfmt with write formatting
+- `bun run dev` - start the docs dev server through Turbo
 
 ## Releases
 
 Releases use Changesets, Depot-backed GitHub Actions runners, npm, and the repo-local Homebrew formula. See [AGENTS.md](AGENTS.md).
 
-Do not run the docs dev server unless you actually want a local preview:
+Do not start the docs dev server unless you actually want a local preview.
 
-```bash
-bun run dev
-```
+## Reliability Notes
 
-## Available Scripts
+The SDK validates messages locally and adapter tests verify payload mapping with injected fetch calls. Real provider sends still depend on live account setup: verified domains, sender identities, API scopes, sandbox settings, regions, rate limits, and provider-specific policy.
 
-- `bun run build`: build all packages and apps
-- `bun run check-types`: check TypeScript types across the workspace
-- `bun test`: run package tests
-- `bun run check`: Run Oxlint and Oxfmt
-- `bun run dev`: start the docs dev server through Turbo
+Before production use, configure one primary adapter, add a fallback adapter where delivery matters, and run a live smoke send from the target environment.
