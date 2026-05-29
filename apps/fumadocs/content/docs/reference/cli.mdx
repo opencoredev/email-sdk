@@ -21,23 +21,24 @@ email-sdk send \
 email-sdk adapters
 ```
 
-| Adapter      | Required environment                              |
-| ------------ | ------------------------------------------------- |
-| `resend`     | `RESEND_API_KEY`                                  |
-| `postmark`   | `POSTMARK_SERVER_TOKEN`                           |
-| `sendgrid`   | `SENDGRID_API_KEY`                                |
-| `mailgun`    | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`               |
-| `mailersend` | `MAILERSEND_API_KEY`                              |
-| `brevo`      | `BREVO_API_KEY`                                   |
-| `mailchimp`  | `MAILCHIMP_API_KEY`                               |
-| `sparkpost`  | `SPARKPOST_API_KEY`                               |
-| `loops`      | `LOOPS_API_KEY`, `LOOPS_TRANSACTIONAL_ID`         |
-| `plunk`      | `PLUNK_API_KEY`                                   |
-| `mailtrap`   | `MAILTRAP_API_KEY`                                |
-| `scaleway`   | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID`      |
-| `zeptomail`  | `ZEPTOMAIL_TOKEN`                                 |
-| `mailpace`   | `MAILPACE_API_KEY`                                |
-| `smtp`       | `SMTP_HOST`, plus SMTP auth variables when needed |
+| Adapter      | Required environment                                       |
+| ------------ | ---------------------------------------------------------- |
+| `resend`     | `RESEND_API_KEY`                                           |
+| `postmark`   | `POSTMARK_SERVER_TOKEN`                                    |
+| `sendgrid`   | `SENDGRID_API_KEY`                                         |
+| `ses`        | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `mailgun`    | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`                        |
+| `mailersend` | `MAILERSEND_API_KEY`                                       |
+| `brevo`      | `BREVO_API_KEY`                                            |
+| `mailchimp`  | `MAILCHIMP_API_KEY`                                        |
+| `sparkpost`  | `SPARKPOST_API_KEY`                                        |
+| `loops`      | `LOOPS_API_KEY`, `LOOPS_TRANSACTIONAL_ID`                  |
+| `plunk`      | `PLUNK_API_KEY`                                            |
+| `mailtrap`   | `MAILTRAP_API_KEY`                                         |
+| `scaleway`   | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID`               |
+| `zeptomail`  | `ZEPTOMAIL_TOKEN`                                          |
+| `mailpace`   | `MAILPACE_API_KEY`                                         |
+| `smtp`       | `SMTP_HOST`, plus SMTP auth variables when needed          |
 
 If `--adapter` is omitted, the CLI selects the first adapter with all required environment variables set.
 
@@ -72,6 +73,10 @@ email-sdk doctor --adapter resend
 | `--api-key`             | many      | Overrides the adapter API key variable.                |
 | `--server-token`        | Postmark  | Overrides `POSTMARK_SERVER_TOKEN`.                     |
 | `--message-stream`      | Postmark  | Optional message stream.                               |
+| `--access-key-id`       | AWS SES   | Overrides `AWS_ACCESS_KEY_ID`.                         |
+| `--secret-access-key`   | AWS SES   | Overrides `AWS_SECRET_ACCESS_KEY`.                     |
+| `--session-token`       | AWS SES   | Overrides `AWS_SESSION_TOKEN`.                         |
+| `--configuration-set`   | AWS SES   | Overrides `AWS_SES_CONFIGURATION_SET`.                 |
 | `--domain`              | Mailgun   | Overrides `MAILGUN_DOMAIN`.                            |
 | `--transactional-id`    | Loops     | Overrides `LOOPS_TRANSACTIONAL_ID`.                    |
 | `--project-id`          | Scaleway  | Overrides `SCALEWAY_PROJECT_ID`.                       |

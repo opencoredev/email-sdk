@@ -38,6 +38,10 @@
       "types": "./dist/sendgrid.d.ts",
       "import": "./dist/sendgrid.js"
     },
+    "./ses": {
+      "types": "./dist/ses.d.ts",
+      "import": "./dist/ses.js"
+    },
     "./mailgun": {
       "types": "./dist/mailgun.d.ts",
       "import": "./dist/mailgun.js"
