@@ -3,7 +3,7 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
 import SearchDialog from "@/components/search";
-import { appDescription, appName, docsImageRoute } from "@/lib/shared";
+import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 import appCss from "@/styles/app.css?url";
 
@@ -35,12 +35,16 @@ export const Route = createRootRoute({
         content: siteTitle,
       },
       {
+        property: "og:url",
+        content: siteUrl,
+      },
+      {
         property: "og:description",
         content: appDescription,
       },
       {
         property: "og:image",
-        content: docsImageRoute,
+        content: siteOgImageUrl,
       },
       {
         property: "og:image:width",
@@ -64,7 +68,7 @@ export const Route = createRootRoute({
       },
       {
         name: "twitter:image",
-        content: docsImageRoute,
+        content: siteOgImageUrl,
       },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
