@@ -1,25 +1,28 @@
 ---
 title: Observability plugin
-description: Emit redacted email events to logs, metrics, and traces.
+description: Emit redacted log, metric, and trace events.
 icon: Activity
 ---
 
-The observability plugin reports email lifecycle events without exposing recipient addresses or message body content by default.
+Use the observability plugin when you want to see email behavior without logging recipients or message bodies.
 
 ```ts
-import { observabilityPlugin } from "email-sdk/plugins/observability";
+import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
   plugins: [
     observabilityPlugin({
       log(event) {
-        console.log(event.type, event.provider, event.message.subject);
+        console.log(event.type, event.provider);
       },
       metric(event) {
         statsd.increment(event.type, {
           provider: event.provider,
         });
+      },
+      trace(event) {
+        tracer.event("email", event);
       },
     }),
   ],
@@ -28,15 +31,15 @@ const email = createEmailClient({
 
 ## Events
 
-| Event         | When it fires                                   | Includes                                                                   |
-| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
-| `email.sent`  | After a provider returns a normalized response. | Provider, attempt, redacted message, response IDs, metadata.               |
-| `email.retry` | Before a retry delay.                           | Provider, attempt, next attempt, delay, error, redacted message, metadata. |
-| `email.error` | After a provider attempt fails.                 | Provider, attempt, error, redacted message, metadata.                      |
+| Event         | Fires when                                 |
+| ------------- | ------------------------------------------ |
+| `email.sent`  | A provider returns a normalized response.  |
+| `email.retry` | Email SDK schedules another retry attempt. |
+| `email.error` | A provider attempt fails.                  |
 
-## Default redaction
+Each event includes provider name, attempt number, metadata, and a redacted message summary.
 
-The default redacted message keeps operational shape without raw PII.
+## Redacted message shape
 
 ```ts
 type RedactedEmailMessage = {
@@ -52,11 +55,9 @@ type RedactedEmailMessage = {
 };
 ```
 
-Recipients, body content, attachment content, and metadata values are not included by default.
+By default, the plugin does not include recipient addresses, HTML, text, attachment content, or metadata values.
 
 ## Custom redaction
-
-Use `redactMessage` when your logging policy needs a different shape.
 
 ```ts
 observabilityPlugin({
@@ -68,16 +69,16 @@ observabilityPlugin({
       hasAttachments: Boolean(message.attachments?.length),
     };
   },
-  trace(event) {
-    tracer.event("email", event);
+  log(event) {
+    console.log(event);
   },
 });
 ```
 
-Keep raw recipient addresses, body HTML, body text, tokens, and provider secrets out of logs unless your application has a specific approved reason to store them.
+Keep secrets, raw tokens, recipient lists, and body content out of logs unless your app explicitly needs and protects that data.
 
-## Callback behavior
+## Failure behavior
 
-`log`, `metric`, and `trace` callbacks can be sync or async. They run as observability callbacks, so thrown errors are swallowed and do not mask provider behavior. That matches the normal hook behavior in Email SDK.
+Observability callbacks are non-blocking. If `log`, `metric`, or `trace` throws, Email SDK swallows that error so logging failures do not hide provider failures.
 
-Use `beforeSend` middleware in a custom plugin when you need policy enforcement that can block a send.
+Use a custom `beforeSend` middleware plugin when a rule should block a send.

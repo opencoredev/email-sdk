@@ -1,19 +1,28 @@
 ---
 title: Writing plugins
-description: Create adapter plugins, policy plugins, and community plugin packages.
-icon: Blocks
+description: Create adapter, middleware, and community plugins.
+icon: PackagePlus
 ---
 
-Write a plugin when behavior should be reused across clients or apps. A plugin can be adapter-only, middleware-only, hook-only, or a combination.
+Write a plugin when email behavior should be reused across clients, apps, or packages.
+
+Start with one of these shapes:
+
+| Shape             | Use it for                                                    |
+| ----------------- | ------------------------------------------------------------- |
+| Adapter plugin    | Package a provider as `plugins: [providerPlugin()]`.          |
+| Middleware plugin | Add defaults, policy, capture, or observability around sends. |
+| Hook plugin       | Reuse existing `EmailHooks` callbacks.                        |
+| Client extension  | Add a small typed helper to the returned client.              |
 
 ## Adapter plugin
 
-Adapter plugins are the publishing shape for community providers.
+Adapter plugins are the best shape for community providers.
 
 ```ts
-import type { EmailPlugin } from "email-sdk";
+import type { EmailPlugin } from "@opencoredev/email-sdk";
 
-export function communityMailProvider(options: { apiKey: string }): EmailPlugin {
+export function communityMail(options: { apiKey: string }): EmailPlugin {
   return {
     id: "community-mail",
     adapters: [
@@ -45,45 +54,22 @@ export function communityMailProvider(options: { apiKey: string }): EmailPlugin 
 }
 ```
 
-Use it like any other plugin:
+Application code stays clean:
 
 ```ts
 const email = createEmailClient({
-  plugins: [communityMailProvider({ apiKey: process.env.COMMUNITY_MAIL_API_KEY! })],
+  plugins: [communityMail({ apiKey: process.env.COMMUNITY_MAIL_API_KEY! })],
 });
 ```
 
-## Programmatic adapter registration
+## Middleware plugin
 
-Adapter factories may return adapters, call `ctx.addAdapter`, or both with the same adapter object.
-
-```ts
-export function multiRegionProvider(options: RegionOptions): EmailPlugin {
-  return {
-    id: "multi-region-mail",
-    adapters(ctx) {
-      const primary = createRegionAdapter("mail-us", options.us);
-      const backup = createRegionAdapter("mail-eu", options.eu);
-
-      ctx.addAdapter(primary);
-      ctx.addAdapter(backup);
-
-      return [];
-    },
-  };
-}
-```
-
-Duplicate adapter names still throw. That protects application routing from hidden collisions.
-
-## Policy plugin
-
-Policy plugins usually use `beforeSend` middleware because thrown errors should block the send.
+Use `beforeSend` when the plugin needs to change or block a message.
 
 ```ts
-import type { EmailPlugin } from "email-sdk";
+import type { EmailPlugin } from "@opencoredev/email-sdk";
 
-export function requireMetadataPlugin(key: string): EmailPlugin {
+export function requireMetadata(key: string): EmailPlugin {
   return {
     id: `require-metadata:${key}`,
     middleware: [
@@ -99,47 +85,61 @@ export function requireMetadataPlugin(key: string): EmailPlugin {
 }
 ```
 
-## Client extension plugin
+`beforeSend` errors are not swallowed. Use it for policy.
 
-Use `extendClient` for small helpers that belong next to the email client.
+Use `afterSend` and `onError` for observability work that should not block provider behavior.
+
+## Programmatic adapter registration
+
+Use `ctx.addAdapter` when a plugin creates adapters dynamically.
 
 ```ts
-export function templatesPlugin(): EmailPlugin<{
-  sendWelcome(to: string): Promise<void>;
+export function regionalMail(options: RegionOptions): EmailPlugin {
+  return {
+    id: "regional-mail",
+    adapters(ctx) {
+      ctx.addAdapter(createRegionAdapter("mail-us", options.us));
+      ctx.addAdapter(createRegionAdapter("mail-eu", options.eu));
+
+      return [];
+    },
+  };
+}
+```
+
+Duplicate adapter names throw. If a factory both calls `ctx.addAdapter(adapter)` and returns the same adapter object, Email SDK registers it once.
+
+## Client extension
+
+Use `extendClient` for tiny helpers or stores. Keep it boring.
+
+```ts
+export function routeNamesPlugin(): EmailPlugin<{
+  routeNames: string[];
 }> {
   return {
-    id: "templates",
+    id: "route-names",
     extendClient(ctx) {
       return {
-        async sendWelcome(to) {
-          await ctx.adapters.get(ctx.defaultAdapter)?.send(
-            {
-              from: "hello@example.com",
-              to,
-              subject: "Welcome",
-              text: "Your account is ready.",
-            },
-            { attempt: 1 },
-          );
-        },
+        routeNames: [...ctx.adapters.keys()],
       };
     },
   };
 }
 ```
 
-Keep extensions small. If a helper grows into a templating system, queue, or campaign workflow, put that logic in your app and call Email SDK at the boundary.
+Extension keys cannot collide with built-in client keys like `send`, `sendBatch`, `adapter`, or `defaultAdapter`.
 
 ## Community adapter checklist
 
 - Use a stable plugin `id` and adapter `name`.
 - Keep credentials in plugin options.
-- Support `context.signal` when making network requests.
+- Support `context.signal` for network requests.
 - Pass `context.idempotencyKey` when the provider supports idempotency.
 - Return normalized `id`, `messageId`, `accepted`, or `rejected` fields when available.
 - Put provider responses in `raw` when useful for debugging.
 - Map every supported `EmailMessage` field.
-- Reject unsupported fields clearly before calling the provider.
-- Test with injected `fetch` or a local test server.
+- Reject unsupported fields before calling the provider.
+- Test payloads with injected `fetch` or a local test server.
 
-Community adapters can also export a plain provider factory for direct use with `adapters`. The plugin shape is best when the package should feel like a one-call extension point.
+Community packages can export both a plain provider factory and an adapter plugin. Use the plugin shape when you want the one-call setup path.

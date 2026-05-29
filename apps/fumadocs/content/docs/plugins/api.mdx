@@ -1,10 +1,10 @@
 ---
 title: Plugin API
 description: Type reference for EmailPlugin and EmailSendMiddleware.
-icon: Workflow
+icon: Braces
 ---
 
-The plugin API is intentionally small. A plugin can register adapters, add lifecycle hooks, add send middleware, or extend the returned client.
+This page is the type reference. For examples, start with Writing plugins.
 
 ## EmailPlugin
 
@@ -18,13 +18,13 @@ type EmailPlugin<TExtension extends object = object> = {
 };
 ```
 
-| Field          | Notes                                                          |
-| -------------- | -------------------------------------------------------------- |
-| `id`           | Required stable plugin ID. Duplicate IDs throw.                |
-| `adapters`     | Optional providers to register. Duplicate adapter names throw. |
-| `hooks`        | Observability callbacks composed before user `hooks`.          |
-| `middleware`   | Send-pipeline middleware.                                      |
-| `extendClient` | Adds non-conflicting helper properties to the client.          |
+| Field          | Notes                                                 |
+| -------------- | ----------------------------------------------------- |
+| `id`           | Required stable plugin ID. Duplicate IDs throw.       |
+| `adapters`     | Providers to register. Duplicate adapter names throw. |
+| `hooks`        | Observability callbacks that run before user `hooks`. |
+| `middleware`   | Send-pipeline middleware.                             |
+| `extendClient` | Adds non-conflicting helper properties to the client. |
 
 `createEmailClient` is synchronous, so plugin adapter factories must return adapters synchronously.
 
@@ -38,8 +38,6 @@ type EmailPluginContext = {
 };
 ```
 
-Use `addAdapter` when a plugin needs to register adapters programmatically. Adapter factories may either return adapters or call `addAdapter`. If a factory does both with the same adapter object, Email SDK only registers it once.
-
 ## EmailSendMiddleware
 
 ```ts
@@ -52,7 +50,7 @@ type EmailSendMiddleware = {
 
 ## beforeSend
 
-Runs before message validation and before any adapter is called. Return an update to replace the message or send options.
+Runs once per `send` call before message validation and before any adapter is called.
 
 ```ts
 beforeSend(event) {
@@ -68,7 +66,7 @@ beforeSend(event) {
 }
 ```
 
-Errors thrown from `beforeSend` stop the send. Use this for policy and validation plugins.
+Thrown errors stop the send.
 
 ## afterSend
 
@@ -80,7 +78,7 @@ afterSend(event) {
 }
 ```
 
-Errors thrown from `afterSend` are swallowed. Use it for observability, not policy enforcement.
+Thrown errors are swallowed.
 
 ## onError
 
@@ -92,4 +90,4 @@ onError(event) {
 }
 ```
 
-Fallback adapters can still run after `onError`. Errors thrown from `onError` are swallowed so observability problems do not hide provider failures.
+Fallback adapters can still run after this callback. Thrown errors are swallowed.
