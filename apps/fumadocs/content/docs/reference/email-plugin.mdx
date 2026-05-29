@@ -47,4 +47,4 @@ type EmailPluginContext = {
 };
 ```
 
-Use `addAdapter` when a plugin needs to register adapters programmatically.
+Use `addAdapter` when a plugin needs to register adapters programmatically. Adapter factories may either return adapters or call `addAdapter`. If a factory does both with the same adapter object, Email SDK only registers it once.

@@ -54,6 +54,10 @@ export function createEmailClient<
     const pluginAdapters = resolvePluginAdapters(plugin, context);
 
     for (const adapter of pluginAdapters) {
+      if (adapters.get(adapter.name) === adapter) {
+        continue;
+      }
+
       context.addAdapter(adapter);
     }
 
@@ -358,7 +362,7 @@ function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
 
 function applyClientExtension(client: EmailClient, pluginId: string, extension: object) {
   for (const key of Object.keys(extension)) {
-    if (key in client) {
+    if (Object.hasOwn(client, key)) {
       throw new EmailValidationError(
         `Email plugin "${pluginId}" tried to extend the client with reserved key "${key}".`,
       );

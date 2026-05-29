@@ -195,6 +195,26 @@ describe("email plugins", () => {
     ).toThrow(EmailValidationError);
   });
 
+  test("allows client extension keys from Object.prototype", () => {
+    const client = createEmailClient({
+      adapters: [memoryProvider()],
+      plugins: [
+        {
+          id: "to-string",
+          extendClient() {
+            return {
+              toString() {
+                return "email-client";
+              },
+            };
+          },
+        },
+      ],
+    });
+
+    expect(client.toString()).toBe("email-client");
+  });
+
   test("applies send middleware to each batch item", async () => {
     const provider = memoryProvider();
     const client = createEmailClient({
@@ -272,6 +292,25 @@ describe("email plugins", () => {
 
     await expect(client.send(message)).rejects.toMatchObject({ provider: "failing" });
     expect(errors).toHaveLength(1);
+  });
+
+  test("does not double-register adapters added and returned by a plugin factory", async () => {
+    const provider = memoryProvider("factory");
+    const client = createEmailClient({
+      plugins: [
+        {
+          id: "factory-adapter",
+          adapters(ctx) {
+            ctx.addAdapter(provider);
+            return [provider];
+          },
+        },
+      ],
+    });
+
+    const response = await client.send(message);
+
+    expect(response.provider).toBe("factory");
   });
 
   test("built-in plugins allow custom ids", async () => {
