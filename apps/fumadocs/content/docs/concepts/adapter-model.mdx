@@ -68,3 +68,7 @@ console.log(adapter.raw);
 ```
 
 The older `provider`, `defaultProvider`, `email.provider()`, and `email.withProvider()` names still work as aliases.
+
+## Production rule
+
+Choose fallbacks from adapters that can send the same required fields as the primary adapter. If the message includes attachments, metadata, tags, or custom headers, check <a href="/docs/adapters/field-support">field support</a> before adding a backup route.

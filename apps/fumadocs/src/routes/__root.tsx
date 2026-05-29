@@ -3,8 +3,11 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
 import SearchDialog from "@/components/search";
+import { appName, siteDescription, siteUrl } from "@/lib/shared";
 
 import appCss from "@/styles/app.css?url";
+
+const title = `${appName} - Unified email sending for TypeScript`;
 
 export const Route = createRootRoute({
   head: () => ({
@@ -17,15 +20,45 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Email SDK - Unified email sending for TypeScript",
+        title,
       },
       {
         name: "description",
-        content:
-          "A lightweight TypeScript SDK for unified email sending with Resend, SMTP, Postmark, fallbacks, hooks, and a Bun CLI.",
+        content: siteDescription,
+      },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:title",
+        content: title,
+      },
+      {
+        property: "og:description",
+        content: siteDescription,
+      },
+      {
+        property: "og:url",
+        content: siteUrl,
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
+      {
+        name: "twitter:title",
+        content: title,
+      },
+      {
+        name: "twitter:description",
+        content: siteDescription,
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "canonical", href: siteUrl },
+    ],
   }),
   component: RootComponent,
 });

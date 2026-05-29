@@ -53,6 +53,8 @@ export const email = createEmailClient({
 });
 ```
 
+Before using a fallback in production, confirm the backup adapter supports every field your message sends. See <a href="/docs/getting-started/provider-readiness">provider readiness</a> and <a href="/docs/adapters/field-support">field support</a>.
+
 Your application still sends the same way:
 
 ```ts
@@ -95,3 +97,7 @@ email-sdk send \
   --subject "Hello" \
   --text "It works"
 ```
+
+## Agent skill
+
+When a coding assistant wires Email SDK into an app, point it at <a href="/docs/getting-started/agent-skill">Agent skill</a>. The skill tells agents to use adapter entry points, keep secrets in environment variables, avoid Nodemailer for SMTP, and validate fallback compatibility.
