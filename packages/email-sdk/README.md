@@ -1,6 +1,9 @@
 # Email SDK
 
-A lightweight TypeScript SDK for unified email sending.
+A lightweight TypeScript SDK for transactional email.
+
+Use one client in your app, pick the adapters you actually send through, and keep provider-specific
+field support visible instead of pretending every email API behaves the same way.
 
 ```bash
 bun add email-sdk
@@ -42,4 +45,6 @@ Adapters:
 
 SMTP is built in and does not require Nodemailer.
 
-Adapters map supported `EmailMessage` fields and reject unsupported fields instead of silently dropping message data. Attachment `content` is treated as raw content by default; set `contentEncoding: "base64"` when passing pre-encoded content.
+Adapters map supported `EmailMessage` fields and reject unsupported fields instead of silently
+dropping message data. Attachment `content` is treated as raw content by default; set
+`contentEncoding: "base64"` when passing pre-encoded content.

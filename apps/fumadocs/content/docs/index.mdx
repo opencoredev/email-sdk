@@ -1,12 +1,15 @@
 ---
 title: Email SDK
-description: Send email through Resend, SMTP, Postmark, SendGrid, Mailgun, and more with one TypeScript API.
+description: A small TypeScript email client with swappable adapters and explicit provider limits.
 icon: Mail
 ---
 
-Email SDK is a small TypeScript package for sending transactional email through swappable adapters.
+Email SDK is a small TypeScript package for transactional email. It gives your application one
+client and one message shape while keeping provider-specific behavior visible in the adapter docs.
 
-Use Resend for the default path, add SMTP when you want a cheap or self-managed route, and keep a second API adapter ready for fallback. Your app code still calls the same `send` method.
+Use Resend for a simple API path, SMTP when you want a cheap or self-managed route, or another
+provider when its field support fits your app better. Your application code still calls `send`;
+the adapter decides how that message maps to the provider.
 
 ```ts
 import { createEmailClient } from "email-sdk";
@@ -55,10 +58,21 @@ await email.send({
 - `email.send()` for one message.
 - `email.sendBatch()` for small batches where each result is reported separately.
 - Fifteen adapters, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
-- Retry, fallback, and hook options.
-- A small CLI for adapter setup checks and test sends.
+- Retry and fallback options that run in the order you configure.
+- Hooks for logs, metrics, tracing, and retry visibility.
+- A small CLI for setup checks, dry runs, and smoke-test sends.
 - A repo-local agent skill for future coding agents.
 
 ## What stays small
 
-Email SDK does not try to be a template engine, campaign tool, analytics platform, or full email operations suite. The first version is the layer most apps keep rebuilding: adapter setup, a consistent send call, typed errors, and a clean fallback path.
+Email SDK does not try to be a template engine, campaign tool, queue, analytics platform, or full
+email operations suite. It is the layer many apps keep rebuilding: adapter setup, a consistent send
+call, typed errors, and a fallback path that is explicit enough to debug.
+
+## Provider behavior is not hidden
+
+Email providers do not all support the same fields. A fallback route is only safe when the backup
+adapter can represent the same class of message. Before choosing routes, read the
+
+<a href="/docs/adapters/field-support">field support guide</a>; unsupported fields should fail fast
+instead of being silently dropped.
