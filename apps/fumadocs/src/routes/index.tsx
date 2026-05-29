@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, Check, Copy, Mail, Terminal } from "lucide-react";
+import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -42,21 +42,13 @@ function Home() {
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
         <section className="mx-auto grid min-h-[calc(100svh-64px)] max-w-[1512px] items-center gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:px-14 xl:px-16">
           <div className="max-w-2xl py-4">
-            <p className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-fd-muted-foreground">
-              <span className="grid size-7 place-items-center rounded-md border border-fd-border bg-fd-card">
-                <Mail className="size-4 text-fd-primary" strokeWidth={2} />
-              </span>
-              Transactional email for TypeScript apps
-            </p>
-
             <h1 className="text-5xl font-medium leading-[1.04] text-fd-foreground md:text-6xl">
-              One send call, with the provider details left visible.
+              One email SDK for every provider.
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
-              Email SDK gives you a typed client for Resend, SMTP, Postmark, SendGrid, Mailgun, and
-              more. It keeps the common path clean while still showing which fields each adapter can
-              actually send.
+              Send through Resend, Postmark, SendGrid, Mailgun, Brevo, SMTP, and more with one clean
+              TypeScript API.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -82,18 +74,9 @@ function Home() {
             </div>
 
             <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
-              <ProofPoint
-                label="Fallbacks"
-                text="Retry one adapter, then move to the next route you configured."
-              />
-              <ProofPoint
-                label="Field support"
-                text="Unsupported message fields fail before the provider request."
-              />
-              <ProofPoint
-                label="Small scope"
-                text="No templates, campaigns, queues, or analytics layer hiding in the SDK."
-              />
+              <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
+              <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
+              <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
             </div>
           </div>
 
@@ -111,31 +94,6 @@ function Home() {
                   <SyntaxCode />
                 </code>
               </pre>
-            </div>
-          </div>
-        </section>
-
-        <section className="border-t border-fd-border bg-fd-muted/20">
-          <div className="mx-auto grid max-w-[1512px] gap-10 px-6 py-12 md:px-10 lg:grid-cols-[0.72fr_1.28fr] lg:px-14 xl:px-16">
-            <div>
-              <p className="text-sm font-medium text-fd-primary">What it is</p>
-              <h2 className="mt-3 text-3xl font-medium leading-tight text-fd-foreground">
-                A thin adapter layer, not an email platform.
-              </h2>
-            </div>
-            <div className="grid gap-6 md:grid-cols-3">
-              <LandingDetail
-                label="Use one client"
-                text="Keep app code on createEmailClient, email.send, and email.sendBatch."
-              />
-              <LandingDetail
-                label="Choose real routes"
-                text="Set the primary adapter, fallback adapters, and per-send overrides explicitly."
-              />
-              <LandingDetail
-                label="Read the limits"
-                text="The docs list field support because providers do not expose the same API shape."
-              />
             </div>
           </div>
         </section>
@@ -225,15 +183,6 @@ function ProofPoint({ label, text }: { label: string; text: string }) {
     <div className="grid gap-1 py-3 sm:grid-cols-[120px_1fr]">
       <p className="font-medium text-fd-foreground">{label}</p>
       <p className="text-fd-muted-foreground">{text}</p>
-    </div>
-  );
-}
-
-function LandingDetail({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="border-t border-fd-border pt-4">
-      <p className="font-medium text-fd-foreground">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-fd-muted-foreground">{text}</p>
     </div>
   );
 }
