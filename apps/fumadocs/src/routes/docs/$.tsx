@@ -12,10 +12,8 @@ import {
   MarkdownCopyButton,
   ViewOptionsPopover,
 } from "fumadocs-ui/layouts/docs/page";
-import { Suspense } from "react";
 
 import { useMDXComponents } from "@/components/mdx";
-import { PageSpinner } from "@/components/spinner";
 import { baseOptions } from "@/lib/layout.shared";
 import { gitConfig } from "@/lib/shared";
 import { slugsToMarkdownPath, source } from "@/lib/source";
@@ -83,9 +81,7 @@ function Page() {
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>
       <Link to={markdownUrl} hidden />
-      <Suspense fallback={<PageSpinner />}>
-        {clientLoader.useContent(path, { markdownUrl, path })}
-      </Suspense>
+      {clientLoader.useContent(path, { markdownUrl, path })}
     </DocsLayout>
   );
 }
