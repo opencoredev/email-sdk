@@ -96,7 +96,7 @@ function Home() {
                 </div>
                 <CopyCodeButton />
               </div>
-              <pre className="max-h-[64svh] overflow-hidden p-5 text-[13px] leading-6 text-fd-foreground md:p-6 md:text-sm">
+              <pre className="p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
                 <code>
                   <SyntaxCode />
                 </code>
@@ -178,7 +178,9 @@ function CopyCodeButton() {
         <Copy className="t-icon size-3.5" data-icon="a" strokeWidth={2} />
         <Check className="t-icon size-3.5 text-fd-primary" data-icon="b" strokeWidth={2} />
       </span>
-      <span className={`t-text-swap ${labelState}`}>{label}</span>
+      <span aria-atomic="true" aria-live="polite" className={`t-text-swap ${labelState}`}>
+        {label}
+      </span>
     </button>
   );
 }
@@ -300,12 +302,12 @@ function Token({
   tone: "function" | "keyword" | "number" | "property" | "string" | "variable";
 }) {
   const className = {
-    function: "text-sky-300",
-    keyword: "text-purple-300",
-    number: "text-amber-300",
-    property: "text-rose-300",
-    string: "text-emerald-300",
-    variable: "text-blue-300",
+    function: "text-sky-700 dark:text-sky-300",
+    keyword: "text-purple-700 dark:text-purple-300",
+    number: "text-amber-700 dark:text-amber-300",
+    property: "text-rose-700 dark:text-rose-300",
+    string: "text-emerald-700 dark:text-emerald-300",
+    variable: "text-blue-700 dark:text-blue-300",
   }[tone];
 
   return <span className={className}>{children}</span>;
