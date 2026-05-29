@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight, Check, Copy, Mail, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";
 
@@ -113,16 +113,56 @@ function CopyCodeButton() {
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState("Copy");
   const [labelState, setLabelState] = useState("");
+  const swapTimerRef = useRef<number | null>(null);
+  const resetTimerRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  function clearTimers() {
+    if (swapTimerRef.current !== null) {
+      window.clearTimeout(swapTimerRef.current);
+      swapTimerRef.current = null;
+    }
+
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+  }
+
+  useEffect(() => clearTimers, []);
 
   function swapLabel(next: string) {
     const duration = readTextSwapDuration();
 
     setLabelState("is-exit");
-    window.setTimeout(() => {
+    swapTimerRef.current = window.setTimeout(() => {
       setLabel(next);
       setLabelState("is-enter-start");
-      window.requestAnimationFrame(() => setLabelState(""));
+      frameRef.current = window.requestAnimationFrame(() => {
+        setLabelState("");
+        frameRef.current = null;
+      });
+      swapTimerRef.current = null;
     }, duration);
+  }
+
+  async function handleCopy() {
+    clearTimers();
+
+    const copiedToClipboard = await copyToClipboard(example);
+    setCopied(copiedToClipboard);
+    swapLabel(copiedToClipboard ? "Copied" : "Copy failed");
+
+    resetTimerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      swapLabel("Copy");
+      resetTimerRef.current = null;
+    }, 1200);
   }
 
   return (
@@ -130,14 +170,7 @@ function CopyCodeButton() {
       aria-label="Copy code example"
       className="inline-flex items-center gap-2 overflow-hidden rounded-md border border-fd-border px-2.5 py-1.5 text-xs text-fd-muted-foreground transition-colors duration-200 hover:bg-fd-accent hover:text-fd-foreground"
       onClick={() => {
-        void copyToClipboard(example).then(() => {
-          setCopied(true);
-          swapLabel("Copied");
-          window.setTimeout(() => {
-            setCopied(false);
-            swapLabel("Copy");
-          }, 1200);
-        });
+        void handleCopy();
       }}
       type="button"
     >
@@ -198,35 +231,52 @@ function SyntaxCode() {
       </CodeLine>
       <CodeLine number={10}>
         {"      "}
-        <Token tone="property">auth</Token>: {"{"} <Token tone="property">user</Token>,{" "}
-        <Token tone="property">pass</Token> {"}"},
+        <Token tone="property">auth</Token>: {"{"}
       </CodeLine>
-      <CodeLine number={11}>{"    })"},</CodeLine>
-      <CodeLine number={12}>{"  ],"}</CodeLine>
-      <CodeLine number={13}>
+      <CodeLine number={11}>
+        {"        "}
+        <Token tone="property">user</Token>: <Token tone="variable">process</Token>.env.SMTP_USER!,
+      </CodeLine>
+      <CodeLine number={12}>
+        {"        "}
+        <Token tone="property">pass</Token>: <Token tone="variable">process</Token>.env.SMTP_PASS!,
+      </CodeLine>
+      <CodeLine number={13}>{"      },"}</CodeLine>
+      <CodeLine number={14}>{"    }),"}</CodeLine>
+      <CodeLine number={15}>{"  ],"}</CodeLine>
+      <CodeLine number={16}>
         {"  "}
         <Token tone="property">fallback</Token>: [<Token tone="string">"smtp"</Token>],
       </CodeLine>
-      <CodeLine number={14}>
+      <CodeLine number={17}>
         {"  "}
         <Token tone="property">retry</Token>: {"{"} <Token tone="property">retries</Token>:{" "}
         <Token tone="number">1</Token> {"}"},
       </CodeLine>
-      <CodeLine number={15}>{"});"}</CodeLine>
+      <CodeLine number={18}>{"});"}</CodeLine>
       <CodeLine />
-      <CodeLine number={17}>
+      <CodeLine number={20}>
         <Token tone="keyword">await</Token> <Token tone="variable">email</Token>.
         <Token tone="function">send</Token>({"{"}
       </CodeLine>
-      <CodeLine number={18}>
+      <CodeLine number={21}>
+        {"  "}
+        <Token tone="property">from</Token>:{" "}
+        <Token tone="string">{'"Acme <hello@acme.com>"'}</Token>,
+      </CodeLine>
+      <CodeLine number={22}>
         {"  "}
         <Token tone="property">to</Token>: <Token tone="string">"user@example.com"</Token>,
       </CodeLine>
-      <CodeLine number={19}>
+      <CodeLine number={23}>
         {"  "}
         <Token tone="property">subject</Token>: <Token tone="string">"Welcome"</Token>,
       </CodeLine>
-      <CodeLine number={20}>{"});"}</CodeLine>
+      <CodeLine number={24}>
+        {"  "}
+        <Token tone="property">text</Token>: <Token tone="string">"Your account is ready."</Token>,
+      </CodeLine>
+      <CodeLine number={25}>{"});"}</CodeLine>
     </>
   );
 }
@@ -262,7 +312,37 @@ function Token({
 }
 
 async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    return copyWithTextarea(text);
+  }
+
+  return copyWithTextarea(text);
+}
+
+function copyWithTextarea(text: string) {
+  const textarea = document.createElement("textarea");
+
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }
 
 function readTextSwapDuration() {
