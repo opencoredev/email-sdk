@@ -161,6 +161,7 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.headers.get("authorization")).toStartWith(
       "AWS4-HMAC-SHA256 Credential=access/",
     );
+    expect(capture.calls[0]?.headers.has("host")).toBe(false);
     expect(capture.calls[0]?.headers.get("x-amz-security-token")).toBe("session");
     expect(capture.calls[0]?.json).toMatchObject({
       FromEmailAddress: "Acme <hello@example.com>",
@@ -174,6 +175,10 @@ describe("provider payloads", () => {
       Content: {
         Simple: {
           Subject: { Data: "Welcome", Charset: "UTF-8" },
+          Body: {
+            Text: { Data: "Hello", Charset: "UTF-8" },
+            Html: { Data: "<p>Hello</p>", Charset: "UTF-8" },
+          },
           Headers: [{ Name: "X-Test", Value: "yes" }],
         },
       },

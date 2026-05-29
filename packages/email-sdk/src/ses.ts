@@ -162,14 +162,16 @@ function signAwsRequest(input: {
   const amzDate = toAmzDate(now);
   const dateStamp = amzDate.slice(0, 8);
   const payloadHash = sha256Hex(input.body);
-  const headers = {
+  const requestHeaders = {
     ...input.headers,
-    host: input.url.host,
     "x-amz-content-sha256": payloadHash,
     "x-amz-date": amzDate,
     ...(input.sessionToken ? { "x-amz-security-token": input.sessionToken } : {}),
   };
-  const canonicalHeaders = Object.entries(headers)
+  const canonicalHeaders = Object.entries({
+    ...requestHeaders,
+    host: input.url.host,
+  })
     .map(([name, value]) => [name.toLowerCase(), value.trim()] as const)
     .sort(([left], [right]) => left.localeCompare(right));
   const signedHeaders = canonicalHeaders.map(([name]) => name).join(";");
@@ -192,7 +194,7 @@ function signAwsRequest(input: {
   const signature = hmacHex(signingKey, stringToSign);
 
   return {
-    ...headers,
+    ...requestHeaders,
     Authorization: [
       `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}`,
       `SignedHeaders=${signedHeaders}`,
