@@ -7,8 +7,8 @@ icon: plunk
 <ProviderBadge adapter="plunk" />
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { plunk } from "email-sdk/plunk";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { plunk } from "@opencoredev/email-sdk/plunk";
 
 const email = createEmailClient({
   adapters: [plunk({ apiKey: process.env.PLUNK_API_KEY! })],

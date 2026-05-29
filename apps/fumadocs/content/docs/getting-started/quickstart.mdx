@@ -7,14 +7,14 @@ icon: Rocket
 Install the SDK:
 
 ```bash
-bun add email-sdk
+bun add @opencoredev/email-sdk
 ```
 
 This example sends through Resend.
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -33,9 +33,9 @@ await email.send({
 Add SMTP when you want a second route for the same transactional email. The SMTP adapter is built in and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK upgrades with STARTTLS before authenticating.
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
-import { smtp } from "email-sdk/smtp";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 export const email = createEmailClient({
   adapters: [

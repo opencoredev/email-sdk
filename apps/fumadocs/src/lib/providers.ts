@@ -2,7 +2,7 @@ export const providers = [
   {
     name: "Resend",
     key: "resend",
-    importPath: "email-sdk/resend",
+    importPath: "@opencoredev/email-sdk/resend",
     docs: "/docs/adapters/resend",
     logo: "https://cdn.simpleicons.org/resend",
     sidebarLogo: "https://cdn.simpleicons.org/resend/white",
@@ -11,7 +11,7 @@ export const providers = [
   {
     name: "Postmark",
     key: "postmark",
-    importPath: "email-sdk/postmark",
+    importPath: "@opencoredev/email-sdk/postmark",
     docs: "/docs/adapters/postmark",
     logo: "https://www.google.com/s2/favicons?domain=postmarkapp.com&sz=64",
     category: "Popular APIs",
@@ -19,7 +19,7 @@ export const providers = [
   {
     name: "SendGrid",
     key: "sendgrid",
-    importPath: "email-sdk/sendgrid",
+    importPath: "@opencoredev/email-sdk/sendgrid",
     docs: "/docs/adapters/sendgrid",
     logo: "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64",
     category: "Popular APIs",
@@ -27,7 +27,7 @@ export const providers = [
   {
     name: "Mailgun",
     key: "mailgun",
-    importPath: "email-sdk/mailgun",
+    importPath: "@opencoredev/email-sdk/mailgun",
     docs: "/docs/adapters/mailgun",
     logo: "https://cdn.simpleicons.org/mailgun",
     category: "Popular APIs",
@@ -35,7 +35,7 @@ export const providers = [
   {
     name: "MailerSend",
     key: "mailersend",
-    importPath: "email-sdk/mailersend",
+    importPath: "@opencoredev/email-sdk/mailersend",
     docs: "/docs/adapters/mailersend",
     logo: "https://www.google.com/s2/favicons?domain=mailersend.com&sz=64",
     category: "Popular APIs",
@@ -43,7 +43,7 @@ export const providers = [
   {
     name: "Brevo",
     key: "brevo",
-    importPath: "email-sdk/brevo",
+    importPath: "@opencoredev/email-sdk/brevo",
     docs: "/docs/adapters/brevo",
     logo: "https://cdn.simpleicons.org/brevo",
     category: "Popular APIs",
@@ -51,7 +51,7 @@ export const providers = [
   {
     name: "Mailchimp Transactional",
     key: "mailchimp",
-    importPath: "email-sdk/mailchimp",
+    importPath: "@opencoredev/email-sdk/mailchimp",
     docs: "/docs/adapters/mailchimp",
     logo: "https://cdn.simpleicons.org/mailchimp",
     category: "Popular APIs",
@@ -59,7 +59,7 @@ export const providers = [
   {
     name: "SparkPost",
     key: "sparkpost",
-    importPath: "email-sdk/sparkpost",
+    importPath: "@opencoredev/email-sdk/sparkpost",
     docs: "/docs/adapters/sparkpost",
     logo: "https://cdn.simpleicons.org/sparkpost",
     category: "Infrastructure",
@@ -67,7 +67,7 @@ export const providers = [
   {
     name: "Mailtrap",
     key: "mailtrap",
-    importPath: "email-sdk/mailtrap",
+    importPath: "@opencoredev/email-sdk/mailtrap",
     docs: "/docs/adapters/mailtrap",
     logo: "https://cdn.simpleicons.org/mailtrap",
     category: "Infrastructure",
@@ -75,7 +75,7 @@ export const providers = [
   {
     name: "Scaleway",
     key: "scaleway",
-    importPath: "email-sdk/scaleway",
+    importPath: "@opencoredev/email-sdk/scaleway",
     docs: "/docs/adapters/scaleway",
     logo: "https://cdn.simpleicons.org/scaleway",
     category: "Infrastructure",
@@ -83,7 +83,7 @@ export const providers = [
   {
     name: "ZeptoMail",
     key: "zeptomail",
-    importPath: "email-sdk/zeptomail",
+    importPath: "@opencoredev/email-sdk/zeptomail",
     docs: "/docs/adapters/zeptomail",
     logo: "https://cdn.simpleicons.org/zoho",
     category: "Infrastructure",
@@ -91,7 +91,7 @@ export const providers = [
   {
     name: "MailPace",
     key: "mailpace",
-    importPath: "email-sdk/mailpace",
+    importPath: "@opencoredev/email-sdk/mailpace",
     docs: "/docs/adapters/mailpace",
     logo: "https://www.google.com/s2/favicons?domain=mailpace.com&sz=64",
     category: "Infrastructure",
@@ -99,7 +99,7 @@ export const providers = [
   {
     name: "Loops",
     key: "loops",
-    importPath: "email-sdk/loops",
+    importPath: "@opencoredev/email-sdk/loops",
     docs: "/docs/adapters/loops",
     logo: "https://cdn.simpleicons.org/loops",
     category: "Product-led",
@@ -107,7 +107,7 @@ export const providers = [
   {
     name: "Plunk",
     key: "plunk",
-    importPath: "email-sdk/plunk",
+    importPath: "@opencoredev/email-sdk/plunk",
     docs: "/docs/adapters/plunk",
     logo: "https://www.google.com/s2/favicons?domain=useplunk.com&sz=64",
     category: "Product-led",
@@ -115,7 +115,7 @@ export const providers = [
   {
     name: "SMTP",
     key: "smtp",
-    importPath: "email-sdk/smtp",
+    importPath: "@opencoredev/email-sdk/smtp",
     docs: "/docs/adapters/smtp",
     logo: "",
     category: "Transport",

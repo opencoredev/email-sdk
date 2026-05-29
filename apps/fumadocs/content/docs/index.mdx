@@ -9,8 +9,8 @@ Email SDK is a small TypeScript package for sending transactional email through 
 Use Resend for the default path, add SMTP when you want a cheap or self-managed route, and keep a second API adapter ready for fallback. Your app code still calls the same `send` method.
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
