@@ -1,0 +1,45 @@
+---
+title: AI resources
+description: Use the Markdown docs, llms.txt, and agent skill when assistants work with Email SDK.
+icon: BrainCircuit
+---
+
+Email SDK exposes machine-readable docs so coding assistants can retrieve the same setup, adapter, fallback, hook, and reference pages that humans read.
+
+## Available resources
+
+| Resource                               | What it is                                                        |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `/llms.txt`                            | A compact index of docs pages for assistants and AI search tools. |
+| `/llms-full.txt`                       | One Markdown bundle containing every docs page.                   |
+| `/docs/index.md`                       | Markdown for the docs landing page.                               |
+| `/docs/getting-started/quickstart.md`  | Markdown for a specific docs page.                                |
+| `/docs/getting-started/agent-skill.md` | Agent instructions for Email SDK integration work.                |
+
+## Use per-page Markdown
+
+Every docs page has a Markdown version. Add `.md` to the docs path:
+
+```txt
+/docs/adapters/resend.md
+/docs/adapters/field-support.md
+/docs/reference/client.md
+```
+
+Use per-page Markdown when an assistant only needs one topic. Use `/llms-full.txt` when it needs the complete docs bundle.
+
+## Keep assistant answers grounded
+
+When asking an assistant to wire Email SDK into an app, include the page that matches the job:
+
+```txt
+Use /docs/getting-started/provider-readiness.md and /docs/adapters/field-support.md.
+Wire Resend as the primary adapter and SMTP as fallback.
+Do not log API keys, SMTP passwords, raw tokens, or full message bodies.
+```
+
+For codebase work, also point the assistant at the repo-local skill:
+
+```txt
+Use skills/email-sdk/SKILL.md before changing Email SDK integration code.
+```

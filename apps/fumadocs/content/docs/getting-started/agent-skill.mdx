@@ -10,7 +10,7 @@ This repo includes an agent skill at:
 skills/email-sdk/SKILL.md
 ```
 
-Use it when an agent wires Email SDK into an app, reviews adapter setup, or updates these docs.
+Use it when an agent wires Email SDK into an app, reviews adapter setup, updates provider docs, or checks production fallback behavior.
 
 ## What it tells agents
 
@@ -27,6 +27,7 @@ Use it when an agent wires Email SDK into an app, reviews adapter setup, or upda
 ```txt
 Use the repo-local Email SDK skill at skills/email-sdk/SKILL.md.
 Wire Resend as the primary adapter and SMTP as fallback.
+Check /docs/adapters/field-support.md before choosing fallback routes.
 Keep secrets in environment variables.
 Add one narrow test around the send path.
 ```

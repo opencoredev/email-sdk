@@ -1,0 +1,112 @@
+---
+title: Provider readiness
+description: Choose production adapters, confirm field support, and validate fallback behavior before launch.
+icon: ShieldCheck
+---
+
+Email SDK adapters are stable by contract: each adapter maps the `EmailMessage` fields it supports and rejects unsupported fields before calling the provider. That keeps production sends from silently dropping CC, BCC, reply-to, headers, tags, metadata, or attachments.
+
+## Production checklist
+
+1. Pick a primary adapter that supports every field your app sends.
+2. Pick fallback adapters that support the same required fields.
+3. Keep credentials in environment variables.
+4. Add an idempotency key for sends that may be retried.
+5. Use hooks for status and tracing, not secrets or full message bodies.
+6. Run adapter payload tests before shipping provider changes.
+7. Run a real provider smoke test only with explicit test recipients.
+
+## Recommended pairs
+
+| Need                             | Start with                                         |
+| -------------------------------- | -------------------------------------------------- |
+| Most complete API field mapping  | Postmark, SendGrid, Mailgun, Brevo                 |
+| Resend-style DX with attachments | Resend                                             |
+| Cheap or self-managed delivery   | SMTP                                               |
+| Product or event email           | Loops, Plunk                                       |
+| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark |
+| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend    |
+
+## Field support decides fallback safety
+
+Fallbacks are only safe when the backup adapter can send the same kind of message. For example, a receipt with attachments should not fall back to SMTP in this SDK because SMTP currently rejects attachments. A basic text or HTML notification can fall back to SMTP because SMTP maps addresses, subject, text, HTML, reply-to, and headers.
+
+Use the <a href="/docs/adapters/field-support">field support table</a> before choosing backup routes.
+
+## Retry and fallback order
+
+Retries happen inside one adapter. Fallbacks happen after that adapter has finished its retry loop.
+
+```ts
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  retry: {
+    retries: 1,
+  },
+  fallback: ["smtp"],
+});
+```
+
+With this setup, Email SDK tries Resend first. If Resend fails with a retryable error, it retries once. If the final Resend attempt still fails, Email SDK tries SMTP.
+
+## Hooks are observability callbacks
+
+Hooks receive the routing name, original message, attempt number, and optional `metadata` passed to `send`.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  hooks: {
+    beforeSend(event) {
+      console.log("email.send", event.provider, event.attempt);
+    },
+    afterSend(event) {
+      console.log("email.sent", event.provider, event.response.id);
+    },
+    onRetry(event) {
+      console.warn("email.retry", event.provider, event.nextAttempt);
+    },
+    onError(event) {
+      console.error("email.error", event.provider, event.error);
+    },
+  },
+});
+```
+
+Hook failures are swallowed so observability code does not mask provider behavior.
+
+## What is covered by tests
+
+The package test suite covers:
+
+| Area                        | Test file                                 |
+| --------------------------- | ----------------------------------------- |
+| Provider payload mapping    | `packages/email-sdk/src/adapters.test.ts` |
+| Unsupported field rejection | `packages/email-sdk/src/adapters.test.ts` |
+| Default adapter send path   | `packages/email-sdk/src/core.test.ts`     |
+| Fallback routing            | `packages/email-sdk/src/core.test.ts`     |
+| Legacy provider aliases     | `packages/email-sdk/src/core.test.ts`     |
+| Retryable provider failures | `packages/email-sdk/src/core.test.ts`     |
+| Hook failure isolation      | `packages/email-sdk/src/core.test.ts`     |
+
+Run the narrow production gate:
+
+```bash
+bun test packages/email-sdk/src/adapters.test.ts packages/email-sdk/src/core.test.ts
+```
+
+Then run the package build:
+
+```bash
+bun run --filter email-sdk build
+```

@@ -42,3 +42,5 @@ Each hook receives:
 ## Keep logs safe
 
 Do not log API keys, SMTP passwords, raw tokens, full message bodies, or unnecessary recipient data. For most production logs, routing name, status, subject category, template name, and message ID are enough.
+
+Hook failures are swallowed. Email SDK treats hooks as observability callbacks, so a logging failure does not hide the provider result or provider error.

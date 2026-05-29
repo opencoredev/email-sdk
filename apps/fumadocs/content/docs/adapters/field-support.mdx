@@ -64,6 +64,8 @@ SMTP is built in and does not use Nodemailer. It maps address fields and headers
 
 Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. That keeps production behavior boring: if a field matters, you find out before the provider request.
 
+This behavior is covered by `packages/email-sdk/src/adapters.test.ts`. If an adapter starts mapping a new field, update the table and the payload test in the same change.
+
 ## Attachment rules
 
 Attachment `content` is treated as raw content by default and encoded to Base64 for API adapters that require Base64.

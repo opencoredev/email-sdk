@@ -28,6 +28,8 @@ const email = createEmailClient({
 
 In this setup, Email SDK tries Resend first. If Resend fails with a retryable error, it retries once. If it still fails, it tries SMTP.
 
+Do not use a fallback just because it can deliver email. Use a fallback when it can represent the fields your message needs. Unsupported fields fail fast before the provider request.
+
 ## Override fallback for one send
 
 ```ts
