@@ -21,7 +21,6 @@ import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
 import {
   type DocsVersionCollection,
   getDocsVersionBase,
-  getDocsVersionHref,
   resolveDocsVersionedSlugs,
 } from "@/lib/versions";
 
@@ -72,7 +71,6 @@ const loader = createServerFn({
     const docsSource = getDocsSource(resolved.version);
     const page = docsSource.getPage(resolved.slugs);
     if (!page) throw notFound();
-    const rawPageTree = await docsSource.serializePageTree(docsSource.getPageTree());
 
     return {
       title: page.data.title,
@@ -82,33 +80,9 @@ const loader = createServerFn({
       versionCollection: resolved.version.collection,
       contentPath: resolved.version.contentPath,
       docsBasePath: getDocsVersionBase(resolved.version),
-      pageTree: withVersionedTreeUrls(rawPageTree, resolved.version),
+      pageTree: await docsSource.serializePageTree(docsSource.getPageTree()),
     };
   });
-
-function withVersionedTreeUrls<T>(tree: T, version: Parameters<typeof getDocsVersionHref>[0]): T {
-  if (Array.isArray(tree)) {
-    return tree.map((item) => withVersionedTreeUrls(item, version)) as T;
-  }
-
-  if (!tree || typeof tree !== "object") {
-    return tree;
-  }
-
-  const next = { ...tree } as Record<string, unknown>;
-
-  if (typeof next.url === "string") {
-    next.url = getDocsVersionHref(version, next.url);
-  }
-
-  for (const [key, value] of Object.entries(next)) {
-    if (key !== "url" && value && typeof value === "object") {
-      next[key] = withVersionedTreeUrls(value, version);
-    }
-  }
-
-  return next as T;
-}
 
 function createDocsClientLoader(collection: (typeof browserCollections)[DocsVersionCollection]) {
   return collection.createClientLoader({
