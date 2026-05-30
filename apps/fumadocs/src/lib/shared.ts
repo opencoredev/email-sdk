@@ -7,7 +7,7 @@ export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev"
   "",
 );
 export const siteOgImagePath = "/og/email-sdk.png";
-export const siteOgImageVersion = import.meta.env.VITE_OG_IMAGE_VERSION ?? "dev";
+export const siteOgImageVersion = import.meta.env.VITE_OG_IMAGE_VERSION || "dev";
 export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}?v=${encodeURIComponent(
   siteOgImageVersion,
 )}`;
