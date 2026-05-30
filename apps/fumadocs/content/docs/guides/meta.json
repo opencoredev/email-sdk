@@ -1,10 +1,5 @@
 {
   "title": "Guides",
   "icon": "BookOpen",
-  "pages": [
-    "create-first-plugin",
-    "create-adapter",
-    "publish-community-adapter",
-    "test-email-behavior"
-  ]
+  "pages": ["authoring", "test-email-behavior"]
 }

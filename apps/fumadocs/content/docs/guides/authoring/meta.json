@@ -1,0 +1,5 @@
+{
+  "title": "Build",
+  "icon": "Wrench",
+  "pages": ["create-first-plugin", "create-adapter", "publish-community-adapter"]
+}
