@@ -100,7 +100,7 @@ Useful workspace scripts:
 
 ## Releases
 
-Releases use Changesets, Depot-backed GitHub Actions runners, npm, and the repo-local Homebrew formula. See [AGENTS.md](AGENTS.md).
+Releases use Changesets, Depot-backed GitHub Actions runners, npm, and the repo-local Homebrew formula. Release operator notes live in [AGENTS.md](AGENTS.md).
 
 Do not start the docs dev server unless you actually want a local preview.
 
