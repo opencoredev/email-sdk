@@ -56,12 +56,23 @@ jobs:
 
       - name: Update Homebrew formula checksum
         if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun run homebrew:update
           if ! git diff --quiet -- Formula/email-sdk.rb; then
+            VERSION="$(bun -e 'const pkg = await Bun.file("packages/email-sdk/package.json").json(); console.log(pkg.version)')"
+            BRANCH="automation/homebrew-formula-${VERSION}"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -B "$BRANCH"
             git add Formula/email-sdk.rb
-            git commit -m "Update Homebrew formula"
-            git push
+            git commit -m "Update Homebrew formula for ${VERSION}"
+            git push --force-with-lease origin "$BRANCH"
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Update Homebrew formula for ${VERSION}" \
+              --body "Updates the Homebrew formula to the published @opencoredev/email-sdk ${VERSION} npm tarball." \
+              || echo "::notice::Pushed Homebrew formula update to ${BRANCH}. Open a pull request into main to apply it."
           fi

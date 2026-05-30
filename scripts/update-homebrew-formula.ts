@@ -26,12 +26,27 @@ formula = formula.replace(/sha256 "[^"]+"/, `sha256 "${sha256}"`);
 await writeFile(formulaPath, formula);
 
 async function resolvePublishedSha(url: string) {
-  const response = await fetch(url);
+  const maxAttempts = 12;
+  const retryDelayMs = 5_000;
 
-  if (!response.ok) {
-    return "TODO_UPDATE_AFTER_NPM_PUBLISH";
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, { cache: "no-store" });
+
+    if (response.ok) {
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return createHash("sha256").update(bytes).digest("hex");
+    }
+
+    if (attempt === maxAttempts) {
+      throw new Error(`Unable to fetch published npm tarball ${url}: ${response.status}`);
+    }
+
+    await delay(retryDelayMs);
   }
 
-  const bytes = Buffer.from(await response.arrayBuffer());
-  return createHash("sha256").update(bytes).digest("hex");
+  throw new Error(`Unable to fetch published npm tarball ${url}`);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
