@@ -202,10 +202,10 @@ export function assertSupportedMessageFields(
   if (message.cc && !supported.cc) unsupported.push("cc");
   if (message.bcc && !supported.bcc) unsupported.push("bcc");
   if (message.replyTo && !supported.replyTo) unsupported.push("replyTo");
-  if (message.headers && !supported.headers) unsupported.push("headers");
+  if (hasValues(message.headers) && !supported.headers) unsupported.push("headers");
   if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
   if (message.tags?.length && !supported.tags) unsupported.push("tags");
-  if (message.metadata && !supported.metadata) unsupported.push("metadata");
+  if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
 
   if (unsupported.length > 0) {
     throw new EmailValidationError(
@@ -213,4 +213,27 @@ export function assertSupportedMessageFields(
       { adapter, unsupported },
     );
   }
+}
+
+export function assertMaxItems(adapter: string, field: string, values: unknown[], max: number) {
+  if (values.length <= max) {
+    return;
+  }
+
+  throw new EmailValidationError(
+    `${adapter} only supports ${max} ${field}${max === 1 ? "" : "s"} per message.`,
+    { adapter, field, max, count: values.length },
+  );
+}
+
+function hasValues(value: EmailMessage["headers"] | EmailMessage["metadata"] | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return Object.keys(value).length > 0;
 }

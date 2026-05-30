@@ -1,0 +1,26 @@
+---
+title: Community plugins
+description: Static registry for community Email SDK plugins and adapters.
+icon: Users
+---
+
+Community plugins are third-party npm packages. The registry is static and maintained in this repository by pull request.
+
+<CommunityPluginRegistry />
+
+## Labels
+
+| Label     | Meaning                                                    |
+| --------- | ---------------------------------------------------------- |
+| Community | Listed by pull request. The package is not endorsed.       |
+| Verified  | Passed the registry checks for a specific package version. |
+| Official  | Maintained by OpenCore or in this repository.              |
+
+Verified does not mean risk-free. It means the package passed the static checks documented in the registry schema.
+
+## Add a package
+
+Publish a package to npm, then open a pull request that adds an entry to `apps/fumadocs/content/community/plugins.json`.
+If you want feedback before writing the entry, open the `Community plugin listing` issue template with the package and source links.
+
+Start with [Publish a community plugin](/docs/guides/authoring/publish-community-plugin).

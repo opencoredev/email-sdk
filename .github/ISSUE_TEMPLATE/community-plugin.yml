@@ -1,0 +1,60 @@
+name: Community plugin listing
+description: Request a static docs listing for an Email SDK community plugin or adapter.
+title: "[Community plugin]: "
+labels: ["community-plugin", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Community packages are listed from `apps/fumadocs/content/community/plugins.json`.
+        The fastest path is a pull request that updates that file and passes `bun run community:check`.
+
+  - type: input
+    id: package
+    attributes:
+      label: npm package
+      placeholder: "email-sdk-require-metadata"
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source repository
+      placeholder: "https://github.com/acme/email-sdk-require-metadata"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Package kind
+      options:
+        - plugin
+        - adapter
+        - hybrid
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What does it add?
+      description: Keep this short. Mention the adapter name or plugin ID if there is one.
+      placeholder: "Blocks sends unless tenant metadata is present."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Listing checks
+      options:
+        - label: "The package declares `@opencoredev/email-sdk` as a peer dependency."
+          required: true
+        - label: "The package has a public source repository."
+          required: true
+        - label: "The package does not include `preinstall`, `install`, or `postinstall` scripts."
+          required: true
+        - label: "The package README shows `createEmailClient({ plugins: [...] })` usage."
+          required: true

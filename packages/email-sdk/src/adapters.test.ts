@@ -347,6 +347,78 @@ describe("provider payloads", () => {
       ),
     ).rejects.toThrow("mailtrap does not support");
   });
+
+  test("empty optional field containers do not fail narrow adapters", async () => {
+    const emptyOptionals = {
+      ...message,
+      headers: {},
+      metadata: {},
+      tags: [],
+      attachments: undefined,
+      cc: undefined,
+      bcc: undefined,
+      replyTo: undefined,
+    };
+
+    const response = await loops({
+      apiKey: "key",
+      transactionalId: "tx",
+      fetch: jsonCapture({ id: "loop_123" }).fetch,
+    }).send(emptyOptionals, context);
+
+    expect(response.id).toBe("loop_123");
+  });
+
+  test("adapters reject values they can only partially represent", async () => {
+    await expect(
+      postmark({
+        serverToken: "server",
+        fetch: jsonCapture({ MessageID: "postmark_123" }).fetch,
+      }).send(
+        {
+          ...message,
+          tags: [
+            { name: "kind", value: "welcome" },
+            { name: "plan", value: "pro" },
+          ],
+        },
+        context,
+      ),
+    ).rejects.toThrow("postmark only supports 1 tag per message");
+
+    await expect(
+      mailtrap({ apiKey: "key", fetch: jsonCapture({ message_id: "mt_123" }).fetch }).send(
+        {
+          ...messageWithoutReplyToOrMetadata,
+          tags: [
+            { name: "kind", value: "welcome" },
+            { name: "plan", value: "pro" },
+          ],
+        },
+        context,
+      ),
+    ).rejects.toThrow("mailtrap only supports 1 tag per message");
+
+    await expect(
+      brevo({ apiKey: "key", fetch: jsonCapture({ messageId: "brevo_123" }).fetch }).send(
+        {
+          ...message,
+          replyTo: ["reply@example.com", "support@example.com"],
+        },
+        context,
+      ),
+    ).rejects.toThrow("brevo only supports 1 replyTo per message");
+
+    await expect(
+      mailersend({ apiKey: "key", fetch: jsonCapture({ message_id: "ms_123" }).fetch }).send(
+        {
+          ...messageWithoutMetadata,
+          replyTo: ["reply@example.com", "support@example.com"],
+        },
+        context,
+      ),
+    ).rejects.toThrow("mailersend only supports 1 replyTo per message");
+  });
 });
 
 function jsonCapture(body: unknown, init?: ResponseInit) {

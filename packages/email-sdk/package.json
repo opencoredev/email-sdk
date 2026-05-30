@@ -97,6 +97,18 @@
     "./agent-tools": {
       "types": "./dist/agent-tools.d.ts",
       "import": "./dist/agent-tools.js"
+    },
+    "./plugins/defaults": {
+      "types": "./dist/plugins-defaults.d.ts",
+      "import": "./dist/plugins-defaults.js"
+    },
+    "./plugins/observability": {
+      "types": "./dist/plugins-observability.d.ts",
+      "import": "./dist/plugins-observability.js"
+    },
+    "./plugins/capture": {
+      "types": "./dist/plugins-capture.d.ts",
+      "import": "./dist/plugins-capture.js"
     }
   },
   "publishConfig": {

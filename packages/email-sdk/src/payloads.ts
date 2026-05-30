@@ -1,5 +1,6 @@
 import type { EmailMessage } from "./types.js";
 import {
+  assertMaxItems,
   attachmentToBase64,
   formatAddress,
   formatAddresses,
@@ -42,6 +43,21 @@ export function optionalApiAddresses(addresses: EmailMessage["cc"]) {
   }
 
   return (Array.isArray(addresses) ? addresses : [addresses]).map(apiAddress);
+}
+
+export function optionalSingleApiAddress(
+  adapter: string,
+  field: string,
+  addresses: EmailMessage["cc"],
+) {
+  const values = optionalApiAddresses(addresses);
+
+  if (!values) {
+    return undefined;
+  }
+
+  assertMaxItems(adapter, field, values, 1);
+  return values[0];
 }
 
 export function stringAddresses(addresses: EmailMessage["to"]) {

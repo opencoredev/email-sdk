@@ -1,0 +1,84 @@
+---
+title: Observability plugin
+description: Emit redacted log, metric, and trace events.
+icon: Activity
+---
+
+Use the observability plugin when you want to see email behavior without logging recipients or message bodies.
+
+```ts
+import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    observabilityPlugin({
+      log(event) {
+        console.log(event.type, event.provider);
+      },
+      metric(event) {
+        statsd.increment(event.type, {
+          provider: event.provider,
+        });
+      },
+      trace(event) {
+        tracer.event("email", event);
+      },
+    }),
+  ],
+});
+```
+
+## Events
+
+| Event         | Fires when                                 |
+| ------------- | ------------------------------------------ |
+| `email.sent`  | A provider returns a normalized response.  |
+| `email.retry` | Email SDK schedules another retry attempt. |
+| `email.error` | A provider attempt fails.                  |
+
+Each event includes provider name, attempt number, metadata, and a redacted message summary.
+
+## Redacted message shape
+
+```ts
+type RedactedEmailMessage = {
+  subject: string;
+  toCount: number;
+  ccCount: number;
+  bccCount: number;
+  hasHtml: boolean;
+  hasText: boolean;
+  attachmentCount: number;
+  tagNames: string[];
+  metadataKeys: string[];
+};
+```
+
+By default, the plugin does not include recipient addresses, HTML, text, attachment content, or metadata values.
+
+## Custom redaction
+
+```ts
+observabilityPlugin({
+  redactMessage(message) {
+    return {
+      subject: message.subject,
+      toCount: Array.isArray(message.to) ? message.to.length : 1,
+      template: message.metadata?.template ?? "unknown",
+      hasAttachments: Boolean(message.attachments?.length),
+    };
+  },
+  log(event) {
+    console.log(event);
+  },
+});
+```
+
+Keep secrets, raw tokens, recipient lists, and body content out of logs unless your app explicitly needs and protects that data.
+
+## Failure behavior
+
+Observability callbacks are non-blocking. If `log`, `metric`, or `trace` throws, Email SDK swallows that error so logging failures do not hide provider failures.
+
+Use a custom `beforeSend` middleware plugin when a rule should block a send.

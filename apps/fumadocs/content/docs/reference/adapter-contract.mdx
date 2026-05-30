@@ -29,6 +29,27 @@ export const customAdapter: EmailProvider = {
 };
 ```
 
+Use a plain adapter directly:
+
+```ts
+createEmailClient({ adapters: [customAdapter] });
+```
+
+Or package it as an adapter plugin:
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function customAdapterPlugin(): EmailPlugin {
+  return {
+    id: "custom",
+    adapters: [customAdapter],
+  };
+}
+
+createEmailClient({ plugins: [customAdapterPlugin()] });
+```
+
 ## `EmailProvider`
 
 ```ts

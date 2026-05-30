@@ -5,6 +5,7 @@ import {
   base64Attachments,
   commonHeadersObject,
   optionalApiAddresses,
+  optionalSingleApiAddress,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 
@@ -31,7 +32,7 @@ export function brevo(options: BrevoProviderOptions): EmailProvider<{ baseUrl: s
         to: apiAddresses(message.to),
         cc: optionalApiAddresses(message.cc),
         bcc: optionalApiAddresses(message.bcc),
-        replyTo: optionalApiAddresses(message.replyTo)?.[0],
+        replyTo: optionalSingleApiAddress("brevo", "replyTo", message.replyTo),
         subject: message.subject,
         htmlContent: message.html,
         textContent: message.text,

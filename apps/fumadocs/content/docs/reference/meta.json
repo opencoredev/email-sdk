@@ -1,4 +1,5 @@
 {
   "title": "Reference",
-  "pages": ["client", "message", "adapter-contract", "errors", "cli"]
+  "icon": "LibraryBig",
+  "pages": ["client", "message", "adapter-contract", "community-registry", "errors", "cli"]
 }
