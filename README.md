@@ -17,6 +17,8 @@ you actually send through, and keep provider-specific field support visible in t
 bun add @opencoredev/email-sdk
 ```
 
+The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
