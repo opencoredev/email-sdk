@@ -1,0 +1,67 @@
+---
+title: AWS SES
+description: Configure the AWS SES v2 SendEmail adapter.
+icon: Cloud
+---
+
+The AWS SES adapter calls the SES v2 SendEmail API directly with SigV4-signed fetch requests. It does not add a runtime dependency on the AWS SDK.
+
+<ProviderBadge adapter="ses" />
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { ses } from "email-sdk/ses";
+
+const email = createEmailClient({
+  adapters: [
+    ses({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      sessionToken: process.env.AWS_SESSION_TOKEN,
+      region: process.env.AWS_REGION!,
+    }),
+  ],
+});
+```
+
+## Send
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+  tags: [{ name: "type", value: "welcome" }],
+});
+```
+
+## Options
+
+| Option                 | Type           | Required | Notes                                                 |
+| ---------------------- | -------------- | -------- | ----------------------------------------------------- |
+| `accessKeyId`          | `string`       | Yes      | AWS access key ID.                                    |
+| `secretAccessKey`      | `string`       | Yes      | AWS secret access key.                                |
+| `region`               | `string`       | Yes      | SES region, for example `us-east-1`.                  |
+| `sessionToken`         | `string`       | No       | Required for temporary credentials.                   |
+| `baseUrl`              | `string`       | No       | Defaults to `https://email.{region}.amazonaws.com`.   |
+| `fetch`                | `typeof fetch` | No       | Useful for tests or custom runtimes.                  |
+| `charset`              | `string`       | No       | Defaults to `UTF-8`.                                  |
+| `configurationSetName` | `string`       | No       | SES configuration set for sends through this adapter. |
+
+## CLI
+
+```bash
+AWS_ACCESS_KEY_ID=... \
+AWS_SECRET_ACCESS_KEY=... \
+AWS_REGION=us-east-1 \
+email-sdk send --adapter ses \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Welcome" \
+  --html "<p>Your workspace is ready.</p>"
+```
+
+## Response
+
+The adapter returns the SES `MessageId` as `id` and `messageId`.

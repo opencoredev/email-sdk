@@ -1,0 +1,106 @@
+---
+title: Quickstart
+description: Install Email SDK, create a client, and send a first transactional email.
+icon: Rocket
+---
+
+Install the SDK:
+
+```bash
+bun add @opencoredev/email-sdk
+```
+
+This example sends through Resend. Set `RESEND_API_KEY` in the environment before running it.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome to Acme",
+  text: "Your account is ready.",
+});
+```
+
+## Add built-in SMTP fallback
+
+Add SMTP when you want a second route for the same transactional email. The SMTP adapter is built in
+and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK
+upgrades with STARTTLS before authenticating.
+
+Only use fallback adapters that can send the same message shape. For example, SMTP supports address
+fields and headers, but not provider-only fields like tags, metadata, or attachments.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: ["smtp"],
+});
+```
+
+Your application still sends the same way:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Receipt",
+  text: "Thanks for your order.",
+});
+```
+
+## Check the result
+
+`send` resolves with the normalized adapter response. The `provider` value tells you which adapter
+actually handled the send.
+
+```ts
+const result = await email.send(message);
+
+console.log(result.provider);
+console.log(result.id);
+```
+
+If the adapter returns a message ID, Email SDK exposes it as both `id` and `messageId`. Provider
+responses are still available through `raw` when an adapter includes them.
+
+## Test from the CLI
+
+Use the CLI to check adapter credentials from your terminal.
+
+```bash
+email-sdk doctor --adapter resend
+```
+
+Send a test email:
+
+```bash
+email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+Use `--dry-run` when you want to validate the message and selected adapter without sending email.

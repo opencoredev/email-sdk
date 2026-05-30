@@ -1,6 +1,6 @@
-import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 
+import { DocsVersionLink } from "@/components/docs-version-link";
 import { providers } from "@/lib/providers";
 
 export function ProviderGrid() {
@@ -20,14 +20,12 @@ export function ProviderGrid() {
           </div>
           <code className="mt-3 block text-xs text-fd-muted-foreground">{provider.importPath}</code>
           <div className="mt-4 flex items-center gap-2">
-            <Link
+            <DocsVersionLink
               className="inline-flex h-8 items-center justify-center rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
-              params={{ _splat: provider.docs.replace("/docs/", "") }}
-              preload="intent"
-              to="/docs/$"
+              docsPath={provider.docs}
             >
               Docs
-            </Link>
+            </DocsVersionLink>
             <a
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
               href={provider.website}

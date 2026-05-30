@@ -1,0 +1,4 @@
+{
+  "title": "Reference",
+  "pages": ["client", "message", "adapter-contract", "errors", "cli"]
+}

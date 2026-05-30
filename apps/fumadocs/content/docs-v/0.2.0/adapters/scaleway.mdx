@@ -1,0 +1,33 @@
+---
+title: Scaleway
+description: Configure the Scaleway Transactional Email adapter.
+icon: scaleway
+---
+
+<ProviderBadge adapter="scaleway" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { scaleway } from "@opencoredev/email-sdk/scaleway";
+
+const email = createEmailClient({
+  adapters: [
+    scaleway({
+      secretKey: process.env.SCALEWAY_SECRET_KEY!,
+      projectId: process.env.SCALEWAY_PROJECT_ID!,
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option      | Type           | Required | Notes                                   |
+| ----------- | -------------- | -------- | --------------------------------------- |
+| `secretKey` | `string`       | Yes      | Scaleway secret key.                    |
+| `projectId` | `string`       | Yes      | Scaleway project ID.                    |
+| `region`    | `string`       | No       | Defaults to `fr-par`.                   |
+| `baseUrl`   | `string`       | No       | Defaults to `https://api.scaleway.com`. |
+| `fetch`     | `typeof fetch` | No       | Useful for tests or custom runtimes.    |
+
+Scaleway supports a narrower message shape than full API-first providers. Unsupported fields throw before the API call.

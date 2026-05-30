@@ -5,6 +5,14 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
+import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
+
+const versionedDocsPages = docsVersions
+  .filter((version) => !version.current)
+  .map((version) => ({
+    path: getDocsVersionHref(version),
+  }));
+
 export default defineConfig({
   server: {
     port: 3000,
@@ -25,6 +33,7 @@ export default defineConfig({
         {
           path: "/docs",
         },
+        ...versionedDocsPages,
         {
           path: "/api/search",
         },

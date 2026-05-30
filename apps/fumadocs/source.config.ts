@@ -9,4 +9,22 @@ export const docs = defineDocs({
   },
 });
 
+export const docsV020 = defineDocs({
+  dir: "content/docs-v/0.2.0",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
+export const docsV021 = defineDocs({
+  dir: "content/docs-v/0.2.1",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
 export default defineConfig();
