@@ -1,5 +1,10 @@
 {
   "title": "Build",
   "icon": "Wrench",
-  "pages": ["create-first-plugin", "create-adapter", "publish-community-adapter"]
+  "pages": [
+    "create-first-plugin",
+    "create-adapter",
+    "publish-community-plugin",
+    "publish-community-adapter"
+  ]
 }
