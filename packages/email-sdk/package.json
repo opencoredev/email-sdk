@@ -89,6 +89,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/cli.js",
     "check-types": "tsc -p tsconfig.json --noEmit",
+    "live:smoke": "bun run src/live-smoke.ts",
     "test": "bun test"
   },
   "devDependencies": {

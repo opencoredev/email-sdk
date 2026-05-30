@@ -1,0 +1,35 @@
+{
+  "providers": {
+    "resend": {
+      "status": "verified",
+      "verifiedAt": "2026-05-30",
+      "scope": "Resend testing sender to account-owner recipient",
+      "messageId": "1415dfa2-2170-46bf-8537-2a625b752f96",
+      "notes": [
+        "A previous successful Resend smoke returned message ID 808d95ee-bf2e-4a40-a389-3ef912f9422a.",
+        "Sending to arbitrary recipients returned Resend's testing-mode restriction.",
+        "Domain verification is still required for production recipient coverage."
+      ]
+    },
+    "postmark": { "status": "untested" },
+    "sendgrid": { "status": "untested" },
+    "mailgun": { "status": "untested" },
+    "mailersend": { "status": "untested" },
+    "brevo": { "status": "untested" },
+    "mailchimp": {
+      "status": "untested",
+      "notes": ["Live Mailchimp Transactional delivery was skipped because the provider is paid or account-gated."]
+    },
+    "sparkpost": { "status": "untested" },
+    "loops": {
+      "status": "untested",
+      "notes": ["The current adapter requires both LOOPS_API_KEY and LOOPS_TRANSACTIONAL_ID."]
+    },
+    "plunk": { "status": "untested" },
+    "mailtrap": { "status": "untested" },
+    "scaleway": { "status": "untested" },
+    "zeptomail": { "status": "untested" },
+    "mailpace": { "status": "untested" },
+    "smtp": { "status": "untested" }
+  }
+}

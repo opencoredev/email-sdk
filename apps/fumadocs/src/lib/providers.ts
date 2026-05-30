@@ -7,6 +7,10 @@ export const providers = [
     logo: "https://cdn.simpleicons.org/resend",
     sidebarLogo: "https://cdn.simpleicons.org/resend/white",
     category: "Popular APIs",
+    verification: {
+      status: "verified",
+      note: "Live delivery was verified with Resend's testing sender. Sending to arbitrary recipients still requires a verified Resend domain.",
+    },
   },
   {
     name: "Postmark",
@@ -15,6 +19,10 @@ export const providers = [
     docs: "/docs/adapters/postmark",
     logo: "https://www.google.com/s2/favicons?domain=postmarkapp.com&sz=64",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "SendGrid",
@@ -23,6 +31,10 @@ export const providers = [
     docs: "/docs/adapters/sendgrid",
     logo: "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Mailgun",
@@ -31,6 +43,10 @@ export const providers = [
     docs: "/docs/adapters/mailgun",
     logo: "https://cdn.simpleicons.org/mailgun",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "MailerSend",
@@ -39,6 +55,10 @@ export const providers = [
     docs: "/docs/adapters/mailersend",
     logo: "https://www.google.com/s2/favicons?domain=mailersend.com&sz=64",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Brevo",
@@ -47,6 +67,10 @@ export const providers = [
     docs: "/docs/adapters/brevo",
     logo: "https://cdn.simpleicons.org/brevo",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Mailchimp Transactional",
@@ -55,6 +79,10 @@ export const providers = [
     docs: "/docs/adapters/mailchimp",
     logo: "https://cdn.simpleicons.org/mailchimp",
     category: "Popular APIs",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests. Live Mailchimp Transactional delivery is not verified because the provider is paid or account-gated.",
+    },
   },
   {
     name: "SparkPost",
@@ -63,6 +91,10 @@ export const providers = [
     docs: "/docs/adapters/sparkpost",
     logo: "https://cdn.simpleicons.org/sparkpost",
     category: "Infrastructure",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Mailtrap",
@@ -71,6 +103,10 @@ export const providers = [
     docs: "/docs/adapters/mailtrap",
     logo: "https://cdn.simpleicons.org/mailtrap",
     category: "Infrastructure",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Scaleway",
@@ -79,6 +115,10 @@ export const providers = [
     docs: "/docs/adapters/scaleway",
     logo: "https://cdn.simpleicons.org/scaleway",
     category: "Infrastructure",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "ZeptoMail",
@@ -87,6 +127,10 @@ export const providers = [
     docs: "/docs/adapters/zeptomail",
     logo: "https://cdn.simpleicons.org/zoho",
     category: "Infrastructure",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "MailPace",
@@ -95,6 +139,10 @@ export const providers = [
     docs: "/docs/adapters/mailpace",
     logo: "https://www.google.com/s2/favicons?domain=mailpace.com&sz=64",
     category: "Infrastructure",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Loops",
@@ -103,6 +151,10 @@ export const providers = [
     docs: "/docs/adapters/loops",
     logo: "https://cdn.simpleicons.org/loops",
     category: "Product-led",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "Plunk",
@@ -111,6 +163,10 @@ export const providers = [
     docs: "/docs/adapters/plunk",
     logo: "https://www.google.com/s2/favicons?domain=useplunk.com&sz=64",
     category: "Product-led",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live provider delivery has not been verified yet.",
+    },
   },
   {
     name: "SMTP",
@@ -119,6 +175,10 @@ export const providers = [
     docs: "/docs/adapters/smtp",
     logo: "",
     category: "Transport",
+    verification: {
+      status: "untested",
+      note: "Adapter contract is covered by tests, but live transport delivery has not been verified yet.",
+    },
   },
 ] as const;
 
