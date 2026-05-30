@@ -57,9 +57,11 @@ export type EmailObservabilityPluginOptions = {
 
 export function observabilityPlugin(options: EmailObservabilityPluginOptions): EmailPlugin {
   const emit = async (event: EmailObservabilityEvent) => {
-    await options.log?.(event);
-    await options.metric?.(event);
-    await options.trace?.(event);
+    await Promise.allSettled([
+      callObserver(() => options.log?.(event)),
+      callObserver(() => options.metric?.(event)),
+      callObserver(() => options.trace?.(event)),
+    ]);
   };
 
   const redactMessage = options.redactMessage ?? defaultRedactMessage;
@@ -106,6 +108,10 @@ export function observabilityPlugin(options: EmailObservabilityPluginOptions): E
       },
     ],
   };
+}
+
+async function callObserver(callback: () => MaybePromise<void> | undefined) {
+  return callback();
 }
 
 function defaultRedactMessage(message: EmailMessage): RedactedEmailMessage {

@@ -4,6 +4,7 @@ import { createEmailClient } from "./core.js";
 import { EmailProviderError, EmailValidationError } from "./errors.js";
 import { capturePlugin } from "./plugins-capture.js";
 import { defaultsPlugin } from "./plugins-defaults.js";
+import { observabilityPlugin } from "./plugins-observability.js";
 import type { EmailPlugin, EmailProvider } from "./types.js";
 import { failingProvider, memoryProvider } from "./testing.js";
 
@@ -344,6 +345,30 @@ describe("email plugins", () => {
 
     expect(client.primaryCapture.events).toHaveLength(2);
     expect(client.auditCapture.events).toHaveLength(2);
+  });
+
+  test("observability callbacks run independently when one callback fails", async () => {
+    const events: string[] = [];
+    const client = createEmailClient({
+      adapters: [memoryProvider()],
+      plugins: [
+        observabilityPlugin({
+          log() {
+            throw new Error("logger down");
+          },
+          metric(event) {
+            events.push(`metric:${event.type}`);
+          },
+          trace(event) {
+            events.push(`trace:${event.type}`);
+          },
+        }),
+      ],
+    });
+
+    await client.send(message);
+
+    expect(events).toEqual(["metric:email.sent", "trace:email.sent"]);
   });
 });
 
