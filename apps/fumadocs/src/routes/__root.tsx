@@ -74,36 +74,11 @@ export const Route = createRootRoute({
         name: "robots",
         content: "index, follow",
       },
-      {
-        property: "og:type",
-        content: "website",
-      },
-      {
-        property: "og:title",
-        content: "Email SDK - Unified email sending for TypeScript",
-      },
-      {
-        property: "og:description",
-        content:
-          "A lightweight TypeScript SDK for unified email sending with Resend, SMTP, Postmark, fallbacks, hooks, and a Bun CLI.",
-      },
-      {
-        property: "og:image",
-        content: "/apple-touch-icon.png",
-      },
-      {
-        name: "twitter:card",
-        content: "summary",
-      },
-      {
-        name: "twitter:image",
-        content: "/apple-touch-icon.png",
-      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "icon", type: "image/png", href: "/logo.png" },
+      { rel: "apple-touch-icon", href: "/logo.png" },
     ],
   }),
   component: RootComponent,
