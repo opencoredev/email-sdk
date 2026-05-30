@@ -1,5 +1,7 @@
 # Email SDK
 
+[![skills.sh](https://skills.sh/b/opencoredev/email-sdk)](https://skills.sh/opencoredev/email-sdk)
+
 A lightweight TypeScript SDK for unified email sending. One clean API, swappable adapters, fallbacks, hooks, a Bun CLI, and Fumadocs documentation.
 
 ## Packages
@@ -33,6 +35,16 @@ await email.send({
 SMTP is built in and does not require Nodemailer.
 
 Adapters are stable by contract: they map supported `EmailMessage` fields and reject unsupported fields instead of silently dropping them.
+
+## Agent Skill
+
+Install the Email SDK agent skill from skills.sh when you want an AI agent to add, review, or document an integration:
+
+```bash
+npx skills add opencoredev/email-sdk --skill email-sdk
+```
+
+The skill is stored in `skills/email-sdk/SKILL.md`. It tells agents to refresh the current README, Fumadocs pages, package exports, and TypeScript declarations before implementing, so the guidance stays useful as the SDK evolves without needing every new adapter or option copied into the skill.
 
 ## Development
 
