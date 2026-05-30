@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { siteMeta } from "@/lib/metadata";
-import { siteOgImageUrl } from "@/lib/shared";
+import { siteOgImagePath, siteOgImageUrl } from "@/lib/shared";
 
-const findByName = (name: string) => siteMeta.filter((meta) => meta.name === name);
-const findByProperty = (property: string) => siteMeta.filter((meta) => meta.property === property);
+const findByName = (name: string) =>
+  siteMeta.filter((meta) => "name" in meta && meta.name === name);
+const findByProperty = (property: string) =>
+  siteMeta.filter((meta) => "property" in meta && meta.property === property);
 
 describe("site social metadata", () => {
   test("uses the canonical PNG open graph image exactly once", () => {
@@ -15,7 +17,10 @@ describe("site social metadata", () => {
     expect(twitterImages).toHaveLength(1);
     expect(ogImages[0]?.content).toBe(siteOgImageUrl);
     expect(twitterImages[0]?.content).toBe(siteOgImageUrl);
-    expect(siteOgImageUrl).toMatch(/^https:\/\/email-sdk\.dev\/og\/email-sdk\.png\?v=\d+$/);
+
+    const imageUrl = new URL(siteOgImageUrl);
+    expect(imageUrl.pathname).toBe(siteOgImagePath);
+    expect(imageUrl.searchParams.get("v")).toMatch(/\S+/);
   });
 
   test("keeps the Twitter preview on the large image card", () => {

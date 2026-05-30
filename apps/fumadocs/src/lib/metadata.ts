@@ -1,16 +1,10 @@
-import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
+import type { MetaDescriptor } from "@tanstack/react-router";
 
-export type HeadMeta = {
-  charSet?: string;
-  content?: string;
-  name?: string;
-  property?: string;
-  title?: string;
-};
+import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const siteTitle = `${appName} - Unified email sending for TypeScript`;
 
-export const siteMeta: HeadMeta[] = [
+export const siteMeta = [
   {
     charSet: "utf-8",
   },
@@ -73,4 +67,4 @@ export const siteMeta: HeadMeta[] = [
     name: "robots",
     content: "index, follow",
   },
-];
+] satisfies MetaDescriptor[];

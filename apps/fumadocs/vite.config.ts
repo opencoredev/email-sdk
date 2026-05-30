@@ -5,9 +5,17 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
+const ogImageVersion =
+  process.env.VITE_OG_IMAGE_VERSION ??
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ??
+  new Date().toISOString().slice(0, 10).replaceAll("-", "");
+
 export default defineConfig({
   server: {
     port: 3000,
+  },
+  define: {
+    "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),
   },
   plugins: [
     mdx(),
