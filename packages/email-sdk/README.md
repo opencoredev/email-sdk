@@ -9,6 +9,8 @@ field support visible instead of pretending every email API behaves the same way
 bun add @opencoredev/email-sdk
 ```
 
+The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
