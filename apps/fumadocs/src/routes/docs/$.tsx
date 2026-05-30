@@ -40,7 +40,6 @@ export const Route = createFileRoute("/docs/$")({
         { property: "og:type", content: "article" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
-        { name: "twitter:card", content: "summary" },
       ],
     };
   },
