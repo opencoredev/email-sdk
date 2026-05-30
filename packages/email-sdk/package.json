@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/email-sdk",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A lightweight TypeScript SDK for unified email sending.",
   "homepage": "https://github.com/opencoredev/email-sdk#readme",
   "bugs": {
