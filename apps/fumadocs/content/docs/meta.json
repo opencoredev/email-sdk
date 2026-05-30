@@ -1,4 +1,13 @@
 {
   "title": "Email SDK",
-  "pages": ["index", "send", "receive", "getting-started", "concepts", "reference", "agents"]
+  "pages": [
+    "index",
+    "getting-started",
+    "adapters",
+    "send",
+    "receive",
+    "concepts",
+    "reference",
+    "agents"
+  ]
 }

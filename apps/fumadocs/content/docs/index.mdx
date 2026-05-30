@@ -6,7 +6,7 @@ icon: Mail
 
 Email SDK is a small TypeScript package for sending transactional email and parsing inbound email webhooks through swappable adapters.
 
-Use `createEmailClient` for outbound mail and `createInboundEmailClient` for inbound webhooks. Sending imports stay stable, while receiving lives under `email-sdk/inbound/*`.
+Start with `createEmailClient` for outbound mail. Add `createInboundEmailClient` when your app needs to parse inbound webhook payloads. Sending imports stay stable, receiving lives under `email-sdk/inbound/*`, and the adapter catalog remains the place to compare providers.
 
 ```ts
 import { createEmailClient } from "email-sdk";
@@ -39,24 +39,24 @@ const event = await inbound.parse(request);
 
 <Cards>
   <Card
+    title="Quickstart"
+    href="/docs/getting-started/quickstart"
+    description="Install the SDK, create a client, and send your first message."
+  />
+  <Card
+    title="Adapters"
+    href="/docs/adapters"
+    description="Browse provider support, field coverage, and import paths."
+  />
+  <Card
     title="Send"
     href="/docs/send"
-    description="Create a send client, choose providers, and configure fallbacks."
+    description="Configure outbound sending, fallbacks, hooks, and the CLI."
   />
   <Card
     title="Receive"
     href="/docs/receive"
-    description="Parse inbound webhook payloads into one normalized message model."
-  />
-  <Card
-    title="Sending providers"
-    href="/docs/send/providers"
-    description="See send-only and send-capable provider imports."
-  />
-  <Card
-    title="Receiving providers"
-    href="/docs/receive/providers"
-    description="See webhook receiving and Gmail polling adapter imports."
+    description="Parse inbound webhooks and sync Gmail with caller-owned OAuth."
   />
 </Cards>
 
@@ -66,7 +66,7 @@ const event = await inbound.parse(request);
 - `createInboundEmailClient` for one shared inbound email parser.
 - `email.send()` for one message.
 - `email.sendBatch()` for small batches where each result is reported separately.
-- Fifteen adapters, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
+- The existing adapter catalog, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
 - Inbound webhook adapters for Resend, Mailgun Routes, Postmark Inbound, and SendGrid Inbound Parse.
 - A Gmail BYO OAuth polling adapter for advanced inbox sync use cases.
 - Retry, fallback, and hook options.

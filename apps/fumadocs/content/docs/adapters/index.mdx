@@ -6,18 +6,18 @@ icon: Cable
 
 Email SDK ships with fifteen adapters. Import only the adapter you use.
 
-Adapter docs are moving into the Send / Receive split.
+The adapter catalog remains the canonical provider index. Send and Receive pages add workflow-focused guides on top of these provider pages.
 
 <Cards>
   <Card
-    title="Sending providers"
+    title="Send workflows"
     href="/docs/send/providers"
-    description="Outbound imports and capability labels."
+    description="Outbound routing, fallbacks, hooks, and provider capability labels."
   />
   <Card
-    title="Receiving providers"
+    title="Receive workflows"
     href="/docs/receive/providers"
-    description="Inbound webhook and Gmail adapter imports."
+    description="Inbound webhook parsing, verification, and Gmail polling."
   />
 </Cards>
 
@@ -55,3 +55,15 @@ const email = createEmailClient({
 | Infrastructure | SparkPost, Mailtrap, Scaleway, ZeptoMail, MailPace                              |
 | Product-led    | Loops, Plunk                                                                    |
 | Transport      | Built-in SMTP                                                                   |
+
+## Receiving support
+
+Receiving adapters use capability subpaths so they do not change the existing send imports.
+
+| Provider               | Import                       | Capability     |
+| ---------------------- | ---------------------------- | -------------- |
+| Resend                 | `email-sdk/inbound/resend`   | Send + receive |
+| Mailgun Routes         | `email-sdk/inbound/mailgun`  | Send + receive |
+| Postmark Inbound       | `email-sdk/inbound/postmark` | Send + receive |
+| SendGrid Inbound Parse | `email-sdk/inbound/sendgrid` | Send + receive |
+| Gmail                  | `email-sdk/inbound/gmail`    | Receive only   |

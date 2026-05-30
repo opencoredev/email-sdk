@@ -77,6 +77,34 @@ console.log(result.id);
 
 If the adapter returns a message ID, Email SDK exposes it as both `id` and `messageId`.
 
+## Parse inbound email
+
+Receiving uses a separate client so your existing sending setup does not change.
+
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { resendInbound } from "email-sdk/inbound/resend";
+
+const inbound = createInboundEmailClient({
+  adapters: [resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET })],
+});
+
+export async function POST(request: Request) {
+  const verified = await inbound.verify(request.clone());
+
+  if (!verified) {
+    return new Response("Invalid signature", { status: 400 });
+  }
+
+  const email = await inbound.parse(request);
+
+  console.log(email.from.email);
+  console.log(email.subject);
+
+  return new Response(null, { status: 204 });
+}
+```
+
 ## Test from the CLI
 
 Use the CLI to check adapter credentials from your terminal.
@@ -95,3 +123,23 @@ email-sdk send \
   --subject "Hello" \
   --text "It works"
 ```
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Adapters"
+    href="/docs/adapters"
+    description="Compare providers and capability coverage."
+  />
+  <Card
+    title="Send"
+    href="/docs/send"
+    description="Configure sending, fallbacks, hooks, and the CLI."
+  />
+  <Card
+    title="Receive"
+    href="/docs/receive"
+    description="Parse inbound webhooks and normalize received messages."
+  />
+</Cards>
