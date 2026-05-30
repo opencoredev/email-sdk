@@ -1,5 +1,3 @@
-import { createHash, createHmac } from "node:crypto";
-
 import { EmailProviderError } from "./errors.js";
 import {
   base64Attachments,
@@ -39,7 +37,7 @@ export function ses(
       const fetcher = options.fetch ?? fetch;
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
       const body = JSON.stringify(await toSesPayload(message, options));
-      const headers = signAwsRequest({
+      const headers = await signAwsRequest({
         accessKeyId: options.accessKeyId,
         secretAccessKey: options.secretAccessKey,
         sessionToken: options.sessionToken,
@@ -147,7 +145,7 @@ async function toSesPayload(message: EmailMessage, options: SesProviderOptions) 
   };
 }
 
-function signAwsRequest(input: {
+async function signAwsRequest(input: {
   accessKeyId: string;
   secretAccessKey: string;
   sessionToken?: string;
@@ -161,7 +159,7 @@ function signAwsRequest(input: {
   const now = new Date();
   const amzDate = toAmzDate(now);
   const dateStamp = amzDate.slice(0, 8);
-  const payloadHash = sha256Hex(input.body);
+  const payloadHash = await sha256Hex(input.body);
   const requestHeaders = {
     ...input.headers,
     "x-amz-content-sha256": payloadHash,
@@ -188,10 +186,15 @@ function signAwsRequest(input: {
     "AWS4-HMAC-SHA256",
     amzDate,
     credentialScope,
-    sha256Hex(canonicalRequest),
+    await sha256Hex(canonicalRequest),
   ].join("\n");
-  const signingKey = getSigningKey(input.secretAccessKey, dateStamp, input.region, input.service);
-  const signature = hmacHex(signingKey, stringToSign);
+  const signingKey = await getSigningKey(
+    input.secretAccessKey,
+    dateStamp,
+    input.region,
+    input.service,
+  );
+  const signature = await hmacHex(signingKey, stringToSign);
 
   return {
     ...requestHeaders,
@@ -207,8 +210,9 @@ function toAmzDate(date: Date) {
   return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
 }
 
-function sha256Hex(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", textBytes(value));
+  return bytesToHex(new Uint8Array(digest));
 }
 
 function canonicalQueryString(searchParams: URLSearchParams) {
@@ -228,22 +232,44 @@ function awsEncode(value: string) {
   );
 }
 
-function hmac(key: string | Buffer, value: string) {
-  return createHmac("sha256", key).update(value).digest();
+async function hmac(key: string | Uint8Array, value: string) {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    typeof key === "string" ? textBytes(key) : toArrayBuffer(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, textBytes(value));
+  return new Uint8Array(signature);
 }
 
-function hmacHex(key: string | Buffer, value: string) {
-  return createHmac("sha256", key).update(value).digest("hex");
+async function hmacHex(key: string | Uint8Array, value: string) {
+  return bytesToHex(await hmac(key, value));
 }
 
-function getSigningKey(
+async function getSigningKey(
   secretAccessKey: string,
   dateStamp: string,
   region: string,
   service: string,
 ) {
-  const dateKey = hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const regionKey = hmac(dateKey, region);
-  const serviceKey = hmac(regionKey, service);
+  const dateKey = await hmac(`AWS4${secretAccessKey}`, dateStamp);
+  const regionKey = await hmac(dateKey, region);
+  const serviceKey = await hmac(regionKey, service);
   return hmac(serviceKey, "aws4_request");
+}
+
+function textBytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
