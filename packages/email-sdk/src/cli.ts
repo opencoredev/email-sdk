@@ -251,14 +251,21 @@ async function printVersion(flags: CliFlags) {
 }
 
 async function readPackageInfo(): Promise<PackageInfo> {
-  const packageJson = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as
-    | Partial<PackageInfo>
-    | undefined;
+  try {
+    const packageJson = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as
+      | Partial<PackageInfo>
+      | undefined;
 
-  return {
-    name: packageJson?.name ?? "@opencoredev/email-sdk",
-    version: packageJson?.version ?? "0.0.0",
-  };
+    return {
+      name: packageJson?.name ?? "@opencoredev/email-sdk",
+      version: packageJson?.version ?? "0.0.0",
+    };
+  } catch {
+    return {
+      name: "@opencoredev/email-sdk",
+      version: "0.0.0",
+    };
+  }
 }
 
 function parseFlags(args: string[]): CliFlags {
