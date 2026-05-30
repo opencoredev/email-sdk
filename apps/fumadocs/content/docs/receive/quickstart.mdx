@@ -1,0 +1,30 @@
+---
+title: Quickstart
+description: Parse one inbound webhook request.
+icon: Rocket
+---
+
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { mailgunInbound } from "email-sdk/inbound/mailgun";
+
+const inbound = createInboundEmailClient({
+  adapters: [mailgunInbound({ signingKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY })],
+});
+
+export async function POST(request: Request) {
+  const verified = await inbound.verify(request.clone());
+
+  if (!verified) {
+    return new Response("Invalid signature", { status: 400 });
+  }
+
+  const email = await inbound.parse(request);
+
+  await routeInboundEmail(email);
+
+  return new Response(null, { status: 204 });
+}
+```
+
+Use `request.clone()` if you verify before parsing so both methods can read the raw request body.

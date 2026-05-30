@@ -1,4 +1,5 @@
 export { createEmailClient } from "./core.js";
+export { createInboundEmailClient } from "./inbound-core.js";
 export {
   EmailProviderError,
   EmailProviderNotFoundError,
@@ -23,3 +24,14 @@ export type {
   SendBatchResult,
   SendOptions,
 } from "./types.js";
+export type {
+  InboundEmail,
+  InboundEmailAdapter,
+  InboundEmailAddress,
+  InboundEmailAttachment,
+  InboundEmailClient,
+  InboundEmailClientOptions,
+  InboundParseContext,
+  InboundParseOptions,
+  InboundVerifyOptions,
+} from "./inbound-types.js";

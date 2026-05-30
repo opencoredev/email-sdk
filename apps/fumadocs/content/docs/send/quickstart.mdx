@@ -1,0 +1,35 @@
+---
+title: Quickstart
+description: Install Email SDK and send one message.
+icon: Rocket
+---
+
+```bash
+bun add email-sdk
+```
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { resend } from "email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+});
+```
+
+The result includes the provider name and any message identifiers the adapter can return.
+
+```ts
+result.provider;
+result.id;
+result.messageId;
+```
+
+For existing guides, `/docs/getting-started/quickstart` remains available. New send-specific docs live in this section.

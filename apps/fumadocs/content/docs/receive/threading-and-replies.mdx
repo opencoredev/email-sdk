@@ -1,0 +1,30 @@
+---
+title: Threading and Replies
+description: Use message identifiers from inbound email when sending replies.
+icon: MessagesSquare
+---
+
+Inbound messages include threading fields when the provider payload exposes them.
+
+```ts
+email.messageId;
+email.inReplyTo;
+email.references;
+```
+
+When replying, pass the received `messageId` as an outbound header.
+
+```ts
+await outbound.send({
+  from: "Support <support@acme.com>",
+  to: email.from,
+  subject: email.subject?.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
+  text: "Thanks, we are looking into this.",
+  headers: {
+    "In-Reply-To": email.messageId ?? "",
+    References: [email.references?.join(" "), email.messageId].filter(Boolean).join(" "),
+  },
+});
+```
+
+Email clients use these identifiers to group replies into the same conversation.

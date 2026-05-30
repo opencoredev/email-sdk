@@ -1,0 +1,17 @@
+---
+title: Receiving Providers
+description: Inbound provider imports and capability labels.
+icon: Plug
+---
+
+Receiving adapters live under `email-sdk/inbound/*`.
+
+| Provider               | Import                       | Capability     | Mode              |
+| ---------------------- | ---------------------------- | -------------- | ----------------- |
+| Resend                 | `email-sdk/inbound/resend`   | Send + receive | Webhook           |
+| Mailgun Routes         | `email-sdk/inbound/mailgun`  | Send + receive | Webhook           |
+| Postmark Inbound       | `email-sdk/inbound/postmark` | Send + receive | Webhook           |
+| SendGrid Inbound Parse | `email-sdk/inbound/sendgrid` | Send + receive | Webhook           |
+| Gmail                  | `email-sdk/inbound/gmail`    | Receive only   | BYO OAuth polling |
+
+Sending imports stay separate. For example, `email-sdk/mailgun` sends through Mailgun, while `email-sdk/inbound/mailgun` parses Mailgun Routes payloads.

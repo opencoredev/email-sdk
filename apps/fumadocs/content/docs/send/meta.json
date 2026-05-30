@@ -1,0 +1,4 @@
+{
+  "title": "Send",
+  "pages": ["index", "quickstart", "providers", "fallbacks-and-retries", "hooks", "cli"]
+}

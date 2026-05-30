@@ -1,0 +1,12 @@
+{
+  "title": "Receive",
+  "pages": [
+    "index",
+    "quickstart",
+    "client-reference",
+    "providers",
+    "webhook-verification",
+    "threading-and-replies",
+    "gmail"
+  ]
+}

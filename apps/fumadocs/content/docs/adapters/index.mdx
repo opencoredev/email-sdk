@@ -6,6 +6,21 @@ icon: Cable
 
 Email SDK ships with fifteen adapters. Import only the adapter you use.
 
+Adapter docs are moving into the Send / Receive split.
+
+<Cards>
+  <Card
+    title="Sending providers"
+    href="/docs/send/providers"
+    description="Outbound imports and capability labels."
+  />
+  <Card
+    title="Receiving providers"
+    href="/docs/receive/providers"
+    description="Inbound webhook and Gmail adapter imports."
+  />
+</Cards>
+
 Every adapter is stable in the same sense: it maps the fields it supports and throws a validation error for fields the provider API cannot represent. Use the <a href="/docs/adapters/field-support">SDK field support guide</a> before choosing fallback routes.
 
 <ProviderGrid />

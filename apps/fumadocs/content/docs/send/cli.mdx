@@ -1,0 +1,22 @@
+---
+title: CLI
+description: Use the Email SDK CLI for outbound setup checks and test sends.
+icon: Terminal
+---
+
+The CLI remains focused on sending in this release.
+
+```bash
+email-sdk providers
+email-sdk doctor --adapter resend
+email-sdk send --adapter resend --to user@example.com --subject "Hello" --text "It works"
+```
+
+Receiving CLI commands are planned as a follow-up:
+
+```bash
+email-sdk receive parse --adapter resend --file payload.json
+email-sdk receive verify --adapter resend --file payload.json
+```
+
+There is no long-running `listen` command in the first receiving release.

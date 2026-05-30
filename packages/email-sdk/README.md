@@ -1,6 +1,6 @@
 # Email SDK
 
-A lightweight TypeScript SDK for unified email sending.
+A lightweight TypeScript SDK for unified email sending and receiving.
 
 ```bash
 bun add email-sdk
@@ -22,7 +22,20 @@ await email.send({
 });
 ```
 
-Adapters:
+Receive inbound webhook payloads with a separate client:
+
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { resendInbound } from "email-sdk/inbound/resend";
+
+const inbound = createInboundEmailClient({
+  adapters: [resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET })],
+});
+
+const event = await inbound.parse(request);
+```
+
+Send adapters:
 
 - `email-sdk/resend`
 - `email-sdk/smtp`
@@ -39,6 +52,14 @@ Adapters:
 - `email-sdk/scaleway`
 - `email-sdk/zeptomail`
 - `email-sdk/mailpace`
+
+Receive adapters:
+
+- `email-sdk/inbound/resend`
+- `email-sdk/inbound/mailgun`
+- `email-sdk/inbound/postmark`
+- `email-sdk/inbound/sendgrid`
+- `email-sdk/inbound/gmail`
 
 SMTP is built in and does not require Nodemailer.
 

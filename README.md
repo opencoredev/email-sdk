@@ -1,6 +1,6 @@
 # Email SDK
 
-A lightweight TypeScript SDK for unified email sending. One clean API, swappable adapters, fallbacks, hooks, a Bun CLI, and Fumadocs documentation.
+A lightweight TypeScript SDK for unified email sending and receiving. One clean send API, a first-class inbound parser, swappable adapters, fallbacks, hooks, a Bun CLI, and Fumadocs documentation.
 
 ## Packages
 
@@ -28,6 +28,19 @@ await email.send({
   subject: "Welcome",
   html: "<p>It works.</p>",
 });
+```
+
+Receive inbound webhook payloads with a separate client:
+
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { resendInbound } from "email-sdk/inbound/resend";
+
+const inbound = createInboundEmailClient({
+  adapters: [resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET })],
+});
+
+const event = await inbound.parse(request);
 ```
 
 SMTP is built in and does not require Nodemailer.

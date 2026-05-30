@@ -1,0 +1,28 @@
+---
+title: Hooks
+description: Observe send attempts, retries, successes, and failures.
+icon: Workflow
+---
+
+Hooks are outbound observability callbacks. They do not change provider behavior.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  hooks: {
+    beforeSend(event) {
+      console.log(event.provider, event.attempt);
+    },
+    afterSend(event) {
+      console.log(event.response.id);
+    },
+    onError(event) {
+      console.error(event.error);
+    },
+  },
+});
+```
+
+Hook errors are ignored so they do not mask provider failures.
+
+See `/docs/concepts/hooks` for the full hook contract.

@@ -1,12 +1,12 @@
 ---
 title: Email SDK
-description: Send email through Resend, SMTP, Postmark, SendGrid, Mailgun, and more with one TypeScript API.
+description: Send and receive email through Resend, SMTP, Postmark, SendGrid, Mailgun, and more with one TypeScript API.
 icon: Mail
 ---
 
-Email SDK is a small TypeScript package for sending transactional email through swappable adapters.
+Email SDK is a small TypeScript package for sending transactional email and parsing inbound email webhooks through swappable adapters.
 
-Use Resend for the default path, add SMTP when you want a cheap or self-managed route, and keep a second API adapter ready for fallback. Your app code still calls the same `send` method.
+Use `createEmailClient` for outbound mail and `createInboundEmailClient` for inbound webhooks. Sending imports stay stable, while receiving lives under `email-sdk/inbound/*`.
 
 ```ts
 import { createEmailClient } from "email-sdk";
@@ -24,41 +24,55 @@ await email.send({
 });
 ```
 
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { resendInbound } from "email-sdk/inbound/resend";
+
+const inbound = createInboundEmailClient({
+  adapters: [resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET })],
+});
+
+const event = await inbound.parse(request);
+```
+
 ## Start here
 
 <Cards>
   <Card
-    title="Send your first email"
-    href="/docs/getting-started/quickstart"
-    description="Install the SDK, create a client, and send a message."
+    title="Send"
+    href="/docs/send"
+    description="Create a send client, choose providers, and configure fallbacks."
   />
   <Card
-    title="Understand adapters"
-    href="/docs/concepts/adapter-model"
-    description="Learn how adapters and routing names work."
+    title="Receive"
+    href="/docs/receive"
+    description="Parse inbound webhook payloads into one normalized message model."
   />
   <Card
-    title="Browse adapters"
-    href="/docs/adapters"
-    description="See all supported email services."
+    title="Sending providers"
+    href="/docs/send/providers"
+    description="See send-only and send-capable provider imports."
   />
   <Card
-    title="Read the API reference"
-    href="/docs/reference/client"
-    description="Look up client options, messages, errors, and the CLI."
+    title="Receiving providers"
+    href="/docs/receive/providers"
+    description="See webhook receiving and Gmail polling adapter imports."
   />
 </Cards>
 
 ## What is included
 
-- `createEmailClient` for one shared email client.
+- `createEmailClient` for one shared outbound email client.
+- `createInboundEmailClient` for one shared inbound email parser.
 - `email.send()` for one message.
 - `email.sendBatch()` for small batches where each result is reported separately.
 - Fifteen adapters, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
+- Inbound webhook adapters for Resend, Mailgun Routes, Postmark Inbound, and SendGrid Inbound Parse.
+- A Gmail BYO OAuth polling adapter for advanced inbox sync use cases.
 - Retry, fallback, and hook options.
 - A small CLI for adapter setup checks and test sends.
 - A repo-local agent skill for future coding agents.
 
 ## What stays small
 
-Email SDK does not try to be a template engine, campaign tool, analytics platform, or full email operations suite. The first version is the layer most apps keep rebuilding: adapter setup, a consistent send call, typed errors, and a clean fallback path.
+Email SDK does not try to be a hosted inbox, template engine, campaign tool, analytics platform, or full compliance suite. It is the layer most apps keep rebuilding: adapter setup, a consistent send call, typed errors, inbound normalization, and a clean fallback path.

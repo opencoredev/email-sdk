@@ -1,0 +1,29 @@
+---
+title: Webhook Verification
+description: Verify inbound provider webhooks before parsing.
+icon: ShieldCheck
+---
+
+When a provider has a local signature format, configure the inbound adapter with its verification secret or public key.
+
+```ts
+const inbound = createInboundEmailClient({
+  adapters: [
+    resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET }),
+    mailgunInbound({ signingKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY }),
+    sendgridInbound({ publicKey: process.env.SENDGRID_INBOUND_PUBLIC_KEY }),
+  ],
+});
+```
+
+```ts
+const ok = await inbound.verify(request.clone(), { adapter: "resend" });
+
+if (!ok) {
+  return new Response("Invalid signature", { status: 400 });
+}
+```
+
+Resend uses Svix-style webhook headers. Mailgun verifies the timestamp and token with HMAC-SHA256. SendGrid Inbound Parse can verify signed payloads with the configured ECDSA public key. Postmark Inbound does not expose a local signature verifier in this SDK release.
+
+Always verify the raw request before parsing when your framework consumes request bodies.

@@ -1,0 +1,27 @@
+---
+title: Fallbacks and Retries
+description: Configure retry behavior and fallback providers for sending.
+icon: Repeat
+---
+
+Fallbacks and retries apply to outbound sending.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! }), smtp({ host, port })],
+  defaultAdapter: "resend",
+  fallback: ["smtp"],
+  retry: {
+    retries: 2,
+  },
+});
+
+await email.send(message, {
+  fallbackAdapters: ["smtp"],
+  retries: 1,
+});
+```
+
+The client tries the selected adapter first, retries retryable failures, then moves through fallback adapters. If every adapter fails, the client throws an SDK error with the collected failures.
+
+See `/docs/concepts/fallbacks-and-retries` for the full behavior notes.

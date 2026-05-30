@@ -1,0 +1,27 @@
+---
+title: Gmail BYO OAuth
+description: Use Gmail as an advanced caller-managed polling adapter.
+icon: Mail
+---
+
+Gmail is an advanced receiving adapter. Your application owns Google OAuth, user consent, token storage, token deletion, restricted-scope review, and any compliance requirements.
+
+```ts
+import { gmailInbound } from "email-sdk/inbound/gmail";
+
+const gmail = gmailInbound({
+  accessToken,
+  refreshAccessToken,
+  userId: "me",
+});
+
+const messages = await gmail.sync({
+  since: new Date("2026-01-01T00:00:00.000Z"),
+  maxResults: 25,
+});
+
+const raw = await gmail.getMessage(messages[0].id);
+const email = await gmail.parse(raw, {});
+```
+
+The initial Gmail adapter uses explicit polling and sync. It does not create a hosted OAuth app, store tokens, configure Pub/Sub watch, or provide compliance automation.

@@ -1,0 +1,46 @@
+---
+title: Inbound Client Reference
+description: Reference for createInboundEmailClient, parse, verify, and adapter lookup.
+icon: Braces
+---
+
+## `createInboundEmailClient(options)`
+
+```ts
+const inbound = createInboundEmailClient({
+  adapters,
+  defaultAdapter,
+});
+```
+
+| Option           | Type                    | Default       |
+| ---------------- | ----------------------- | ------------- |
+| `adapters`       | `InboundEmailAdapter[]` | Required      |
+| `defaultAdapter` | `string`                | First adapter |
+
+Adapter names must be unique.
+
+## `inbound.parse(input, options?)`
+
+```ts
+const email = await inbound.parse(request, {
+  adapter: "postmark",
+  metadata: {
+    route: "support",
+  },
+});
+```
+
+`parse` accepts a `Request` or a provider payload object and returns an `InboundEmail`.
+
+## `inbound.verify(input, options?)`
+
+```ts
+const ok = await inbound.verify(request, { adapter: "sendgrid" });
+```
+
+`verify` returns `true` when the selected adapter has no verification function. When verification is configured, the adapter returns a deterministic boolean.
+
+## `inbound.adapter(name)`
+
+Returns a registered inbound adapter or throws `EmailProviderNotFoundError`.

@@ -1,4 +1,4 @@
 {
   "title": "Email SDK",
-  "pages": ["index", "getting-started", "concepts", "adapters", "reference", "agents"]
+  "pages": ["index", "send", "receive", "getting-started", "concepts", "reference", "agents"]
 }

@@ -1,0 +1,56 @@
+---
+title: Send
+description: Send transactional email through one stable TypeScript API.
+icon: Send
+---
+
+Use `createEmailClient` when your app needs to send mail. Existing provider imports stay unchanged under `email-sdk/*`.
+
+```ts
+import { createEmailClient } from "email-sdk";
+import { resend } from "email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+```
+
+## Included
+
+- One outbound client with `send` and `sendBatch`.
+- Provider routing by adapter name.
+- Fallback adapters and retry hooks.
+- Fetch-based API adapters plus built-in SMTP.
+- Unsupported-field validation so message data is not silently dropped.
+
+## Next
+
+<Cards>
+  <Card
+    title="Quickstart"
+    href="/docs/send/quickstart"
+    description="Install the package and send one message."
+  />
+  <Card
+    title="Sending providers"
+    href="/docs/send/providers"
+    description="Browse outbound provider imports and capability labels."
+  />
+  <Card
+    title="Fallbacks and retries"
+    href="/docs/send/fallbacks-and-retries"
+    description="Route around temporary provider failures."
+  />
+  <Card
+    title="CLI"
+    href="/docs/send/cli"
+    description="Run setup checks and test sends from a terminal."
+  />
+</Cards>

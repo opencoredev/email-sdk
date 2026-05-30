@@ -33,6 +33,26 @@
       "types": "./dist/mailgun.d.ts",
       "import": "./dist/mailgun.js"
     },
+    "./inbound/resend": {
+      "types": "./dist/inbound-resend.d.ts",
+      "import": "./dist/inbound-resend.js"
+    },
+    "./inbound/mailgun": {
+      "types": "./dist/inbound-mailgun.d.ts",
+      "import": "./dist/inbound-mailgun.js"
+    },
+    "./inbound/postmark": {
+      "types": "./dist/inbound-postmark.d.ts",
+      "import": "./dist/inbound-postmark.js"
+    },
+    "./inbound/sendgrid": {
+      "types": "./dist/inbound-sendgrid.d.ts",
+      "import": "./dist/inbound-sendgrid.js"
+    },
+    "./inbound/gmail": {
+      "types": "./dist/inbound-gmail.d.ts",
+      "import": "./dist/inbound-gmail.js"
+    },
     "./mailersend": {
       "types": "./dist/mailersend.d.ts",
       "import": "./dist/mailersend.js"

@@ -1,0 +1,31 @@
+---
+title: Receive
+description: Parse inbound email webhooks into one normalized model.
+icon: Inbox
+---
+
+Use `createInboundEmailClient` when your app receives email from provider webhooks or from a caller-managed Gmail sync.
+
+```ts
+import { createInboundEmailClient } from "email-sdk";
+import { resendInbound } from "email-sdk/inbound/resend";
+
+const inbound = createInboundEmailClient({
+  adapters: [resendInbound({ webhookSecret: process.env.RESEND_WEBHOOK_SECRET })],
+});
+
+const event = await inbound.parse(request);
+```
+
+Inbound adapters normalize provider payloads to `InboundEmail` with addresses, bodies, headers, attachments, message IDs, and threading fields.
+
+## Included
+
+- Webhook parsing for Resend, Mailgun Routes, Postmark Inbound, and SendGrid Inbound Parse.
+- Optional deterministic webhook verification when an adapter has local verification inputs.
+- Gmail as an advanced BYO OAuth polling adapter.
+- Raw payload preservation on `raw`.
+
+## Not included
+
+Email SDK does not host inbound mail, own your OAuth app, store messages, manage deletion policy, or automate compliance reviews.
