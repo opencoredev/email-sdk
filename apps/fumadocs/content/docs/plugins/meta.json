@@ -1,14 +1,5 @@
 {
   "title": "Plugins",
   "icon": "Plug",
-  "pages": [
-    "---[PackagePlus]Built in---",
-    "defaults",
-    "observability",
-    "capture",
-    "---[Wrench]Build---",
-    "writing-plugins",
-    "---[Braces]Reference---",
-    "api"
-  ]
+  "pages": ["defaults", "observability", "capture", "writing-plugins", "api"]
 }

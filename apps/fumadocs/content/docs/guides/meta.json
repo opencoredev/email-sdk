@@ -2,11 +2,9 @@
   "title": "Guides",
   "icon": "BookOpen",
   "pages": [
-    "---[Wrench]Build---",
     "create-first-plugin",
     "create-adapter",
     "publish-community-adapter",
-    "---[FlaskConical]Test---",
     "test-email-behavior"
   ]
 }

@@ -22,35 +22,31 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 
-#nd-sidebar p {
+:is(#nd-sidebar, #nd-sidebar-mobile) p.inline-flex {
   position: relative;
-  margin-block: 1.1rem 0.35rem;
-  min-height: 1rem;
-  color: color-mix(in oklab, var(--color-fd-muted-foreground) 82%, transparent);
-  font-size: 0.68rem;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  line-height: 1;
+  margin-block: 1.25rem 0.2rem;
+  color: color-mix(in oklab, var(--color-fd-muted-foreground) 72%, transparent);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  line-height: 0.9;
   text-transform: uppercase;
 }
 
-#nd-sidebar p:first-child {
+:is(#nd-sidebar, #nd-sidebar-mobile) p.inline-flex:first-child {
   margin-top: 0;
 }
 
-#nd-sidebar p::after {
+:is(#nd-sidebar, #nd-sidebar-mobile) p.inline-flex::after {
   content: "";
   height: 1px;
   flex: 1;
-  min-width: 1.75rem;
-  background: color-mix(in oklab, var(--color-fd-border) 72%, transparent);
+  min-width: 1rem;
+  background: color-mix(in oklab, var(--color-fd-border) 48%, transparent);
 }
 
-#nd-sidebar p svg {
-  width: 0.82rem;
-  height: 0.82rem;
-  opacity: 0.78;
-  stroke-width: 2;
+:is(#nd-sidebar, #nd-sidebar-mobile) p.inline-flex svg {
+  display: none;
 }
 
 #nd-sidebar a,
