@@ -7,8 +7,8 @@ icon: zeptomail
 <ProviderBadge adapter="zeptomail" />
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { zeptomail } from "email-sdk/zeptomail";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 
 const email = createEmailClient({
   adapters: [zeptomail({ token: process.env.ZEPTOMAIL_TOKEN! })],

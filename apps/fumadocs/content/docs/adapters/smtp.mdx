@@ -6,13 +6,15 @@ icon: smtp
 
 The SMTP adapter is built in. It uses Node/Bun TCP and TLS sockets directly, so it does not need Nodemailer.
 
+<ProviderBadge adapter="smtp" />
+
 When `auth` is configured with `secure: false`, the adapter sends `STARTTLS` before authenticating. Set `allowInsecureAuth: true` only for a trusted local server that does not support TLS.
 
 ## Configure
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { smtp } from "email-sdk/smtp";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 const email = createEmailClient({
   adapters: [
@@ -63,7 +65,7 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
-email-sdk send \
+bunx --yes @opencoredev/email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --user hello@example.com \

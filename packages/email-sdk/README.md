@@ -1,14 +1,20 @@
 # Email SDK
 
-A lightweight TypeScript SDK for unified email sending.
+A lightweight TypeScript SDK for transactional email.
+
+Use one client in your app, pick the adapters you actually send through, and keep provider-specific
+field support visible instead of pretending every email API behaves the same way.
 
 ```bash
-bun add email-sdk
+bun add @opencoredev/email-sdk
 ```
 
+The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+The command-line binary it installs is named `email-sdk`.
+
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -24,22 +30,35 @@ await email.send({
 
 Adapters:
 
-- `email-sdk/resend`
-- `email-sdk/smtp`
-- `email-sdk/postmark`
-- `email-sdk/sendgrid`
-- `email-sdk/mailgun`
-- `email-sdk/mailersend`
-- `email-sdk/brevo`
-- `email-sdk/mailchimp`
-- `email-sdk/sparkpost`
-- `email-sdk/loops`
-- `email-sdk/plunk`
-- `email-sdk/mailtrap`
-- `email-sdk/scaleway`
-- `email-sdk/zeptomail`
-- `email-sdk/mailpace`
+- `@opencoredev/email-sdk/resend`
+- `@opencoredev/email-sdk/smtp`
+- `@opencoredev/email-sdk/postmark`
+- `@opencoredev/email-sdk/sendgrid`
+- `@opencoredev/email-sdk/ses`
+- `@opencoredev/email-sdk/mailgun`
+- `@opencoredev/email-sdk/mailersend`
+- `@opencoredev/email-sdk/brevo`
+- `@opencoredev/email-sdk/mailchimp`
+- `@opencoredev/email-sdk/sparkpost`
+- `@opencoredev/email-sdk/loops`
+- `@opencoredev/email-sdk/plunk`
+- `@opencoredev/email-sdk/mailtrap`
+- `@opencoredev/email-sdk/scaleway`
+- `@opencoredev/email-sdk/zeptomail`
+- `@opencoredev/email-sdk/mailpace`
 
 SMTP is built in and does not require Nodemailer.
 
-Adapters map supported `EmailMessage` fields and reject unsupported fields instead of silently dropping message data. Attachment `content` is treated as raw content by default; set `contentEncoding: "base64"` when passing pre-encoded content.
+Adapters map supported `EmailMessage` fields and reject unsupported fields instead of silently
+dropping message data. Attachment `content` is treated as raw content by default; set
+`contentEncoding: "base64"` when passing pre-encoded content.
+
+CLI:
+
+```bash
+# one-off: no install needed
+bunx --yes @opencoredev/email-sdk adapters
+
+# after bun add @opencoredev/email-sdk
+bun email-sdk doctor --adapter resend
+```

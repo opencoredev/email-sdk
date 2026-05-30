@@ -11,6 +11,7 @@ import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
+import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { sparkpost } from "./sparkpost.js";
 import type { EmailMessage, EmailProviderContext } from "./types.js";
@@ -142,6 +143,54 @@ describe("provider payloads", () => {
     });
   });
 
+  test("SES signs and maps simple email payloads", async () => {
+    const capture = jsonCapture({ MessageId: "ses_123" });
+
+    const response = await ses({
+      accessKeyId: "access",
+      secretAccessKey: "secret",
+      sessionToken: "session",
+      region: "us-east-1",
+      fetch: capture.fetch,
+    }).send(messageWithoutMetadata, context);
+
+    expect(response.messageId).toBe("ses_123");
+    expect(capture.calls[0]?.url).toBe(
+      "https://email.us-east-1.amazonaws.com/v2/email/outbound-emails",
+    );
+    expect(capture.calls[0]?.headers.get("authorization")).toStartWith(
+      "AWS4-HMAC-SHA256 Credential=access/",
+    );
+    expect(capture.calls[0]?.headers.has("host")).toBe(false);
+    expect(capture.calls[0]?.headers.get("x-amz-security-token")).toBe("session");
+    expect(capture.calls[0]?.json).toMatchObject({
+      FromEmailAddress: "Acme <hello@example.com>",
+      Destination: {
+        ToAddresses: ["Ada <ada@example.com>"],
+        CcAddresses: ["cc@example.com"],
+        BccAddresses: ["bcc@example.com"],
+      },
+      ReplyToAddresses: ["reply@example.com"],
+      EmailTags: [{ Name: "kind", Value: "welcome" }],
+      Content: {
+        Simple: {
+          Subject: { Data: "Welcome", Charset: "UTF-8" },
+          Body: {
+            Text: { Data: "Hello", Charset: "UTF-8" },
+            Html: { Data: "<p>Hello</p>", Charset: "UTF-8" },
+          },
+          Headers: [{ Name: "X-Test", Value: "yes" }],
+        },
+      },
+    });
+    expect(capture.calls[0]?.json.Content.Simple.Attachments[0]).toMatchObject({
+      FileName: "hello.txt",
+      RawContent: base64("hello"),
+      ContentType: "text/plain",
+      ContentTransferEncoding: "BASE64",
+    });
+  });
+
   test("Mailgun sends multipart form data with attachments", async () => {
     const capture = formCapture({ id: "<mailgun_123>" });
 
@@ -267,6 +316,15 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("resend does not support");
+
+    await expect(
+      ses({
+        accessKeyId: "access",
+        secretAccessKey: "secret",
+        region: "us-east-1",
+        fetch: jsonCapture({ MessageId: "ses_123" }).fetch,
+      }).send({ ...limitedMessage, metadata: { id: "nope" } }, context),
+    ).rejects.toThrow("ses does not support");
 
     await expect(
       mailersend({ apiKey: "key", fetch: jsonCapture({ id: "ms_123" }).fetch }).send(

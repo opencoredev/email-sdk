@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, Check, Copy, Mail, Terminal } from "lucide-react";
+import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,9 +10,9 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const example = `import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
-import { smtp } from "email-sdk/smtp";
+const example = `import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 const email = createEmailClient({
   adapters: [
@@ -39,23 +39,16 @@ await email.send({
 function Home() {
   return (
     <HomeLayout {...baseOptions()}>
-      <main className="h-[calc(100svh-64px)] overflow-hidden border-b border-fd-border bg-fd-background text-fd-foreground">
-        <section className="mx-auto grid h-full max-w-[1512px] items-center gap-10 px-6 py-8 md:px-10 lg:grid-cols-[0.82fr_1.18fr] lg:px-14 xl:px-16">
-          <div className="max-w-2xl">
-            <p className="mb-7 inline-flex items-center gap-2 text-sm font-medium text-fd-muted-foreground">
-              <span className="grid size-7 place-items-center rounded-md border border-fd-border bg-fd-card">
-                <Mail className="size-4 text-fd-primary" strokeWidth={2} />
-              </span>
-              Unified email sending for TypeScript
-            </p>
-
-            <h1 className="text-5xl font-medium leading-[1.04] tracking-[-0.02em] text-fd-foreground md:text-6xl">
-              One email client. Every provider you trust.
+      <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
+        <section className="mx-auto grid min-h-[calc(100svh-64px)] max-w-[1512px] items-center gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:px-14 xl:px-16">
+          <div className="max-w-2xl py-4">
+            <h1 className="text-5xl font-medium leading-[1.04] text-fd-foreground md:text-6xl">
+              One email SDK for every provider.
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
-              Send through Resend, SMTP, Postmark, and more without rewriting provider glue or
-              hiding what each adapter supports.
+              Send through Resend, Postmark, SendGrid, Mailgun, Brevo, SMTP, and more with one clean
+              TypeScript API.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -80,15 +73,15 @@ function Home() {
               </Link>
             </div>
 
-            <div className="mt-9 grid max-w-xl gap-3 text-sm sm:grid-cols-3">
-              <ProofPoint label="Fallbacks" text="Fail over by route" />
-              <ProofPoint label="Contracts" text="No silent field drops" />
-              <ProofPoint label="CLI" text="Test sends locally" />
+            <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
+              <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
+              <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
+              <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
             </div>
           </div>
 
           <div className="min-w-0">
-            <div className="overflow-hidden rounded-xl border border-fd-border bg-fd-card shadow-xl shadow-black/10">
+            <div className="overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10">
               <div className="flex items-center justify-between border-b border-fd-border px-4 py-3">
                 <div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
                   <Terminal className="size-4" strokeWidth={2} />
@@ -96,7 +89,7 @@ function Home() {
                 </div>
                 <CopyCodeButton />
               </div>
-              <pre className="p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
+              <pre className="overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
                 <code>
                   <SyntaxCode />
                 </code>
@@ -187,9 +180,9 @@ function CopyCodeButton() {
 
 function ProofPoint({ label, text }: { label: string; text: string }) {
   return (
-    <div className="border-l border-fd-primary/70 pl-3">
+    <div className="grid gap-1 py-3 sm:grid-cols-[120px_1fr]">
       <p className="font-medium text-fd-foreground">{label}</p>
-      <p className="mt-1 text-fd-muted-foreground">{text}</p>
+      <p className="text-fd-muted-foreground">{text}</p>
     </div>
   );
 }
@@ -199,15 +192,15 @@ function SyntaxCode() {
     <>
       <CodeLine number={1}>
         <Token tone="keyword">import</Token> {"{ createEmailClient }"}{" "}
-        <Token tone="keyword">from</Token> <Token tone="string">"email-sdk"</Token>;
+        <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
         <Token tone="keyword">import</Token> {"{ resend }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"email-sdk/resend"</Token>;
+        <Token tone="string">"@opencoredev/email-sdk/resend"</Token>;
       </CodeLine>
       <CodeLine number={3}>
         <Token tone="keyword">import</Token> {"{ smtp }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"email-sdk/smtp"</Token>;
+        <Token tone="string">"@opencoredev/email-sdk/smtp"</Token>;
       </CodeLine>
       <CodeLine />
       <CodeLine number={5}>

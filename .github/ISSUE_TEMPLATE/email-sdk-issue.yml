@@ -1,0 +1,94 @@
+name: Email SDK issue
+description: Report a bug, adapter mismatch, docs gap, or feature request.
+title: "[Issue]: "
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Email SDK. Keep this lightweight: fill in what you know, skip anything that does not apply, and avoid sharing API keys or customer data.
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: What kind of issue is this?
+      options:
+        - Bug or unexpected behavior
+        - Adapter/provider mismatch
+        - Feature request
+        - Documentation gap
+        - CLI or tooling issue
+        - Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, what did you expect, or what should exist?
+      placeholder: "Example: Mailgun rejects messages with attachments even though the same payload works through Resend."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Adapter or area
+      description: Pick the closest match.
+      options:
+        - Core client
+        - CLI
+        - Docs
+        - Agent tools
+        - brevo
+        - loops
+        - mailchimp
+        - mailersend
+        - mailgun
+        - mailpace
+        - mailtrap
+        - plunk
+        - postmark
+        - resend
+        - scaleway
+        - sendgrid
+        - smtp
+        - sparkpost
+        - zeptomail
+        - Other or not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal example or steps
+      description: A tiny code snippet, command, payload shape, or numbered steps is enough.
+      placeholder: |
+        1. Create a client with ...
+        2. Send this message ...
+        3. See this error ...
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Relevant details
+      description: Add versions, runtime, config, error text, provider response, or links. Redact secrets and private recipient data.
+      placeholder: |
+        email-sdk version:
+        Runtime: Bun / Node / browser / edge
+        TypeScript version:
+        Provider response or error:
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Quick checks
+      options:
+        - label: I removed API keys, tokens, and private customer data from this issue.
+          required: true
+        - label: I checked the docs or README first.
+          required: false
+        - label: I can help test a fix.
+          required: false
