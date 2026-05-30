@@ -30,7 +30,7 @@ export const providers = [
   {
     name: "AWS SES",
     key: "ses",
-    importPath: "email-sdk/ses",
+    importPath: "@opencoredev/email-sdk/ses",
     docs: "/docs/adapters/ses",
     logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
     category: "Infrastructure",

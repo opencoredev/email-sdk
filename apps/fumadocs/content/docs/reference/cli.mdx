@@ -6,6 +6,12 @@ icon: Terminal
 
 The CLI is intentionally small. Use it to inspect adapters, check environment variables, validate a message with `--dry-run`, and send a smoke-test email from your terminal.
 
+The CLI ships with the npm package. Check the installed version before comparing behavior against the docs:
+
+```bash
+email-sdk version
+```
+
 ```bash
 email-sdk send \
   --adapter resend \
@@ -50,45 +56,57 @@ email-sdk doctor --adapter resend
 
 `doctor` checks whether the selected adapter has the required environment variables.
 
+## Version
+
+```bash
+email-sdk version
+email-sdk --version
+email-sdk -v
+email-sdk version --json
+```
+
+`version` reads the installed `@opencoredev/email-sdk` package metadata, so it reports the SDK and CLI version from the package currently on your machine. The docs version picker in the top navigation uses the same package version from this repository.
+
 ## Flags
 
-| Flag                    | Adapter   | Notes                                                  |
-| ----------------------- | --------- | ------------------------------------------------------ |
-| `--adapter`             | all       | Adapter routing name.                                  |
-| `--provider`            | all       | Alias for `--adapter`.                                 |
-| `--from`                | all       | Sender address.                                        |
-| `--to`                  | all       | Recipient address. Comma-separated values are allowed. |
-| `--subject`             | all       | Message subject.                                       |
-| `--text`                | all       | Plain text body.                                       |
-| `--html`                | all       | HTML body.                                             |
-| `--cc`                  | send      | Comma-separated CC addresses.                          |
-| `--bcc`                 | send      | Comma-separated BCC addresses.                         |
-| `--reply-to`            | send      | Comma-separated reply-to addresses.                    |
-| `--header`              | send      | Header in `Name: value` format. Repeatable.            |
-| `--tag`                 | send      | Tag in `name=value` format. Repeatable.                |
-| `--metadata`            | send      | Metadata in `key=value` format. Repeatable.            |
-| `--attachment`          | send      | Local file path, optionally `path:content/type`.       |
-| `--message`             | send      | Read an `EmailMessage` JSON payload from a file.       |
-| `--dry-run`             | all       | Validate and print the send plan without sending.      |
-| `--api-key`             | many      | Overrides the adapter API key variable.                |
-| `--server-token`        | Postmark  | Overrides `POSTMARK_SERVER_TOKEN`.                     |
-| `--message-stream`      | Postmark  | Optional message stream.                               |
-| `--access-key-id`       | AWS SES   | Overrides `AWS_ACCESS_KEY_ID`.                         |
-| `--secret-access-key`   | AWS SES   | Overrides `AWS_SECRET_ACCESS_KEY`.                     |
-| `--region`              | AWS SES   | Overrides `AWS_REGION`.                                |
-| `--session-token`       | AWS SES   | Overrides `AWS_SESSION_TOKEN`.                         |
-| `--configuration-set`   | AWS SES   | Overrides `AWS_SES_CONFIGURATION_SET`.                 |
-| `--domain`              | Mailgun   | Overrides `MAILGUN_DOMAIN`.                            |
-| `--transactional-id`    | Loops     | Overrides `LOOPS_TRANSACTIONAL_ID`.                    |
-| `--project-id`          | Scaleway  | Overrides `SCALEWAY_PROJECT_ID`.                       |
-| `--secret-key`          | Scaleway  | Overrides `SCALEWAY_SECRET_KEY`.                       |
-| `--token`               | ZeptoMail | Overrides `ZEPTOMAIL_TOKEN`.                           |
-| `--host`                | SMTP      | Overrides `SMTP_HOST`.                                 |
-| `--port`                | SMTP      | Overrides `SMTP_PORT`.                                 |
-| `--secure`              | SMTP      | Set to `true` for secure SMTP.                         |
-| `--require-tls`         | SMTP      | Require STARTTLS.                                      |
-| `--allow-insecure-auth` | SMTP      | Allow SMTP AUTH without TLS.                           |
-| `--user`                | SMTP      | Overrides `SMTP_USER`.                                 |
-| `--pass`                | SMTP      | Overrides `SMTP_PASS`.                                 |
+| Flag                    | Adapter           | Notes                                                  |
+| ----------------------- | ----------------- | ------------------------------------------------------ |
+| `--adapter`             | all               | Adapter routing name.                                  |
+| `--provider`            | all               | Alias for `--adapter`.                                 |
+| `--from`                | all               | Sender address.                                        |
+| `--to`                  | all               | Recipient address. Comma-separated values are allowed. |
+| `--subject`             | all               | Message subject.                                       |
+| `--text`                | all               | Plain text body.                                       |
+| `--html`                | all               | HTML body.                                             |
+| `--cc`                  | send              | Comma-separated CC addresses.                          |
+| `--bcc`                 | send              | Comma-separated BCC addresses.                         |
+| `--reply-to`            | send              | Comma-separated reply-to addresses.                    |
+| `--header`              | send              | Header in `Name: value` format. Repeatable.            |
+| `--tag`                 | send              | Tag in `name=value` format. Repeatable.                |
+| `--metadata`            | send              | Metadata in `key=value` format. Repeatable.            |
+| `--attachment`          | send              | Local file path, optionally `path:content/type`.       |
+| `--message`             | send              | Read an `EmailMessage` JSON payload from a file.       |
+| `--dry-run`             | all               | Validate and print the send plan without sending.      |
+| `--json`                | version, adapters | Print output as JSON.                                  |
+| `--api-key`             | many              | Overrides the adapter API key variable.                |
+| `--server-token`        | Postmark          | Overrides `POSTMARK_SERVER_TOKEN`.                     |
+| `--message-stream`      | Postmark          | Optional message stream.                               |
+| `--access-key-id`       | AWS SES           | Overrides `AWS_ACCESS_KEY_ID`.                         |
+| `--secret-access-key`   | AWS SES           | Overrides `AWS_SECRET_ACCESS_KEY`.                     |
+| `--region`              | AWS SES           | Overrides `AWS_REGION`.                                |
+| `--session-token`       | AWS SES           | Overrides `AWS_SESSION_TOKEN`.                         |
+| `--configuration-set`   | AWS SES           | Overrides `AWS_SES_CONFIGURATION_SET`.                 |
+| `--domain`              | Mailgun           | Overrides `MAILGUN_DOMAIN`.                            |
+| `--transactional-id`    | Loops             | Overrides `LOOPS_TRANSACTIONAL_ID`.                    |
+| `--project-id`          | Scaleway          | Overrides `SCALEWAY_PROJECT_ID`.                       |
+| `--secret-key`          | Scaleway          | Overrides `SCALEWAY_SECRET_KEY`.                       |
+| `--token`               | ZeptoMail         | Overrides `ZEPTOMAIL_TOKEN`.                           |
+| `--host`                | SMTP              | Overrides `SMTP_HOST`.                                 |
+| `--port`                | SMTP              | Overrides `SMTP_PORT`.                                 |
+| `--secure`              | SMTP              | Set to `true` for secure SMTP.                         |
+| `--require-tls`         | SMTP              | Require STARTTLS.                                      |
+| `--allow-insecure-auth` | SMTP              | Allow SMTP AUTH without TLS.                           |
+| `--user`                | SMTP              | Overrides `SMTP_USER`.                                 |
+| `--pass`                | SMTP              | Overrides `SMTP_PASS`.                                 |
 
 The CLI prints the normalized adapter response as JSON.
