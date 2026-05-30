@@ -9,8 +9,8 @@ The AWS SES adapter calls the SES v2 SendEmail API directly with SigV4-signed fe
 <ProviderBadge adapter="ses" />
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { ses } from "email-sdk/ses";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { ses } from "@opencoredev/email-sdk/ses";
 
 const email = createEmailClient({
   adapters: [

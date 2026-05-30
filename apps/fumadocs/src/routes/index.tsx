@@ -10,9 +10,9 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const example = `import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
-import { smtp } from "email-sdk/smtp";
+const example = `import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 const email = createEmailClient({
   adapters: [
@@ -192,15 +192,15 @@ function SyntaxCode() {
     <>
       <CodeLine number={1}>
         <Token tone="keyword">import</Token> {"{ createEmailClient }"}{" "}
-        <Token tone="keyword">from</Token> <Token tone="string">"email-sdk"</Token>;
+        <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
         <Token tone="keyword">import</Token> {"{ resend }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"email-sdk/resend"</Token>;
+        <Token tone="string">"@opencoredev/email-sdk/resend"</Token>;
       </CodeLine>
       <CodeLine number={3}>
         <Token tone="keyword">import</Token> {"{ smtp }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"email-sdk/smtp"</Token>;
+        <Token tone="string">"@opencoredev/email-sdk/smtp"</Token>;
       </CodeLine>
       <CodeLine />
       <CodeLine number={5}>

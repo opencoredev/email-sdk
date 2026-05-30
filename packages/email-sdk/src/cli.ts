@@ -30,6 +30,10 @@ import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
 type ProviderFactory = (flags: CliFlags) => EmailProvider;
+type PackageInfo = {
+  name: string;
+  version: string;
+};
 
 const providerDocs: Array<{
   name: string;
@@ -136,6 +140,11 @@ async function main() {
     return;
   }
 
+  if (command === "version" || command === "--version" || command === "-v") {
+    await printVersion(flags);
+    return;
+  }
+
   if (command === "adapters" || command === "providers") {
     printAdapters(flags);
     return;
@@ -228,6 +237,28 @@ function doctor(flags: CliFlags) {
   }
 
   console.log(`${provider.name} looks configured.`);
+}
+
+async function printVersion(flags: CliFlags) {
+  const packageInfo = await readPackageInfo();
+
+  if (truthyFlag(flags, "json")) {
+    console.log(JSON.stringify(packageInfo, null, 2));
+    return;
+  }
+
+  console.log(`${packageInfo.name} ${packageInfo.version}`);
+}
+
+async function readPackageInfo(): Promise<PackageInfo> {
+  const packageJson = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as
+    | Partial<PackageInfo>
+    | undefined;
+
+  return {
+    name: packageJson?.name ?? "@opencoredev/email-sdk",
+    version: packageJson?.version ?? "0.0.0",
+  };
 }
 
 function parseFlags(args: string[]): CliFlags {
@@ -441,6 +472,7 @@ function printHelp() {
   console.log(`Email SDK
 
 Usage:
+  email-sdk version
   email-sdk adapters
   email-sdk doctor --adapter resend
   email-sdk send --adapter resend --from you@example.com --to them@example.com --subject "Hello" --text "It works"
