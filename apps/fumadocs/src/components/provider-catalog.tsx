@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { ExternalLink } from "lucide-react";
 
 import { providers } from "@/lib/providers";
 
@@ -6,12 +7,9 @@ export function ProviderGrid() {
   return (
     <div className="not-prose grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {providers.map((provider) => (
-        <Link
-          className="rounded-lg border border-fd-border bg-fd-card p-4 text-fd-foreground transition hover:bg-fd-accent/60"
+        <article
+          className="rounded-lg border border-fd-border bg-fd-card p-4 text-fd-foreground transition hover:bg-fd-accent/40"
           key={provider.key}
-          params={{ _splat: provider.docs.replace("/docs/", "") }}
-          preload="intent"
-          to="/docs/$"
         >
           <div className="flex items-center gap-3">
             <ProviderMark logo={provider.logo} name={provider.name} />
@@ -21,7 +19,26 @@ export function ProviderGrid() {
             </div>
           </div>
           <code className="mt-3 block text-xs text-fd-muted-foreground">{provider.importPath}</code>
-        </Link>
+          <div className="mt-4 flex items-center gap-2">
+            <Link
+              className="inline-flex h-8 items-center justify-center rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
+              params={{ _splat: provider.docs.replace("/docs/", "") }}
+              preload="intent"
+              to="/docs/$"
+            >
+              Docs
+            </Link>
+            <a
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
+              href={provider.website}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Website
+              <ExternalLink aria-hidden="true" className="size-3" strokeWidth={2} />
+            </a>
+          </div>
+        </article>
       ))}
     </div>
   );
@@ -35,12 +52,23 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
   }
 
   return (
-    <div className="not-prose mb-6 flex w-fit items-center gap-3 rounded-lg border border-fd-border bg-fd-card px-3 py-2 text-sm text-fd-foreground">
-      <ProviderMark logo={provider.logo} name={provider.name} />
-      <div>
-        <div className="font-medium">{provider.name}</div>
-        <code className="text-xs text-fd-muted-foreground">{provider.importPath}</code>
+    <div className="not-prose mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-fd-border bg-fd-card px-3 py-2 text-sm text-fd-foreground">
+      <div className="flex min-w-0 items-center gap-3">
+        <ProviderMark logo={provider.logo} name={provider.name} />
+        <div className="min-w-0">
+          <div className="font-medium">{provider.name}</div>
+          <code className="break-all text-xs text-fd-muted-foreground">{provider.importPath}</code>
+        </div>
       </div>
+      <a
+        className="ml-auto inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
+        href={provider.website}
+        rel="noreferrer"
+        target="_blank"
+      >
+        Open website
+        <ExternalLink aria-hidden="true" className="size-3" strokeWidth={2} />
+      </a>
     </div>
   );
 }

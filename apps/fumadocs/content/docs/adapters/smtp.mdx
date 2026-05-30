@@ -6,6 +6,8 @@ icon: smtp
 
 The SMTP adapter is built in. It uses Node/Bun TCP and TLS sockets directly, so it does not need Nodemailer.
 
+<ProviderBadge adapter="smtp" />
+
 When `auth` is configured with `secure: false`, the adapter sends `STARTTLS` before authenticating. Set `allowInsecureAuth: true` only for a trusted local server that does not support TLS.
 
 ## Configure
