@@ -22,6 +22,50 @@ html > body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0px !important;
 }
 
+#nd-sidebar p {
+  position: relative;
+  margin-block: 1.1rem 0.35rem;
+  min-height: 1rem;
+  color: color-mix(in oklab, var(--color-fd-muted-foreground) 82%, transparent);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+#nd-sidebar p:first-child {
+  margin-top: 0;
+}
+
+#nd-sidebar p::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  min-width: 1.75rem;
+  background: color-mix(in oklab, var(--color-fd-border) 72%, transparent);
+}
+
+#nd-sidebar p svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  opacity: 0.78;
+  stroke-width: 2;
+}
+
+#nd-sidebar a,
+#nd-sidebar button {
+  min-width: 0;
+}
+
+#nd-sidebar a > svg,
+#nd-sidebar button > svg:first-child {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.82;
+}
+
 .t-text-swap {
   display: inline-block;
   transform: translateY(0);

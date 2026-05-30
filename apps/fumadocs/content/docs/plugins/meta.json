@@ -2,14 +2,13 @@
   "title": "Plugins",
   "icon": "Plug",
   "pages": [
-    "index",
-    "---[PackagePlus]BUILT-IN---",
+    "---[PackagePlus]Built in---",
     "defaults",
     "observability",
     "capture",
-    "---[Wrench]BUILD---",
+    "---[Wrench]Build---",
     "writing-plugins",
-    "---[Braces]REFERENCE---",
+    "---[Braces]Reference---",
     "api"
   ]
 }
