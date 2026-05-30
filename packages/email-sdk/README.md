@@ -31,6 +31,7 @@ Adapters:
 - `@opencoredev/email-sdk/smtp`
 - `@opencoredev/email-sdk/postmark`
 - `@opencoredev/email-sdk/sendgrid`
+- `@opencoredev/email-sdk/ses`
 - `@opencoredev/email-sdk/mailgun`
 - `@opencoredev/email-sdk/mailersend`
 - `@opencoredev/email-sdk/brevo`

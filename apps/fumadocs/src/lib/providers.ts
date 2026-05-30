@@ -25,6 +25,14 @@ export const providers = [
     category: "Popular APIs",
   },
   {
+    name: "AWS SES",
+    key: "ses",
+    importPath: "email-sdk/ses",
+    docs: "/docs/adapters/ses",
+    logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
+    category: "Infrastructure",
+  },
+  {
     name: "Mailgun",
     key: "mailgun",
     importPath: "@opencoredev/email-sdk/mailgun",
