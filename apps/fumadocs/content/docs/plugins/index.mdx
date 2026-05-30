@@ -6,7 +6,7 @@ icon: Plug
 
 Plugins are add-ons for an email client. They can register adapters, change a message before validation, record send activity, or expose a small typed helper on the client.
 
-Most apps should start with the built-in plugins before writing their own.
+Most apps should start with the built-in plugins. If a behavior should be reused across apps, move it into a plugin.
 
 ## Built-in plugins
 
@@ -52,6 +52,16 @@ const email = createEmailClient({
 
 Email SDK plugins do not add databases, migrations, HTTP endpoints, route middleware, rate limits, or server/client plugin pairs. Those are framework-level features. Email SDK plugins stay focused on sending email.
 
+## Common plugin shapes
+
+| Shape             | Where to start                                                       |
+| ----------------- | -------------------------------------------------------------------- |
+| Shared defaults   | Use the [defaults plugin](/docs/plugins/defaults).                   |
+| Redacted logging  | Use the [observability plugin](/docs/plugins/observability).         |
+| Test capture      | Use the [capture plugin](/docs/plugins/capture).                     |
+| Custom provider   | Follow [Create an adapter](/docs/guides/create-adapter).             |
+| Reusable behavior | Follow [Create your first plugin](/docs/guides/create-first-plugin). |
+
 ## Order
 
 Plugin order is deterministic.
@@ -86,7 +96,12 @@ Use a custom `id` when mounting more than one instance of the same plugin type. 
   />
   <Card
     title="Writing plugins"
-    href="/docs/plugins/writing-plugins"
-    description="Create adapter, middleware, and community plugins."
+    href="/docs/guides/create-first-plugin"
+    description="Build a reusable policy plugin step by step."
+  />
+  <Card
+    title="Create an adapter"
+    href="/docs/guides/create-adapter"
+    description="Write a custom provider adapter and wrap it as a plugin."
   />
 </Cards>

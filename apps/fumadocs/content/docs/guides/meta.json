@@ -1,0 +1,13 @@
+{
+  "title": "Guides",
+  "icon": "BookOpen",
+  "pages": [
+    "index",
+    "---[Wrench]BUILD---",
+    "create-first-plugin",
+    "create-adapter",
+    "publish-community-adapter",
+    "---[FlaskConical]TEST---",
+    "test-email-behavior"
+  ]
+}
