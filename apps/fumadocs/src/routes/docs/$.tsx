@@ -15,10 +15,35 @@ import {
 
 import { useMDXComponents } from "@/components/mdx";
 import { baseOptions } from "@/lib/layout.shared";
-import { gitConfig } from "@/lib/shared";
+import { appName, gitConfig } from "@/lib/shared";
 import { slugsToMarkdownPath, source } from "@/lib/source";
 
+type DocsLoaderData = {
+  title: string;
+  description?: string;
+  path: string;
+  markdownUrl: string;
+  pageTree: Awaited<ReturnType<typeof source.serializePageTree>>;
+};
+
 export const Route = createFileRoute("/docs/$")({
+  head: ({ loaderData }) => {
+    const data = loaderData as DocsLoaderData | undefined;
+    const title = data?.title ? `${data.title} - ${appName}` : appName;
+    const description =
+      data?.description ?? "Email SDK documentation for TypeScript email adapters.";
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:type", content: "article" },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { name: "twitter:card", content: "summary" },
+      ],
+    };
+  },
   component: Page,
   loader: async ({ params }) => {
     const slugs = params._splat?.split("/") ?? [];
@@ -38,6 +63,8 @@ const loader = createServerFn({
     if (!page) throw notFound();
 
     return {
+      title: page.data.title,
+      description: page.data.description,
       path: page.path,
       markdownUrl: slugsToMarkdownPath(page.slugs).url,
       pageTree: await source.serializePageTree(source.getPageTree()),
@@ -76,7 +103,9 @@ const clientLoader = browserCollections.docs.createClientLoader({
 });
 
 function Page() {
-  const { pageTree, path, markdownUrl } = useFumadocsLoader(Route.useLoaderData());
+  const { pageTree, path, markdownUrl } = useFumadocsLoader(
+    Route.useLoaderData() as DocsLoaderData,
+  );
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>

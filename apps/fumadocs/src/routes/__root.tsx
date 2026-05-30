@@ -24,8 +24,33 @@ export const Route = createRootRoute({
         content:
           "A lightweight TypeScript SDK for unified email sending with Resend, SMTP, Postmark, fallbacks, hooks, and a Bun CLI.",
       },
+      {
+        name: "robots",
+        content: "index, follow",
+      },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:title",
+        content: "Email SDK - Unified email sending for TypeScript",
+      },
+      {
+        property: "og:description",
+        content:
+          "A lightweight TypeScript SDK for unified email sending with Resend, SMTP, Postmark, fallbacks, hooks, and a Bun CLI.",
+      },
+      {
+        name: "twitter:card",
+        content: "summary",
+      },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+    ],
   }),
   component: RootComponent,
 });
