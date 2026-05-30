@@ -6,12 +6,12 @@ Use one client in your app, pick the adapters you actually send through, and kee
 field support visible instead of pretending every email API behaves the same way.
 
 ```bash
-bun add @email-sdk/email-sdk
+bun add @opencoredev/email-sdk
 ```
 
 ```ts
-import { createEmailClient } from "@email-sdk/email-sdk";
-import { resend } from "@email-sdk/email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -27,22 +27,22 @@ await email.send({
 
 Adapters:
 
-- `@email-sdk/email-sdk/resend`
-- `@email-sdk/email-sdk/smtp`
-- `@email-sdk/email-sdk/postmark`
-- `@email-sdk/email-sdk/sendgrid`
-- `@email-sdk/email-sdk/ses`
-- `@email-sdk/email-sdk/mailgun`
-- `@email-sdk/email-sdk/mailersend`
-- `@email-sdk/email-sdk/brevo`
-- `@email-sdk/email-sdk/mailchimp`
-- `@email-sdk/email-sdk/sparkpost`
-- `@email-sdk/email-sdk/loops`
-- `@email-sdk/email-sdk/plunk`
-- `@email-sdk/email-sdk/mailtrap`
-- `@email-sdk/email-sdk/scaleway`
-- `@email-sdk/email-sdk/zeptomail`
-- `@email-sdk/email-sdk/mailpace`
+- `@opencoredev/email-sdk/resend`
+- `@opencoredev/email-sdk/smtp`
+- `@opencoredev/email-sdk/postmark`
+- `@opencoredev/email-sdk/sendgrid`
+- `@opencoredev/email-sdk/ses`
+- `@opencoredev/email-sdk/mailgun`
+- `@opencoredev/email-sdk/mailersend`
+- `@opencoredev/email-sdk/brevo`
+- `@opencoredev/email-sdk/mailchimp`
+- `@opencoredev/email-sdk/sparkpost`
+- `@opencoredev/email-sdk/loops`
+- `@opencoredev/email-sdk/plunk`
+- `@opencoredev/email-sdk/mailtrap`
+- `@opencoredev/email-sdk/scaleway`
+- `@opencoredev/email-sdk/zeptomail`
+- `@opencoredev/email-sdk/mailpace`
 
 SMTP is built in and does not require Nodemailer.
 
