@@ -17,8 +17,13 @@ describe("site social metadata", () => {
     expect(twitterImages).toHaveLength(1);
     expect(ogImages[0]?.content).toBe(siteOgImageUrl);
     expect(twitterImages[0]?.content).toBe(siteOgImageUrl);
-    expect(findByProperty("og:image:alt")[0]?.content).toBe(siteImageAlt);
-    expect(findByName("twitter:image:alt")[0]?.content).toBe(siteImageAlt);
+
+    const ogImageAlts = findByProperty("og:image:alt");
+    const twitterImageAlts = findByName("twitter:image:alt");
+    expect(ogImageAlts).toHaveLength(1);
+    expect(twitterImageAlts).toHaveLength(1);
+    expect(ogImageAlts[0]?.content).toBe(siteImageAlt);
+    expect(twitterImageAlts[0]?.content).toBe(siteImageAlt);
 
     const imageUrl = new URL(siteOgImageUrl);
     expect(imageUrl.pathname).toBe(siteOgImagePath);
