@@ -7,8 +7,8 @@ icon: mailtrap
 <ProviderBadge adapter="mailtrap" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { mailtrap } from "@email-sdk/email-sdk/mailtrap";
 
 const email = createEmailClient({
   adapters: [mailtrap({ apiKey: process.env.MAILTRAP_API_KEY! })],

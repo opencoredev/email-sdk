@@ -7,14 +7,14 @@ icon: Rocket
 Install the SDK:
 
 ```bash
-bun add @opencoredev/email-sdk
+bun add @email-sdk/email-sdk
 ```
 
 This example sends through Resend. Set `RESEND_API_KEY` in the environment before running it.
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { resend } from "@email-sdk/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -38,9 +38,9 @@ Only use fallback adapters that can send the same message shape. For example, SM
 fields and headers, but not provider-only fields like tags, metadata, or attachments.
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { smtp } from "@opencoredev/email-sdk/smtp";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { resend } from "@email-sdk/email-sdk/resend";
+import { smtp } from "@email-sdk/email-sdk/smtp";
 
 export const email = createEmailClient({
   adapters: [

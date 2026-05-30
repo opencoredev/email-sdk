@@ -7,8 +7,8 @@ icon: mailpace
 <ProviderBadge adapter="mailpace" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { mailpace } from "@opencoredev/email-sdk/mailpace";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { mailpace } from "@email-sdk/email-sdk/mailpace";
 
 const email = createEmailClient({
   adapters: [mailpace({ apiKey: process.env.MAILPACE_API_KEY! })],
