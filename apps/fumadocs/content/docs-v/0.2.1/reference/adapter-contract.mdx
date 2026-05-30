@@ -1,0 +1,64 @@
+---
+title: Adapter contract
+description: Reference for writing a custom Email SDK adapter.
+icon: Plug
+---
+
+Custom adapters are plain objects.
+
+```ts
+import type { EmailProvider } from "@opencoredev/email-sdk";
+
+export const customAdapter: EmailProvider = {
+  name: "custom",
+  async send(message, context) {
+    const response = await fetch("https://api.example.com/email", {
+      method: "POST",
+      signal: context.signal,
+      body: JSON.stringify(message),
+    });
+
+    const body = await response.json();
+
+    return {
+      provider: "custom",
+      id: body.id,
+      raw: body,
+    };
+  },
+};
+```
+
+## `EmailProvider`
+
+```ts
+type EmailProvider<TRaw = unknown> = {
+  name: string;
+  send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  raw?: TRaw;
+};
+```
+
+## `EmailProviderContext`
+
+| Field            | Type                      | Notes                                          |
+| ---------------- | ------------------------- | ---------------------------------------------- |
+| `signal`         | `AbortSignal`             | Optional abort signal.                         |
+| `idempotencyKey` | `string`                  | Optional key from the message or send options. |
+| `attempt`        | `number`                  | Attempt number for this adapter.               |
+| `metadata`       | `Record<string, unknown>` | Metadata passed to `send`.                     |
+
+## Adapter responses
+
+```ts
+type EmailProviderResponse = {
+  id?: string;
+  provider: string;
+  messageId?: string;
+  accepted?: string[];
+  rejected?: string[];
+  raw?: unknown;
+};
+```
+
+Return the provider's raw response in `raw` when it helps callers debug or inspect provider-specific fields.

@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { DocsVersionLink } from "@/components/docs-version-link";
 import { baseOptions } from "@/lib/layout.shared";
 
 export const Route = createFileRoute("/")({
@@ -52,25 +53,16 @@ function Home() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-fd-primary px-4 text-sm font-medium text-fd-primary-foreground transition hover:opacity-90"
-                params={{
-                  _splat: "",
-                }}
-                to="/docs/$"
-              >
+              <DocsVersionLink className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-fd-primary px-4 text-sm font-medium text-fd-primary-foreground transition hover:opacity-90">
                 Read the docs
                 <ArrowRight className="size-4" strokeWidth={2} />
-              </Link>
-              <Link
+              </DocsVersionLink>
+              <DocsVersionLink
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-4 text-sm font-medium text-fd-foreground transition hover:bg-fd-accent"
-                params={{
-                  _splat: "adapters",
-                }}
-                to="/docs/$"
+                docsPath="/docs/adapters"
               >
                 Browse adapters
-              </Link>
+              </DocsVersionLink>
             </div>
 
             <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
