@@ -14,12 +14,12 @@ you actually send through, and keep provider-specific field support visible in t
 ## Quickstart
 
 ```bash
-bun add @email-sdk/email-sdk
+bun add @opencoredev/email-sdk
 ```
 
 ```ts
-import { createEmailClient } from "@email-sdk/email-sdk";
-import { resend } from "@email-sdk/email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],

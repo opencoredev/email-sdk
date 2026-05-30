@@ -1,5 +1,5 @@
 {
-  "name": "@email-sdk/email-sdk",
+  "name": "@opencoredev/email-sdk",
   "version": "0.2.0",
   "description": "A lightweight TypeScript SDK for unified email sending.",
   "homepage": "https://github.com/opencoredev/email-sdk#readme",
