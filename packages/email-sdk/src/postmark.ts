@@ -8,6 +8,7 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  assertMaxItems,
 } from "./utils.js";
 
 export type PostmarkProviderOptions = {
@@ -103,6 +104,8 @@ function firstPostmarkTag(tags: EmailTag[] | undefined) {
   if (!tags || tags.length === 0) {
     return undefined;
   }
+
+  assertMaxItems("postmark", "tag", tags, 1);
 
   const [first] = tags;
   return first ? `${first.name}:${first.value}` : undefined;

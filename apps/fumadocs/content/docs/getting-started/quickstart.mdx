@@ -1,18 +1,20 @@
 ---
 title: Quickstart
-description: Install Email SDK, create a client, and send a first transactional email.
+description: Create a client, send a first transactional email, and verify the CLI path.
 icon: Rocket
 ---
 
-Install the SDK:
+Start with the scoped package:
 
 ```bash
 bun add @opencoredev/email-sdk
 ```
 
-The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+The installed CLI command is named `email-sdk`. If you only need the CLI for a quick check, run `bunx --yes @opencoredev/email-sdk ...` instead. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
 
-This example sends through Resend. Set `RESEND_API_KEY` in the environment before running it.
+## Send through Resend
+
+Set `RESEND_API_KEY`, then create a client with the Resend adapter.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -30,7 +32,48 @@ await email.send({
 });
 ```
 
-## Add built-in SMTP fallback
+## Check the send result
+
+`send` resolves with the normalized adapter response. The `provider` value tells you which adapter
+actually handled the send.
+
+```ts
+const result = await email.send(message);
+
+console.log(result.provider);
+console.log(result.id);
+```
+
+If the adapter returns a message ID, Email SDK exposes it as both `id` and `messageId`. Provider
+responses are still available through `raw` when an adapter includes them.
+
+## Verify from the CLI
+
+Use `doctor` to check that the selected adapter has the required environment variables.
+
+```bash
+RESEND_API_KEY="re_..." bunx --yes @opencoredev/email-sdk doctor --adapter resend
+```
+
+Use `--dry-run` to validate the message shape without sending email.
+
+```bash
+bunx --yes @opencoredev/email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works" \
+  --dry-run
+```
+
+When the package is installed in your project, the same command can run through the installed binary:
+
+```bash
+bun email-sdk doctor --adapter resend
+```
+
+## Add SMTP fallback
 
 Add SMTP when you want a second route for the same transactional email. The SMTP adapter is built in
 and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK
@@ -70,39 +113,3 @@ await email.send({
   text: "Thanks for your order.",
 });
 ```
-
-## Check the result
-
-`send` resolves with the normalized adapter response. The `provider` value tells you which adapter
-actually handled the send.
-
-```ts
-const result = await email.send(message);
-
-console.log(result.provider);
-console.log(result.id);
-```
-
-If the adapter returns a message ID, Email SDK exposes it as both `id` and `messageId`. Provider
-responses are still available through `raw` when an adapter includes them.
-
-## Test from the CLI
-
-Use the CLI to check adapter credentials from your terminal.
-
-```bash
-email-sdk doctor --adapter resend
-```
-
-Send a test email:
-
-```bash
-email-sdk send \
-  --adapter resend \
-  --from "Acme <hello@acme.com>" \
-  --to "user@example.com" \
-  --subject "Hello" \
-  --text "It works"
-```
-
-Use `--dry-run` when you want to validate the message and selected adapter without sending email.

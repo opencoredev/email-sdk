@@ -1,0 +1,132 @@
+---
+title: Create your first plugin
+description: Build a reusable send policy plugin.
+icon: PackagePlus
+---
+
+This guide builds a small policy plugin that requires each send to include a metadata value. The same shape works for tenant checks, route enforcement, audit defaults, or environment-specific guardrails.
+
+## What you will build
+
+The plugin will:
+
+1. Accept a required metadata key.
+2. Run before provider validation.
+3. Block the send when the key is missing.
+4. Add a tiny typed helper to the returned client.
+
+## Create the plugin file
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export type RequireMetadataPluginOptions = {
+  key: string;
+};
+
+export function requireMetadataPlugin(
+  options: RequireMetadataPluginOptions,
+): EmailPlugin<{ requiredEmailMetadata: string }> {
+  return {
+    id: `require-metadata:${options.key}`,
+    middleware: [
+      {
+        beforeSend(event) {
+          const value = event.options?.metadata?.[options.key];
+
+          if (value === undefined || value === null || value === "") {
+            throw new Error(`Missing email metadata: ${options.key}`);
+          }
+        },
+      },
+    ],
+    extendClient() {
+      return {
+        requiredEmailMetadata: options.key,
+      };
+    },
+  };
+}
+```
+
+## Use it
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { requireMetadataPlugin } from "./require-metadata-plugin";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [requireMetadataPlugin({ key: "tenantId" })],
+});
+
+await email.send(
+  {
+    from: "billing@example.com",
+    to: "user@example.com",
+    subject: "Receipt",
+    text: "Thanks for your order.",
+  },
+  {
+    metadata: {
+      tenantId: "tenant_123",
+    },
+  },
+);
+```
+
+The returned client now has a typed `email.requiredEmailMetadata` property.
+
+## Block a send
+
+```ts
+await email.send({
+  from: "billing@example.com",
+  to: "user@example.com",
+  subject: "Receipt",
+  text: "Thanks for your order.",
+});
+```
+
+That call throws before any adapter is called. `beforeSend` errors are not swallowed because policy plugins need to be able to stop unsafe sends.
+
+## Add tests
+
+```ts
+import { describe, expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryProvider } from "@opencoredev/email-sdk/testing";
+import { requireMetadataPlugin } from "./require-metadata-plugin";
+
+describe("requireMetadataPlugin", () => {
+  test("blocks sends without the required metadata", async () => {
+    const memory = memoryProvider();
+    const email = createEmailClient({
+      adapters: [memory],
+      plugins: [requireMetadataPlugin({ key: "tenantId" })],
+    });
+
+    await expect(
+      email.send({
+        from: "test@example.com",
+        to: "user@example.com",
+        subject: "Hello",
+        text: "Hi",
+      }),
+    ).rejects.toThrow("Missing email metadata: tenantId");
+
+    expect(memory.raw.sent).toHaveLength(0);
+  });
+});
+```
+
+## Plugin rules
+
+- Use a stable `id`.
+- Make IDs unique when mounting multiple instances.
+- Use `beforeSend` for behavior that can block a send.
+- Use `afterSend`, `onError`, and hooks for observability work.
+- Keep client extensions small and avoid names like `send`, `adapter`, or `defaultAdapter`.
+
+For exact types, see [Plugin API](/docs/plugins/api).

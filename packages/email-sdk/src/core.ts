@@ -5,11 +5,20 @@ import {
   isRetryableEmailError,
 } from "./errors.js";
 import type {
+  EmailAfterSendEvent,
+  EmailBeforeSendEvent,
   EmailClient,
   EmailClientOptions,
+  EmailErrorEvent,
+  EmailHookEvent,
+  EmailHooks,
   EmailMessage,
+  EmailPlugin,
+  EmailPluginClientExtensions,
+  EmailPluginContext,
   EmailProvider,
   EmailProviderResponse,
+  EmailSendMiddleware,
   SendBatchResult,
   SendOptions,
 } from "./types.js";
@@ -17,24 +26,54 @@ import { assertMessage, toProviderError } from "./utils.js";
 
 const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
-export function createEmailClient(options: EmailClientOptions): EmailClient {
+export function createEmailClient<
+  const TPlugins extends readonly EmailPlugin[] = readonly EmailPlugin[],
+>(options: EmailClientOptions<TPlugins>): EmailClient<EmailPluginClientExtensions<TPlugins>> {
   const adapterList = options.adapters ?? options.providers ?? [];
-
-  if (adapterList.length === 0) {
-    throw new EmailValidationError("createEmailClient requires at least one adapter.");
-  }
-
   const adapters = new Map<string, EmailProvider>();
+  const pluginHooks: NonNullable<EmailClientOptions["hooks"]>[] = [];
+  const middleware: EmailSendMiddleware[] = [];
+  const extensionPlugins: EmailPlugin[] = [];
+  const requestedDefault =
+    options.defaultAdapter ?? options.defaultProvider ?? adapterList[0]?.name ?? "";
 
   for (const adapter of adapterList) {
-    if (adapters.has(adapter.name)) {
-      throw new EmailValidationError(`Duplicate email adapter "${adapter.name}".`);
-    }
-
-    adapters.set(adapter.name, adapter);
+    addAdapter(adapters, adapter);
   }
 
-  const defaultProvider = options.defaultAdapter ?? options.defaultProvider ?? adapterList[0]?.name;
+  const pluginIds = new Set<string>();
+
+  for (const plugin of options.plugins ?? []) {
+    if (pluginIds.has(plugin.id)) {
+      throw new EmailValidationError(`Duplicate email plugin "${plugin.id}".`);
+    }
+
+    pluginIds.add(plugin.id);
+
+    const context = createPluginContext(adapters, requestedDefault);
+    const pluginAdapters = resolvePluginAdapters(plugin, context);
+
+    for (const adapter of pluginAdapters) {
+      if (adapters.get(adapter.name) === adapter) {
+        continue;
+      }
+
+      context.addAdapter(adapter);
+    }
+
+    if (plugin.hooks) {
+      pluginHooks.push(plugin.hooks);
+    }
+
+    middleware.push(...(plugin.middleware ?? []));
+
+    if (plugin.extendClient) {
+      extensionPlugins.push(plugin);
+    }
+  }
+
+  const firstAdapter = adapters.keys().next().value;
+  const defaultProvider = options.defaultAdapter ?? options.defaultProvider ?? firstAdapter;
 
   if (!defaultProvider) {
     throw new EmailValidationError("createEmailClient requires a default adapter.");
@@ -44,6 +83,7 @@ export function createEmailClient(options: EmailClientOptions): EmailClient {
     throw new EmailProviderNotFoundError(defaultProvider);
   }
 
+  const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
   const client: EmailClient = {
     adapters,
     providers: adapters,
@@ -66,7 +106,8 @@ export function createEmailClient(options: EmailClientOptions): EmailClient {
         adapters,
         message,
         options: {
-          hooks: options.hooks,
+          hookList: hooks,
+          middleware,
           retry: options.retry,
           defaultProvider,
           fallback: options.fallback,
@@ -116,26 +157,41 @@ export function createEmailClient(options: EmailClientOptions): EmailClient {
     },
   };
 
-  return client;
+  for (const plugin of extensionPlugins) {
+    applyClientExtension(
+      client,
+      plugin.id,
+      plugin.extendClient?.(createPluginContext(adapters, defaultProvider)) ?? {},
+    );
+  }
+
+  return client as EmailClient<EmailPluginClientExtensions<TPlugins>>;
 }
 
 async function sendWithAdapters(input: {
   adapters: Map<string, EmailProvider>;
   message: EmailMessage;
-  options: Pick<EmailClientOptions, "hooks" | "retry"> & {
+  options: Pick<EmailClientOptions, "retry"> & {
+    hookList: NonNullable<EmailClientOptions["hooks"]>[];
+    middleware: EmailSendMiddleware[];
     defaultProvider: string;
     fallback?: string[];
   };
   sendOptions?: SendOptions;
 }): Promise<EmailProviderResponse> {
-  assertMessage(input.message);
+  const prepared = await applyBeforeSendMiddleware(input.options.middleware, {
+    message: input.message,
+    options: input.sendOptions,
+  });
+
+  assertMessage(prepared.message);
 
   const adapterNames = resolveAdapterOrder({
     adapter:
-      input.sendOptions?.adapter ?? input.sendOptions?.provider ?? input.options.defaultProvider,
+      prepared.options?.adapter ?? prepared.options?.provider ?? input.options.defaultProvider,
     fallbackAdapters:
-      input.sendOptions?.fallbackAdapters ??
-      input.sendOptions?.fallbackProviders ??
+      prepared.options?.fallbackAdapters ??
+      prepared.options?.fallbackProviders ??
       input.options.fallback,
   });
 
@@ -151,24 +207,27 @@ async function sendWithAdapters(input: {
     try {
       return await sendWithRetry({
         provider,
-        message: input.message,
-        hooks: input.options.hooks,
+        message: prepared.message,
+        hookList: input.options.hookList,
+        middleware: input.options.middleware,
         retry: {
           ...input.options.retry,
-          retries: input.sendOptions?.retries ?? input.options.retry?.retries,
+          retries: prepared.options?.retries ?? input.options.retry?.retries,
         },
-        sendOptions: input.sendOptions,
+        sendOptions: prepared.options,
       });
     } catch (error) {
       const failure = unwrapProviderAttemptFailure(error);
       failures.push(failure.error);
-      await invokeHook(input.options.hooks?.onError, {
+      const event = {
         provider: provider.name,
-        message: input.message,
+        message: prepared.message,
         attempt: failure.attempt,
-        metadata: input.sendOptions?.metadata,
+        metadata: prepared.options?.metadata,
         error: failure.error,
-      });
+      };
+      await invokeErrorMiddleware(input.options.middleware, event);
+      await invokeHooks(input.options.hookList, "onError", event);
     }
   }
 
@@ -186,7 +245,8 @@ async function sendWithAdapters(input: {
 async function sendWithRetry(input: {
   provider: EmailProvider;
   message: EmailMessage;
-  hooks: EmailClientOptions["hooks"];
+  hookList: NonNullable<EmailClientOptions["hooks"]>[];
+  middleware: EmailSendMiddleware[];
   retry: EmailClientOptions["retry"];
   sendOptions?: SendOptions;
 }) {
@@ -195,7 +255,7 @@ async function sendWithRetry(input: {
   const delayFor = input.retry?.delay ?? defaultDelay;
 
   for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
-    await invokeHook(input.hooks?.beforeSend, {
+    await invokeHooks(input.hookList, "beforeSend", {
       provider: input.provider.name,
       message: input.message,
       attempt,
@@ -215,13 +275,16 @@ async function sendWithRetry(input: {
         provider: response.provider || input.provider.name,
       };
 
-      await invokeHook(input.hooks?.afterSend, {
+      const afterEvent = {
         provider: input.provider.name,
         message: input.message,
         attempt,
         metadata: input.sendOptions?.metadata,
         response: normalizedResponse,
-      });
+      };
+
+      await invokeAfterSendMiddleware(input.middleware, afterEvent);
+      await invokeHooks(input.hookList, "afterSend", afterEvent);
 
       return normalizedResponse;
     } catch (error) {
@@ -234,7 +297,7 @@ async function sendWithRetry(input: {
 
       const delayMs = delayFor(attempt, normalizedError);
 
-      await invokeHook(input.hooks?.onRetry, {
+      await invokeHooks(input.hookList, "onRetry", {
         provider: input.provider.name,
         message: input.message,
         attempt,
@@ -252,6 +315,100 @@ async function sendWithRetry(input: {
     code: "retry_loop_exited",
     retryable: false,
   });
+}
+
+function addAdapter(adapters: Map<string, EmailProvider>, adapter: EmailProvider) {
+  if (adapters.has(adapter.name)) {
+    throw new EmailValidationError(`Duplicate email adapter "${adapter.name}".`);
+  }
+
+  adapters.set(adapter.name, adapter);
+}
+
+function createPluginContext(
+  adapters: Map<string, EmailProvider>,
+  requestedDefault: string,
+): EmailPluginContext {
+  return {
+    adapters,
+    get defaultAdapter() {
+      return requestedDefault;
+    },
+    addAdapter(adapter) {
+      addAdapter(adapters, adapter);
+    },
+  };
+}
+
+function resolvePluginAdapters(plugin: EmailPlugin, context: EmailPluginContext): EmailProvider[] {
+  if (!plugin.adapters) {
+    return [];
+  }
+
+  const adapters = Array.isArray(plugin.adapters) ? plugin.adapters : plugin.adapters(context);
+
+  if (isThenable(adapters)) {
+    throw new EmailValidationError(
+      `Email plugin "${plugin.id}" returned async adapters. createEmailClient requires synchronous plugin adapters.`,
+    );
+  }
+
+  return adapters;
+}
+
+function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
+  return Boolean(value && typeof (value as Promise<T>).then === "function");
+}
+
+function applyClientExtension(client: EmailClient, pluginId: string, extension: object) {
+  for (const key of Object.keys(extension)) {
+    if (Object.hasOwn(client, key)) {
+      throw new EmailValidationError(
+        `Email plugin "${pluginId}" tried to extend the client with reserved key "${key}".`,
+      );
+    }
+  }
+
+  Object.assign(client, extension);
+}
+
+async function applyBeforeSendMiddleware(
+  middleware: EmailSendMiddleware[],
+  event: EmailBeforeSendEvent,
+): Promise<
+  Required<Pick<EmailBeforeSendEvent, "message">> & Pick<EmailBeforeSendEvent, "options">
+> {
+  let message = event.message;
+  let options = event.options;
+
+  for (const item of middleware) {
+    const result = await item.beforeSend?.({ message, options });
+
+    if (result?.message) {
+      message = result.message;
+    }
+
+    if (result?.options) {
+      options = { ...options, ...result.options };
+    }
+  }
+
+  return { message, options };
+}
+
+async function invokeAfterSendMiddleware(
+  middleware: EmailSendMiddleware[],
+  event: EmailAfterSendEvent,
+) {
+  for (const item of middleware) {
+    await invokeHook(item.afterSend, event);
+  }
+}
+
+async function invokeErrorMiddleware(middleware: EmailSendMiddleware[], event: EmailErrorEvent) {
+  for (const item of middleware) {
+    await invokeHook(item.onError, event);
+  }
 }
 
 class ProviderAttemptFailure {
@@ -277,6 +434,31 @@ async function invokeHook<T>(
     await hook?.(event);
   } catch {
     // Hooks are observability callbacks. Provider behavior should not be masked by hook failures.
+  }
+}
+
+type EmailRetryHookEvent = EmailHookEvent & {
+  error: unknown;
+  nextAttempt: number;
+  delayMs: number;
+};
+
+type EmailHookPayload =
+  | EmailHookEvent
+  | EmailAfterSendEvent
+  | EmailErrorEvent
+  | EmailRetryHookEvent;
+
+async function invokeHooks(
+  hookList: NonNullable<EmailClientOptions["hooks"]>[],
+  name: keyof EmailHooks,
+  event: EmailHookPayload,
+) {
+  for (const hooks of hookList) {
+    await invokeHook(
+      hooks[name] as ((event: EmailHookPayload) => unknown | Promise<unknown>) | undefined,
+      event,
+    );
   }
 }
 

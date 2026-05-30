@@ -11,7 +11,7 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 - `Yes` means the adapter maps that `EmailMessage` field.
 - `No` means the adapter rejects that field before calling the provider.
 - `Values` means Email SDK sends each tag's value to the provider.
-- `First tag` means only the first tag can be represented by that provider API.
+- `One tag` means only one tag can be represented by that provider API. Sending more than one tag fails before the provider request.
 
 ## Best fits
 
@@ -28,17 +28,17 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 
 These adapters cover most transactional email fields. They are the best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.
 
-| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags      | Attachments |
-| ----------------------- | --- | --- | -------- | ------- | -------- | --------- | ----------- |
-| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes       | Yes         |
-| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | First tag | Yes         |
-| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
-| AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes       | Yes         |
-| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
-| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values    | Yes         |
-| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values    | Yes         |
-| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values    | Yes         |
-| Mailtrap                | Yes | Yes | No       | Yes     | No       | First tag | Yes         |
+| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags    | Attachments |
+| ----------------------- | --- | --- | -------- | ------- | -------- | ------- | ----------- |
+| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
+| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
+| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
+| AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
+| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
+| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
+| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
+| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values  | Yes         |
+| Mailtrap                | Yes | Yes | No       | Yes     | No       | One tag | Yes         |
 
 ## Narrow adapters
 

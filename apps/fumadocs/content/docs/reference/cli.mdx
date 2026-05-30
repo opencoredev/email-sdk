@@ -6,14 +6,39 @@ icon: Terminal
 
 The CLI is intentionally small. Use it to inspect adapters, check environment variables, validate a message with `--dry-run`, and send a smoke-test email from your terminal.
 
-The CLI ships with the npm package. Check the installed version before comparing behavior against the docs:
+The npm package is `@opencoredev/email-sdk`; the CLI command it installs is `email-sdk`.
+
+## Install or run
+
+Run the CLI once with `bunx`:
 
 ```bash
-email-sdk version
+bunx --yes @opencoredev/email-sdk adapters
 ```
 
+Install the SDK in a project:
+
 ```bash
-email-sdk send \
+bun add @opencoredev/email-sdk
+```
+
+Then run the installed binary:
+
+```bash
+bun email-sdk adapters
+```
+
+The CLI requires Bun on your `PATH`. Check the installed version before comparing behavior against
+the docs:
+
+```bash
+bun email-sdk version
+```
+
+## Send
+
+```bash
+bunx --yes @opencoredev/email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \
@@ -24,7 +49,7 @@ email-sdk send \
 ## Adapters
 
 ```bash
-email-sdk adapters
+bunx --yes @opencoredev/email-sdk adapters
 ```
 
 | Adapter      | Required environment                                       |
@@ -51,7 +76,7 @@ If `--adapter` is omitted, the CLI selects the first adapter with all required e
 ## Doctor
 
 ```bash
-email-sdk doctor --adapter resend
+bunx --yes @opencoredev/email-sdk doctor --adapter resend
 ```
 
 `doctor` checks whether the selected adapter has the required environment variables.
@@ -59,10 +84,10 @@ email-sdk doctor --adapter resend
 ## Version
 
 ```bash
-email-sdk version
-email-sdk --version
-email-sdk -v
-email-sdk version --json
+bun email-sdk version
+bun email-sdk --version
+bun email-sdk -v
+bun email-sdk version --json
 ```
 
 `version` reads the installed `@opencoredev/email-sdk` package metadata, so it reports the SDK and CLI version from the package currently on your machine. The docs version picker in the top navigation uses the same package version from this repository.

@@ -78,6 +78,60 @@ export type EmailProvider<TRaw = unknown> = {
   raw?: TRaw;
 };
 
+export type EmailPluginContext = {
+  adapters: ReadonlyMap<string, EmailProvider>;
+  defaultAdapter: string;
+  addAdapter(adapter: EmailProvider): void;
+};
+
+export type EmailBeforeSendEvent = {
+  message: EmailMessage;
+  options?: SendOptions;
+};
+
+export type EmailBeforeSendResult = {
+  message?: EmailMessage;
+  options?: SendOptions;
+};
+
+export type EmailAfterSendEvent = EmailHookEvent & {
+  response: EmailProviderResponse;
+};
+
+export type EmailErrorEvent = EmailHookEvent & {
+  error: unknown;
+};
+
+export type EmailSendMiddleware = {
+  beforeSend?: (event: EmailBeforeSendEvent) => MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?: (event: EmailAfterSendEvent) => MaybePromise<void>;
+  onError?: (event: EmailErrorEvent) => MaybePromise<void>;
+};
+
+export type EmailPlugin<TExtension extends object = object> = {
+  id: string;
+  adapters?: EmailProvider[] | ((ctx: EmailPluginContext) => EmailProvider[]);
+  hooks?: EmailHooks;
+  middleware?: EmailSendMiddleware[];
+  extendClient?: (ctx: EmailPluginContext) => TExtension;
+};
+
+export type EmailPluginClientExtension<TPlugin> =
+  TPlugin extends EmailPlugin<infer TExtension> ? TExtension : object;
+
+export type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
+  value: infer TIntersection,
+) => void
+  ? TIntersection
+  : never;
+
+export type EmailPluginClientExtensions<TPlugins extends readonly EmailPlugin[]> =
+  UnionToIntersection<EmailPluginClientExtension<TPlugins[number]>> extends infer TExtension
+    ? TExtension extends object
+      ? TExtension
+      : object
+    : object;
+
 export type EmailRetryConfig = {
   retries?: number;
   delay?: (attempt: number, error: unknown) => number;
@@ -100,7 +154,7 @@ export type EmailHookEvent = {
   metadata?: Record<string, unknown>;
 };
 
-export type EmailClientOptions = {
+export type EmailClientOptions<TPlugins extends readonly EmailPlugin[] = readonly EmailPlugin[]> = {
   adapters?: EmailProvider[];
   providers?: EmailProvider[];
   defaultAdapter?: string;
@@ -108,6 +162,7 @@ export type EmailClientOptions = {
   fallback?: string[];
   retry?: EmailRetryConfig;
   hooks?: EmailHooks;
+  plugins?: TPlugins;
 };
 
 export type SendBatchItem = EmailMessage & {
@@ -129,7 +184,7 @@ export type SendBatchResult =
       error: unknown;
     };
 
-export type EmailClient = {
+export type EmailClient<TExtension extends object = object> = {
   readonly adapters: ReadonlyMap<string, EmailProvider>;
   readonly providers: ReadonlyMap<string, EmailProvider>;
   readonly defaultAdapter: string;
@@ -140,4 +195,4 @@ export type EmailClient = {
   provider<TProvider extends EmailProvider = EmailProvider>(name: string): TProvider;
   withAdapter(name: string): Pick<EmailClient, "send" | "sendBatch">;
   withProvider(name: string): Pick<EmailClient, "send" | "sendBatch">;
-};
+} & TExtension;
