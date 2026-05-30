@@ -3,6 +3,7 @@ import type { MetaDescriptor } from "@tanstack/react-router";
 import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const siteTitle = `${appName} - Unified email sending for TypeScript`;
+export const siteImageAlt = "Email SDK unified email sending preview";
 
 export const siteMeta = [
   {
@@ -40,6 +41,10 @@ export const siteMeta = [
     content: siteOgImageUrl,
   },
   {
+    property: "og:image:alt",
+    content: siteImageAlt,
+  },
+  {
     property: "og:image:width",
     content: "1200",
   },
@@ -62,6 +67,10 @@ export const siteMeta = [
   {
     name: "twitter:image",
     content: siteOgImageUrl,
+  },
+  {
+    name: "twitter:image:alt",
+    content: siteImageAlt,
   },
   {
     name: "robots",
