@@ -4,7 +4,7 @@
 [![GitHub release](https://shieldcn.dev/github/release/opencoredev/email-sdk.svg)](https://github.com/opencoredev/email-sdk/releases)
 [![GitHub issues](https://shieldcn.dev/github/issues/opencoredev/email-sdk.svg)](https://github.com/opencoredev/email-sdk/issues)
 [![skills.sh](https://skills.sh/b/opencoredev/email-sdk)](https://skills.sh/opencoredev/email-sdk)
-[![Follow on X](https://shieldcn.dev/x/follow/opencoredev.svg?variant=branded)](https://x.com/opencoredev)
+[![Follow on X](https://shieldcn.dev/x/follow/leodev.svg?variant=branded)](https://x.com/leodev)
 
 A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters
 you actually send through, and keep provider-specific field support visible in the docs.
