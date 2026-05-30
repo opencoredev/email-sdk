@@ -18,6 +18,7 @@ bun add @opencoredev/email-sdk
 ```
 
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+The CLI binary installed by this package is still named `email-sdk`.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -38,6 +39,20 @@ await email.send({
 SMTP is built in and does not require Nodemailer.
 
 Adapters are stable by contract: they map supported `EmailMessage` fields and reject unsupported fields instead of silently dropping them.
+
+## CLI
+
+Run the CLI without installing anything globally:
+
+```bash
+bunx --yes @opencoredev/email-sdk adapters
+```
+
+After adding the package to a project, run the installed binary with Bun:
+
+```bash
+bun email-sdk doctor --adapter resend
+```
 
 ## Agent Skill
 

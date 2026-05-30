@@ -31,6 +31,11 @@ await email.send({
 
 <Cards>
   <Card
+    title="Install package and CLI"
+    href="/docs/getting-started/install"
+    description="Use the scoped npm package and the email-sdk command."
+  />
+  <Card
     title="Send your first email"
     href="/docs/getting-started/quickstart"
     description="Install the SDK, create a client, and send a message."
@@ -72,6 +77,4 @@ call, typed errors, and a fallback path that is explicit enough to debug.
 ## Provider behavior is not hidden
 
 Email providers do not all support the same fields. A fallback route is only safe when the backup
-adapter can represent the same class of message. Before choosing routes, read the
-[field support guide](/docs/adapters/field-support); unsupported fields should fail fast instead of
-being silently dropped.
+adapter can represent the same class of message. Before choosing routes, read the <a href="/docs/adapters/field-support">field support guide</a>; unsupported fields should fail fast instead of being silently dropped.
