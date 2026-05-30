@@ -12,8 +12,8 @@ provider when its field support fits your app better. Your application code stil
 the adapter decides how that message maps to the provider.
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { resend } from "@email-sdk/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],

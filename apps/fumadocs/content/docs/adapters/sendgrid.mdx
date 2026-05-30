@@ -7,8 +7,8 @@ icon: sendgrid
 <ProviderBadge adapter="sendgrid" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { sendgrid } from "@email-sdk/email-sdk/sendgrid";
 
 const email = createEmailClient({
   adapters: [sendgrid({ apiKey: process.env.SENDGRID_API_KEY! })],

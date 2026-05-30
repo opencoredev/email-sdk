@@ -7,9 +7,9 @@ icon: Plug
 An adapter is an Email SDK module that knows how to send through one service or transport.
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { postmark } from "@opencoredev/email-sdk/postmark";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { resend } from "@email-sdk/email-sdk/resend";
+import { postmark } from "@email-sdk/email-sdk/postmark";
 
 const email = createEmailClient({
   adapters: [

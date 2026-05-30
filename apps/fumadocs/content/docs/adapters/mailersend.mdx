@@ -7,8 +7,8 @@ icon: mailersend
 <ProviderBadge adapter="mailersend" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { mailersend } from "@opencoredev/email-sdk/mailersend";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { mailersend } from "@email-sdk/email-sdk/mailersend";
 
 const email = createEmailClient({
   adapters: [mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })],

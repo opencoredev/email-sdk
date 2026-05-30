@@ -9,8 +9,8 @@ The Resend adapter calls the Resend Email API directly. It does not add a runtim
 <ProviderBadge adapter="resend" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { resend } from "@email-sdk/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],

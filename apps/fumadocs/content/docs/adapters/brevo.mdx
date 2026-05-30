@@ -7,8 +7,8 @@ icon: brevo
 <ProviderBadge adapter="brevo" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { brevo } from "@opencoredev/email-sdk/brevo";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { brevo } from "@email-sdk/email-sdk/brevo";
 
 const email = createEmailClient({
   adapters: [brevo({ apiKey: process.env.BREVO_API_KEY! })],

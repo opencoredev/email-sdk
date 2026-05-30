@@ -1,5 +1,5 @@
 {
-  "name": "@opencoredev/email-sdk",
+  "name": "@email-sdk/email-sdk",
   "version": "0.2.0",
   "description": "A lightweight TypeScript SDK for unified email sending.",
   "homepage": "https://github.com/opencoredev/email-sdk#readme",
@@ -13,7 +13,7 @@
     "directory": "packages/email-sdk"
   },
   "bin": {
-    "email-sdk": "./dist/cli.js"
+    "email-sdk": "dist/cli.js"
   },
   "files": [
     "dist",

@@ -9,8 +9,8 @@ The Postmark adapter calls the Postmark Email API directly. It does not add a ru
 <ProviderBadge adapter="postmark" />
 
 ```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { postmark } from "@opencoredev/email-sdk/postmark";
+import { createEmailClient } from "@email-sdk/email-sdk";
+import { postmark } from "@email-sdk/email-sdk/postmark";
 
 const email = createEmailClient({
   adapters: [
