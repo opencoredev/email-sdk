@@ -10,11 +10,18 @@ This repo includes an agent skill at:
 skills/email-sdk/SKILL.md
 ```
 
+Install it with the skills.sh CLI:
+
+```bash
+npx skills add opencoredev/email-sdk --skill email-sdk
+```
+
 Use it when an agent wires Email SDK into an app, reviews adapter setup, or updates these docs.
 
 ## What it tells agents
 
 - Use `bun` and `bunx`.
+- Refresh the current README, package exports, Fumadocs pages, and TypeScript declarations before implementing.
 - Keep adapter credentials in environment variables.
 - Import adapters from their own entry points.
 - Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
@@ -31,4 +38,4 @@ Keep secrets in environment variables.
 Add one narrow test around the send path.
 ```
 
-The skill is short on purpose. It should guide implementation without turning a small email task into a large framework change.
+The skill is dynamic on purpose. It teaches agents where to fetch the current docs and source first, so the skill does not need a manual update every time the SDK gains another adapter or option.
