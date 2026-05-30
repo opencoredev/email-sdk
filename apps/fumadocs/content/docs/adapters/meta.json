@@ -6,6 +6,7 @@
     "resend",
     "postmark",
     "sendgrid",
+    "ses",
     "mailgun",
     "mailersend",
     "brevo",

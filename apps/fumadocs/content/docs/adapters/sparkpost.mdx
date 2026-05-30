@@ -7,8 +7,8 @@ icon: sparkpost
 <ProviderBadge adapter="sparkpost" />
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { sparkpost } from "email-sdk/sparkpost";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
 
 const email = createEmailClient({
   adapters: [sparkpost({ apiKey: process.env.SPARKPOST_API_KEY! })],

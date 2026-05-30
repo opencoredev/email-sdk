@@ -9,8 +9,8 @@ icon: mailchimp
 Mailchimp Transactional is the API formerly known as Mandrill.
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { mailchimp } from "email-sdk/mailchimp";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
 
 const email = createEmailClient({
   adapters: [mailchimp({ apiKey: process.env.MAILCHIMP_API_KEY! })],

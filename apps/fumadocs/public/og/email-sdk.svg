@@ -1,0 +1,137 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="solar-blue" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(880 110) rotate(142) scale(720 430)">
+      <stop stop-color="#38bdf8" stop-opacity="0.26"/>
+      <stop offset="0.42" stop-color="#1d4ed8" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#09090b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lower-blue" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(270 540) rotate(-22) scale(500 240)">
+      <stop stop-color="#60a5fa" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#09090b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panel-stroke" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" stroke="#27272a" stroke-width="1" opacity="0.18"/>
+    </pattern>
+    <filter id="panel-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="24" stdDeviation="34" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="#09090b"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#solar-blue)"/>
+  <rect width="1200" height="630" fill="url(#lower-blue)"/>
+
+  <g transform="translate(74 130)">
+    <text x="0" y="74" fill="#fafafa" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="800">Email SDK</text>
+    <text x="2" y="130" fill="#d4d4d8" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="500">One typed API for every provider.</text>
+    <text x="2" y="180" fill="#8f8f98" font-family="Arial, Helvetica, sans-serif" font-size="18">Fallback routing, hooks, retries, and Bun CLI support.</text>
+  </g>
+
+  <g transform="translate(74 434)" font-family="Arial, Helvetica, sans-serif">
+    <path d="M0 0H360" stroke="#27272a" stroke-width="1"/>
+    <text x="0" y="34" fill="#d4d4d8" font-size="17" font-weight="700">15+ built-in providers</text>
+    <text x="0" y="65" fill="#8f8f98" font-size="17">plus custom transports when you need them.</text>
+  </g>
+
+  <g transform="translate(540 62)" filter="url(#panel-shadow)">
+    <rect width="586" height="506" rx="28" fill="#0f0f11" stroke="#27272a"/>
+    <rect x="1" y="1" width="584" height="60" rx="27" fill="#151518"/>
+    <path d="M0 61H586" stroke="#27272a"/>
+    <text x="30" y="38" fill="#fafafa" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800">Provider adapters</text>
+
+    <g transform="translate(28 82)" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">
+      <g>
+        <rect width="252" height="39" rx="11" fill="#202023" stroke="#3f3f46"/>
+        <image href="provider-logos/resend.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#fafafa">Resend</text>
+      </g>
+      <g transform="translate(280 0)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/mailtrap.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Mailtrap</text>
+      </g>
+
+      <g transform="translate(0 50)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/postmark.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Postmark</text>
+      </g>
+      <g transform="translate(280 50)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/scaleway.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Scaleway</text>
+      </g>
+
+      <g transform="translate(0 100)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/sendgrid.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">SendGrid</text>
+      </g>
+      <g transform="translate(280 100)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/zeptomail.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">ZeptoMail</text>
+      </g>
+
+      <g transform="translate(0 150)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/mailgun.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Mailgun</text>
+      </g>
+      <g transform="translate(280 150)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/mailpace.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">MailPace</text>
+      </g>
+
+      <g transform="translate(0 200)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/mailersend.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">MailerSend</text>
+      </g>
+      <g transform="translate(280 200)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/loops.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Loops</text>
+      </g>
+
+      <g transform="translate(0 250)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/brevo.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Brevo</text>
+      </g>
+      <g transform="translate(280 250)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/plunk.png" x="16" y="10" width="20" height="20" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Plunk</text>
+      </g>
+
+      <g transform="translate(0 300)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/mailchimp.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">Mailchimp Transactional</text>
+      </g>
+      <g transform="translate(280 300)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <rect x="15" y="10" width="20" height="20" rx="6" fill="#172554"/>
+        <text x="20" y="26" fill="#93c5fd" font-size="14" font-weight="800">S</text>
+        <text x="48" y="25" fill="#e4e4e7">SMTP</text>
+      </g>
+
+      <g transform="translate(0 350)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <image href="provider-logos/sparkpost.png" x="16" y="11" width="18" height="18" preserveAspectRatio="xMidYMid meet"/>
+        <text x="48" y="25" fill="#e4e4e7">SparkPost</text>
+      </g>
+      <g transform="translate(280 350)">
+        <rect width="252" height="39" rx="11" fill="#17171a" stroke="#2a2a2d"/>
+        <text x="20" y="25" fill="#93c5fd">and more</text>
+      </g>
+    </g>
+  </g>
+</svg>

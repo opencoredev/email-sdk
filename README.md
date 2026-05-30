@@ -2,7 +2,8 @@
 
 [![skills.sh](https://skills.sh/b/opencoredev/email-sdk)](https://skills.sh/opencoredev/email-sdk)
 
-A lightweight TypeScript SDK for unified email sending. One clean API, swappable adapters, fallbacks, hooks, a Bun CLI, and Fumadocs documentation.
+A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters
+you actually send through, and keep provider-specific field support visible in the docs.
 
 ## Packages
 
@@ -13,12 +14,12 @@ A lightweight TypeScript SDK for unified email sending. One clean API, swappable
 ## Quickstart
 
 ```bash
-bun add email-sdk
+bun add @opencoredev/email-sdk
 ```
 
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
@@ -54,6 +55,10 @@ bun run check-types
 bun test
 bun run build
 ```
+
+## Releases
+
+Releases use Changesets, Depot-backed GitHub Actions runners, npm, and the repo-local Homebrew formula. See [AGENTS.md](AGENTS.md).
 
 Do not run the docs dev server unless you actually want a local preview:
 

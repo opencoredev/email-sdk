@@ -5,7 +5,7 @@ description: Use when adding, reviewing, or documenting Email SDK integrations i
 
 # Email SDK
 
-Use this skill when an agent works with this repository or wires `email-sdk` into another TypeScript app.
+Use this skill when an agent works with this repository or wires `@opencoredev/email-sdk` into another TypeScript app.
 
 This skill is intentionally dynamic: do not treat the examples below as the full current API. First refresh the local package docs/source for the installed version, then implement against what the repo or dependency actually exposes.
 
@@ -21,13 +21,13 @@ Before changing code, inspect the most relevant current sources:
    - `packages/email-sdk/src/index.ts`
    - the specific adapter file in `packages/email-sdk/src/<adapter>.ts`
    - `packages/email-sdk/src/types.ts`, `core.ts`, and `errors.ts` when message shape, routing, retries, hooks, or error handling matter.
-2. If you are inside an app that has `email-sdk` installed, inspect:
-   - the app lockfile and `node_modules/email-sdk/package.json`
-   - `node_modules/email-sdk/README.md`
-   - `node_modules/email-sdk/dist/*.d.ts`
+2. If you are inside an app that has `@opencoredev/email-sdk` installed, inspect:
+   - the app lockfile and `node_modules/@opencoredev/email-sdk/package.json`
+   - `node_modules/@opencoredev/email-sdk/README.md`
+   - `node_modules/@opencoredev/email-sdk/dist/*.d.ts`
    - the app's existing email, notification, queue, environment, and test patterns.
 3. If local docs are missing or the task depends on version-sensitive behavior, fetch the current published package metadata/docs before implementing:
-   - `bun pm view email-sdk`
+   - `bun pm view @opencoredev/email-sdk`
    - `bunx --yes jsr info email-sdk` only if the project is using JSR
    - the repository docs or package README for the exact version in use.
 
@@ -37,7 +37,7 @@ When local source and external docs disagree, prefer the code/types for the exac
 
 - Prefer `bun` and `bunx`.
 - Keep the core dependency-free.
-- Import adapters from separate entry points such as `email-sdk/resend`, `email-sdk/smtp`, and the adapter-specific entry point shown by the current package exports.
+- Import adapters from separate entry points such as `@opencoredev/email-sdk/resend`, `@opencoredev/email-sdk/smtp`, and the adapter-specific entry point shown by the current package exports.
 - Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
 - SMTP auth on non-secure ports upgrades with STARTTLS by default. Only use `allowInsecureAuth` for trusted local test servers.
 - Adapters must either map a normalized `EmailMessage` field or reject it clearly. Never silently drop CC, BCC, reply-to, headers, tags, metadata, or attachments.
@@ -47,10 +47,12 @@ When local source and external docs disagree, prefer the code/types for the exac
 
 ## Integration Pattern
 
+Entry point names like `@opencoredev/email-sdk/resend` and `@opencoredev/email-sdk/smtp` are illustrative. Verify the exact exports from the installed version before copying these imports.
+
 ```ts
-import { createEmailClient } from "email-sdk";
-import { resend } from "email-sdk/resend";
-import { smtp } from "email-sdk/smtp";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 export const email = createEmailClient({
   adapters: [

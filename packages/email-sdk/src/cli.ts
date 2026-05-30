@@ -14,6 +14,7 @@ import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
+import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { smtp } from "./smtp.js";
 import { sparkpost } from "./sparkpost.js";
@@ -38,6 +39,11 @@ const providerDocs: Array<{
   { name: "resend", env: ["RESEND_API_KEY"], note: "Resend Email API" },
   { name: "postmark", env: ["POSTMARK_SERVER_TOKEN"], note: "Postmark Email API" },
   { name: "sendgrid", env: ["SENDGRID_API_KEY"], note: "Twilio SendGrid Mail Send API" },
+  {
+    name: "ses",
+    env: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
+    note: "AWS SES v2 SendEmail API",
+  },
   { name: "mailgun", env: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"], note: "Mailgun Messages API" },
   { name: "mailersend", env: ["MAILERSEND_API_KEY"], note: "MailerSend Email API" },
   { name: "brevo", env: ["BREVO_API_KEY"], note: "Brevo transactional email API" },
@@ -68,6 +74,16 @@ const factories: Record<string, ProviderFactory> = {
       messageStream: stringFlag(flags, "message-stream") ?? process.env.POSTMARK_MESSAGE_STREAM,
     }),
   sendgrid: (flags) => sendgrid({ apiKey: flagOrEnv(flags, "api-key", "SENDGRID_API_KEY") }),
+  ses: (flags) =>
+    ses({
+      accessKeyId: flagOrEnv(flags, "access-key-id", "AWS_ACCESS_KEY_ID"),
+      secretAccessKey: flagOrEnv(flags, "secret-access-key", "AWS_SECRET_ACCESS_KEY"),
+      sessionToken: stringFlag(flags, "session-token") ?? process.env.AWS_SESSION_TOKEN,
+      region: flagOrEnv(flags, "region", "AWS_REGION"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.AWS_SES_BASE_URL,
+      configurationSetName:
+        stringFlag(flags, "configuration-set") ?? process.env.AWS_SES_CONFIGURATION_SET,
+    }),
   mailgun: (flags) =>
     mailgun({
       apiKey: flagOrEnv(flags, "api-key", "MAILGUN_API_KEY"),
