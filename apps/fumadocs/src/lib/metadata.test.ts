@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { siteMeta } from "@/lib/metadata";
+import { siteImageAlt, siteMeta } from "@/lib/metadata";
 import { siteOgImagePath, siteOgImageUrl } from "@/lib/shared";
 
 const findByName = (name: string) =>
@@ -17,6 +17,8 @@ describe("site social metadata", () => {
     expect(twitterImages).toHaveLength(1);
     expect(ogImages[0]?.content).toBe(siteOgImageUrl);
     expect(twitterImages[0]?.content).toBe(siteOgImageUrl);
+    expect(findByProperty("og:image:alt")[0]?.content).toBe(siteImageAlt);
+    expect(findByName("twitter:image:alt")[0]?.content).toBe(siteImageAlt);
 
     const imageUrl = new URL(siteOgImageUrl);
     expect(imageUrl.pathname).toBe(siteOgImagePath);
