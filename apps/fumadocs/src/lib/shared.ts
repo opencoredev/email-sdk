@@ -7,7 +7,7 @@ export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev"
   "",
 );
 export const siteOgImagePath = "/og/email-sdk.png";
-export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}`;
+export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}?v=20260530`;
 
 // fill this with your actual GitHub info, for example:
 export const gitConfig = {
