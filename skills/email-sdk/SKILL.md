@@ -28,7 +28,7 @@ Before changing code, inspect the most relevant current sources:
    - the app's existing email, notification, queue, environment, and test patterns.
 3. If local docs are missing or the task depends on version-sensitive behavior, fetch the current published package metadata/docs before implementing:
    - `bun pm view @opencoredev/email-sdk`
-   - `email-sdk version` when the CLI is installed in the target app
+   - `bun email-sdk version` when the CLI is installed in the target app
    - `bunx --yes jsr info email-sdk` only if the project is using JSR
    - the repository docs or package README for the exact version in use.
 

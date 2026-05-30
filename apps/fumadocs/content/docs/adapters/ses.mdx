@@ -55,7 +55,7 @@ await email.send({
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
 AWS_REGION=us-east-1 \
-email-sdk send --adapter ses \
+bunx --yes @opencoredev/email-sdk send --adapter ses \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
   --subject "Welcome" \

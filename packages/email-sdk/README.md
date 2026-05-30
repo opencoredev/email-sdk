@@ -10,6 +10,7 @@ bun add @opencoredev/email-sdk
 ```
 
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
+The command-line binary it installs is named `email-sdk`.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -51,3 +52,13 @@ SMTP is built in and does not require Nodemailer.
 Adapters map supported `EmailMessage` fields and reject unsupported fields instead of silently
 dropping message data. Attachment `content` is treated as raw content by default; set
 `contentEncoding: "base64"` when passing pre-encoded content.
+
+CLI:
+
+```bash
+# one-off: no install needed
+bunx --yes @opencoredev/email-sdk adapters
+
+# after bun add @opencoredev/email-sdk
+bun email-sdk doctor --adapter resend
+```
