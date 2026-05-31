@@ -8,7 +8,7 @@ import {
   optionalSingleApiAddress,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type MailerSendProviderOptions = {
   apiKey: string;
@@ -26,14 +26,7 @@ export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ 
     },
     fetch: options.fetch,
     async buildPayload(message) {
-      assertSupportedMessageFields("mailersend", message, {
-        cc: true,
-        bcc: true,
-        replyTo: true,
-        headers: true,
-        attachments: true,
-        tags: true,
-      });
+      assertSupportedMessageFields("mailersend", message, SUPPORTED_MESSAGE_FIELDS.mailersend);
       const attachments = await base64Attachments(message);
 
       return {

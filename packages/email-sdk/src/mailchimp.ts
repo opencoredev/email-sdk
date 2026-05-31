@@ -1,7 +1,11 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, emailParts } from "./payloads.js";
 import type { EmailAddress, EmailProvider, OneOrMany } from "./types.js";
-import { assertSupportedMessageFields, headersToObject } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  headersToObject,
+} from "./utils.js";
 
 export type MailchimpProviderOptions = {
   apiKey: string;
@@ -17,14 +21,7 @@ export function mailchimp(options: MailchimpProviderOptions): EmailProvider<{ ba
     headers: {},
     fetch: options.fetch,
     async buildPayload(message) {
-      assertSupportedMessageFields("mailchimp", message, {
-        cc: true,
-        bcc: true,
-        headers: true,
-        attachments: true,
-        tags: true,
-        metadata: true,
-      });
+      assertSupportedMessageFields("mailchimp", message, SUPPORTED_MESSAGE_FIELDS.mailchimp);
       const from = emailParts(message.from);
       const attachments = await base64Attachments(message);
 

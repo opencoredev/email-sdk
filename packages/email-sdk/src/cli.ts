@@ -25,24 +25,24 @@ import type {
   EmailProvider,
   EmailTag,
 } from "./types.js";
-import { arrayify, assertMaxItems, assertMessage, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  arrayify,
+  assertMaxItems,
+  assertMessage,
+  assertSupportedMessageFields,
+} from "./utils.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
 type ProviderFactory = (flags: CliFlags) => EmailProvider;
-type FieldSupport = Partial<
-  Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
->;
+type SupportedAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
 type PackageInfo = {
   name: string;
   version: string;
 };
 
-const providerDocs: Array<{
-  name: string;
-  env: string[];
-  note: string;
-}> = [
+const providerDocs = [
   { name: "resend", env: ["RESEND_API_KEY"], note: "Resend Email API" },
   { name: "postmark", env: ["POSTMARK_SERVER_TOKEN"], note: "Postmark Email API" },
   { name: "sendgrid", env: ["SENDGRID_API_KEY"], note: "Twilio SendGrid Mail Send API" },
@@ -71,9 +71,15 @@ const providerDocs: Array<{
   { name: "zeptomail", env: ["ZEPTOMAIL_TOKEN"], note: "Zoho ZeptoMail API" },
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
-];
+] as const satisfies ReadonlyArray<{
+  name: SupportedAdapterName;
+  env: readonly string[];
+  note: string;
+}>;
 
-const factories: Record<string, ProviderFactory> = {
+type ProviderName = (typeof providerDocs)[number]["name"];
+
+const factories = {
   resend: (flags) => resend({ apiKey: flagOrEnv(flags, "api-key", "RESEND_API_KEY") }),
   postmark: (flags) =>
     postmark({
@@ -132,58 +138,7 @@ const factories: Record<string, ProviderFactory> = {
             }
           : undefined,
     }),
-};
-
-const dryRunFieldSupport: Record<string, FieldSupport> = {
-  resend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
-  postmark: {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-    metadata: true,
-  },
-  sendgrid: {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-    metadata: true,
-  },
-  ses: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
-  mailgun: {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-    metadata: true,
-  },
-  mailersend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
-  brevo: {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-    metadata: true,
-  },
-  mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
-  sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
-  loops: { metadata: true },
-  plunk: { metadata: true },
-  mailtrap: { cc: true, bcc: true, headers: true, attachments: true, tags: true },
-  scaleway: { cc: true, bcc: true, headers: true },
-  zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
-  mailpace: { cc: true, bcc: true, replyTo: true },
-  smtp: { cc: true, bcc: true, replyTo: true, headers: true },
-};
+} satisfies Record<ProviderName, ProviderFactory>;
 
 const envFlagNames: Record<string, string> = {
   RESEND_API_KEY: "api-key",
@@ -264,26 +219,28 @@ async function main() {
 }
 
 function createProvider(name: string, flags: CliFlags): EmailProvider {
-  const factory = factories[name];
-
-  if (!factory) {
+  if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
 
-  return factory(flags);
+  return factories[name](flags);
 }
 
 function validateDryRun(name: string, message: EmailMessage) {
-  if (!factories[name]) {
+  if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
 
   assertMessage(message);
-  assertSupportedMessageFields(name, message, dryRunFieldSupport[name] ?? {});
+  assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS[name]);
 
   if (name === "loops") {
     assertMaxItems("loops", "recipient", arrayify(message.to), 1);
   }
+}
+
+function isProviderName(name: string): name is ProviderName {
+  return Object.prototype.hasOwnProperty.call(factories, name);
 }
 
 function detectProvider() {

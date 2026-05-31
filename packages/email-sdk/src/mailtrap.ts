@@ -7,7 +7,7 @@ import {
   optionalApiAddresses,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertMaxItems, assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
 
 export type MailtrapProviderOptions = {
   apiKey: string;
@@ -25,13 +25,7 @@ export function mailtrap(options: MailtrapProviderOptions): EmailProvider<{ base
     },
     fetch: options.fetch,
     async buildPayload(message) {
-      assertSupportedMessageFields("mailtrap", message, {
-        cc: true,
-        bcc: true,
-        headers: true,
-        attachments: true,
-        tags: true,
-      });
+      assertSupportedMessageFields("mailtrap", message, SUPPORTED_MESSAGE_FIELDS.mailtrap);
       assertMaxItems("mailtrap", "tag", message.tags ?? [], 1);
       const attachments = await base64Attachments(message);
 

@@ -1,7 +1,7 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses, optionalStringAddresses } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type MailPaceProviderOptions = {
   apiKey: string;
@@ -18,11 +18,7 @@ export function mailpace(options: MailPaceProviderOptions): EmailProvider<{ base
       "MailPace-Server-Token": options.apiKey,
     },
     buildPayload(message) {
-      assertSupportedMessageFields("mailpace", message, {
-        cc: true,
-        bcc: true,
-        replyTo: true,
-      });
+      assertSupportedMessageFields("mailpace", message, SUPPORTED_MESSAGE_FIELDS.mailpace);
 
       return {
         from: formatAddress(message.from),

@@ -1,7 +1,7 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, emailParts } from "./payloads.js";
 import type { EmailAddress, EmailProvider, OneOrMany } from "./types.js";
-import { assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type ZeptoMailProviderOptions = {
   token: string;
@@ -21,12 +21,7 @@ export function zeptomail(options: ZeptoMailProviderOptions): EmailProvider<{ ba
     },
     fetch: options.fetch,
     async buildPayload(message) {
-      assertSupportedMessageFields("zeptomail", message, {
-        cc: true,
-        bcc: true,
-        replyTo: true,
-        attachments: true,
-      });
+      assertSupportedMessageFields("zeptomail", message, SUPPORTED_MESSAGE_FIELDS.zeptomail);
       const attachments = await base64Attachments(message);
 
       return {

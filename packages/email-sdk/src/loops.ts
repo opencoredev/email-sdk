@@ -1,7 +1,7 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type LoopsProviderOptions = {
   apiKey: string;
@@ -19,9 +19,7 @@ export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: s
       Authorization: `Bearer ${options.apiKey}`,
     },
     buildPayload(message) {
-      assertSupportedMessageFields("loops", message, {
-        metadata: true,
-      });
+      assertSupportedMessageFields("loops", message, SUPPORTED_MESSAGE_FIELDS.loops);
       const recipients = formatAddresses(message.to);
 
       if (recipients.length !== 1) {

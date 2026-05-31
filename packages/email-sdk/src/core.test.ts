@@ -171,6 +171,52 @@ describe("createEmailClient", () => {
     expect(attempts).toBe(2);
   });
 
+  test("does not retry programming TypeErrors from provider transports", async () => {
+    let attempts = 0;
+    const provider = {
+      name: "runtime",
+      send() {
+        attempts += 1;
+        throw new TypeError("Cannot read properties of null (reading 'apiKey')");
+      },
+    };
+
+    const client = createEmailClient({
+      adapters: [provider],
+      retry: {
+        retries: 1,
+        delay: () => 0,
+      },
+    });
+
+    await expect(client.send(message)).rejects.toThrow("Cannot read properties");
+    expect(attempts).toBe(1);
+  });
+
+  test("does not retry ENOTFOUND runtime errors", async () => {
+    let attempts = 0;
+    const provider = {
+      name: "runtime",
+      send() {
+        attempts += 1;
+        throw Object.assign(new Error("getaddrinfo ENOTFOUND api.example.com"), {
+          code: "ENOTFOUND",
+        });
+      },
+    };
+
+    const client = createEmailClient({
+      adapters: [provider],
+      retry: {
+        retries: 1,
+        delay: () => 0,
+      },
+    });
+
+    await expect(client.send(message)).rejects.toThrow("ENOTFOUND");
+    expect(attempts).toBe(1);
+  });
+
   test("reports the final retry attempt to onError", async () => {
     const attempts: number[] = [];
     const client = createEmailClient({
