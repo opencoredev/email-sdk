@@ -20,11 +20,12 @@ export const Route = createFileRoute("/rss.xml")({
 function renderRssFeed() {
   const items = blogPosts.map((post) => {
     const url = `${siteUrl}${getBlogPostUrl(post.slug)}`;
+    const escapedUrl = escapeXml(url);
 
     return `    <item>
       <title>${escapeXml(post.title)}</title>
-      <link>${url}</link>
-      <guid>${url}</guid>
+      <link>${escapedUrl}</link>
+      <guid>${escapedUrl}</guid>
       <description>${escapeXml(post.description)}</description>
       <pubDate>${new Date(`${post.publishedAt}T00:00:00Z`).toUTCString()}</pubDate>
     </item>`;
@@ -38,7 +39,7 @@ function renderRssFeed() {
 <rss version="2.0">
   <channel>
     <title>${escapeXml(`${appName} Blog`)}</title>
-    <link>${siteUrl}/blog</link>
+    <link>${escapeXml(`${siteUrl}/blog`)}</link>
     <description>${escapeXml(appDescription)}</description>
     <language>en</language>
     <lastBuildDate>${new Date(`${latestPost.updatedAt}T00:00:00Z`).toUTCString()}</lastBuildDate>

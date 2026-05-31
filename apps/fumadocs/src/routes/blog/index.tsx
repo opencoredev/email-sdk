@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight } from "lucide-react";
 
+import { blogPosts, formatBlogDate } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
-import { blogPosts } from "@/lib/blog";
 import { siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/blog/")({
@@ -61,7 +61,7 @@ function BlogIndex() {
                 />
                 <article className="min-w-0">
                   <div className="flex flex-wrap gap-2 text-xs text-fd-muted-foreground">
-                    <span>{formatDate(post.publishedAt)}</span>
+                    <span>{formatBlogDate(post.publishedAt)}</span>
                     <span aria-hidden="true">/</span>
                     <span>{post.readTime}</span>
                   </div>
@@ -83,13 +83,4 @@ function BlogIndex() {
       </main>
     </HomeLayout>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${value}T00:00:00Z`));
 }

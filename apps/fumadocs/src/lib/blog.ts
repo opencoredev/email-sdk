@@ -56,3 +56,12 @@ export function getBlogPost(slug: string) {
 export function getBlogPostUrl(slug: string) {
   return `/blog/${slug}`;
 }
+
+export function formatBlogDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
+}

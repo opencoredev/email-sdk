@@ -4,7 +4,7 @@ import { ArrowRight, CheckCircle2, GitBranch, Mail, Route as RouteIcon, ShieldCh
 import type { ReactNode } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
-import { blogPosts, getBlogPost, getBlogPostUrl, type BlogPost } from "@/lib/blog";
+import { blogPosts, formatBlogDate, getBlogPost, getBlogPostUrl, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteOgImageUrl, siteUrl } from "@/lib/shared";
 
@@ -129,7 +129,7 @@ function BlogPostPage() {
               {post.description}
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-sm text-fd-muted-foreground">
-              <span>{formatDate(post.publishedAt)}</span>
+              <span>{formatBlogDate(post.publishedAt)}</span>
               <span aria-hidden="true">/</span>
               <span>{post.readTime}</span>
             </div>
@@ -149,7 +149,9 @@ function BlogPostPage() {
 function BlogPostContent({ slug }: { slug: string }) {
   if (slug === "introducing-email-sdk") return <IntroducingPost />;
   if (slug === "email-provider-fallbacks") return <FallbacksPost />;
-  return <NodemailerAlternativePost />;
+  if (slug === "nodemailer-alternative-typescript") return <NodemailerAlternativePost />;
+
+  throw new Error(`Missing blog post content for slug: ${slug}`);
 }
 
 function IntroducingPost() {
@@ -627,13 +629,4 @@ function Callout({ children }: { children: ReactNode }) {
       {children}
     </aside>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${value}T00:00:00Z`));
 }
