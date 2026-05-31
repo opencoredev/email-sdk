@@ -22,6 +22,8 @@ bun add @opencoredev/email-sdk
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The CLI binary installed by this package is still named `email-sdk`.
 
+Use the SDK from server-side Node 20+ or Bun runtimes. Do not expose provider API keys in browser or client-side code. The CLI requires Bun.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";

@@ -9,6 +9,8 @@ bun add @opencoredev/email-sdk
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The command-line binary it installs is named `email-sdk`.
 
+Use the SDK from server-side runtimes such as Node 20+ or Bun. Do not expose provider API keys in browser or client-side code. The included CLI requires Bun.
+
 ## Quickstart
 
 ```ts
@@ -275,7 +277,7 @@ bun email-sdk send --adapter resend --from hello@example.com --to user@example.c
 bun email-sdk send --dry-run --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 ```
 
-The CLI can read provider credentials from environment variables. Run `bun email-sdk adapters` to see the variables each adapter expects.
+The CLI can read provider credentials from environment variables or matching credential flags. Run `bun email-sdk adapters` to see the variables each adapter expects. `--dry-run` validates the message and selected adapter field support without sending email.
 
 ## Provider Reality
 

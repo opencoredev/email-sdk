@@ -120,17 +120,21 @@ export function createEmailClient<
 
       for (const [index, item] of messages.entries()) {
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
+        const resolvedAdapter =
+          adapter ?? provider ?? sendOptions?.adapter ?? sendOptions?.provider;
+        const resolvedFallbackAdapters =
+          fallbackAdapters ??
+          fallbackProviders ??
+          sendOptions?.fallbackAdapters ??
+          sendOptions?.fallbackProviders;
 
         try {
           const response = await client.send(message, {
             ...sendOptions,
-            adapter: adapter ?? sendOptions?.adapter,
-            provider: provider ?? sendOptions?.provider,
-            fallbackAdapters:
-              fallbackAdapters ??
-              sendOptions?.fallbackAdapters ??
-              fallbackProviders ??
-              sendOptions?.fallbackProviders,
+            adapter: resolvedAdapter,
+            provider: undefined,
+            fallbackAdapters: resolvedFallbackAdapters,
+            fallbackProviders: undefined,
           });
           results.push({ ok: true, index, response });
         } catch (error) {

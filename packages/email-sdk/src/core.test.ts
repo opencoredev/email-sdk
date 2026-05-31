@@ -124,6 +124,53 @@ describe("createEmailClient", () => {
     expect(results[1]?.ok).toBe(false);
   });
 
+  test("lets item-level provider aliases override batch-level adapter aliases", async () => {
+    const client = createEmailClient({
+      adapters: [memoryProvider("primary"), memoryProvider("secondary")],
+    });
+
+    const [result] = await client.sendBatch([{ ...message, provider: "secondary" }], {
+      adapter: "primary",
+    });
+
+    expect(result?.ok).toBe(true);
+    if (result?.ok) {
+      expect(result.response.provider).toBe("secondary");
+    }
+  });
+
+  test("retries transient runtime errors from provider transports", async () => {
+    let attempts = 0;
+    const provider = {
+      name: "runtime",
+      send() {
+        attempts += 1;
+
+        if (attempts === 1) {
+          throw new TypeError("fetch failed");
+        }
+
+        return {
+          provider: "runtime",
+          id: "ok",
+        };
+      },
+    };
+
+    const client = createEmailClient({
+      adapters: [provider],
+      retry: {
+        retries: 1,
+        delay: () => 0,
+      },
+    });
+
+    const response = await client.send(message);
+
+    expect(response.id).toBe("ok");
+    expect(attempts).toBe(2);
+  });
+
   test("reports the final retry attempt to onError", async () => {
     const attempts: number[] = [];
     const client = createEmailClient({

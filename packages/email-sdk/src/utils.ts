@@ -120,7 +120,7 @@ export function toProviderError(provider: string, error: unknown) {
   if (error instanceof Error) {
     return new EmailProviderError(error.message, {
       provider,
-      retryable: false,
+      retryable: isRetryableRuntimeError(error),
       cause: error,
     });
   }
@@ -130,6 +130,27 @@ export function toProviderError(provider: string, error: unknown) {
     retryable: false,
     details: error,
   });
+}
+
+function isRetryableRuntimeError(error: Error) {
+  if (error.name === "AbortError") {
+    return false;
+  }
+
+  const code = (error as unknown as Record<string, unknown>).code;
+
+  if (
+    typeof code === "string" &&
+    /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|EPIPE)$/i.test(code)
+  ) {
+    return true;
+  }
+
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  return /fetch|network|socket|timeout|timed out|connection|reset/i.test(error.message);
 }
 
 export async function attachmentContentToString(

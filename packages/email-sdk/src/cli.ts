@@ -25,11 +25,14 @@ import type {
   EmailProvider,
   EmailTag,
 } from "./types.js";
-import { assertMessage } from "./utils.js";
+import { arrayify, assertMaxItems, assertMessage, assertSupportedMessageFields } from "./utils.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
 type ProviderFactory = (flags: CliFlags) => EmailProvider;
+type FieldSupport = Partial<
+  Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
+>;
 type PackageInfo = {
   name: string;
   version: string;
@@ -131,6 +134,81 @@ const factories: Record<string, ProviderFactory> = {
     }),
 };
 
+const dryRunFieldSupport: Record<string, FieldSupport> = {
+  resend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  postmark: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  sendgrid: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  ses: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  mailgun: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  mailersend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  brevo: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
+  sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
+  loops: { metadata: true },
+  plunk: { metadata: true },
+  mailtrap: { cc: true, bcc: true, headers: true, attachments: true, tags: true },
+  scaleway: { cc: true, bcc: true, headers: true },
+  zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
+  mailpace: { cc: true, bcc: true, replyTo: true },
+  smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+};
+
+const envFlagNames: Record<string, string> = {
+  RESEND_API_KEY: "api-key",
+  POSTMARK_SERVER_TOKEN: "server-token",
+  SENDGRID_API_KEY: "api-key",
+  AWS_ACCESS_KEY_ID: "access-key-id",
+  AWS_SECRET_ACCESS_KEY: "secret-access-key",
+  AWS_REGION: "region",
+  MAILGUN_API_KEY: "api-key",
+  MAILGUN_DOMAIN: "domain",
+  MAILERSEND_API_KEY: "api-key",
+  BREVO_API_KEY: "api-key",
+  MAILCHIMP_API_KEY: "api-key",
+  SPARKPOST_API_KEY: "api-key",
+  LOOPS_API_KEY: "api-key",
+  LOOPS_TRANSACTIONAL_ID: "transactional-id",
+  PLUNK_API_KEY: "api-key",
+  MAILTRAP_API_KEY: "api-key",
+  SCALEWAY_SECRET_KEY: "secret-key",
+  SCALEWAY_PROJECT_ID: "project-id",
+  ZEPTOMAIL_TOKEN: "token",
+  MAILPACE_API_KEY: "api-key",
+  SMTP_HOST: "host",
+};
+
 async function main() {
   const [command, ...args] = Bun.argv.slice(2);
   const flags = parseFlags(args);
@@ -163,7 +241,7 @@ async function main() {
   const message = await buildMessage(flags);
 
   if (truthyFlag(flags, "dry-run")) {
-    assertMessage(message);
+    validateDryRun(providerName, message);
     console.log(
       JSON.stringify(
         {
@@ -193,6 +271,19 @@ function createProvider(name: string, flags: CliFlags): EmailProvider {
   }
 
   return factory(flags);
+}
+
+function validateDryRun(name: string, message: EmailMessage) {
+  if (!factories[name]) {
+    fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
+  }
+
+  assertMessage(message);
+  assertSupportedMessageFields(name, message, dryRunFieldSupport[name] ?? {});
+
+  if (name === "loops") {
+    assertMaxItems("loops", "recipient", arrayify(message.to), 1);
+  }
 }
 
 function detectProvider() {
@@ -230,13 +321,18 @@ function doctor(flags: CliFlags) {
     fail(`Unsupported adapter "${providerName}".`);
   }
 
-  const missing = provider.env.filter((name) => !process.env[name]);
+  const missing = provider.env.filter((name) => !hasEnvOrFlag(flags, name));
 
   if (missing.length > 0) {
     fail(`Missing environment for ${provider.name}: ${missing.join(", ")}`);
   }
 
   console.log(`${provider.name} looks configured.`);
+}
+
+function hasEnvOrFlag(flags: CliFlags, env: string) {
+  const flag = envFlagNames[env];
+  return Boolean(process.env[env] || (flag ? stringFlag(flags, flag) : undefined));
 }
 
 async function printVersion(flags: CliFlags) {
