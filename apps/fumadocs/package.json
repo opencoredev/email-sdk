@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "serve .output/public --config ../../serve.json",
     "preview": "vite preview",
+    "test": "bun test",
     "types:check": "fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
