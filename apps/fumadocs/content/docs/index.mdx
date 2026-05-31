@@ -1,12 +1,18 @@
 ---
 title: Email SDK
-description: A small TypeScript email client with swappable adapters, plugins, and explicit provider limits.
+description: TypeScript email SDK documentation for unified transactional sending across Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more.
 icon: Mail
 ---
 
 Email SDK is a small TypeScript package for transactional email. It gives your application one client and one message shape while keeping provider-specific behavior visible in the adapter docs.
 
 Use Resend for a simple API path, SMTP when you want a cheap or self-managed route, or another provider when its field support fits your app better. Add plugins for shared defaults, observability, capture, or community adapters. Your application code still calls `send`; the adapter decides how that message maps to the provider.
+
+## What is an email SDK?
+
+An email SDK is a developer library that lets an application send email without hand-writing every provider API request. Email SDK is a TypeScript email SDK focused on transactional email: one typed client, one normalized message shape, and adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and other providers.
+
+Use Email SDK when you want provider choice without hiding provider limits. Each adapter documents the fields it can send, and unsupported fields fail before the provider request instead of disappearing silently.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";

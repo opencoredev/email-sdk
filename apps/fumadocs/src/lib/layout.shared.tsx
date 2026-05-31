@@ -18,15 +18,29 @@ export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): B
         </span>
       ),
     },
-    links: versionPicker
-      ? [
-          {
-            type: "custom",
-            secondary: true,
-            children: <VersionPicker />,
-          },
-        ]
-      : undefined,
+    links: [
+      {
+        type: "main",
+        text: "Docs",
+        url: "/docs",
+        active: "nested-url",
+      },
+      {
+        type: "main",
+        text: "Blog",
+        url: "/blog",
+        active: "nested-url",
+      },
+      ...(versionPicker
+        ? [
+            {
+              type: "custom" as const,
+              secondary: true,
+              children: <VersionPicker />,
+            },
+          ]
+        : []),
+    ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }

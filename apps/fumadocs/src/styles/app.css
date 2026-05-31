@@ -62,6 +62,23 @@ html > body[data-scroll-locked] {
   opacity: 0.82;
 }
 
+.blog-post-table th,
+.blog-post-table td {
+  border-bottom: 1px solid var(--color-fd-border);
+  padding: 0.875rem 1rem;
+  vertical-align: top;
+}
+
+.blog-post-table th {
+  background: var(--color-fd-muted);
+  color: var(--color-fd-foreground);
+  font-weight: 600;
+}
+
+.blog-post-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .t-text-swap {
   display: inline-block;
   transform: translateY(0);

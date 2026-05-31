@@ -2,6 +2,8 @@
 
 A lightweight TypeScript SDK for transactional email. Use one typed client, pick the adapters your app actually sends through, and add plugins for defaults, observability, capture, or community providers.
 
+Docs: https://email-sdk.dev/docs
+
 ```bash
 bun add @opencoredev/email-sdk
 ```

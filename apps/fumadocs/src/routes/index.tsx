@@ -6,8 +6,19 @@ import { useEffect, useRef, useState } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { baseOptions } from "@/lib/layout.shared";
+import { homeStructuredData, siteTitle } from "@/lib/metadata";
+import { appDescription, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: siteTitle },
+      { name: "description", content: appDescription },
+      { property: "og:url", content: siteUrl },
+      { "script:ld+json": homeStructuredData },
+    ],
+    links: [{ rel: "canonical", href: siteUrl }],
+  }),
   component: Home,
 });
 
@@ -48,8 +59,8 @@ function Home() {
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
-              Send through Resend, Postmark, SendGrid, Mailgun, Brevo, SMTP, and more with one clean
-              TypeScript API.
+              Email SDK is a TypeScript email SDK for transactional sending through Resend,
+              Postmark, SendGrid, Mailgun, AWS SES, Brevo, SMTP, and more with one clean API.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">

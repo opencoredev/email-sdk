@@ -16,7 +16,7 @@ import {
 import { useMDXComponents } from "@/components/mdx";
 import { VersionPicker } from "@/components/version-picker";
 import { baseOptions } from "@/lib/layout.shared";
-import { appName, gitConfig } from "@/lib/shared";
+import { appName, gitConfig, siteUrl } from "@/lib/shared";
 import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
 import {
   type DocsVersionCollection,
@@ -38,9 +38,22 @@ type DocsLoaderData = {
 export const Route = createFileRoute("/docs/$")({
   head: ({ loaderData }) => {
     const data = loaderData as DocsLoaderData | undefined;
-    const title = data?.title ? `${data.title} - ${appName}` : appName;
+    const title = data?.title
+      ? data.title === appName
+        ? `${appName} Documentation - TypeScript email SDK`
+        : `${data.title} - ${appName}`
+      : appName;
     const description =
       data?.description ?? "Email SDK documentation for TypeScript email adapters.";
+    const docsPath = data?.path
+      .replace(/\/?index\.mdx$/, "")
+      .replace(/\.mdx$/, "");
+    const canonicalPath = data?.docsBasePath
+      ? docsPath
+        ? `${data.docsBasePath}/${docsPath}`
+        : data.docsBasePath
+      : "/docs";
+    const canonicalUrl = `${siteUrl}${canonicalPath}`;
 
     return {
       meta: [
@@ -49,7 +62,9 @@ export const Route = createFileRoute("/docs/$")({
         { property: "og:type", content: "article" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
+        { property: "og:url", content: canonicalUrl },
       ],
+      links: [{ rel: "canonical", href: canonicalUrl }],
     };
   },
   component: Page,
