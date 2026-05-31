@@ -8,6 +8,9 @@ export const providers = [
     logo: "https://cdn.simpleicons.org/resend",
     sidebarLogo: "https://cdn.simpleicons.org/resend/white",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Postmark",
@@ -17,6 +20,9 @@ export const providers = [
     website: "https://postmarkapp.com",
     logo: "https://www.google.com/s2/favicons?domain=postmarkapp.com&sz=64",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "SendGrid",
@@ -26,6 +32,9 @@ export const providers = [
     website: "https://sendgrid.com",
     logo: "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "AWS SES",
@@ -35,6 +44,9 @@ export const providers = [
     website: "https://aws.amazon.com/ses/",
     logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Mailgun",
@@ -44,6 +56,9 @@ export const providers = [
     website: "https://www.mailgun.com",
     logo: "https://cdn.simpleicons.org/mailgun",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "MailerSend",
@@ -53,6 +68,9 @@ export const providers = [
     website: "https://www.mailersend.com",
     logo: "https://www.google.com/s2/favicons?domain=mailersend.com&sz=64",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Brevo",
@@ -62,6 +80,9 @@ export const providers = [
     website: "https://www.brevo.com",
     logo: "https://cdn.simpleicons.org/brevo",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Mailchimp Transactional",
@@ -71,6 +92,9 @@ export const providers = [
     website: "https://mailchimp.com/features/transactional-email",
     logo: "https://cdn.simpleicons.org/mailchimp",
     category: "Popular APIs",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "SparkPost",
@@ -80,6 +104,9 @@ export const providers = [
     website: "https://www.sparkpost.com",
     logo: "https://cdn.simpleicons.org/sparkpost",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Mailtrap",
@@ -89,6 +116,9 @@ export const providers = [
     website: "https://mailtrap.io",
     logo: "https://cdn.simpleicons.org/mailtrap",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Scaleway",
@@ -98,6 +128,9 @@ export const providers = [
     website: "https://www.scaleway.com/en/transactional-email-tem",
     logo: "https://cdn.simpleicons.org/scaleway",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "ZeptoMail",
@@ -107,6 +140,9 @@ export const providers = [
     website: "https://www.zoho.com/zeptomail",
     logo: "https://cdn.simpleicons.org/zoho",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "MailPace",
@@ -116,6 +152,9 @@ export const providers = [
     website: "https://mailpace.com",
     logo: "https://www.google.com/s2/favicons?domain=mailpace.com&sz=64",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Loops",
@@ -125,6 +164,9 @@ export const providers = [
     website: "https://loops.so",
     logo: "https://cdn.simpleicons.org/loops",
     category: "Product-led",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "Plunk",
@@ -134,6 +176,9 @@ export const providers = [
     website: "https://www.useplunk.com",
     logo: "https://www.google.com/s2/favicons?domain=useplunk.com&sz=64",
     category: "Product-led",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
   },
   {
     name: "SMTP",
@@ -143,6 +188,9 @@ export const providers = [
     website: "https://datatracker.ietf.org/doc/html/rfc5321",
     logo: "",
     category: "Transport",
+    status: "Official",
+    testStatus: "Built-in transport",
+    liveStatus: "SMTP server required",
   },
 ] as const;
 

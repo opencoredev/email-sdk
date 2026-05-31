@@ -24,6 +24,8 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 | Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark |
 | Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend    |
 
+If you are unsure, start with Resend for the first send, then choose fallback routes from this table based on the exact fields your app sends. Do not add a fallback adapter until it can represent the same message shape as your primary route.
+
 ## API adapters
 
 These adapters cover most transactional email fields. They are the best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.
@@ -64,6 +66,8 @@ SMTP is built in and does not use Nodemailer. It maps address fields and headers
 ## Validation behavior
 
 Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. That keeps production behavior boring: if a field matters, you find out before the provider request.
+
+The SDK's local checks are not a live deliverability guarantee. Provider accounts still need verified senders or domains, the correct region, API scopes, and any sandbox or recipient allow-list configuration required by that service.
 
 ## Attachment rules
 

@@ -18,6 +18,11 @@ export function ProviderGrid() {
               <div className="text-xs text-fd-muted-foreground">{provider.category}</div>
             </div>
           </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <ProviderPill>{provider.status}</ProviderPill>
+            <ProviderPill>{provider.testStatus}</ProviderPill>
+            <ProviderPill muted>{provider.liveStatus}</ProviderPill>
+          </div>
           <code className="mt-3 block text-xs text-fd-muted-foreground">{provider.importPath}</code>
           <div className="mt-4 flex items-center gap-2">
             <DocsVersionLink
@@ -56,6 +61,11 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
         <div className="min-w-0">
           <div className="font-medium">{provider.name}</div>
           <code className="break-all text-xs text-fd-muted-foreground">{provider.importPath}</code>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <ProviderPill>{provider.status}</ProviderPill>
+            <ProviderPill>{provider.testStatus}</ProviderPill>
+            <ProviderPill muted>{provider.liveStatus}</ProviderPill>
+          </div>
         </div>
       </div>
       <a
@@ -68,6 +78,20 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
         <ExternalLink aria-hidden="true" className="size-3" strokeWidth={2} />
       </a>
     </div>
+  );
+}
+
+function ProviderPill({ children, muted = false }: { children: string; muted?: boolean }) {
+  return (
+    <span
+      className={`rounded-sm border px-1.5 py-0.5 text-[11px] font-medium leading-none ${
+        muted
+          ? "border-fd-border bg-fd-muted text-fd-muted-foreground"
+          : "border-fd-primary/20 bg-fd-primary/10 text-fd-primary"
+      }`}
+    >
+      {children}
+    </span>
   );
 }
 

@@ -4,13 +4,17 @@ description: Create a client, send a first transactional email, and verify the C
 icon: Rocket
 ---
 
-Start with the scoped package:
+Install the scoped package with the package manager your app already uses:
 
-```bash
-bun add @opencoredev/email-sdk
-```
+<PackageInstallTabs />
 
-The installed CLI command is named `email-sdk`. If you only need the CLI for a quick check, run `bunx --yes @opencoredev/email-sdk ...` instead. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
+The SDK works in server-side Node 20+ and Bun runtimes. The installed CLI command is named `email-sdk` and requires Bun. If you only need the CLI for a quick check, run `bunx --yes @opencoredev/email-sdk ...` instead. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
+
+## Choose a first adapter
+
+If you are new to Email SDK, start with Resend. It has the shortest setup path, supports the common transactional fields, and is the default example throughout these docs.
+
+Use Postmark, SendGrid, AWS SES, Mailgun, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 ## Send through Resend
 
