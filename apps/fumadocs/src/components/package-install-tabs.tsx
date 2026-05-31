@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Clipboard } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 type PackageManager = "bun" | "npm" | "pnpm" | "yarn";
 
@@ -14,6 +14,8 @@ type InstallCommand = {
   verb: string;
   packageName: string;
 };
+
+type CopyState = "idle" | "copied" | "failed";
 
 const packageManagerStorageKey = "email-sdk-package-manager";
 const packageManagerChangeEvent = "email-sdk-package-manager-change";
@@ -52,8 +54,9 @@ function isPackageManager(value: string | null): value is PackageManager {
 export function PackageInstallTabs({
   packageName = "@opencoredev/email-sdk",
 }: PackageInstallTabsProps) {
+  const installTabsId = useId();
   const [selected, setSelected] = useState<PackageManager>("bun");
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<CopyState>("idle");
 
   useEffect(() => {
     function syncStoredManager() {
@@ -87,22 +90,35 @@ export function PackageInstallTabs({
     packageManagers.find((manager) => manager.value === selected) ?? packageManagers[0];
   const selectedCommand = selectedManager.command(packageName);
   const commandText = `${selectedCommand.executable} ${selectedCommand.verb} ${selectedCommand.packageName}`;
+  const panelId = `${installTabsId}-panel`;
+  const activeTabId = `${installTabsId}-${selectedManager.value}-tab`;
 
   async function copyCommand() {
-    await navigator.clipboard.writeText(commandText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    try {
+      await navigator.clipboard.writeText(commandText);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+
+    window.setTimeout(() => setCopyState("idle"), 1200);
   }
 
   return (
     <figure className="not-prose my-4 overflow-hidden rounded-xl border bg-fd-card text-sm shadow-sm">
-      <div className="flex h-10 items-end gap-1 overflow-x-auto border-b px-2">
+      <div
+        aria-label="Package manager"
+        className="flex h-10 items-end gap-1 overflow-x-auto border-b px-2"
+        role="tablist"
+      >
         {packageManagers.map((manager) => (
           <button
+            aria-controls={panelId}
             aria-selected={selected === manager.value}
             className={`relative h-10 px-3 font-medium transition-colors hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring ${
               selected === manager.value ? "text-fd-primary" : "text-fd-muted-foreground"
             }`}
+            id={`${installTabsId}-${manager.value}-tab`}
             key={manager.value}
             onClick={() => selectManager(manager.value)}
             role="tab"
@@ -115,11 +131,13 @@ export function PackageInstallTabs({
           </button>
         ))}
       </div>
-      <div className="relative bg-fd-secondary">
-        <pre
-          className="overflow-x-auto px-4 py-3.5 pr-12 text-[0.8125rem] leading-6"
-          role="tabpanel"
-        >
+      <div
+        aria-labelledby={activeTabId}
+        className="relative bg-fd-secondary"
+        id={panelId}
+        role="tabpanel"
+      >
+        <pre className="overflow-x-auto px-4 py-3.5 pr-12 text-[0.8125rem] leading-6">
           <code className="whitespace-pre">
             <span className="text-fd-primary">{selectedCommand.executable}</span>{" "}
             <span className="text-fd-foreground">{selectedCommand.verb}</span>{" "}
@@ -127,12 +145,16 @@ export function PackageInstallTabs({
           </code>
         </pre>
         <button
-          aria-label={copied ? "Copied" : "Copy code"}
-          className="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-lg text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+          aria-label={
+            copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy code"
+          }
+          className={`absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring ${
+            copyState === "failed" ? "text-red-500" : "text-fd-muted-foreground"
+          }`}
           onClick={copyCommand}
           type="button"
         >
-          {copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+          {copyState === "copied" ? <Check className="size-4" /> : <Clipboard className="size-4" />}
         </button>
       </div>
     </figure>
