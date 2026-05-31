@@ -1,8 +1,8 @@
 {
   "name": "@opencoredev/email-sdk",
   "version": "0.3.0",
-  "description": "A lightweight TypeScript SDK for unified email sending.",
-  "homepage": "https://github.com/opencoredev/email-sdk#readme",
+  "description": "A TypeScript email SDK for unified transactional sending.",
+  "homepage": "https://email-sdk.dev",
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },
@@ -15,6 +15,19 @@
   "bin": {
     "email-sdk": "dist/cli.js"
   },
+  "keywords": [
+    "email",
+    "email-sdk",
+    "transactional-email",
+    "typescript",
+    "smtp",
+    "resend",
+    "sendgrid",
+    "postmark",
+    "mailgun",
+    "ses",
+    "bun"
+  ],
   "files": [
     "dist",
     "README.md"

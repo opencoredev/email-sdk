@@ -1,6 +1,6 @@
 export const appName = "Email SDK";
 export const appDescription =
-  "A lightweight TypeScript SDK for unified email sending with Resend, SMTP, Postmark, SendGrid, Mailgun, fallbacks, hooks, and a Bun CLI.";
+  "A TypeScript email SDK for unified email sending with Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, fallbacks, plugins, and a Bun CLI.";
 export const docsRoute = "/docs";
 export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev").replace(
   /\/$/,

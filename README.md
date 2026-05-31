@@ -7,6 +7,8 @@
 
 A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters you actually send through, add plugins for shared behavior, and keep provider-specific field support visible in the docs.
 
+Docs: https://email-sdk.dev/docs
+
 ## What Is Here
 
 - `packages/email-sdk` - core SDK, adapters, plugins, CLI, tests, and package README
@@ -48,7 +50,7 @@ await email.send({
 - Built-in SMTP transport without Nodemailer.
 - Fail-fast adapter validation for fields a provider cannot represent.
 
-See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage examples.
+See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage examples, or read the public docs at https://email-sdk.dev/docs.
 
 ## Adapter Entry Points
 
