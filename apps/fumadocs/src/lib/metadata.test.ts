@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { siteImageAlt, siteMeta } from "@/lib/metadata";
-import { siteOgImagePath, siteOgImageUrl } from "@/lib/shared";
+import { siteOgImageUrl } from "@/lib/shared";
 
 const findByName = (name: string) =>
   siteMeta.filter((meta) => "name" in meta && meta.name === name);
@@ -26,7 +26,7 @@ describe("site social metadata", () => {
     expect(twitterImageAlts[0]?.content).toBe(siteImageAlt);
 
     const imageUrl = new URL(siteOgImageUrl);
-    expect(imageUrl.pathname).toBe(siteOgImagePath);
+    expect(imageUrl.pathname).toBe("/og/email-sdk.png");
     expect(imageUrl.searchParams.get("v")).toMatch(/\S+/);
   });
 
