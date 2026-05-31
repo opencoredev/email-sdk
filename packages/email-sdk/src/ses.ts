@@ -8,6 +8,7 @@ import {
 } from "./payloads.js";
 import type { EmailMessage, EmailProvider } from "./types.js";
 import {
+  SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   httpErrorMessage,
   isRetryableStatus,
@@ -83,14 +84,7 @@ export function ses(
 }
 
 async function toSesPayload(message: EmailMessage, options: SesProviderOptions) {
-  assertSupportedMessageFields("ses", message, {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-  });
+  assertSupportedMessageFields("ses", message, SUPPORTED_MESSAGE_FIELDS.ses);
 
   const charset = options.charset ?? "UTF-8";
   const attachments = await base64Attachments(message);
@@ -227,8 +221,9 @@ function canonicalQueryString(searchParams: URLSearchParams) {
 }
 
 function awsEncode(value: string) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
-    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 

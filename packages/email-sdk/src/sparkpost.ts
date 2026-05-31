@@ -6,7 +6,11 @@ import {
   optionalStringAddresses,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields, headersToObject } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  headersToObject,
+} from "./utils.js";
 
 export type SparkPostProviderOptions = {
   apiKey: string;
@@ -25,13 +29,7 @@ export function sparkpost(options: SparkPostProviderOptions): EmailProvider<{ ba
     },
     fetch: options.fetch,
     async buildPayload(message) {
-      assertSupportedMessageFields("sparkpost", message, {
-        replyTo: true,
-        headers: true,
-        attachments: true,
-        tags: true,
-        metadata: true,
-      });
+      assertSupportedMessageFields("sparkpost", message, SUPPORTED_MESSAGE_FIELDS.sparkpost);
       const attachments = await base64Attachments(message);
 
       return {

@@ -1,7 +1,7 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields } from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type PlunkProviderOptions = {
   apiKey: string;
@@ -16,9 +16,7 @@ export function plunk(options: PlunkProviderOptions): EmailProvider<{ baseUrl: s
     endpoint: "/v1/send",
     headers: { Authorization: `Bearer ${options.apiKey}` },
     buildPayload(message) {
-      assertSupportedMessageFields("plunk", message, {
-        metadata: true,
-      });
+      assertSupportedMessageFields("plunk", message, SUPPORTED_MESSAGE_FIELDS.plunk);
 
       return {
         to: formatAddresses(message.to),

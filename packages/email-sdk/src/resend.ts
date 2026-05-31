@@ -9,6 +9,7 @@ import {
   isRetryableStatus,
   readErrorBody,
   assertSupportedMessageFields,
+  SUPPORTED_MESSAGE_FIELDS,
 } from "./utils.js";
 
 export type ResendProviderOptions = {
@@ -61,14 +62,7 @@ export function resend(options: ResendProviderOptions): EmailProvider<{ baseUrl:
 }
 
 async function toResendPayload(message: EmailMessage) {
-  assertSupportedMessageFields("resend", message, {
-    cc: true,
-    bcc: true,
-    replyTo: true,
-    headers: true,
-    attachments: true,
-    tags: true,
-  });
+  assertSupportedMessageFields("resend", message, SUPPORTED_MESSAGE_FIELDS.resend);
 
   return {
     from: formatAddress(message.from),

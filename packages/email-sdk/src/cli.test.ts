@@ -27,6 +27,62 @@ describe("email-sdk CLI", () => {
       expect(stdout.trim()).toBe(`${packageInfo.name} ${packageInfo.version}`);
     },
   );
+
+  test("rejects an unsupported adapter during dry run", async () => {
+    const { stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "nope",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Unsupported adapter "nope"');
+  });
+
+  test("rejects adapter-unsupported fields during dry run", async () => {
+    const { stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--metadata",
+      "order=123",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("resend does not support these EmailMessage fields: metadata");
+  });
+
+  test("doctor accepts provider credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "resend",
+      "--api-key",
+      "re_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("resend looks configured.");
+  });
 });
 
 async function runCli(args: string[]) {

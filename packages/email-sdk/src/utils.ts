@@ -120,7 +120,7 @@ export function toProviderError(provider: string, error: unknown) {
   if (error instanceof Error) {
     return new EmailProviderError(error.message, {
       provider,
-      retryable: false,
+      retryable: isRetryableRuntimeError(error),
       cause: error,
     });
   }
@@ -130,6 +130,25 @@ export function toProviderError(provider: string, error: unknown) {
     retryable: false,
     details: error,
   });
+}
+
+function isRetryableRuntimeError(error: Error) {
+  if (error.name === "AbortError") {
+    return false;
+  }
+
+  const code = (error as unknown as Record<string, unknown>).code;
+
+  if (
+    typeof code === "string" &&
+    /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE)$/i.test(code)
+  ) {
+    return true;
+  }
+
+  return /fetch failed|failed to fetch|network|socket|timeout|timed out|connection reset/i.test(
+    error.message,
+  );
 }
 
 export async function attachmentContentToString(
@@ -190,12 +209,65 @@ export async function attachmentToBytes(attachment: EmailAttachment) {
   return Buffer.from(content);
 }
 
+export type MessageFieldSupport = Partial<
+  Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
+>;
+
+export const SUPPORTED_MESSAGE_FIELDS = {
+  resend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  postmark: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  sendgrid: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  ses: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  mailgun: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  mailersend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  brevo: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
+  mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
+  sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
+  loops: { metadata: true },
+  plunk: { metadata: true },
+  mailtrap: { cc: true, bcc: true, headers: true, attachments: true, tags: true },
+  scaleway: { cc: true, bcc: true, headers: true },
+  zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
+  mailpace: { cc: true, bcc: true, replyTo: true },
+  smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+} satisfies Record<string, MessageFieldSupport>;
+
 export function assertSupportedMessageFields(
   adapter: string,
   message: EmailMessage,
-  supported: Partial<
-    Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
-  >,
+  supported: MessageFieldSupport,
 ) {
   const unsupported: string[] = [];
 

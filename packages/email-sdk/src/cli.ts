@@ -25,21 +25,24 @@ import type {
   EmailProvider,
   EmailTag,
 } from "./types.js";
-import { assertMessage } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  arrayify,
+  assertMaxItems,
+  assertMessage,
+  assertSupportedMessageFields,
+} from "./utils.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
 type ProviderFactory = (flags: CliFlags) => EmailProvider;
+type SupportedAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
 type PackageInfo = {
   name: string;
   version: string;
 };
 
-const providerDocs: Array<{
-  name: string;
-  env: string[];
-  note: string;
-}> = [
+const providerDocs = [
   { name: "resend", env: ["RESEND_API_KEY"], note: "Resend Email API" },
   { name: "postmark", env: ["POSTMARK_SERVER_TOKEN"], note: "Postmark Email API" },
   { name: "sendgrid", env: ["SENDGRID_API_KEY"], note: "Twilio SendGrid Mail Send API" },
@@ -68,9 +71,15 @@ const providerDocs: Array<{
   { name: "zeptomail", env: ["ZEPTOMAIL_TOKEN"], note: "Zoho ZeptoMail API" },
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
-];
+] as const satisfies ReadonlyArray<{
+  name: SupportedAdapterName;
+  env: readonly string[];
+  note: string;
+}>;
 
-const factories: Record<string, ProviderFactory> = {
+type ProviderName = (typeof providerDocs)[number]["name"];
+
+const factories = {
   resend: (flags) => resend({ apiKey: flagOrEnv(flags, "api-key", "RESEND_API_KEY") }),
   postmark: (flags) =>
     postmark({
@@ -129,6 +138,30 @@ const factories: Record<string, ProviderFactory> = {
             }
           : undefined,
     }),
+} satisfies Record<ProviderName, ProviderFactory>;
+
+const envFlagNames: Record<string, string> = {
+  RESEND_API_KEY: "api-key",
+  POSTMARK_SERVER_TOKEN: "server-token",
+  SENDGRID_API_KEY: "api-key",
+  AWS_ACCESS_KEY_ID: "access-key-id",
+  AWS_SECRET_ACCESS_KEY: "secret-access-key",
+  AWS_REGION: "region",
+  MAILGUN_API_KEY: "api-key",
+  MAILGUN_DOMAIN: "domain",
+  MAILERSEND_API_KEY: "api-key",
+  BREVO_API_KEY: "api-key",
+  MAILCHIMP_API_KEY: "api-key",
+  SPARKPOST_API_KEY: "api-key",
+  LOOPS_API_KEY: "api-key",
+  LOOPS_TRANSACTIONAL_ID: "transactional-id",
+  PLUNK_API_KEY: "api-key",
+  MAILTRAP_API_KEY: "api-key",
+  SCALEWAY_SECRET_KEY: "secret-key",
+  SCALEWAY_PROJECT_ID: "project-id",
+  ZEPTOMAIL_TOKEN: "token",
+  MAILPACE_API_KEY: "api-key",
+  SMTP_HOST: "host",
 };
 
 async function main() {
@@ -163,7 +196,7 @@ async function main() {
   const message = await buildMessage(flags);
 
   if (truthyFlag(flags, "dry-run")) {
-    assertMessage(message);
+    validateDryRun(providerName, message);
     console.log(
       JSON.stringify(
         {
@@ -186,13 +219,28 @@ async function main() {
 }
 
 function createProvider(name: string, flags: CliFlags): EmailProvider {
-  const factory = factories[name];
-
-  if (!factory) {
+  if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
 
-  return factory(flags);
+  return factories[name](flags);
+}
+
+function validateDryRun(name: string, message: EmailMessage) {
+  if (!isProviderName(name)) {
+    fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
+  }
+
+  assertMessage(message);
+  assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS[name]);
+
+  if (name === "loops") {
+    assertMaxItems("loops", "recipient", arrayify(message.to), 1);
+  }
+}
+
+function isProviderName(name: string): name is ProviderName {
+  return Object.prototype.hasOwnProperty.call(factories, name);
 }
 
 function detectProvider() {
@@ -230,13 +278,18 @@ function doctor(flags: CliFlags) {
     fail(`Unsupported adapter "${providerName}".`);
   }
 
-  const missing = provider.env.filter((name) => !process.env[name]);
+  const missing = provider.env.filter((name) => !hasEnvOrFlag(flags, name));
 
   if (missing.length > 0) {
     fail(`Missing environment for ${provider.name}: ${missing.join(", ")}`);
   }
 
   console.log(`${provider.name} looks configured.`);
+}
+
+function hasEnvOrFlag(flags: CliFlags, env: string) {
+  const flag = envFlagNames[env];
+  return Boolean(process.env[env] || (flag ? stringFlag(flags, flag) : undefined));
 }
 
 async function printVersion(flags: CliFlags) {

@@ -5,6 +5,7 @@ import tls from "node:tls";
 import { EmailProviderError } from "./errors.js";
 import type { EmailAddress, EmailMessage, EmailProvider } from "./types.js";
 import {
+  SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   formatAddress,
   formatAddresses,
@@ -44,12 +45,7 @@ export function smtp(options: SmtpProviderOptions): EmailProvider<{ host: string
       port,
     },
     async send(message) {
-      assertSupportedMessageFields(name, message, {
-        cc: true,
-        bcc: true,
-        replyTo: true,
-        headers: true,
-      });
+      assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS.smtp);
       const client = new SmtpClient(options, port);
 
       try {

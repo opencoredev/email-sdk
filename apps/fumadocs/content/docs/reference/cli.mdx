@@ -79,7 +79,7 @@ If `--adapter` is omitted, the CLI selects the first adapter with all required e
 bunx --yes @opencoredev/email-sdk doctor --adapter resend
 ```
 
-`doctor` checks whether the selected adapter has the required environment variables.
+`doctor` checks whether the selected adapter has the required environment variables or matching CLI credential flags.
 
 ## Version
 
@@ -111,7 +111,7 @@ bun email-sdk version --json
 | `--metadata`            | send              | Metadata in `key=value` format. Repeatable.            |
 | `--attachment`          | send              | Local file path, optionally `path:content/type`.       |
 | `--message`             | send              | Read an `EmailMessage` JSON payload from a file.       |
-| `--dry-run`             | all               | Validate and print the send plan without sending.      |
+| `--dry-run`             | all               | Validate the message and adapter field support without sending. |
 | `--json`                | version, adapters | Print output as JSON.                                  |
 | `--api-key`             | many              | Overrides the adapter API key variable.                |
 | `--server-token`        | Postmark          | Overrides `POSTMARK_SERVER_TOKEN`.                     |

@@ -1,7 +1,11 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses, optionalStringAddresses } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
-import { assertSupportedMessageFields, headersToObject } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  headersToObject,
+} from "./utils.js";
 
 export type ScalewayProviderOptions = {
   secretKey: string;
@@ -22,11 +26,7 @@ export function scaleway(options: ScalewayProviderOptions): EmailProvider<{ base
       "X-Auth-Token": options.secretKey,
     },
     buildPayload(message) {
-      assertSupportedMessageFields("scaleway", message, {
-        cc: true,
-        bcc: true,
-        headers: true,
-      });
+      assertSupportedMessageFields("scaleway", message, SUPPORTED_MESSAGE_FIELDS.scaleway);
 
       return {
         project_id: options.projectId,
