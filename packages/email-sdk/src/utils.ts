@@ -146,7 +146,9 @@ function isRetryableRuntimeError(error: Error) {
     return true;
   }
 
-  return /fetch|network|socket|timeout|timed out|connection|reset/i.test(error.message);
+  return /fetch failed|failed to fetch|network|socket|timeout|timed out|connection reset/i.test(
+    error.message,
+  );
 }
 
 export async function attachmentContentToString(

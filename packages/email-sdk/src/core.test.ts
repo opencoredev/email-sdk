@@ -217,6 +217,28 @@ describe("createEmailClient", () => {
     expect(attempts).toBe(1);
   });
 
+  test("does not retry runtime errors with unrelated reset messages", async () => {
+    let attempts = 0;
+    const provider = {
+      name: "runtime",
+      send() {
+        attempts += 1;
+        throw new Error("password reset link expired");
+      },
+    };
+
+    const client = createEmailClient({
+      adapters: [provider],
+      retry: {
+        retries: 1,
+        delay: () => 0,
+      },
+    });
+
+    await expect(client.send(message)).rejects.toThrow("password reset");
+    expect(attempts).toBe(1);
+  });
+
   test("reports the final retry attempt to onError", async () => {
     const attempts: number[] = [];
     const client = createEmailClient({
