@@ -8,6 +8,10 @@ The Postmark adapter calls the Postmark Email API directly. It does not add a ru
 
 <ProviderBadge adapter="postmark" />
 
+## Before live sends
+
+Create a Postmark server token for the server and message stream you want to send through. Make sure the sender signature or domain is approved in Postmark before using a production `from` address.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { postmark } from "@opencoredev/email-sdk/postmark";
@@ -49,3 +53,14 @@ await email.send({
 ## Response
 
 The adapter maps Postmark `MessageID` to `id` and `messageId`.
+
+## CLI smoke test
+
+```bash
+POSTMARK_SERVER_TOKEN="..." bunx --yes @opencoredev/email-sdk send \
+  --adapter postmark \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Postmark test" \
+  --text "It works"
+```

@@ -10,6 +10,10 @@ The SMTP adapter is built in. It uses Node/Bun TCP and TLS sockets directly, so 
 
 When `auth` is configured with `secure: false`, the adapter sends `STARTTLS` before authenticating. Set `allowInsecureAuth: true` only for a trusted local server that does not support TLS.
 
+## Before live sends
+
+Confirm the SMTP host, port, TLS mode, username, and password with your provider. SMTP is a good fallback for simple transactional messages, but it does not support provider-only fields such as tags, metadata, or attachments.
+
 ## Configure
 
 ```ts

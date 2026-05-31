@@ -6,10 +6,18 @@ A lightweight TypeScript SDK for transactional email. Use one typed client, pick
 bun add @opencoredev/email-sdk
 ```
 
+```bash
+npm install @opencoredev/email-sdk
+```
+
+```bash
+pnpm add @opencoredev/email-sdk
+```
+
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The command-line binary it installs is named `email-sdk`.
 
-Use the SDK from server-side runtimes such as Node 20+ or Bun. Do not expose provider API keys in browser or client-side code. The included CLI requires Bun.
+Use the SDK from server-side runtimes such as Node 20+ or Bun. Do not expose provider API keys in browser or client-side code. Bun is only required for the included CLI.
 
 ## Quickstart
 
@@ -42,6 +50,8 @@ await email.send({
 ## Adapters
 
 Each adapter is exported from its own entry point so apps only import what they use.
+
+If you are choosing a first adapter, start with Resend for the shortest setup path. Use Postmark, SendGrid, AWS SES, Mailgun, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";

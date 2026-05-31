@@ -10,7 +10,7 @@ The command-line binary is named `email-sdk`. That means the package name and th
 
 | What you want                  | Use this                                |
 | ------------------------------ | --------------------------------------- |
-| Install the package            | `bun add @opencoredev/email-sdk`        |
+| Install the package            | `bun add @opencoredev/email-sdk` or your package manager's install command |
 | Run the installed CLI          | `bun email-sdk ...`                     |
 | Run the CLI without installing | `bunx --yes @opencoredev/email-sdk ...` |
 
@@ -18,9 +18,9 @@ Do not install the unscoped `email-sdk` package from npm. It is a different pack
 
 ## Install in your app
 
-```bash
-bun add @opencoredev/email-sdk
-```
+Choose the package manager your app already uses.
+
+<PackageInstallTabs />
 
 Then import the client and adapters from the scoped package:
 
@@ -28,6 +28,8 @@ Then import the client and adapters from the scoped package:
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 ```
+
+The SDK runs in server-side Node 20+ and Bun runtimes. Bun is only required for the bundled CLI.
 
 ## Run the CLI once
 
@@ -45,7 +47,7 @@ RESEND_API_KEY="re_..." bunx --yes @opencoredev/email-sdk doctor --adapter resen
 
 ## Run the CLI from an installed project
 
-After `bun add @opencoredev/email-sdk`, Bun can run the installed binary:
+After installing `@opencoredev/email-sdk`, Bun can run the installed binary:
 
 ```bash
 bun email-sdk adapters
@@ -59,3 +61,17 @@ The command is still `email-sdk`; the package you installed is still `@opencored
 - Node 20 or newer is supported for SDK usage in server-side runtimes.
 - Do not expose provider API keys in browser or client-side code.
 - Provider credentials must be set in environment variables or passed with CLI flags.
+
+## Verify the install
+
+Check the published package and CLI version:
+
+```bash
+bunx --yes @opencoredev/email-sdk version
+```
+
+List supported adapters:
+
+```bash
+bunx --yes @opencoredev/email-sdk adapters
+```

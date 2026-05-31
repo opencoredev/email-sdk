@@ -2,6 +2,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
 import { CommunityPluginRegistry } from "./community-plugin-registry";
+import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
 
 type MdxComponentOptions = {
@@ -34,6 +35,7 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
       />
     ),
     CommunityPluginRegistry,
+    PackageInstallTabs,
     ProviderBadge,
     ProviderGrid,
     ...components,

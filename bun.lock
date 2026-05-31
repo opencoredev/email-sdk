@@ -54,7 +54,7 @@
     },
     "packages/email-sdk": {
       "name": "@opencoredev/email-sdk",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "bin": {
         "email-sdk": "dist/cli.js",
       },

@@ -19,10 +19,18 @@ A lightweight TypeScript SDK for transactional email. Use one client in your app
 bun add @opencoredev/email-sdk
 ```
 
+```bash
+npm install @opencoredev/email-sdk
+```
+
+```bash
+pnpm add @opencoredev/email-sdk
+```
+
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The CLI binary installed by this package is still named `email-sdk`.
 
-Use the SDK from server-side Node 20+ or Bun runtimes. Do not expose provider API keys in browser or client-side code. The CLI requires Bun.
+Use the SDK from server-side Node 20+ or Bun runtimes. Do not expose provider API keys in browser or client-side code. Bun is only required for the bundled CLI.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -55,6 +63,8 @@ See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage e
 ## Adapter Entry Points
 
 `resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
+
+If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Postmark, SendGrid, AWS SES, Mailgun, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 Plugin entry points:
 

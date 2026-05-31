@@ -83,3 +83,5 @@ Email SDK does not try to be a template engine, campaign tool, queue, analytics 
 ## Provider behavior is not hidden
 
 Email providers do not all support the same fields. A fallback route is only safe when the backup adapter can represent the same class of message. Before choosing routes, read the <a href="/docs/adapters/field-support">field support guide</a>; unsupported fields should fail fast instead of being silently dropped.
+
+The official API adapters are covered by local payload and validation tests. A live provider send still depends on account setup: verified sender domains, sandbox mode, API scopes, regions, and rate limits. Use the CLI dry run first, then run one real smoke send from the environment that will send production email.
