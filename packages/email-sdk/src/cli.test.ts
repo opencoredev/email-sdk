@@ -83,6 +83,22 @@ describe("email-sdk CLI", () => {
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("resend looks configured.");
   });
+
+  test("doctor accepts Cloudflare credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "cloudflare",
+      "--api-token",
+      "cf_test",
+      "--account-id",
+      "account_123",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("cloudflare looks configured.");
+  });
 });
 
 async function runCli(args: string[]) {

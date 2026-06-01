@@ -233,6 +233,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  cloudflare: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   ses: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
   mailgun: {
     cc: true,

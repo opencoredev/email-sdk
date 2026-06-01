@@ -6,6 +6,7 @@
     "resend",
     "postmark",
     "sendgrid",
+    "cloudflare",
     "ses",
     "mailgun",
     "mailersend",

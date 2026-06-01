@@ -42,6 +42,7 @@ body:
         - Docs
         - Agent tools
         - brevo
+        - cloudflare
         - loops
         - mailchimp
         - mailersend

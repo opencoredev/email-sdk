@@ -2,6 +2,7 @@
 import { basename } from "node:path";
 
 import { brevo } from "./brevo.js";
+import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { loops } from "./loops.js";
@@ -47,6 +48,11 @@ const providerDocs = [
   { name: "postmark", env: ["POSTMARK_SERVER_TOKEN"], note: "Postmark Email API" },
   { name: "sendgrid", env: ["SENDGRID_API_KEY"], note: "Twilio SendGrid Mail Send API" },
   {
+    name: "cloudflare",
+    env: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+    note: "Cloudflare Email Sending REST API",
+  },
+  {
     name: "ses",
     env: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
     note: "AWS SES v2 SendEmail API",
@@ -87,6 +93,12 @@ const factories = {
       messageStream: stringFlag(flags, "message-stream") ?? process.env.POSTMARK_MESSAGE_STREAM,
     }),
   sendgrid: (flags) => sendgrid({ apiKey: flagOrEnv(flags, "api-key", "SENDGRID_API_KEY") }),
+  cloudflare: (flags) =>
+    cloudflare({
+      apiToken: flagOrEnv(flags, "api-token", "CLOUDFLARE_API_TOKEN"),
+      accountId: flagOrEnv(flags, "account-id", "CLOUDFLARE_ACCOUNT_ID"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.CLOUDFLARE_BASE_URL,
+    }),
   ses: (flags) =>
     ses({
       accessKeyId: flagOrEnv(flags, "access-key-id", "AWS_ACCESS_KEY_ID"),
@@ -144,6 +156,8 @@ const envFlagNames: Record<string, string> = {
   RESEND_API_KEY: "api-key",
   POSTMARK_SERVER_TOKEN: "server-token",
   SENDGRID_API_KEY: "api-key",
+  CLOUDFLARE_API_TOKEN: "api-token",
+  CLOUDFLARE_ACCOUNT_ID: "account-id",
   AWS_ACCESS_KEY_ID: "access-key-id",
   AWS_SECRET_ACCESS_KEY: "secret-access-key",
   AWS_REGION: "region",
@@ -554,6 +568,10 @@ Send options:
   --attachment <path[:type]>   Attach a local file. Repeatable.
   --message <path>             Read the EmailMessage JSON payload from a file.
   --dry-run                    Validate input and print the send plan without sending.
+
+Cloudflare options:
+  --api-token <token>          Overrides CLOUDFLARE_API_TOKEN.
+  --account-id <account>       Overrides CLOUDFLARE_ACCOUNT_ID.
 
 SMTP options:
   --host <host>                Overrides SMTP_HOST.
