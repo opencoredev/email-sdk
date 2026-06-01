@@ -18,10 +18,6 @@ Docs: https://email-sdk.dev/docs
 ## Install
 
 ```bash
-bun add @opencoredev/email-sdk
-```
-
-```bash
 npm install @opencoredev/email-sdk
 ```
 
@@ -29,10 +25,14 @@ npm install @opencoredev/email-sdk
 pnpm add @opencoredev/email-sdk
 ```
 
+```bash
+bun add @opencoredev/email-sdk
+```
+
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The CLI binary installed by this package is still named `email-sdk`.
 
-Use the SDK from server-side Node 20+ or Bun runtimes. Do not expose provider API keys in browser or client-side code. Bun is only required for the bundled CLI.
+Use the SDK and CLI from server-side Node 20+ or Bun runtimes. Do not expose provider API keys in browser or client-side code.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -79,13 +79,13 @@ Plugin entry points:
 Run the CLI without installing anything globally:
 
 ```bash
-bunx --yes @opencoredev/email-sdk adapters
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
 ```
 
-After adding the package to a project, run the installed binary with Bun:
+After adding the package to a project, run the installed binary:
 
 ```bash
-bun email-sdk doctor --adapter resend
+npx email-sdk doctor --adapter resend
 ```
 
 ## Agent Skill

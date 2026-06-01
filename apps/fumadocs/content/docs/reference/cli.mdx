@@ -10,10 +10,10 @@ The npm package is `@opencoredev/email-sdk`; the CLI command it installs is `ema
 
 ## Install or run
 
-Run the CLI once with `bunx`:
+Run the CLI once with the scoped package:
 
 ```bash
-bunx --yes @opencoredev/email-sdk adapters
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 Install the SDK in a project:
@@ -23,20 +23,21 @@ Install the SDK in a project:
 Then run the installed binary:
 
 ```bash
-bun email-sdk adapters
+npx email-sdk adapters
 ```
 
-The CLI requires Bun on your `PATH`. Check the installed version before comparing behavior against
-the docs:
+Check the installed version before comparing behavior against the docs:
 
 ```bash
-bun email-sdk version
+npx email-sdk version
 ```
+
+The CLI supports Node 20+ and Bun 1.1+. The examples use `npx` because it is the broadest copy-paste path; Bun users can run the one-off CLI with `bunx --bun --package @opencoredev/email-sdk email-sdk adapters`.
 
 ## Send
 
 ```bash
-bunx --yes @opencoredev/email-sdk send \
+npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \
@@ -47,7 +48,7 @@ bunx --yes @opencoredev/email-sdk send \
 ## Adapters
 
 ```bash
-bunx --yes @opencoredev/email-sdk adapters
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 | Adapter      | Required environment                                       |
@@ -74,7 +75,7 @@ If `--adapter` is omitted, the CLI selects the first adapter with all required e
 ## Doctor
 
 ```bash
-bunx --yes @opencoredev/email-sdk doctor --adapter resend
+npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
 `doctor` checks whether the selected adapter has the required environment variables or matching CLI credential flags.
@@ -82,10 +83,10 @@ bunx --yes @opencoredev/email-sdk doctor --adapter resend
 ## Version
 
 ```bash
-bun email-sdk version
-bun email-sdk --version
-bun email-sdk -v
-bun email-sdk version --json
+npx email-sdk version
+npx email-sdk --version
+npx email-sdk -v
+npx email-sdk version --json
 ```
 
 `version` reads the installed `@opencoredev/email-sdk` package metadata, so it reports the SDK and CLI version from the package currently on your machine. The docs version picker uses the same package version from this repository.

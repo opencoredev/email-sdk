@@ -61,7 +61,7 @@ const email = createEmailClient({
     smtp({ name: "purelymail", host: "smtp.purelymail.com" }),
     smtp({ name: "backup-smtp", host: "smtp.backup.example" }),
   ],
-  defaultProvider: "purelymail",
+  defaultAdapter: "purelymail",
   fallback: ["backup-smtp"],
 });
 ```
@@ -69,7 +69,7 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
-bunx --yes @opencoredev/email-sdk send \
+npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --user hello@example.com \

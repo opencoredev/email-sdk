@@ -129,7 +129,7 @@ export const homeStructuredData = {
         "Provider adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more",
         "Fallback routes and retries",
         "Plugins for defaults, observability, capture, and community adapters",
-        "Bun CLI for local checks and smoke-test sends",
+        "CLI for local checks and smoke-test sends",
       ],
     },
     {
@@ -157,7 +157,7 @@ export const homeStructuredData = {
           name: "How do you install Email SDK?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Install the npm package with bun add @opencoredev/email-sdk. The package includes the email-sdk CLI binary for local adapter checks and smoke-test sends.",
+            text: "Install the npm package with npm install @opencoredev/email-sdk. The package includes the email-sdk CLI binary for local adapter checks and smoke-test sends.",
           },
         },
       ],
