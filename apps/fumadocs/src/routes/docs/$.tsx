@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { staticFunctionMiddleware } from "@tanstack/start-static-server-functions";
 import browserCollections from "collections/browser";
@@ -21,6 +21,8 @@ import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
 import {
   type DocsVersionCollection,
   getDocsVersionBase,
+  getDocsVersionHref,
+  latestDocsVersion,
   resolveDocsVersionedSlugs,
 } from "@/lib/versions";
 
@@ -85,7 +87,9 @@ const loader = createServerFn({
     const resolved = resolveDocsVersionedSlugs(slugs);
     const docsSource = getDocsSource(resolved.version);
     const page = docsSource.getPage(resolved.slugs);
-    if (!page) throw notFound();
+    if (!page) {
+      throw resolveMissingVersionedDocsPage(resolved);
+    }
 
     return {
       title: page.data.title,
@@ -98,6 +102,27 @@ const loader = createServerFn({
       pageTree: await docsSource.serializePageTree(docsSource.getPageTree()),
     };
   });
+
+function resolveMissingVersionedDocsPage(
+  resolved: ReturnType<typeof resolveDocsVersionedSlugs>,
+) {
+  if (resolved.version.current) return notFound();
+
+  const latestPage = getDocsSource(latestDocsVersion).getPage(resolved.slugs);
+  if (latestPage) {
+    const docsPath = resolved.slugs.length > 0 ? `/docs/${resolved.slugs.join("/")}` : "/docs";
+
+    return redirect({
+      href: getDocsVersionHref(latestDocsVersion, docsPath),
+      statusCode: 302,
+    });
+  }
+
+  return redirect({
+    href: getDocsVersionBase(resolved.version),
+    statusCode: 302,
+  });
+}
 
 function createDocsClientLoader(collection: (typeof browserCollections)[DocsVersionCollection]) {
   return collection.createClientLoader({
