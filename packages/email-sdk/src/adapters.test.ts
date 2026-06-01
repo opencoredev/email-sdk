@@ -198,6 +198,37 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Cloudflare surfaces provider envelope errors", async () => {
+    await expect(
+      cloudflare({
+        apiToken: "cf_token",
+        accountId: "account_123",
+        fetch: jsonCapture({
+          success: false,
+          errors: [{ code: 10000, message: "Recipient is not verified." }],
+          result: null,
+        }).fetch,
+      }).send(cloudflareMessage, context),
+    ).rejects.toThrow("Recipient is not verified.");
+  });
+
+  test("Cloudflare surfaces HTTP error details", async () => {
+    await expect(
+      cloudflare({
+        apiToken: "cf_token",
+        accountId: "account_123",
+        fetch: jsonCapture(
+          {
+            success: false,
+            errors: [{ code: 10001, message: "Authentication failed." }],
+            result: null,
+          },
+          { status: 401 },
+        ).fetch,
+      }).send(cloudflareMessage, context),
+    ).rejects.toThrow("Authentication failed.");
+  });
+
   test("SES signs and maps simple email payloads", async () => {
     const capture = jsonCapture({ MessageId: "ses_123" });
 

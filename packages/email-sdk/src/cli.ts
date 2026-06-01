@@ -2,7 +2,7 @@
 import { basename } from "node:path";
 
 import { brevo } from "./brevo.js";
-import { cloudflare } from "./cloudflare.js";
+import { assertCloudflareMessage, cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { loops } from "./loops.js";
@@ -250,6 +250,10 @@ function validateDryRun(name: string, message: EmailMessage) {
 
   if (name === "loops") {
     assertMaxItems("loops", "recipient", arrayify(message.to), 1);
+  }
+
+  if (name === "cloudflare") {
+    assertCloudflareMessage(message);
   }
 }
 

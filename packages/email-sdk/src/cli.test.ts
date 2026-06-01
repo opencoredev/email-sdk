@@ -99,6 +99,26 @@ describe("email-sdk CLI", () => {
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("cloudflare looks configured.");
   });
+
+  test("dry run rejects Cloudflare messages over the recipient limit", async () => {
+    const { stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "cloudflare",
+      "--from",
+      "hello@example.com",
+      "--to",
+      Array.from({ length: 51 }, (_, index) => `user${index}@example.com`).join(","),
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("cloudflare only supports 50 recipients per message");
+  });
 });
 
 async function runCli(args: string[]) {
