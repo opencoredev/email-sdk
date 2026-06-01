@@ -1,0 +1,28 @@
+---
+title: Mailchimp Transactional
+description: Configure the Mailchimp Transactional adapter.
+icon: mailchimp
+---
+
+<ProviderBadge adapter="mailchimp" />
+
+Mailchimp Transactional is the API formerly known as Mandrill.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
+
+const email = createEmailClient({
+  adapters: [mailchimp({ apiKey: process.env.MAILCHIMP_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                          |
+| --------- | -------------- | -------- | ---------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Mailchimp Transactional API key.               |
+| `baseUrl` | `string`       | No       | Defaults to `https://mandrillapp.com/api/1.0`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.

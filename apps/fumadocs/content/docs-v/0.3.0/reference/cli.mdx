@@ -1,0 +1,137 @@
+---
+title: CLI
+description: Reference for the email-sdk command-line smoke test.
+icon: Terminal
+---
+
+The CLI is intentionally small. Use it to inspect adapters, check environment variables, validate a message with `--dry-run`, and send a smoke-test email from your terminal.
+
+The npm package is `@opencoredev/email-sdk`; the CLI command it installs is `email-sdk`.
+
+## Install or run
+
+Run the CLI once with `bunx`:
+
+```bash
+bunx --yes @opencoredev/email-sdk adapters
+```
+
+Install the SDK in a project:
+
+```bash
+bun add @opencoredev/email-sdk
+```
+
+Then run the installed binary:
+
+```bash
+bun email-sdk adapters
+```
+
+The CLI requires Bun on your `PATH`. Check the installed version before comparing behavior against
+the docs:
+
+```bash
+bun email-sdk version
+```
+
+## Send
+
+```bash
+bunx --yes @opencoredev/email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+## Adapters
+
+```bash
+bunx --yes @opencoredev/email-sdk adapters
+```
+
+| Adapter      | Required environment                                       |
+| ------------ | ---------------------------------------------------------- |
+| `resend`     | `RESEND_API_KEY`                                           |
+| `postmark`   | `POSTMARK_SERVER_TOKEN`                                    |
+| `sendgrid`   | `SENDGRID_API_KEY`                                         |
+| `ses`        | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `mailgun`    | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`                        |
+| `mailersend` | `MAILERSEND_API_KEY`                                       |
+| `brevo`      | `BREVO_API_KEY`                                            |
+| `mailchimp`  | `MAILCHIMP_API_KEY`                                        |
+| `sparkpost`  | `SPARKPOST_API_KEY`                                        |
+| `loops`      | `LOOPS_API_KEY`, `LOOPS_TRANSACTIONAL_ID`                  |
+| `plunk`      | `PLUNK_API_KEY`                                            |
+| `mailtrap`   | `MAILTRAP_API_KEY`                                         |
+| `scaleway`   | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID`               |
+| `zeptomail`  | `ZEPTOMAIL_TOKEN`                                          |
+| `mailpace`   | `MAILPACE_API_KEY`                                         |
+| `smtp`       | `SMTP_HOST`, plus SMTP auth variables when needed          |
+
+If `--adapter` is omitted, the CLI selects the first adapter with all required environment variables set.
+
+## Doctor
+
+```bash
+bunx --yes @opencoredev/email-sdk doctor --adapter resend
+```
+
+`doctor` checks whether the selected adapter has the required environment variables.
+
+## Version
+
+```bash
+bun email-sdk version
+bun email-sdk --version
+bun email-sdk -v
+bun email-sdk version --json
+```
+
+`version` reads the installed `@opencoredev/email-sdk` package metadata, so it reports the SDK and CLI version from the package currently on your machine. The docs version picker in the top navigation uses the same package version from this repository.
+
+## Flags
+
+| Flag                    | Adapter           | Notes                                                  |
+| ----------------------- | ----------------- | ------------------------------------------------------ |
+| `--adapter`             | all               | Adapter routing name.                                  |
+| `--provider`            | all               | Alias for `--adapter`.                                 |
+| `--from`                | all               | Sender address.                                        |
+| `--to`                  | all               | Recipient address. Comma-separated values are allowed. |
+| `--subject`             | all               | Message subject.                                       |
+| `--text`                | all               | Plain text body.                                       |
+| `--html`                | all               | HTML body.                                             |
+| `--cc`                  | send              | Comma-separated CC addresses.                          |
+| `--bcc`                 | send              | Comma-separated BCC addresses.                         |
+| `--reply-to`            | send              | Comma-separated reply-to addresses.                    |
+| `--header`              | send              | Header in `Name: value` format. Repeatable.            |
+| `--tag`                 | send              | Tag in `name=value` format. Repeatable.                |
+| `--metadata`            | send              | Metadata in `key=value` format. Repeatable.            |
+| `--attachment`          | send              | Local file path, optionally `path:content/type`.       |
+| `--message`             | send              | Read an `EmailMessage` JSON payload from a file.       |
+| `--dry-run`             | all               | Validate and print the send plan without sending.      |
+| `--json`                | version, adapters | Print output as JSON.                                  |
+| `--api-key`             | many              | Overrides the adapter API key variable.                |
+| `--server-token`        | Postmark          | Overrides `POSTMARK_SERVER_TOKEN`.                     |
+| `--message-stream`      | Postmark          | Optional message stream.                               |
+| `--access-key-id`       | AWS SES           | Overrides `AWS_ACCESS_KEY_ID`.                         |
+| `--secret-access-key`   | AWS SES           | Overrides `AWS_SECRET_ACCESS_KEY`.                     |
+| `--region`              | AWS SES           | Overrides `AWS_REGION`.                                |
+| `--session-token`       | AWS SES           | Overrides `AWS_SESSION_TOKEN`.                         |
+| `--configuration-set`   | AWS SES           | Overrides `AWS_SES_CONFIGURATION_SET`.                 |
+| `--domain`              | Mailgun           | Overrides `MAILGUN_DOMAIN`.                            |
+| `--transactional-id`    | Loops             | Overrides `LOOPS_TRANSACTIONAL_ID`.                    |
+| `--project-id`          | Scaleway          | Overrides `SCALEWAY_PROJECT_ID`.                       |
+| `--secret-key`          | Scaleway          | Overrides `SCALEWAY_SECRET_KEY`.                       |
+| `--token`               | ZeptoMail         | Overrides `ZEPTOMAIL_TOKEN`.                           |
+| `--host`                | SMTP              | Overrides `SMTP_HOST`.                                 |
+| `--port`                | SMTP              | Overrides `SMTP_PORT`.                                 |
+| `--secure`              | SMTP              | Set to `true` for secure SMTP.                         |
+| `--require-tls`         | SMTP              | Require STARTTLS.                                      |
+| `--allow-insecure-auth` | SMTP              | Allow SMTP AUTH without TLS.                           |
+| `--user`                | SMTP              | Overrides `SMTP_USER`.                                 |
+| `--pass`                | SMTP              | Overrides `SMTP_PASS`.                                 |
+
+The CLI prints the normalized adapter response as JSON.

@@ -1,0 +1,93 @@
+---
+title: Plugin API
+description: Type reference for EmailPlugin and EmailSendMiddleware.
+icon: Braces
+---
+
+This page is the type reference. For examples, start with Writing plugins.
+
+## EmailPlugin
+
+```ts
+type EmailPlugin<TExtension extends object = object> = {
+  id: string;
+  adapters?: EmailProvider[] | ((ctx: EmailPluginContext) => EmailProvider[]);
+  hooks?: EmailHooks;
+  middleware?: EmailSendMiddleware[];
+  extendClient?: (ctx: EmailPluginContext) => TExtension;
+};
+```
+
+| Field          | Notes                                                 |
+| -------------- | ----------------------------------------------------- |
+| `id`           | Required stable plugin ID. Duplicate IDs throw.       |
+| `adapters`     | Providers to register. Duplicate adapter names throw. |
+| `hooks`        | Observability callbacks that run before user `hooks`. |
+| `middleware`   | Send-pipeline middleware.                             |
+| `extendClient` | Adds non-conflicting helper properties to the client. |
+
+`createEmailClient` is synchronous, so plugin adapter factories must return adapters synchronously.
+
+## EmailPluginContext
+
+```ts
+type EmailPluginContext = {
+  adapters: ReadonlyMap<string, EmailProvider>;
+  defaultAdapter: string;
+  addAdapter(adapter: EmailProvider): void;
+};
+```
+
+## EmailSendMiddleware
+
+```ts
+type EmailSendMiddleware = {
+  beforeSend?: (event: EmailBeforeSendEvent) => MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?: (event: EmailAfterSendEvent) => MaybePromise<void>;
+  onError?: (event: EmailErrorEvent) => MaybePromise<void>;
+};
+```
+
+## beforeSend
+
+Runs once per `send` call before message validation and before any adapter is called.
+
+```ts
+beforeSend(event) {
+  return {
+    message: {
+      ...event.message,
+      headers: { "X-App": "billing" },
+    },
+    options: {
+      metadata: { template: "receipt" },
+    },
+  };
+}
+```
+
+Thrown errors stop the send.
+
+## afterSend
+
+Runs after a provider returns a normalized response.
+
+```ts
+afterSend(event) {
+  console.log(event.provider, event.response.id);
+}
+```
+
+Thrown errors are swallowed.
+
+## onError
+
+Runs after a provider attempt fails.
+
+```ts
+onError(event) {
+  console.error(event.provider, event.error);
+}
+```
+
+Fallback adapters can still run after this callback. Thrown errors are swallowed.

@@ -1,0 +1,51 @@
+---
+title: Errors
+description: Reference for Email SDK error classes and retry flags.
+icon: TriangleAlert
+---
+
+Email SDK exports four error classes.
+
+```ts
+import {
+  EmailProviderError,
+  EmailProviderNotFoundError,
+  EmailSdkError,
+  EmailValidationError,
+} from "@opencoredev/email-sdk";
+```
+
+## Error fields
+
+`EmailSdkError` includes:
+
+| Field       | Type      | Notes                                   |
+| ----------- | --------- | --------------------------------------- |
+| `code`      | `string`  | Machine-readable error code.            |
+| `provider`  | `string`  | Routing name when available.            |
+| `status`    | `number`  | HTTP status when available.             |
+| `retryable` | `boolean` | Whether retry is reasonable.            |
+| `details`   | `unknown` | Adapter response body or extra context. |
+
+## Common errors
+
+| Error                        | When it happens                         |
+| ---------------------------- | --------------------------------------- |
+| `EmailValidationError`       | A message or client config is invalid.  |
+| `EmailProviderNotFoundError` | The selected adapter is not registered. |
+| `EmailProviderError`         | An adapter call fails.                  |
+| `EmailSdkError`              | A general SDK-level failure occurs.     |
+
+## Handling adapter errors
+
+```ts
+try {
+  await email.send(message);
+} catch (error) {
+  if (error instanceof EmailProviderError && error.retryable) {
+    // Queue a later retry, alert, or switch to another flow.
+  }
+
+  throw error;
+}
+```

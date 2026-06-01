@@ -1,0 +1,44 @@
+---
+title: Hooks
+description: Observe sends without changing adapter code.
+icon: Activity
+---
+
+Hooks are for logs, metrics, tracing, and retry visibility.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  hooks: {
+    beforeSend(event) {
+      console.log("email.send", event.provider, event.message.subject);
+    },
+    afterSend(event) {
+      console.log("email.sent", event.response.id);
+    },
+    onRetry(event) {
+      console.warn("email.retry", event.provider, event.nextAttempt);
+    },
+    onError(event) {
+      console.error("email.error", event.provider, event.error);
+    },
+  },
+});
+```
+
+## Hook events
+
+Each hook receives:
+
+| Field      | Notes                               |
+| ---------- | ----------------------------------- |
+| `provider` | Routing name used for this attempt. |
+| `message`  | The original `EmailMessage`.        |
+| `attempt`  | Current attempt number.             |
+| `metadata` | Optional metadata passed to `send`. |
+
+`afterSend` also receives `response`. `onRetry` receives `nextAttempt` and `delayMs`. `onError` receives `error`.
+
+## Keep logs safe
+
+Do not log API keys, SMTP passwords, raw tokens, full message bodies, or unnecessary recipient data. For most production logs, routing name, status, subject category, template name, and message ID are enough.

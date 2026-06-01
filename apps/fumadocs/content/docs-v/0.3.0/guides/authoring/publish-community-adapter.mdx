@@ -1,0 +1,123 @@
+---
+title: Publish a community adapter
+description: Package a custom adapter for other Email SDK users.
+icon: BadgeCheck
+---
+
+Community adapters should feel like built-in adapters: predictable names, clear field support, narrow dependencies, and a plugin export for clean setup.
+
+Adapter packages follow the same registry process as other plugins. Start with [Publish a community plugin](/docs/guides/authoring/publish-community-plugin), then add the adapter-specific requirements on this page.
+
+## Recommended package shape
+
+```txt
+email-sdk-acme-mail/
+  src/
+    index.ts
+    acme-mail.ts
+    acme-mail.test.ts
+  package.json
+  README.md
+```
+
+## Export both forms
+
+Export a plain adapter factory and an adapter plugin factory.
+
+```ts
+export { acmeMail } from "./acme-mail";
+export { acmeMailPlugin } from "./plugin";
+export type { AcmeMailOptions } from "./acme-mail";
+```
+
+The plain adapter keeps advanced users close to the provider. The plugin form gives most apps the cleanest setup:
+
+```ts
+createEmailClient({
+  plugins: [acmeMailPlugin({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+## Package exports
+
+```json
+{
+  "name": "email-sdk-acme-mail",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^0.1.0"
+  }
+}
+```
+
+Use a peer dependency for Email SDK so apps do not accidentally install two copies of the core types.
+
+## Naming
+
+| Thing     | Recommendation                       |
+| --------- | ------------------------------------ |
+| Package   | `email-sdk-{provider}`               |
+| Adapter   | Provider slug, such as `acme-mail`   |
+| Plugin ID | Same slug unless you need variants   |
+| Env var   | Provider slug in uppercase, plus key |
+| Export    | `{provider}` and `{provider}Plugin`  |
+
+## Document field support
+
+Every adapter README should say whether these fields are supported:
+
+- `html` and `text`
+- `cc`, `bcc`, and `replyTo`
+- `headers`
+- `attachments`
+- `tags`
+- `metadata`
+- `idempotencyKey`
+
+If a field is not supported, say whether the adapter throws. Community adapters should throw on unsupported non-empty fields instead of dropping them.
+
+## Include a smoke test
+
+At minimum, test:
+
+1. Payload mapping.
+2. Response mapping.
+3. Unsupported field errors.
+4. `AbortSignal` forwarding.
+5. Plugin registration through `createEmailClient`.
+
+```ts
+import { describe, expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmeMailPlugin } from "./index";
+
+describe("acmeMailPlugin", () => {
+  test("registers an adapter", () => {
+    const email = createEmailClient({
+      plugins: [acmeMailPlugin({ apiKey: "test" })],
+    });
+
+    expect(email.adapters.has("acme-mail")).toBe(true);
+    expect(email.defaultAdapter).toBe("acme-mail");
+  });
+});
+```
+
+## README checklist
+
+- Install command.
+- Minimal `createEmailClient` example.
+- Required environment variables.
+- Field support table.
+- Error behavior for unsupported fields.
+- Test command.
+- Link to Email SDK adapter contract.
+
+Keep the README short enough that a user can decide if the adapter fits their fallback route.

@@ -1,0 +1,45 @@
+---
+title: Adapters
+description: Supported email service adapters and transports.
+icon: Cable
+---
+
+Email SDK ships with fifteen adapters. Import only the adapter you use; the package does not ask you
+to configure providers that are not on your send path.
+
+Every adapter follows the same contract: map the fields it supports and throw a validation error for
+fields the provider API cannot represent. Use the [SDK field support guide](/docs/adapters/field-support)
+before choosing fallback routes.
+
+<ProviderGrid />
+
+## Import pattern
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: process.env.SMTP_HOST!,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: ["smtp"],
+});
+```
+
+## Adapter groups
+
+| Group          | Adapters                                                                        |
+| -------------- | ------------------------------------------------------------------------------- |
+| Popular APIs   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional |
+| Infrastructure | SparkPost, Mailtrap, Scaleway, ZeptoMail, MailPace                              |
+| Product-led    | Loops, Plunk                                                                    |
+| Transport      | Built-in SMTP                                                                   |
