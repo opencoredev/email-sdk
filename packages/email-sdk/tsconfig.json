@@ -9,7 +9,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ESNext", "DOM"],
-    "types": ["bun"]
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "src/**/*.test.ts"]
