@@ -8,12 +8,12 @@ Community adapters are third-party npm packages. They let someone support a prov
 
 That split is intentional:
 
-| Surface                 | Who owns it                       | Where it lives                                  |
-| ----------------------- | --------------------------------- | ----------------------------------------------- |
-| Official adapter        | Email SDK maintainers             | `@opencoredev/email-sdk/{adapter}`              |
-| Community adapter       | The community package maintainer  | Their npm package, such as `email-sdk-acme`     |
-| Community docs listing  | Email SDK docs, by pull request   | `apps/fumadocs/content/community/plugins.json`  |
-| Verified listing        | Email SDK docs, for one version   | Same registry entry plus verification metadata  |
+| Surface                 | Who owns it                       | Where it lives                                   |
+| ----------------------- | --------------------------------- | ------------------------------------------------ |
+| Official adapter        | Email SDK maintainers             | `@opencoredev/email-sdk/{adapter}`               |
+| Community adapter       | The community package maintainer  | Their npm package, such as `email-sdk-acme-mail` |
+| Community docs listing  | Email SDK docs, by pull request   | `apps/fumadocs/content/community/plugins.json`   |
+| Verified listing        | Email SDK docs, for one version   | Same registry entry plus verification metadata   |
 
 Most community adapters should start as `status: "community"`. That means listed, discoverable, and clearly third-party. It does not mean endorsed, bundled, or maintained by OpenCore.
 
@@ -139,15 +139,16 @@ If a field is not supported, say whether the adapter throws. Community adapters 
 
 Use a small table in the package README:
 
-| Field            | Support | Notes                                  |
-| ---------------- | ------- | -------------------------------------- |
-| `html`, `text`   | Yes     | Sent as provider body fields.          |
-| `cc`, `bcc`      | Yes     | Mapped to provider recipient fields.   |
-| `replyTo`        | No      | Throws when provided.                  |
-| `attachments`    | No      | Throws when provided.                  |
-| `tags`           | Yes     | Mapped to provider tags.               |
-| `metadata`       | Partial | Included when values are strings.      |
-| `idempotencyKey` | No      | Provider does not expose this feature. |
+| Field            | Support | Notes                                      |
+| ---------------- | ------- | ------------------------------------------ |
+| `html`, `text`   | Yes     | Sent as provider body fields.              |
+| `cc`, `bcc`      | Yes     | Mapped to provider recipient fields.       |
+| `replyTo`        | No      | Throws when provided.                      |
+| `headers`        | No      | Provider does not support custom headers.  |
+| `attachments`    | No      | Throws when provided.                      |
+| `tags`           | Yes     | Mapped to provider tags.                   |
+| `metadata`       | Partial | Included when values are strings.          |
+| `idempotencyKey` | No      | Provider does not expose this feature.     |
 
 This is not paperwork. Field support determines whether the adapter is safe as a fallback route. A backup provider that silently drops attachments or reply-to addresses can make a send look successful while changing the email.
 
