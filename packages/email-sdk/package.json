@@ -25,6 +25,7 @@
     "sendgrid",
     "postmark",
     "mailgun",
+    "unosend",
     "ses",
     "bun"
   ],
@@ -54,6 +55,10 @@
     "./cloudflare": {
       "types": "./dist/cloudflare.d.ts",
       "import": "./dist/cloudflare.js"
+    },
+    "./unosend": {
+      "types": "./dist/unosend.d.ts",
+      "import": "./dist/unosend.js"
     },
     "./ses": {
       "types": "./dist/ses.d.ts",

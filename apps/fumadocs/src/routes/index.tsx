@@ -60,7 +60,8 @@ function Home() {
 
             <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
               Email SDK is a TypeScript email SDK for transactional sending through Resend,
-              Postmark, SendGrid, Mailgun, AWS SES, Brevo, SMTP, and more with one clean API.
+              Postmark, SendGrid, Mailgun, Unosend, AWS SES, Brevo, SMTP, and more with one clean
+              API.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
