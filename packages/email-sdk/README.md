@@ -87,7 +87,6 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/loops`      | Loops                            |
 | `@opencoredev/email-sdk/plunk`      | Plunk                            |
 | `@opencoredev/email-sdk/mailtrap`   | Mailtrap                         |
-| `@opencoredev/email-sdk/cloudflare` | Cloudflare Email Sending         |
 | `@opencoredev/email-sdk/scaleway`   | Scaleway                         |
 | `@opencoredev/email-sdk/zeptomail`  | ZeptoMail                        |
 | `@opencoredev/email-sdk/mailpace`   | MailPace                         |
