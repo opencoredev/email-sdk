@@ -1,12 +1,52 @@
 ---
 title: Publish a community adapter
-description: Package a custom adapter for other Email SDK users.
+description: Build, publish, and list a third-party provider adapter without making it official.
 icon: BadgeCheck
 ---
 
-Community adapters should feel like built-in adapters: predictable names, clear field support, narrow dependencies, and a plugin export for clean setup.
+Community adapters are third-party npm packages. They let someone support a provider without adding that provider to `@opencoredev/email-sdk`, the official CLI, or the official adapter maintenance surface.
 
-Adapter packages follow the same registry process as other plugins. Start with [Publish a community plugin](/docs/guides/authoring/publish-community-plugin), then add the adapter-specific requirements on this page.
+That split is intentional:
+
+| Surface                 | Who owns it                       | Where it lives                                   |
+| ----------------------- | --------------------------------- | ------------------------------------------------ |
+| Official adapter        | Email SDK maintainers             | `@opencoredev/email-sdk/{adapter}`               |
+| Community adapter       | The community package maintainer  | Their npm package, such as `email-sdk-acme-mail` |
+| Community docs listing  | Email SDK docs, by pull request   | `apps/fumadocs/content/community/plugins.json`   |
+| Verified listing        | Email SDK docs, for one version   | Same registry entry plus verification metadata   |
+
+Most community adapters should start as `status: "community"`. That means listed, discoverable, and clearly third-party. It does not mean endorsed, bundled, or maintained by OpenCore.
+
+## Adapter or plugin?
+
+An adapter is the provider implementation. It maps Email SDK's normalized `EmailMessage` into one provider API request.
+
+```ts
+createEmailClient({
+  adapters: [acmeMail({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+A plugin is the package-friendly wrapper. It registers the adapter through the `plugins` array, which is the cleanest setup for reusable community packages.
+
+```ts
+createEmailClient({
+  plugins: [acmeMailPlugin({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+Ship both. The plain adapter keeps advanced users close to the provider. The plugin wrapper gives most users a stable one-line integration.
+
+## Publishing path
+
+1. Create a separate package owned by the community maintainer.
+2. Implement the adapter contract from [Create an adapter](/docs/guides/authoring/create-adapter).
+3. Export both the adapter factory and plugin factory.
+4. Publish the package to npm from the maintainer's own repo.
+5. Add a short README with install, setup, field support, and test instructions.
+6. Optionally open a pull request to list the package in the Email SDK community registry.
+
+Do not add community adapters to `packages/email-sdk/src`, the official adapter catalog, the official CLI adapter list, or the official package exports unless the project has agreed to maintain that provider as official.
 
 ## Recommended package shape
 
@@ -15,14 +55,16 @@ email-sdk-acme-mail/
   src/
     index.ts
     acme-mail.ts
+    plugin.ts
     acme-mail.test.ts
   package.json
+  tsconfig.json
   README.md
 ```
 
 ## Export both forms
 
-Export a plain adapter factory and an adapter plugin factory.
+Export a plain adapter factory and an adapter plugin factory from the package root.
 
 ```ts
 export { acmeMail } from "./acme-mail";
@@ -39,6 +81,8 @@ createEmailClient({
 ```
 
 ## Package exports
+
+Community packages should use Email SDK as a peer dependency. That keeps apps from installing two copies of the core types.
 
 ```json
 {
@@ -57,7 +101,7 @@ createEmailClient({
 }
 ```
 
-Use a peer dependency for Email SDK so apps do not accidentally install two copies of the core types.
+Avoid install scripts and binaries. Adapter packages should be boring library packages: importable code, types, tests, and provider docs.
 
 ## Naming
 
@@ -68,6 +112,16 @@ Use a peer dependency for Email SDK so apps do not accidentally install two copi
 | Plugin ID | Same slug unless you need variants   |
 | Env var   | Provider slug in uppercase, plus key |
 | Export    | `{provider}` and `{provider}Plugin`  |
+
+Example:
+
+| Thing     | Example                            |
+| --------- | ---------------------------------- |
+| Package   | `email-sdk-acme-mail`              |
+| Adapter   | `acme-mail`                        |
+| Plugin ID | `acme-mail`                        |
+| Env var   | `ACME_MAIL_API_KEY`                |
+| Export    | `acmeMail`, `acmeMailPlugin`       |
 
 ## Document field support
 
@@ -82,6 +136,21 @@ Every adapter README should say whether these fields are supported:
 - `idempotencyKey`
 
 If a field is not supported, say whether the adapter throws. Community adapters should throw on unsupported non-empty fields instead of dropping them.
+
+Use a small table in the package README:
+
+| Field            | Support | Notes                                      |
+| ---------------- | ------- | ------------------------------------------ |
+| `html`, `text`   | Yes     | Sent as provider body fields.              |
+| `cc`, `bcc`      | Yes     | Mapped to provider recipient fields.       |
+| `replyTo`        | No      | Throws when provided.                      |
+| `headers`        | No      | Provider does not support custom headers.  |
+| `attachments`    | No      | Throws when provided.                      |
+| `tags`           | Yes     | Mapped to provider tags.                   |
+| `metadata`       | Partial | Included when values are strings.          |
+| `idempotencyKey` | No      | Provider does not expose this feature.     |
+
+This is not paperwork. Field support determines whether the adapter is safe as a fallback route. A backup provider that silently drops attachments or reply-to addresses can make a send look successful while changing the email.
 
 ## Include a smoke test
 
@@ -112,12 +181,66 @@ describe("acmeMailPlugin", () => {
 
 ## README checklist
 
-- Install command.
+- Install command for the community package and `@opencoredev/email-sdk`.
 - Minimal `createEmailClient` example.
 - Required environment variables.
 - Field support table.
 - Error behavior for unsupported fields.
 - Test command.
 - Link to Email SDK adapter contract.
+- Link to the provider API docs used by the adapter.
 
 Keep the README short enough that a user can decide if the adapter fits their fallback route.
+
+## List it in Email SDK docs
+
+After publishing to npm, the maintainer can open a pull request that adds an entry to `apps/fumadocs/content/community/plugins.json`.
+
+```json
+{
+  "name": "Acme Mail",
+  "package": "email-sdk-acme-mail",
+  "kind": "adapter",
+  "status": "community",
+  "description": "Adds an Acme Mail provider adapter for Email SDK.",
+  "href": "https://www.npmjs.com/package/email-sdk-acme-mail",
+  "repo": "https://github.com/acme/email-sdk-acme-mail",
+  "maintainer": "acme",
+  "pluginId": "acme-mail",
+  "adapter": "acme-mail",
+  "importName": "acmeMailPlugin"
+}
+```
+
+Then run:
+
+```bash
+bun run community:check
+```
+
+That check validates the registry shape. In CI, verified and official entries also get a published package metadata check. Community entries are listed as third-party packages without verification metadata.
+
+## Community, verified, or official?
+
+| Status      | Use it when...                                                            |
+| ----------- | ------------------------------------------------------------------------- |
+| `community` | A third-party maintainer published the package and wants discoverability. |
+| `verified`  | A specific published version passed the registry verification checklist.  |
+| `official`  | The adapter is maintained by OpenCore or ships in this repository.        |
+
+Verification applies to one version. If the package releases again, the registry should keep the old `verifiedVersion` until the new version is reviewed.
+
+## What not to do
+
+- Do not publish under the `@opencoredev` scope.
+- Do not ask users to import from `@opencoredev/email-sdk/{community-provider}`.
+- Do not add provider secrets or live credentials to examples.
+- Do not hide provider limitations behind successful sends.
+- Do not mark a listing `verified` before a package version has actually passed verification.
+- Do not mark a third-party package `official`.
+
+## Next
+
+- [Create an adapter](/docs/guides/authoring/create-adapter) for implementation details.
+- [Adapter contract](/docs/reference/adapter-contract) for the exact TypeScript types.
+- [Community registry](/docs/reference/community-registry) for listing and verification fields.

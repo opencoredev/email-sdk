@@ -4,7 +4,9 @@ description: Static schema and verification rules for community plugin listings.
 icon: ShieldCheck
 ---
 
-The community registry lives at `apps/fumadocs/content/community/plugins.json`. It is a static JSON file rendered by the docs site.
+The community registry lives at `apps/fumadocs/content/community/plugins.json`. It is a static JSON file rendered by the docs site for third-party plugins, adapters, and hybrid packages.
+
+Adapter packages use this registry too. Set `kind: "adapter"`, include the adapter routing name in `adapter`, and include the plugin factory export in `importName` when the package exposes one.
 
 ## Entry shape
 
