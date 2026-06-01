@@ -1,4 +1,5 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { brevo } from "./brevo.js";
@@ -165,7 +166,7 @@ const envFlagNames: Record<string, string> = {
 };
 
 async function main() {
-  const [command, ...args] = Bun.argv.slice(2);
+  const [command, ...args] = process.argv.slice(2);
   const flags = parseFlags(args);
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -305,9 +306,9 @@ async function printVersion(flags: CliFlags) {
 
 async function readPackageInfo(): Promise<PackageInfo> {
   try {
-    const packageJson = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as
-      | Partial<PackageInfo>
-      | undefined;
+    const packageJson = JSON.parse(
+      await readFile(new URL("../package.json", import.meta.url), "utf8"),
+    ) as Partial<PackageInfo> | undefined;
 
     return {
       name: packageJson?.name ?? "@opencoredev/email-sdk",
@@ -424,7 +425,7 @@ function truthyFlag(flags: CliFlags, name: string) {
 async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
   const messagePath = stringFlag(flags, "message");
   const fromFile = messagePath
-    ? (JSON.parse(await Bun.file(messagePath).text()) as Partial<EmailMessage>)
+    ? (JSON.parse(await readFile(messagePath, "utf8")) as Partial<EmailMessage>)
     : {};
   const message: Partial<EmailMessage> = { ...fromFile };
 

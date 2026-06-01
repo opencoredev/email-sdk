@@ -26,14 +26,14 @@ const packageManagers: Array<{
   command: (packageName: string) => InstallCommand;
 }> = [
   {
-    value: "bun",
-    label: "Bun",
-    command: (packageName) => ({ executable: "bun", verb: "add", packageName }),
-  },
-  {
     value: "npm",
     label: "npm",
     command: (packageName) => ({ executable: "npm", verb: "install", packageName }),
+  },
+  {
+    value: "bun",
+    label: "Bun",
+    command: (packageName) => ({ executable: "bun", verb: "add", packageName }),
   },
   {
     value: "pnpm",
@@ -55,7 +55,7 @@ export function PackageInstallTabs({
   packageName = "@opencoredev/email-sdk",
 }: PackageInstallTabsProps) {
   const installTabsId = useId();
-  const [selected, setSelected] = useState<PackageManager>("bun");
+  const [selected, setSelected] = useState<PackageManager>("npm");
   const [copyState, setCopyState] = useState<CopyState>("idle");
 
   useEffect(() => {

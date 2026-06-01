@@ -32,7 +32,7 @@ In this setup, Email SDK tries Resend first. If Resend fails with a retryable er
 
 ```ts
 await email.send(message, {
-  provider: "resend",
+  adapter: "resend",
   fallbackAdapters: ["smtp"],
 });
 ```

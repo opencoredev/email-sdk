@@ -5,10 +5,6 @@ A lightweight TypeScript SDK for transactional email. Use one typed client, pick
 Docs: https://email-sdk.dev/docs
 
 ```bash
-bun add @opencoredev/email-sdk
-```
-
-```bash
 npm install @opencoredev/email-sdk
 ```
 
@@ -16,10 +12,14 @@ npm install @opencoredev/email-sdk
 pnpm add @opencoredev/email-sdk
 ```
 
+```bash
+bun add @opencoredev/email-sdk
+```
+
 The public npm package is `@opencoredev/email-sdk`; the unscoped `email-sdk` package is unrelated.
 The command-line binary it installs is named `email-sdk`.
 
-Use the SDK from server-side runtimes such as Node 20+ or Bun. Do not expose provider API keys in browser or client-side code. Bun is only required for the included CLI.
+Use the SDK and CLI from server-side runtimes such as Node 20+ or Bun. Do not expose provider API keys in browser or client-side code.
 
 ## Quickstart
 
@@ -276,20 +276,20 @@ email.auditCapture.clear();
 
 ## CLI
 
-The package includes a small Bun CLI:
+The package includes a small CLI:
 
 ```bash
 # one-off: no install needed
-bunx --yes @opencoredev/email-sdk adapters
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
 
-# after bun add @opencoredev/email-sdk
-bun email-sdk adapters
-bun email-sdk doctor --adapter resend
-bun email-sdk send --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
-bun email-sdk send --dry-run --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+# after installing @opencoredev/email-sdk
+npx email-sdk adapters
+npx email-sdk doctor --adapter resend
+npx email-sdk send --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+npx email-sdk send --dry-run --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 ```
 
-The CLI can read provider credentials from environment variables or matching credential flags. Run `bun email-sdk adapters` to see the variables each adapter expects. `--dry-run` validates the message and selected adapter field support without sending email.
+The CLI can read provider credentials from environment variables or matching credential flags. Run `npx email-sdk adapters` to see the variables each adapter expects after the package is installed. `--dry-run` validates the message and selected adapter field support without sending email.
 
 ## Provider Reality
 
