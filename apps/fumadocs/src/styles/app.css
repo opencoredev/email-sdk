@@ -79,6 +79,19 @@ html > body[data-scroll-locked] {
   border-bottom: 0;
 }
 
+.blog-code-block {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-fd-card) 94%, var(--color-fd-primary)),
+    var(--color-fd-card)
+  );
+  box-shadow: inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+}
+
+.blog-code-block code {
+  white-space: pre;
+}
+
 .t-text-swap {
   display: inline-block;
   transform: translateY(0);

@@ -28,8 +28,8 @@ export const blogPosts = [
     title: "Email Provider Fallbacks Are a Product Decision",
     description:
       "A practical guide to choosing fallback routes for transactional email without silently dropping message fields.",
-    publishedAt: "2026-06-01",
-    updatedAt: "2026-06-01",
+    publishedAt: "2026-06-05",
+    updatedAt: "2026-06-05",
     readTime: "7 min read",
     image: "/og/email-sdk.png",
     imageAlt: "Email SDK adapter and fallback routing preview",
@@ -40,8 +40,8 @@ export const blogPosts = [
     title: "A Nodemailer Alternative for TypeScript Apps",
     description:
       "When to use Nodemailer, when to use a provider API, and why Email SDK keeps SMTP as one route instead of the whole abstraction.",
-    publishedAt: "2026-06-01",
-    updatedAt: "2026-06-01",
+    publishedAt: "2026-06-10",
+    updatedAt: "2026-06-10",
     readTime: "6 min read",
     image: "/og/email-sdk.png",
     imageAlt: "Email SDK TypeScript email provider comparison preview",
@@ -49,8 +49,23 @@ export const blogPosts = [
   },
 ] as const satisfies BlogPost[];
 
-export function getBlogPost(slug: string) {
-  return blogPosts.find((post) => post.slug === slug);
+export function getBlogPost(slug: string, options: { includeFuture?: boolean } = {}) {
+  const post = blogPosts.find((item) => item.slug === slug);
+
+  if (!post) return undefined;
+  if (options.includeFuture || isBlogPostPublished(post)) return post;
+
+  return undefined;
+}
+
+export function getPublishedBlogPosts(date = new Date()): BlogPost[] {
+  return (blogPosts as BlogPost[])
+    .filter((post) => isBlogPostPublished(post, date))
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+}
+
+export function isBlogPostPublished(post: BlogPost, date = new Date()) {
+  return post.publishedAt <= formatDateKey(date);
 }
 
 export function getBlogPostUrl(slug: string) {
@@ -64,4 +79,8 @@ export function formatBlogDate(value: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function formatDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
 }

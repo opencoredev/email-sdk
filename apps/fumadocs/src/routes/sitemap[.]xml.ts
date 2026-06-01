@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { blogPosts, getBlogPostUrl } from "@/lib/blog";
+import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
 import { siteUrl } from "@/lib/shared";
 import { getDocsSource } from "@/lib/source";
 import { docsVersions } from "@/lib/versions";
@@ -52,7 +52,7 @@ function getSitemapEntries() {
       changefreq: "monthly",
       priority: "0.3",
     },
-    ...blogPosts.map((post) => ({
+    ...getPublishedBlogPosts().map((post) => ({
       loc: `${siteUrl}${getBlogPostUrl(post.slug)}`,
       lastmod: post.updatedAt,
       changefreq: "monthly" as const,
