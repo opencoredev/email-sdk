@@ -4,8 +4,7 @@
 
 ### Minor Changes
 
-- 781aa8c: Add a Cloudflare Email Sending adapter for the REST API, including the SDK subpath export, CLI adapter support, payload tests, and docs.
-- bc92403: Add a Cloudflare Email Sending adapter with CLI support, docs, and payload validation.
+- Add and harden the Cloudflare Email Sending adapter for the REST API, including the SDK subpath export, CLI adapter support, payload validation, response-envelope validation, tests, and docs.
 
 ### Patch Changes
 
