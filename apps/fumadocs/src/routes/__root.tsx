@@ -4,6 +4,7 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
 import SearchDialog from "@/components/search";
+import { domMutationGuardScript } from "@/lib/dom-mutation-guard";
 import { siteMeta } from "@/lib/metadata";
 
 import appCss from "@/styles/app.css?url";
@@ -38,6 +39,10 @@ function RootComponent() {
   return (
     <html suppressHydrationWarning>
       <head>
+        <script
+          // Browser translation/extensions can mutate React-owned DOM before hydration finishes.
+          dangerouslySetInnerHTML={{ __html: domMutationGuardScript }}
+        />
         <HeadContent />
       </head>
       <body className="flex flex-col min-h-screen">
