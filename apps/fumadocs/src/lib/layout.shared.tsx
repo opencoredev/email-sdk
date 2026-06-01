@@ -1,14 +1,19 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
+import { ThemeToggle } from "@/components/theme-toggle";
 import { VersionPicker } from "@/components/version-picker";
 
 import { appName, gitConfig } from "./shared";
 
 type BaseOptionsConfig = {
+  mainLinks?: boolean;
   versionPicker?: boolean;
 };
 
-export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): BaseLayoutProps {
+export function baseOptions({
+  mainLinks = true,
+  versionPicker = true,
+}: BaseOptionsConfig = {}): BaseLayoutProps {
   return {
     nav: {
       title: (
@@ -18,19 +23,26 @@ export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): B
         </span>
       ),
     },
+    themeSwitch: {
+      component: <ThemeToggle />,
+    },
     links: [
-      {
-        type: "main",
-        text: "Docs",
-        url: "/docs",
-        active: "nested-url",
-      },
-      {
-        type: "main",
-        text: "Blog",
-        url: "/blog",
-        active: "nested-url",
-      },
+      ...(mainLinks
+        ? [
+            {
+              type: "main" as const,
+              text: "Docs",
+              url: "/docs",
+              active: "nested-url" as const,
+            },
+            {
+              type: "main" as const,
+              text: "Blog",
+              url: "/blog",
+              active: "nested-url" as const,
+            },
+          ]
+        : []),
       ...(versionPicker
         ? [
             {
@@ -47,11 +59,6 @@ export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): B
 
 function EmailSdkLogoIcon() {
   return (
-    <img
-      alt=""
-      aria-hidden="true"
-      className="size-8 shrink-0 object-contain"
-      src="/logo.png"
-    />
+    <img alt="" aria-hidden="true" className="size-8 shrink-0 object-contain" src="/logo.png" />
   );
 }
