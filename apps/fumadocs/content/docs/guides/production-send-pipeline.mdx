@@ -133,7 +133,7 @@ export const email = createEmailClient({
 });
 ```
 
-Use `sendMetadata` for hook and observability context. Only put `metadata` on the `EmailMessage` when every route in the path supports message metadata.
+Use `sendMetadata` in `defaultsPlugin` for default hook and observability context on every send. Per-send `metadata` in `email.send(..., { metadata })` is also hook context; it merges with and overrides `sendMetadata` defaults for that send. Only put `metadata` on the `EmailMessage` when every route in the path supports provider message metadata.
 
 ## 4. Add retries and fallback
 
@@ -183,12 +183,14 @@ const email = createEmailClient({
     smtp({
       name: "backup-smtp",
       host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT ?? 587),
       auth: {
         user: process.env.SMTP_USER!,
         pass: process.env.SMTP_PASS!,
       },
     }),
   ],
+  defaultAdapter: "resend",
   fallback: ["backup-smtp"],
   hooks: {
     beforeSend(event) {

@@ -89,7 +89,7 @@ Choose fallback routes by message shape, not by provider popularity.
 
 | Message type | Good fallback | Avoid |
 | --- | --- | --- |
-| Plain text/html transactional email | Resend -> SMTP, Resend -> Postmark | Product-email adapters unless they preserve the same email |
+| Plain text/html transactional email | Resend -> SMTP, Resend -> Postmark | Product-email adapters (Loops, Plunk) that do not preserve the same class of email |
 | Attachments | Resend -> Postmark, SendGrid, Mailgun, MailerSend | SMTP, Loops, Plunk, Scaleway, MailPace |
 | Metadata-dependent sends | Postmark/SendGrid/Mailgun/Brevo pairs | Resend or SMTP if metadata matters |
 | Tag-heavy sends | SendGrid/Mailgun/Brevo/MailerSend pairs | Postmark when more than one tag matters |

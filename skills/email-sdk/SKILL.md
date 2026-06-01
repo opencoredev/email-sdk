@@ -74,7 +74,7 @@ export const email = createEmailClient({
 });
 ```
 
-## Fallback And Retry Guidance
+## Fallback and retry guidance
 
 - Choose fallback routes only after checking the current field support docs or adapter source.
 - Use fallback only when the backup adapter can send the same class of email and preserve the fields that matter to the app.
