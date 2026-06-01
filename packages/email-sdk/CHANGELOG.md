@@ -1,5 +1,19 @@
 # @opencoredev/email-sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- 781aa8c: Add a Cloudflare Email Sending adapter for the REST API, including the SDK subpath export, CLI adapter support, payload tests, and docs.
+- bc92403: Add a Cloudflare Email Sending adapter with CLI support, docs, and payload validation.
+
+### Patch Changes
+
+- 40f787a: Run the CLI with Node as well as Bun and document the scoped npx command for one-off CLI usage.
+- 2640992: Fix CLI dry-run adapter validation, CLI credential checks, batch routing aliases, and retry handling for transient transport errors.
+- b9eb02f: Improve npm package metadata and README links for the Email SDK launch.
+- 76fc0ef: Align provider adapters with current API docs for MailerSend response IDs, Mailtrap metadata and response IDs, Scaleway payload shape, Plunk send fields and response IDs, and Loops transactional ID validation and attachments.
+
 ## 0.3.0
 
 ### Minor Changes
