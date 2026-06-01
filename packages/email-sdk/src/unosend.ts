@@ -6,13 +6,10 @@ import {
   formatAddress,
   formatAddresses,
   optionalSingleApiAddress,
+  optionalStringAddresses,
 } from "./payloads.js";
 import type { EmailMessage, EmailProvider } from "./types.js";
-import {
-  SUPPORTED_MESSAGE_FIELDS,
-  assertSupportedMessageFields,
-  formatAddress as formatReplyAddress,
-} from "./utils.js";
+import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type UnosendProviderOptions = {
   apiKey: string;
@@ -55,8 +52,8 @@ export function unosend(options: UnosendProviderOptions): EmailProvider<{ baseUr
       return {
         from: formatAddress(message.from),
         to: formatAddresses(message.to),
-        cc: optionalStringRecipients(message.cc),
-        bcc: optionalStringRecipients(message.bcc),
+        cc: optionalStringAddresses(message.cc),
+        bcc: optionalStringAddresses(message.bcc),
         reply_to: optionalReplyTo(message),
         subject: message.subject,
         html: message.html,
@@ -97,14 +94,8 @@ export function assertUnosendMessage(message: EmailMessage) {
   optionalSingleApiAddress("unosend", "replyTo", message.replyTo);
 }
 
-function optionalStringRecipients(addresses: EmailMessage["cc"]) {
-  const formatted = formatAddresses(addresses);
-  return formatted.length > 0 ? formatted : undefined;
-}
-
 function optionalReplyTo(message: EmailMessage) {
-  const address = optionalSingleApiAddress("unosend", "replyTo", message.replyTo);
-  return address ? formatReplyAddress(address) : undefined;
+  return formatAddresses(message.replyTo)[0];
 }
 
 function unosendErrorMessage(body: UnosendSendResponse) {

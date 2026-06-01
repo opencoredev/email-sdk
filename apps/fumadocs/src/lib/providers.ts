@@ -138,9 +138,8 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/unosend",
     docs: "/docs/adapters/unosend",
     website: "https://www.unosend.co",
-    logo: "https://mintcdn.com/unosend/VHYAdd1hLKxixkIr/images/logo.svg?fit=max&auto=format&n=VHYAdd1hLKxixkIr&q=85&s=e3dc53a6c318712ee2e50660276371c4",
-    sidebarLogo:
-      "https://mintcdn.com/unosend/VHYAdd1hLKxixkIr/images/lightlogo.svg?fit=max&auto=format&n=VHYAdd1hLKxixkIr&q=85&s=f2a20e21415661b62a1546ba84d2aa9f",
+    logo: "/provider-logos/unosend.svg",
+    sidebarLogo: "/provider-logos/unosend-white.svg",
     category: "Popular APIs",
     status: "Official",
     testStatus: "Payload-tested",
