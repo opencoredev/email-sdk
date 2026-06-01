@@ -1,5 +1,4 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock.core";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import {
   ArrowRight,
@@ -667,22 +666,18 @@ function Checklist({ items }: { items: string[] }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <DynamicCodeBlock
-      code={children}
-      codeblock={{
-        allowCopy: false,
-        className: "blog-code-block my-8 rounded-lg",
-        viewportProps: {
-          className: "max-h-none",
-        },
-      }}
-      highlighter={blogCodeHighlighter}
-      lang="ts"
-      options={{
-        themes: {
-          dark: "github-dark",
-          light: "github-light",
-        },
+    <figure
+      className="blog-code-block shiki not-prose my-8 overflow-hidden rounded-lg border border-fd-border text-sm shadow-sm"
+      dangerouslySetInnerHTML={{
+        __html: blogCodeHighlighter.codeToHtml(children, {
+          defaultColor: false,
+          lang: "ts",
+          tabindex: false,
+          themes: {
+            dark: "github-dark",
+            light: "github-light",
+          },
+        }),
       }}
     />
   );
