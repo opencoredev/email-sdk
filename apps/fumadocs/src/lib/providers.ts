@@ -130,6 +130,18 @@ export const providers = [
     liveStatus: "Live account required",
   },
   {
+    name: "Cloudflare Email Sending",
+    key: "cloudflare",
+    importPath: "@opencoredev/email-sdk/cloudflare",
+    docs: "/docs/adapters/cloudflare",
+    website: "https://developers.cloudflare.com/email-service/",
+    logo: "https://cdn.simpleicons.org/cloudflare",
+    category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Live account required",
+  },
+  {
     name: "Scaleway",
     key: "scaleway",
     importPath: "@opencoredev/email-sdk/scaleway",

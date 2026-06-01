@@ -212,6 +212,16 @@ describe("provider payloads", () => {
     ).rejects.toThrow("Recipient is not verified.");
   });
 
+  test("Cloudflare rejects unexpected success envelopes", async () => {
+    await expect(
+      cloudflare({
+        apiToken: "cf_token",
+        accountId: "account_123",
+        fetch: jsonCapture({ result: { delivered: ["ada@example.com"] } }).fetch,
+      }).send(cloudflareMessage, context),
+    ).rejects.toThrow("cloudflare failed.");
+  });
+
   test("Cloudflare surfaces HTTP error details", async () => {
     await expect(
       cloudflare({

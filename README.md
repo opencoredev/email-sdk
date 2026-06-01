@@ -64,9 +64,9 @@ See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage e
 
 ## Adapter Entry Points
 
-`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
+`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `plunk`, `mailtrap`, `cloudflare`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
 
-If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Postmark, SendGrid, AWS SES, Mailgun, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 Plugin entry points:
 
