@@ -52,7 +52,7 @@ jobs:
           title: "Version packages"
           commit: "Version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
 
       - name: Update Homebrew formula checksum
         if: steps.changesets.outputs.published == 'true'
