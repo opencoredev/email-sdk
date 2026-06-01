@@ -77,6 +77,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/resend`     | Resend                           |
 | `@opencoredev/email-sdk/postmark`   | Postmark                         |
 | `@opencoredev/email-sdk/sendgrid`   | SendGrid                         |
+| `@opencoredev/email-sdk/cloudflare` | Cloudflare Email Sending         |
 | `@opencoredev/email-sdk/ses`        | AWS SES                          |
 | `@opencoredev/email-sdk/mailgun`    | Mailgun                          |
 | `@opencoredev/email-sdk/mailersend` | MailerSend                       |

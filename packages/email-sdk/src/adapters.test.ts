@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { brevo } from "./brevo.js";
+import { cloudflare } from "./cloudflare.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -57,6 +58,17 @@ const messageWithoutProviderSpecificFields: EmailMessage = {
 const messageWithoutMetadata: EmailMessage = {
   ...message,
   metadata: undefined,
+};
+
+const messageWithoutTagsOrMetadata: EmailMessage = {
+  ...message,
+  tags: undefined,
+  metadata: undefined,
+};
+
+const cloudflareMessage: EmailMessage = {
+  ...messageWithoutTagsOrMetadata,
+  to: "ada@example.com",
 };
 
 const messageWithoutReplyTo: EmailMessage = {
@@ -141,6 +153,80 @@ describe("provider payloads", () => {
       content: base64("hello"),
       type: "text/plain",
     });
+  });
+
+  test("Cloudflare maps REST payloads and delivery status", async () => {
+    const capture = jsonCapture({
+      success: true,
+      errors: [],
+      messages: [],
+      result: {
+        delivered: ["ada@example.com"],
+        queued: ["cc@example.com"],
+        permanent_bounces: ["bcc@example.com"],
+      },
+    });
+
+    const response = await cloudflare({
+      apiToken: "cf_token",
+      accountId: "account_123",
+      fetch: capture.fetch,
+    }).send(cloudflareMessage, context);
+
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com"]);
+    expect(response.rejected).toEqual(["bcc@example.com"]);
+    expect(capture.calls[0]?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/account_123/email/sending/send",
+    );
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer cf_token");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: { address: "hello@example.com", name: "Acme" },
+      to: ["ada@example.com"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      reply_to: "reply@example.com",
+      subject: "Welcome",
+      text: "Hello",
+      html: "<p>Hello</p>",
+      headers: { "X-Test": "yes" },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toMatchObject({
+      filename: "hello.txt",
+      content: base64("hello"),
+      type: "text/plain",
+      disposition: "attachment",
+    });
+  });
+
+  test("Cloudflare surfaces provider envelope errors", async () => {
+    await expect(
+      cloudflare({
+        apiToken: "cf_token",
+        accountId: "account_123",
+        fetch: jsonCapture({
+          success: false,
+          errors: [{ code: 10000, message: "Recipient is not verified." }],
+          result: null,
+        }).fetch,
+      }).send(cloudflareMessage, context),
+    ).rejects.toThrow("Recipient is not verified.");
+  });
+
+  test("Cloudflare surfaces HTTP error details", async () => {
+    await expect(
+      cloudflare({
+        apiToken: "cf_token",
+        accountId: "account_123",
+        fetch: jsonCapture(
+          {
+            success: false,
+            errors: [{ code: 10001, message: "Authentication failed." }],
+            result: null,
+          },
+          { status: 401 },
+        ).fetch,
+      }).send(cloudflareMessage, context),
+    ).rejects.toThrow("Authentication failed.");
   });
 
   test("SES signs and maps simple email payloads", async () => {
@@ -228,6 +314,18 @@ describe("provider payloads", () => {
         name: "mailtrap",
         provider: mailtrap({ apiKey: "key", fetch: jsonCapture({ message_id: "mt_123" }).fetch }),
         message: messageWithoutReplyToOrMetadata,
+      },
+      {
+        name: "cloudflare",
+        provider: cloudflare({
+          apiToken: "token",
+          accountId: "account",
+          fetch: jsonCapture({ success: true, result: { delivered: ["ada@example.com"] } }).fetch,
+        }),
+        message: {
+          ...messageWithoutProviderSpecificFields,
+          to: "ada@example.com",
+        },
       },
       {
         name: "zeptomail",
@@ -346,6 +444,14 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("mailtrap does not support");
+
+    await expect(
+      cloudflare({
+        apiToken: "token",
+        accountId: "account",
+        fetch: jsonCapture({ success: true }).fetch,
+      }).send({ ...limitedMessage, metadata: { id: "nope" } }, context),
+    ).rejects.toThrow("cloudflare does not support");
   });
 
   test("empty optional field containers do not fail narrow adapters", async () => {
@@ -418,6 +524,29 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("mailersend only supports 1 replyTo per message");
+
+    await expect(
+      cloudflare({
+        apiToken: "token",
+        accountId: "account",
+        fetch: jsonCapture({ success: true }).fetch,
+      }).send(
+        {
+          ...messageWithoutProviderSpecificFields,
+          to: "ada@example.com",
+          replyTo: ["reply@example.com", "support@example.com"],
+        },
+        context,
+      ),
+    ).rejects.toThrow("cloudflare only supports 1 replyTo per message");
+
+    await expect(
+      cloudflare({
+        apiToken: "token",
+        accountId: "account",
+        fetch: jsonCapture({ success: true }).fetch,
+      }).send(messageWithoutProviderSpecificFields, context),
+    ).rejects.toThrow("cloudflare recipient fields only support plain email addresses");
   });
 });
 

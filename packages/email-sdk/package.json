@@ -51,6 +51,10 @@
       "types": "./dist/sendgrid.d.ts",
       "import": "./dist/sendgrid.js"
     },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.ts",
+      "import": "./dist/cloudflare.js"
+    },
     "./ses": {
       "types": "./dist/ses.d.ts",
       "import": "./dist/ses.js"

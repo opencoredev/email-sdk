@@ -103,6 +103,20 @@ export function httpErrorMessage(provider: string, status: number, body: unknown
     if (typeof message === "string") {
       return `${provider} failed with ${status}: ${message}`;
     }
+
+    if (Array.isArray(record.errors)) {
+      const nestedMessage = record.errors
+        .map((error) =>
+          error && typeof error === "object"
+            ? (error as Record<string, unknown>).message
+            : undefined,
+        )
+        .find((value): value is string => typeof value === "string");
+
+      if (nestedMessage) {
+        return `${provider} failed with ${status}: ${nestedMessage}`;
+      }
+    }
   }
 
   return `${provider} failed with HTTP ${status}.`;
@@ -233,6 +247,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  cloudflare: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   ses: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
   mailgun: {
     cc: true,
