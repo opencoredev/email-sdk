@@ -665,19 +665,37 @@ function Checklist({ items }: { items: string[] }) {
 }
 
 function CodeBlock({ children }: { children: string }) {
+  let highlightedCode: string | null = null;
+
+  try {
+    highlightedCode = blogCodeHighlighter.codeToHtml(children, {
+      defaultColor: false,
+      lang: "ts",
+      tabindex: false,
+      themes: {
+        dark: "github-dark",
+        light: "github-light",
+      },
+    });
+  } catch {
+    highlightedCode = null;
+  }
+
+  if (!highlightedCode) {
+    return (
+      <figure className="blog-code-block not-prose my-8 overflow-hidden rounded-lg border border-fd-border text-sm shadow-sm">
+        <pre>
+          <code>{children}</code>
+        </pre>
+      </figure>
+    );
+  }
+
   return (
     <figure
-      className="blog-code-block shiki not-prose my-8 overflow-hidden rounded-lg border border-fd-border text-sm shadow-sm"
+      className="blog-code-block not-prose my-8 overflow-hidden rounded-lg border border-fd-border text-sm shadow-sm"
       dangerouslySetInnerHTML={{
-        __html: blogCodeHighlighter.codeToHtml(children, {
-          defaultColor: false,
-          lang: "ts",
-          tabindex: false,
-          themes: {
-            dark: "github-dark",
-            light: "github-light",
-          },
-        }),
+        __html: highlightedCode,
       }}
     />
   );
