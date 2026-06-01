@@ -68,7 +68,7 @@ export function unosend(options: UnosendProviderOptions): EmailProvider<{ baseUr
       };
     },
     parseResponse(body) {
-      if (body.success === false) {
+      if (body.success !== true) {
         throw new EmailProviderError(unosendErrorMessage(body), {
           provider: "unosend",
           retryable: false,

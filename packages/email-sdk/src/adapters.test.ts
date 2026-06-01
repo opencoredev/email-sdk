@@ -290,7 +290,7 @@ describe("provider payloads", () => {
           },
         }).fetch,
       }).send(messageWithoutMetadata, context),
-    ).rejects.toThrow("Sending domain is not verified.");
+    ).rejects.toThrow("unosend failed: Sending domain is not verified.");
   });
 
   test("SES signs and maps simple email payloads", async () => {
