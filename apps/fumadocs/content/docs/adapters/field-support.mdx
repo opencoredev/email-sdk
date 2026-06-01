@@ -17,14 +17,14 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 
 Fallback routes are only safe when the backup adapter can represent the same message fields that matter to your app. Choose primary and backup routes from the fields your production messages use, not just from provider popularity.
 
-| Need                             | Start with                                                |
-| -------------------------------- | --------------------------------------------------------- |
-| Most complete API field mapping  | Postmark, SendGrid, AWS SES, Mailgun, Brevo               |
-| Resend-style DX with attachments | Resend                                                    |
-| Cheap or self-managed delivery   | SMTP                                                      |
-| Product/event email              | Loops, Plunk                                              |
-| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark        |
-| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Mailtrap |
+| Need                             | Start with                                               |
+| -------------------------------- | -------------------------------------------------------- |
+| Most complete API field mapping  | Postmark, SendGrid, AWS SES, Mailgun, Brevo              |
+| Resend-style DX with attachments | Resend                                                   |
+| Cheap or self-managed delivery   | SMTP                                                     |
+| Product/event email              | Loops, Plunk                                             |
+| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark       |
+| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend |
 
 If you are unsure, start with Resend for the first send, then choose fallback routes from this table based on the exact fields your app sends. Do not add a fallback adapter until it can represent the same message shape as your primary route.
 
@@ -46,6 +46,7 @@ These adapters cover most transactional email fields. They are the best fit when
 | Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
 | SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
 | Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         |
+| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
 | AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
 | Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
 | MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |

@@ -87,14 +87,14 @@ Use this when a message includes fields that the default backup route cannot rep
 
 Choose fallback routes by message shape, not by provider popularity.
 
-| Message type | Good fallback | Avoid |
-| --- | --- | --- |
-| Plain text/html transactional email | Resend -> SMTP, Resend -> Postmark | Product-email adapters (Loops, Plunk) that do not preserve the same class of email |
-| Attachments | Resend -> Postmark, SendGrid, Mailgun, MailerSend | SMTP, Loops, Plunk, Scaleway, MailPace |
-| Metadata-dependent sends | Postmark/SendGrid/Mailgun/Brevo pairs | Resend or SMTP if metadata matters |
-| Tag-heavy sends | SendGrid/Mailgun/Brevo/MailerSend pairs | Postmark when more than one tag matters |
-| Product/event template sends | Loops or Plunk primary, with an explicitly equivalent route | Generic SMTP fallback that changes the template semantics |
-| Simple backup transport | Primary API -> SMTP | SMTP for attachments, metadata, or tags |
+| Message type                        | Good fallback                                               | Avoid                                                                              |
+| ----------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Plain text/html transactional email | Resend -> SMTP, Resend -> Postmark                          | Product-email adapters (Loops, Plunk) that do not preserve the same class of email |
+| Attachments                         | Resend -> Postmark, SendGrid, Mailgun, Unosend, MailerSend  | SMTP, Loops, Plunk, MailPace                                                       |
+| Metadata-dependent sends            | Postmark/SendGrid/Mailgun/Brevo pairs                       | Resend or SMTP if metadata matters                                                 |
+| Tag-heavy sends                     | SendGrid/Mailgun/Brevo/Unosend/MailerSend pairs             | Postmark when more than one tag matters                                            |
+| Product/event template sends        | Loops or Plunk primary, with an explicitly equivalent route | Generic SMTP fallback that changes the template semantics                          |
+| Simple backup transport             | Primary API -> SMTP                                         | SMTP for attachments, metadata, or tags                                            |
 
 ## Unsafe fallback routes
 
@@ -162,13 +162,13 @@ await email.send(message, {
 
 Fetch-based adapters mark these HTTP responses as retryable:
 
-| Status | Meaning |
-| ------ | ------- |
-| `408` | Request timeout |
-| `409` | Conflict |
-| `425` | Too early |
-| `429` | Rate limited |
-| `5xx` | Adapter or network-side failure |
+| Status | Meaning                         |
+| ------ | ------------------------------- |
+| `408`  | Request timeout                 |
+| `409`  | Conflict                        |
+| `425`  | Too early                       |
+| `429`  | Rate limited                    |
+| `5xx`  | Adapter or network-side failure |
 
 Some network-style runtime failures can also be retryable. Programming errors and unrelated runtime errors should fail instead of being retried.
 

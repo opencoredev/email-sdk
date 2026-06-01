@@ -34,6 +34,7 @@ import {
   assertMessage,
   assertSupportedMessageFields,
 } from "./utils.js";
+import { assertUnosendMessage, unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
@@ -53,6 +54,7 @@ const providerDocs = [
     env: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
     note: "Cloudflare Email Sending REST API",
   },
+  { name: "unosend", env: ["UNOSEND_API_KEY"], note: "Unosend REST API" },
   {
     name: "ses",
     env: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
@@ -99,6 +101,11 @@ const factories = {
       apiToken: flagOrEnv(flags, "api-token", "CLOUDFLARE_API_TOKEN"),
       accountId: flagOrEnv(flags, "account-id", "CLOUDFLARE_ACCOUNT_ID"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.CLOUDFLARE_BASE_URL,
+    }),
+  unosend: (flags) =>
+    unosend({
+      apiKey: flagOrEnv(flags, "api-key", "UNOSEND_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.UNOSEND_BASE_URL,
     }),
   ses: (flags) =>
     ses({
@@ -159,6 +166,7 @@ const envFlagNames: Record<string, string> = {
   SENDGRID_API_KEY: "api-key",
   CLOUDFLARE_API_TOKEN: "api-token",
   CLOUDFLARE_ACCOUNT_ID: "account-id",
+  UNOSEND_API_KEY: "api-key",
   AWS_ACCESS_KEY_ID: "access-key-id",
   AWS_SECRET_ACCESS_KEY: "secret-access-key",
   AWS_REGION: "region",
@@ -255,6 +263,10 @@ function validateDryRun(name: string, message: EmailMessage) {
 
   if (name === "cloudflare") {
     assertCloudflareMessage(message);
+  }
+
+  if (name === "unosend") {
+    assertUnosendMessage(message);
   }
 }
 

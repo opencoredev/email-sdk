@@ -100,6 +100,20 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("cloudflare looks configured.");
   });
 
+  test("doctor accepts Unosend credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "unosend",
+      "--api-key",
+      "un_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("unosend looks configured.");
+  });
+
   test("dry run rejects Cloudflare messages over the recipient limit", async () => {
     const { stderr, exitCode } = await runCli([
       "send",

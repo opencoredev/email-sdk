@@ -16,6 +16,7 @@ import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { sparkpost } from "./sparkpost.js";
 import type { EmailMessage, EmailProviderContext } from "./types.js";
+import { unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
 const context: EmailProviderContext = {
@@ -239,6 +240,59 @@ describe("provider payloads", () => {
     ).rejects.toThrow("Authentication failed.");
   });
 
+  test("Unosend maps REST payloads and response IDs", async () => {
+    const capture = jsonCapture({
+      success: true,
+      data: {
+        id: "uno_123",
+        status: "queued",
+      },
+    });
+
+    const response = await unosend({
+      apiKey: "un_test",
+      fetch: capture.fetch,
+    }).send(messageWithoutMetadata, context);
+
+    expect(response.id).toBe("uno_123");
+    expect(response.messageId).toBe("uno_123");
+    expect(capture.calls[0]?.url).toBe("https://api.unosend.co/emails");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer un_test");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "Acme <hello@example.com>",
+      to: ["Ada <ada@example.com>"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      reply_to: "reply@example.com",
+      subject: "Welcome",
+      text: "Hello",
+      html: "<p>Hello</p>",
+      headers: { "X-Test": "yes" },
+      tags: [{ name: "kind", value: "welcome" }],
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      filename: "hello.txt",
+      content: base64("hello"),
+      content_type: "text/plain",
+    });
+  });
+
+  test("Unosend surfaces provider envelope errors", async () => {
+    await expect(
+      unosend({
+        apiKey: "un_test",
+        fetch: jsonCapture({
+          success: false,
+          error: {
+            code: "domain_not_verified",
+            message: "Sending domain is not verified.",
+            status: 400,
+          },
+        }).fetch,
+      }).send(messageWithoutMetadata, context),
+    ).rejects.toThrow("Sending domain is not verified.");
+  });
+
   test("SES signs and maps simple email payloads", async () => {
     const capture = jsonCapture({ MessageId: "ses_123" });
 
@@ -348,6 +402,14 @@ describe("provider payloads", () => {
           ...messageWithoutProviderSpecificFields,
           to: "ada@example.com",
         },
+      },
+      {
+        name: "unosend",
+        provider: unosend({
+          apiKey: "key",
+          fetch: jsonCapture({ success: true, data: { id: "uno_123" } }).fetch,
+        }),
+        message: messageWithoutMetadata,
       },
       {
         name: "zeptomail",
@@ -628,6 +690,13 @@ describe("provider payloads", () => {
         fetch: jsonCapture({ success: true }).fetch,
       }).send({ ...limitedMessage, metadata: { id: "nope" } }, context),
     ).rejects.toThrow("cloudflare does not support");
+
+    await expect(
+      unosend({ apiKey: "key", fetch: jsonCapture({ success: true }).fetch }).send(
+        { ...limitedMessage, metadata: { id: "nope" } },
+        context,
+      ),
+    ).rejects.toThrow("unosend does not support");
   });
 
   test("empty optional field containers do not fail narrow adapters", async () => {
@@ -715,6 +784,16 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("cloudflare only supports 1 replyTo per message");
+
+    await expect(
+      unosend({ apiKey: "key", fetch: jsonCapture({ success: true }).fetch }).send(
+        {
+          ...messageWithoutMetadata,
+          replyTo: ["reply@example.com", "support@example.com"],
+        },
+        context,
+      ),
+    ).rejects.toThrow("unosend only supports 1 replyTo per message");
 
     await expect(
       cloudflare({
