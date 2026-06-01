@@ -59,7 +59,7 @@ export function getBlogPost(slug: string, options: { includeFuture?: boolean } =
 }
 
 export function getPublishedBlogPosts(date = new Date()): BlogPost[] {
-  return [...blogPosts]
+  return (blogPosts as BlogPost[])
     .filter((post) => isBlogPostPublished(post, date))
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 }
