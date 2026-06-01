@@ -72,6 +72,9 @@ email-sdk doctor --adapter resend
 | `--message`             | send      | Read an `EmailMessage` JSON payload from a file.       |
 | `--dry-run`             | all       | Validate and print the send plan without sending.      |
 | `--api-key`             | many      | Overrides the adapter API key variable.                |
+| `--api-token`           | Cloudflare | Overrides `CLOUDFLARE_API_TOKEN`.                      |
+| `--account-id`          | Cloudflare | Overrides `CLOUDFLARE_ACCOUNT_ID`.                     |
+| `--base-url`            | Cloudflare | Overrides `CLOUDFLARE_BASE_URL`.                       |
 | `--server-token`        | Postmark  | Overrides `POSTMARK_SERVER_TOKEN`.                     |
 | `--message-stream`      | Postmark  | Optional message stream.                               |
 | `--access-key-id`       | AWS SES   | Overrides `AWS_ACCESS_KEY_ID`.                         |

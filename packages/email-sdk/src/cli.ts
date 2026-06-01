@@ -576,6 +576,7 @@ Send options:
 Cloudflare options:
   --api-token <token>          Overrides CLOUDFLARE_API_TOKEN.
   --account-id <account>       Overrides CLOUDFLARE_ACCOUNT_ID.
+  --base-url <url>             Overrides CLOUDFLARE_BASE_URL.
 
 SMTP options:
   --host <host>                Overrides SMTP_HOST.
