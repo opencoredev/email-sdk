@@ -99,9 +99,6 @@ export default defineConfig(({ mode }) => {
             path: "/api/search",
           },
           {
-            path: "/health",
-          },
-          {
             path: "sitemap.xml",
           },
           {

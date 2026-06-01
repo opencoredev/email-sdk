@@ -1,0 +1,38 @@
+checks:
+  adsTxt:
+    enabled: false
+  cookieConsent:
+    enabled: false
+  emailAuth:
+    enabled: false
+  envParity:
+    enabled: true
+    envFile: .env
+    exampleFile: .env.example
+  healthEndpoint:
+    enabled: false
+    path: /health
+  humansTxt:
+    enabled: false
+  indexNow:
+    enabled: false
+    key: ""
+  license:
+    enabled: false
+  plausible:
+    enabled: false
+  secrets:
+    enabled: true
+  security:
+    enabled: true
+  sentry:
+    enabled: false
+ignore:
+  - debug_statements
+  - error_pages
+  - sitemap
+  - llmsTxt
+projectName: email-sdk
+stack: node
+urls:
+  production: https://email-sdk.dev
