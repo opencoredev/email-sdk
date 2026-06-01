@@ -1,4 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock.core";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import {
   ArrowRight,
@@ -9,11 +10,22 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { createHighlighterCoreSync } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import typescriptLanguage from "shiki/langs/typescript.mjs";
+import githubDarkTheme from "shiki/themes/github-dark.mjs";
+import githubLightTheme from "shiki/themes/github-light.mjs";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { formatBlogDate, getBlogPost, getBlogPostUrl, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteOgImageUrl, siteUrl } from "@/lib/shared";
+
+const blogCodeHighlighter = createHighlighterCoreSync({
+  engine: createJavaScriptRegexEngine(),
+  langs: [typescriptLanguage],
+  themes: [githubLightTheme, githubDarkTheme],
+});
 
 export const Route = createFileRoute("/blog/$slug")({
   head: ({ params }) => {
@@ -645,51 +657,25 @@ function Checklist({ items }: { items: string[] }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="blog-code-block not-prose my-8 overflow-x-auto rounded-lg border border-fd-border bg-fd-card p-4 text-sm leading-6 text-fd-foreground">
-      <code>{highlightTypeScript(children)}</code>
-    </pre>
+    <DynamicCodeBlock
+      code={children}
+      codeblock={{
+        allowCopy: false,
+        className: "blog-code-block my-8 rounded-lg",
+        viewportProps: {
+          className: "max-h-none",
+        },
+      }}
+      highlighter={blogCodeHighlighter}
+      lang="ts"
+      options={{
+        themes: {
+          dark: "github-dark",
+          light: "github-light",
+        },
+      }}
+    />
   );
-}
-
-const codeTokenPattern =
-  /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\b(?:import|from|const|await|return|export|type|satisfies)\b|\b(?:true|false|null|undefined)\b|\b(?:process|env)\b|\b[A-Z0-9]+(?:_[A-Z0-9]+)+\b|\b[A-Za-z_$][\w$]*(?=\s*\()|\b\d+\b)/g;
-
-function highlightTypeScript(code: string) {
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-
-  for (const match of code.matchAll(codeTokenPattern)) {
-    const [token] = match;
-    const index = match.index ?? 0;
-
-    if (index > cursor) parts.push(code.slice(cursor, index));
-
-    parts.push(
-      <span className={getCodeTokenClassName(token)} key={`${index}-${token}`}>
-        {token}
-      </span>,
-    );
-    cursor = index + token.length;
-  }
-
-  if (cursor < code.length) parts.push(code.slice(cursor));
-
-  return parts;
-}
-
-function getCodeTokenClassName(token: string) {
-  if (token.startsWith('"') || token.startsWith("'") || token.startsWith("`")) {
-    return "blog-code-string";
-  }
-
-  if (token.startsWith("//") || token.startsWith("/*")) return "blog-code-comment";
-  if (/^(true|false|null|undefined|\d+)$/.test(token)) return "blog-code-literal";
-  if (/^[A-Z0-9]+(?:_[A-Z0-9]+)+$/.test(token)) return "blog-code-constant";
-  if (/^(process|env)$/.test(token)) return "blog-code-runtime";
-
-  return /^(import|from|const|await|return|export|type|satisfies)$/.test(token)
-    ? "blog-code-keyword"
-    : "blog-code-function";
 }
 
 function Callout({ children }: { children: ReactNode }) {
