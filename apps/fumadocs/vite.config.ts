@@ -85,12 +85,21 @@ export default defineConfig(({ mode }) => {
           {
             path: "/blog",
           },
+          {
+            path: "/privacy",
+          },
+          {
+            path: "/terms",
+          },
           ...blogPosts.map((post) => ({
             path: getBlogPostUrl(post.slug),
           })),
           ...versionedDocsPages,
           {
             path: "/api/search",
+          },
+          {
+            path: "/health",
           },
           {
             path: "sitemap.xml",
