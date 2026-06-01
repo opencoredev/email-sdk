@@ -36,6 +36,12 @@ function RootComponent() {
   return (
     <html suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: resilientDomRemovalScript,
+          }}
+          suppressHydrationWarning
+        />
         <HeadContent />
       </head>
       <body className="flex flex-col min-h-screen">
@@ -48,3 +54,17 @@ function RootComponent() {
     </html>
   );
 }
+
+const resilientDomRemovalScript = `(() => {
+  const removeChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function resilientRemoveChild(child) {
+    if (child && child.parentNode !== this) return child;
+    return removeChild.call(this, child);
+  };
+
+  const remove = Element.prototype.remove;
+  Element.prototype.remove = function resilientRemove() {
+    if (!this.parentNode) return;
+    return remove.call(this);
+  };
+})();`;

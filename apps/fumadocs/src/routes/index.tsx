@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
+import { ArrowRight, Check, Copy, GitBranch, PackageCheck, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -48,24 +48,44 @@ await email.send({
   text: "Your account is ready.",
 });`;
 
+const installCommand = "npm install @opencoredev/email-sdk";
+
 function Home() {
   return (
     <HomeLayout {...baseOptions()}>
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
-        <section className="mx-auto grid min-h-[calc(100svh-64px)] max-w-[1512px] items-center gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:px-14 xl:px-16">
+        <section className="mx-auto grid min-h-[calc(100svh-64px)] max-w-[1512px] items-center gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.82fr_1.18fr] lg:px-14 xl:px-16">
           <div className="max-w-2xl py-4">
+            <div className="mb-5 inline-flex max-w-full items-start gap-2 rounded-md border border-fd-border bg-fd-card px-3 py-1.5 text-sm text-fd-muted-foreground">
+              <PackageCheck className="mt-0.5 size-4 shrink-0 text-fd-primary" strokeWidth={2} />
+              <span>Open-source TypeScript package. Use your existing email providers.</span>
+            </div>
+
             <h1 className="text-5xl font-medium leading-[1.04] text-fd-foreground md:text-6xl">
-              One email SDK for every provider.
+              Ship transactional email without provider lock-in.
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
-              Email SDK is a TypeScript email SDK for transactional sending through Resend,
-              Postmark, SendGrid, Mailgun, AWS SES, Brevo, SMTP, and more with one clean API.
+              Email SDK is a small library, not a hosted email service. Install it in your server
+              app, keep one typed send call, and route through Resend, Postmark, SendGrid, Mailgun,
+              AWS SES, SMTP, and more.
             </p>
 
+            <div className="mt-7 overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-sm">
+              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <code className="min-w-0 overflow-x-auto whitespace-nowrap text-sm text-fd-foreground">
+                  {installCommand}
+                </code>
+                <CopyTextButton ariaLabel="Copy install command" text={installCommand} />
+              </div>
+            </div>
+
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <DocsVersionLink className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-fd-primary px-4 text-sm font-medium text-fd-primary-foreground transition hover:opacity-90">
-                Read the docs
+              <DocsVersionLink
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-fd-primary px-4 text-sm font-medium text-fd-primary-foreground transition hover:opacity-90"
+                docsPath="/docs/getting-started/install"
+              >
+                Install the SDK
                 <ArrowRight className="size-4" strokeWidth={2} />
               </DocsVersionLink>
               <DocsVersionLink
@@ -74,12 +94,27 @@ function Home() {
               >
                 Browse adapters
               </DocsVersionLink>
+              <a
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium text-fd-muted-foreground transition hover:bg-fd-accent hover:text-fd-foreground"
+                href="https://github.com/opencoredev/email-sdk"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <GitBranch className="size-4" strokeWidth={2} />
+                GitHub
+              </a>
             </div>
 
             <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
-              <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
-              <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
-              <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
+              <ProofPoint
+                label="Why use it"
+                text="Swap providers or add backups without rewriting application send calls."
+              />
+              <ProofPoint
+                label="What it protects"
+                text="Unsupported fields fail before the provider request instead of disappearing silently."
+              />
+              <ProofPoint label="How to verify" text="Run CLI checks and dry-run sends locally." />
             </div>
           </div>
 
@@ -90,7 +125,7 @@ function Home() {
                   <Terminal className="size-4" strokeWidth={2} />
                   <span>email.ts</span>
                 </div>
-                <CopyCodeButton />
+                <CopyTextButton ariaLabel="Copy code example" text={example} />
               </div>
               <pre className="overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
                 <code>
@@ -105,7 +140,7 @@ function Home() {
   );
 }
 
-function CopyCodeButton() {
+function CopyTextButton({ ariaLabel, text }: { ariaLabel: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState("Copy");
   const [labelState, setLabelState] = useState("");
@@ -150,7 +185,7 @@ function CopyCodeButton() {
   async function handleCopy() {
     clearTimers();
 
-    const copiedToClipboard = await copyToClipboard(example);
+    const copiedToClipboard = await copyToClipboard(text);
     setCopied(copiedToClipboard);
     swapLabel(copiedToClipboard ? "Copied" : "Copy failed");
 
@@ -163,7 +198,7 @@ function CopyCodeButton() {
 
   return (
     <button
-      aria-label="Copy code example"
+      aria-label={ariaLabel}
       className="inline-flex items-center gap-2 overflow-hidden rounded-md border border-fd-border px-2.5 py-1.5 text-xs text-fd-muted-foreground transition-colors duration-200 hover:bg-fd-accent hover:text-fd-foreground"
       onClick={() => {
         void handleCopy();

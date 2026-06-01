@@ -44,6 +44,9 @@ export const providers = [
     website: "https://developers.cloudflare.com/email-service/",
     logo: "https://cdn.simpleicons.org/cloudflare",
     category: "Infrastructure",
+    status: "Official",
+    testStatus: "Payload-tested",
+    liveStatus: "Cloudflare account required",
   },
   {
     name: "AWS SES",
