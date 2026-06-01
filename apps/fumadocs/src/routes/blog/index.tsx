@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight } from "lucide-react";
 
-import { formatBlogDate, getPublishedBlogPosts } from "@/lib/blog";
+import { formatBlogDate, getPublishedBlogPosts, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteUrl } from "@/lib/shared";
 
@@ -25,11 +25,12 @@ export const Route = createFileRoute("/blog/")({
     ],
     links: [{ rel: "canonical", href: `${siteUrl}/blog` }],
   }),
+  loader: () => getPublishedBlogPosts(),
   component: BlogIndex,
 });
 
 function BlogIndex() {
-  const posts = getPublishedBlogPosts();
+  const posts = Route.useLoaderData() as BlogPost[];
 
   return (
     <HomeLayout {...baseOptions()}>
