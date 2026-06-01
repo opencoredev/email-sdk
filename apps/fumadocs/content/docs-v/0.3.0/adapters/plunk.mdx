@@ -1,0 +1,26 @@
+---
+title: Plunk
+description: Configure the Plunk send API adapter.
+icon: plunk
+---
+
+<ProviderBadge adapter="plunk" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { plunk } from "@opencoredev/email-sdk/plunk";
+
+const email = createEmailClient({
+  adapters: [plunk({ apiKey: process.env.PLUNK_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                        |
+| --------- | -------------- | -------- | -------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Plunk API key.                               |
+| `baseUrl` | `string`       | No       | Defaults to `https://next-api.useplunk.com`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.         |
+
+Plunk maps `metadata` to `data`. Unsupported fields throw before the API call.

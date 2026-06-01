@@ -1,0 +1,92 @@
+---
+title: Client
+description: Reference for createEmailClient, send, sendBatch, and adapter helpers.
+icon: Braces
+---
+
+## `createEmailClient(options)`
+
+Creates an email client.
+
+```ts
+const email = createEmailClient({
+  adapters,
+  defaultAdapter,
+  fallback,
+  retry,
+  hooks,
+  plugins,
+});
+```
+
+| Option            | Type               | Default              |
+| ----------------- | ------------------ | -------------------- |
+| `adapters`        | `EmailProvider[]`  | `[]`                 |
+| `providers`       | `EmailProvider[]`  | Alias for `adapters` |
+| `defaultAdapter`  | `string`           | First adapter        |
+| `defaultProvider` | `string`           | First adapter        |
+| `fallback`        | `string[]`         | `[]`                 |
+| `retry`           | `EmailRetryConfig` | No retries           |
+| `hooks`           | `EmailHooks`       | No hooks             |
+| `plugins`         | `EmailPlugin[]`    | `[]`                 |
+
+Routing names must be unique. At least one adapter must be registered directly or through a plugin.
+
+## `email.send(message, options?)`
+
+Sends one message.
+
+```ts
+const result = await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: ["smtp"],
+  retries: 2,
+  idempotencyKey: "receipt:order_123",
+  metadata: {
+    route: "checkout.receipt",
+  },
+});
+```
+
+| Option              | Type                      | Notes                                     |
+| ------------------- | ------------------------- | ----------------------------------------- |
+| `adapter`           | `string`                  | Override the default routing name.        |
+| `provider`          | `string`                  | Alias for `adapter`.                      |
+| `fallbackAdapters`  | `string[]`                | Override fallback adapters for this send. |
+| `fallbackProviders` | `string[]`                | Alias for `fallbackAdapters`.             |
+| `retries`           | `number`                  | Override retry count for this send.       |
+| `signal`            | `AbortSignal`             | Abort provider work when supported.       |
+| `idempotencyKey`    | `string`                  | Passed to adapters that support it.       |
+| `metadata`          | `Record<string, unknown>` | Passed to hooks.                          |
+
+## `email.sendBatch(messages, options?)`
+
+Sends messages one at a time and returns one result per item.
+
+```ts
+const results = await email.sendBatch([messageA, messageB]);
+```
+
+`sendBatch` does not throw for the first failed item. Failed sends are returned as `{ ok: false, index, error }`.
+
+## `email.adapter(name)`
+
+Returns a registered adapter or throws `EmailProviderNotFoundError`.
+
+```ts
+const resendAdapter = email.adapter("resend");
+```
+
+`email.provider(name)` is kept as an alias.
+
+## `email.withAdapter(name)`
+
+Returns a small client bound to one adapter.
+
+```ts
+const transactional = email.withAdapter("postmark");
+
+await transactional.send(message);
+```
+
+`email.withProvider(name)` is kept as an alias.

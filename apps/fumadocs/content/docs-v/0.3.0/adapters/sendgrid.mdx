@@ -1,0 +1,32 @@
+---
+title: SendGrid
+description: Configure the Twilio SendGrid Mail Send API adapter.
+icon: sendgrid
+---
+
+<ProviderBadge adapter="sendgrid" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+
+const email = createEmailClient({
+  adapters: [sendgrid({ apiKey: process.env.SENDGRID_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                   |
+| --------- | -------------- | -------- | --------------------------------------- |
+| `apiKey`  | `string`       | Yes      | SendGrid API key.                       |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.sendgrid.com`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.    |
+
+See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
+
+## CLI
+
+```bash
+bunx --yes @opencoredev/email-sdk send --adapter sendgrid --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+```
