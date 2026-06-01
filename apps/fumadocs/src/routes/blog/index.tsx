@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight } from "lucide-react";
 
-import { blogPosts, formatBlogDate } from "@/lib/blog";
+import { formatBlogDate, getPublishedBlogPosts } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteUrl } from "@/lib/shared";
 
@@ -29,6 +29,8 @@ export const Route = createFileRoute("/blog/")({
 });
 
 function BlogIndex() {
+  const posts = getPublishedBlogPosts();
+
   return (
     <HomeLayout {...baseOptions()}>
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
@@ -45,7 +47,7 @@ function BlogIndex() {
           </div>
 
           <div className="mt-10 grid gap-4">
-            {blogPosts.map((post) => (
+            {posts.map((post) => (
               <Link
                 className="group grid gap-4 rounded-lg border border-fd-border bg-fd-card p-4 transition hover:bg-fd-accent/40 md:grid-cols-[220px_1fr]"
                 key={post.slug}

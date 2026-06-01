@@ -1,10 +1,17 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, CheckCircle2, GitBranch, Mail, Route as RouteIcon, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  GitBranch,
+  Mail,
+  Route as RouteIcon,
+  ShieldCheck,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
-import { blogPosts, formatBlogDate, getBlogPost, getBlogPostUrl, type BlogPost } from "@/lib/blog";
+import { formatBlogDate, getBlogPost, getBlogPostUrl, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { siteOgImageUrl, siteUrl } from "@/lib/shared";
 
@@ -16,75 +23,75 @@ export const Route = createFileRoute("/blog/$slug")({
     const canonicalUrl = `${siteUrl}${getBlogPostUrl(params.slug)}`;
 
     const meta = [
-        { title },
-        { name: "description", content: description },
-        { property: "og:type", content: "article" },
-        { property: "og:title", content: title },
-        { property: "og:description", content: description },
-        { property: "og:url", content: canonicalUrl },
-        { property: "og:image", content: `${siteUrl}${post?.image ?? "/og/email-sdk.png"}` },
-        { name: "twitter:card", content: "summary_large_image" },
-        { name: "twitter:title", content: title },
-        { name: "twitter:description", content: description },
-        { name: "twitter:image", content: siteOgImageUrl },
-        ...(post
-          ? [
-              {
-                "script:ld+json": {
-                  "@context": "https://schema.org",
-                  "@graph": [
-                    {
-                      "@type": "BlogPosting",
-                      headline: post.title,
-                      description: post.description,
-                      datePublished: post.publishedAt,
-                      dateModified: post.updatedAt,
-                      image: `${siteUrl}${post.image}`,
-                      url: canonicalUrl,
-                      mainEntityOfPage: canonicalUrl,
-                      articleSection: post.tags,
-                      author: {
-                        "@type": "Organization",
-                        name: "OpenCore",
-                      },
-                      publisher: {
-                        "@type": "Organization",
-                        name: "OpenCore",
-                        logo: {
-                          "@type": "ImageObject",
-                          url: `${siteUrl}/logo.png`,
-                        },
+      { title },
+      { name: "description", content: description },
+      { property: "og:type", content: "article" },
+      { property: "og:title", content: title },
+      { property: "og:description", content: description },
+      { property: "og:url", content: canonicalUrl },
+      { property: "og:image", content: `${siteUrl}${post?.image ?? "/og/email-sdk.png"}` },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: title },
+      { name: "twitter:description", content: description },
+      { name: "twitter:image", content: siteOgImageUrl },
+      ...(post
+        ? [
+            {
+              "script:ld+json": {
+                "@context": "https://schema.org",
+                "@graph": [
+                  {
+                    "@type": "BlogPosting",
+                    headline: post.title,
+                    description: post.description,
+                    datePublished: post.publishedAt,
+                    dateModified: post.updatedAt,
+                    image: `${siteUrl}${post.image}`,
+                    url: canonicalUrl,
+                    mainEntityOfPage: canonicalUrl,
+                    articleSection: post.tags,
+                    author: {
+                      "@type": "Organization",
+                      name: "OpenCore",
+                    },
+                    publisher: {
+                      "@type": "Organization",
+                      name: "OpenCore",
+                      logo: {
+                        "@type": "ImageObject",
+                        url: `${siteUrl}/logo.png`,
                       },
                     },
-                    {
-                      "@type": "BreadcrumbList",
-                      itemListElement: [
-                        {
-                          "@type": "ListItem",
-                          position: 1,
-                          name: "Email SDK",
-                          item: siteUrl,
-                        },
-                        {
-                          "@type": "ListItem",
-                          position: 2,
-                          name: "Blog",
-                          item: `${siteUrl}/blog`,
-                        },
-                        {
-                          "@type": "ListItem",
-                          position: 3,
-                          name: post.title,
-                          item: canonicalUrl,
-                        },
-                      ],
-                    },
-                  ],
-                },
+                  },
+                  {
+                    "@type": "BreadcrumbList",
+                    itemListElement: [
+                      {
+                        "@type": "ListItem",
+                        position: 1,
+                        name: "Email SDK",
+                        item: siteUrl,
+                      },
+                      {
+                        "@type": "ListItem",
+                        position: 2,
+                        name: "Blog",
+                        item: `${siteUrl}/blog`,
+                      },
+                      {
+                        "@type": "ListItem",
+                        position: 3,
+                        name: post.title,
+                        item: canonicalUrl,
+                      },
+                    ],
+                  },
+                ],
               },
-            ]
-          : []),
-      ];
+            },
+          ]
+        : []),
+    ];
 
     return {
       meta,
@@ -155,18 +162,20 @@ function BlogPostContent({ slug }: { slug: string }) {
 }
 
 function IntroducingPost() {
+  const fallbackPost = getBlogPost("email-provider-fallbacks");
+
   return (
     <BlogBody>
       <p>
-        Email SDK launched on June 1, 2026. It is a small TypeScript package for
-        transactional email, built around a boring idea: your app should not have to know every
-        detail of every provider just to send a receipt, a login code, or an onboarding email.
+        Email SDK launched on June 1, 2026. It is a small TypeScript package for transactional
+        email, built around a boring idea: your app should not have to know every detail of every
+        provider just to send a receipt, a login code, or an onboarding email.
       </p>
       <p>
         Most teams start with one provider. That is sensible. Resend is nice. Postmark is steady.
         SendGrid is everywhere. SES is cheap and deeply tied into AWS. SMTP is still there, quietly
-        doing its job. The trouble starts later, when one provider-specific payload leaks across
-        the app and every product email becomes a small migration risk.
+        doing its job. The trouble starts later, when one provider-specific payload leaks across the
+        app and every product email becomes a small migration risk.
       </p>
       <p>
         Email SDK gives you one typed client, separate adapter entry points, and explicit provider
@@ -264,7 +273,9 @@ await email.send({
               <td>
                 <code>/smtp</code>
               </td>
-              <td>Cheap fallback routes, self-managed mail, or providers without a dedicated API.</td>
+              <td>
+                Cheap fallback routes, self-managed mail, or providers without a dedicated API.
+              </td>
             </tr>
           </tbody>
         </Table>
@@ -297,13 +308,22 @@ await email.send({
           Install Email SDK
           <ArrowRight className="size-4" />
         </DocsVersionLink>
-        <Link
-          className="inline-flex h-11 items-center justify-center rounded-md border border-fd-border px-4 text-sm font-medium transition hover:bg-fd-accent"
-          params={{ slug: "email-provider-fallbacks" }}
-          to="/blog/$slug"
-        >
-          Read the fallback guide
-        </Link>
+        {fallbackPost ? (
+          <Link
+            className="inline-flex h-11 items-center justify-center rounded-md border border-fd-border px-4 text-sm font-medium transition hover:bg-fd-accent"
+            params={{ slug: fallbackPost.slug }}
+            to="/blog/$slug"
+          >
+            Read the fallback guide
+          </Link>
+        ) : (
+          <DocsVersionLink
+            className="inline-flex h-11 items-center justify-center rounded-md border border-fd-border px-4 text-sm font-medium transition hover:bg-fd-accent"
+            docsPath="/docs/concepts/fallbacks-and-retries"
+          >
+            Read fallback docs
+          </DocsVersionLink>
+        )}
       </div>
     </BlogBody>
   );
@@ -431,9 +451,9 @@ function NodemailerAlternativePost() {
     <BlogBody>
       <p>
         Nodemailer is still the right answer for plenty of apps. If you need direct SMTP control,
-        custom transport behavior, or you are maintaining an older Node.js service, it is mature
-        and battle-tested. The question is not whether Nodemailer is good. The question is whether
-        your app wants SMTP to be the whole email layer.
+        custom transport behavior, or you are maintaining an older Node.js service, it is mature and
+        battle-tested. The question is not whether Nodemailer is good. The question is whether your
+        app wants SMTP to be the whole email layer.
       </p>
       <p>
         Most new TypeScript products do not stop at SMTP. They start with Resend or Postmark, add
@@ -573,7 +593,15 @@ function FeatureGrid({ children }: { children: ReactNode }) {
   return <div className="not-prose mt-6 grid gap-3 sm:grid-cols-2">{children}</div>;
 }
 
-function Feature({ children, icon, title }: { children: ReactNode; icon: ReactNode; title: string }) {
+function Feature({
+  children,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  title: string;
+}) {
   return (
     <div className="rounded-lg border border-fd-border bg-fd-card p-4">
       <div className="flex items-center gap-3">
@@ -617,10 +645,51 @@ function Checklist({ items }: { items: string[] }) {
 
 function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="not-prose my-8 overflow-x-auto rounded-lg border border-fd-border bg-fd-card p-4 text-sm leading-6 text-fd-foreground">
-      <code>{children}</code>
+    <pre className="blog-code-block not-prose my-8 overflow-x-auto rounded-lg border border-fd-border bg-fd-card p-4 text-sm leading-6 text-fd-foreground">
+      <code>{highlightTypeScript(children)}</code>
     </pre>
   );
+}
+
+const codeTokenPattern =
+  /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\b(?:import|from|const|await|return|export|type|satisfies)\b|\b(?:true|false|null|undefined)\b|\b(?:process|env)\b|\b[A-Z0-9]+(?:_[A-Z0-9]+)+\b|\b[A-Za-z_$][\w$]*(?=\s*\()|\b\d+\b)/g;
+
+function highlightTypeScript(code: string) {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const match of code.matchAll(codeTokenPattern)) {
+    const [token] = match;
+    const index = match.index ?? 0;
+
+    if (index > cursor) parts.push(code.slice(cursor, index));
+
+    parts.push(
+      <span className={getCodeTokenClassName(token)} key={`${index}-${token}`}>
+        {token}
+      </span>,
+    );
+    cursor = index + token.length;
+  }
+
+  if (cursor < code.length) parts.push(code.slice(cursor));
+
+  return parts;
+}
+
+function getCodeTokenClassName(token: string) {
+  if (token.startsWith('"') || token.startsWith("'") || token.startsWith("`")) {
+    return "blog-code-string";
+  }
+
+  if (token.startsWith("//") || token.startsWith("/*")) return "blog-code-comment";
+  if (/^(true|false|null|undefined|\d+)$/.test(token)) return "blog-code-literal";
+  if (/^[A-Z0-9]+(?:_[A-Z0-9]+)+$/.test(token)) return "blog-code-constant";
+  if (/^(process|env)$/.test(token)) return "blog-code-runtime";
+
+  return /^(import|from|const|await|return|export|type|satisfies)$/.test(token)
+    ? "blog-code-keyword"
+    : "blog-code-function";
 }
 
 function Callout({ children }: { children: ReactNode }) {

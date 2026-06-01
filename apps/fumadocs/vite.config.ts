@@ -8,7 +8,7 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
-import { blogPosts, getBlogPostUrl } from "./src/lib/blog";
+import { getBlogPostUrl, getPublishedBlogPosts } from "./src/lib/blog";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
 function collectContentPages(dir: string) {
@@ -91,7 +91,7 @@ export default defineConfig(({ mode }) => {
           {
             path: "/terms",
           },
-          ...blogPosts.map((post) => ({
+          ...getPublishedBlogPosts().map((post) => ({
             path: getBlogPostUrl(post.slug),
           })),
           ...versionedDocsPages,

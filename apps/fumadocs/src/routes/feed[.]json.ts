@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { blogPosts, getBlogPostUrl } from "@/lib/blog";
+import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
 import { appDescription, appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/feed.json")({
@@ -25,7 +25,7 @@ function renderJsonFeed() {
     feed_url: `${siteUrl}/feed.json`,
     description: appDescription,
     language: "en",
-    items: blogPosts.map((post) => {
+    items: getPublishedBlogPosts().map((post) => {
       const url = `${siteUrl}${getBlogPostUrl(post.slug)}`;
 
       return {

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { blogPosts, getBlogPostUrl } from "@/lib/blog";
+import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
 import { appDescription, appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/rss.xml")({
@@ -18,7 +18,8 @@ export const Route = createFileRoute("/rss.xml")({
 });
 
 function renderRssFeed() {
-  const items = blogPosts.map((post) => {
+  const posts = getPublishedBlogPosts();
+  const items = posts.map((post) => {
     const url = `${siteUrl}${getBlogPostUrl(post.slug)}`;
     const escapedUrl = escapeXml(url);
 
@@ -31,7 +32,7 @@ function renderRssFeed() {
     </item>`;
   });
 
-  const latestPost = blogPosts.reduce((latest, post) =>
+  const latestPost = posts.reduce((latest, post) =>
     post.updatedAt > latest.updatedAt ? post : latest,
   );
 
