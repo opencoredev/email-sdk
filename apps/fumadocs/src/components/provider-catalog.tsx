@@ -1,12 +1,18 @@
 import { ExternalLink } from "lucide-react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
+import { useSelectedDocsVersion } from "@/lib/docs-version-state";
 import { providers } from "@/lib/providers";
 
 export function ProviderGrid() {
+  const selectedVersion = useSelectedDocsVersion();
+  const visibleProviders = selectedVersion.current
+    ? providers
+    : providers.filter((provider) => !("currentOnly" in provider && provider.currentOnly));
+
   return (
     <div className="not-prose grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {providers.map((provider) => (
+      {visibleProviders.map((provider) => (
         <article
           className="rounded-lg border border-fd-border bg-fd-card p-4 text-fd-foreground transition hover:bg-fd-accent/40"
           key={provider.key}

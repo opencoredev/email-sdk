@@ -144,6 +144,7 @@ export const providers = [
     status: "Official",
     testStatus: "Payload-tested",
     liveStatus: "Live account required",
+    currentOnly: true,
   },
   {
     name: "Scaleway",
