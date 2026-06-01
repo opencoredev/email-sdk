@@ -30,6 +30,13 @@ describe("recovery page helpers", () => {
   test("extracts error messages safely", () => {
     expect(getErrorMessage("plain failure")).toBe("plain failure");
     expect(getErrorMessage({ message: "object failure" })).toBe("object failure");
+    expect(getErrorMessage(new Error("instance failure"))).toBe("instance failure");
+    expect(getErrorMessage(0)).toBe("0");
     expect(getErrorMessage(null)).toBe("No error details were provided.");
+    expect(getErrorMessage(undefined)).toBe("No error details were provided.");
+
+    const namelessError = new Error();
+    namelessError.name = "";
+    expect(getErrorMessage(namelessError)).toBe("Unknown error");
   });
 });

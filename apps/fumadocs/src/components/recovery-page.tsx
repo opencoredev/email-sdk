@@ -1,4 +1,4 @@
-import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tanstack/react-router";
+import type { ErrorComponentProps, NotFoundRouteProps } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import {
   ArrowRight,
@@ -65,7 +65,7 @@ export function AppErrorPage({ error, reset }: ErrorComponentProps) {
       copy={copy}
       details={getErrorMessage(error)}
       icon={<TriangleAlert className="size-5" />}
-      onRetry={reset}
+      onRetry={kind === "chunk" ? undefined : reset}
       status={kind === "chunk" ? "Reload needed" : "Runtime error"}
     />
   );
@@ -94,9 +94,9 @@ export function classifyRecoveryError(error: unknown): RecoveryKind {
 }
 
 export function getErrorMessage(error: unknown) {
-  if (!error) return "No error details were provided.";
+  if (error == null) return "No error details were provided.";
   if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message || error.name;
+  if (error instanceof Error) return error.message || error.name || "Unknown error";
   if (typeof error === "object" && "message" in error) {
     return String((error as { message?: unknown }).message ?? "Unknown error");
   }
@@ -190,19 +190,19 @@ function RecoveryLayout({
               ) : null}
               <button
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-3 py-2 text-sm font-medium text-fd-foreground transition hover:bg-fd-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fd-primary"
-                onClick={() => window.location.reload()}
+                onClick={() => typeof window !== "undefined" && window.location.reload()}
                 type="button"
               >
                 <RefreshCw className="size-4" />
                 Refresh
               </button>
-              <Link
+              <a
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-fd-border bg-fd-card px-3 py-2 text-sm font-medium text-fd-foreground transition hover:bg-fd-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fd-primary"
-                to="/"
+                href="/"
               >
                 <Home className="size-4" />
                 Home
-              </Link>
+              </a>
             </div>
           </div>
 
