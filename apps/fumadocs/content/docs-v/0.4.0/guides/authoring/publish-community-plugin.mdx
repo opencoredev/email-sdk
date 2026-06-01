@@ -1,0 +1,103 @@
+---
+title: Publish a community plugin
+description: Package and list a third-party Email SDK plugin.
+icon: PackageCheck
+---
+
+Community plugins are npm packages that export an `EmailPlugin` factory. The docs site lists them from a static JSON registry; there is no hosted plugin service.
+
+## Package shape
+
+```txt
+email-sdk-require-metadata/
+  src/
+    index.ts
+    require-metadata.ts
+    require-metadata.test.ts
+  package.json
+  README.md
+```
+
+Export the plugin factory from the package root.
+
+```ts
+export { requireMetadataPlugin } from "./require-metadata";
+export type { RequireMetadataOptions } from "./require-metadata";
+```
+
+Apps should be able to use the package in one line inside `plugins`.
+
+```ts
+createEmailClient({
+  plugins: [requireMetadataPlugin({ key: "tenantId" })],
+});
+```
+
+## Package requirements
+
+Use `@opencoredev/email-sdk` as a peer dependency.
+
+```json
+{
+  "name": "email-sdk-require-metadata",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^0.3.0"
+  }
+}
+```
+
+Verified packages must not define `preinstall`, `install`, or `postinstall` scripts.
+
+## Security expectations
+
+Verified packages must be boring:
+
+- Public source repository.
+- npm trusted publishing or provenance.
+- No install scripts.
+- No binaries.
+- Small runtime dependency surface.
+- No network calls during import or plugin construction.
+- Tests that prove the plugin registers with `createEmailClient`.
+
+These checks reduce supply-chain risk, but they do not make third-party code risk-free.
+
+## Registry entry
+
+Add the package to `apps/fumadocs/content/community/plugins.json`.
+
+```json
+{
+  "name": "Require metadata",
+  "package": "email-sdk-require-metadata",
+  "kind": "plugin",
+  "status": "community",
+  "description": "Blocks sends unless required metadata is present.",
+  "href": "https://www.npmjs.com/package/email-sdk-require-metadata",
+  "repo": "https://github.com/acme/email-sdk-require-metadata",
+  "maintainer": "acme",
+  "pluginId": "require-metadata"
+}
+```
+
+Use `status: "verified"` only after the package passes the verification checklist for one published version.
+
+## Verify locally
+
+```bash
+bun run community:check
+```
+
+CI runs the same registry check. Verified entries also get a package tarball audit in CI.
+
+## Next
+
+Adapter packages follow the same process, but should also document field support. See [Publish a community adapter](/docs/guides/authoring/publish-community-adapter).

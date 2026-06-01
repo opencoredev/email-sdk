@@ -1,0 +1,86 @@
+---
+title: Defaults plugin
+description: Apply shared message and send-option defaults.
+icon: Settings
+---
+
+Use the defaults plugin when many sends need the same headers, tags, metadata, reply-to address, or idempotency key format.
+
+```ts
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      headers: { "X-App": "billing" },
+      tags: [{ name: "service", value: "billing" }],
+      sendMetadata: { service: "billing" },
+      replyTo: "support@example.com",
+      idempotencyKeyPrefix: "billing_",
+    }),
+  ],
+});
+```
+
+## Use it for
+
+- App or service headers.
+- Shared tags for routing or provider dashboards.
+- Hook metadata such as `service`, `route`, or `template`.
+- A default reply-to address.
+- Idempotency key prefixes.
+
+## Options
+
+| Option                 | Writes to                | Override rule                                                   |
+| ---------------------- | ------------------------ | --------------------------------------------------------------- |
+| `headers`              | `message.headers`        | Message headers win.                                            |
+| `tags`                 | `message.tags`           | Message tags are appended after default tags.                   |
+| `metadata`             | `message.metadata`       | Message metadata wins.                                          |
+| `sendMetadata`         | `sendOptions.metadata`   | Per-send metadata wins.                                         |
+| `replyTo`              | `message.replyTo`        | Used only when the message has no `replyTo`.                    |
+| `idempotencyKey`       | Message and send options | Used only when no idempotency key exists.                       |
+| `idempotencyKeyPrefix` | Message and send options | Added only when the key does not already start with the prefix. |
+
+## Override a default
+
+```ts
+await email.send(
+  {
+    from: "billing@example.com",
+    to: "user@example.com",
+    subject: "Receipt",
+    text: "Thanks for your order.",
+    headers: {
+      "X-App": "checkout",
+    },
+  },
+  {
+    metadata: {
+      route: "checkout.receipt",
+    },
+  },
+);
+```
+
+Here, `X-App: checkout` wins over the default `X-App: billing`.
+
+## Stack defaults
+
+Use custom IDs for multiple defaults layers.
+
+```ts
+plugins: [
+  defaultsPlugin({
+    id: "defaults:app",
+    headers: { "X-App": "acme" },
+  }),
+  defaultsPlugin({
+    id: "defaults:billing",
+    tags: [{ name: "team", value: "billing" }],
+  }),
+];
+```
+
+Defaults run before adapter validation. If a default adds a field the selected adapter cannot represent, Email SDK throws before calling the provider.

@@ -1,0 +1,27 @@
+---
+title: SparkPost
+description: Configure the SparkPost Transmissions API adapter.
+icon: sparkpost
+---
+
+<ProviderBadge adapter="sparkpost" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
+
+const email = createEmailClient({
+  adapters: [sparkpost({ apiKey: process.env.SPARKPOST_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                           |
+| --------- | -------------- | -------- | ----------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | SparkPost API key.                              |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.sparkpost.com/api/v1`. |
+| `sandbox` | `boolean`      | No       | Enables SparkPost sandbox mode.                 |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.            |
+
+SparkPost does not expose normalized CC/BCC in this adapter. See <a href="/docs/adapters/field-support">field support</a>.

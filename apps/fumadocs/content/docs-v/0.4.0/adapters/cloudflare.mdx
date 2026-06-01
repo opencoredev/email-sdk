@@ -1,0 +1,49 @@
+---
+title: Cloudflare Email Sending
+description: Configure the Cloudflare Email Sending REST API adapter.
+icon: cloudflare
+---
+
+<ProviderBadge adapter="cloudflare" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+
+const email = createEmailClient({
+  adapters: [
+    cloudflare({
+      apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option      | Type           | Required | Notes                                                     |
+| ----------- | -------------- | -------- | --------------------------------------------------------- |
+| `apiToken`  | `string`       | Yes      | Cloudflare API token with Email Sending permission.       |
+| `accountId` | `string`       | Yes      | Cloudflare account ID used in the Email Sending endpoint. |
+| `baseUrl`   | `string`       | No       | Defaults to `https://api.cloudflare.com/client/v4`.       |
+| `fetch`     | `typeof fetch` | No       | Useful for tests or custom runtimes.                      |
+
+## CLI
+
+```bash
+bunx --yes @opencoredev/email-sdk send \
+  --adapter cloudflare \
+  --api-token "$CLOUDFLARE_API_TOKEN" \
+  --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+  --from "hello@example.com" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+Cloudflare Email Sending requires a Cloudflare DNS domain onboarded to Email Service. New accounts may be limited to verified recipient addresses, and Email Sending is available on Workers Paid plans.
+
+Cloudflare's REST API accepts `to`, `cc`, and `bcc` as plain email-address strings. The adapter preserves display names for `from` and `replyTo`, and rejects named recipients before the request instead of silently dropping the names.
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.

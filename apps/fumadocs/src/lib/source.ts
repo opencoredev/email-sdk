@@ -1,4 +1,4 @@
-import { docs, docsV020, docsV021, docsV030 } from "collections/server";
+import { docs, docsV020, docsV021, docsV030, docsV040 } from "collections/server";
 import { loader } from "fumadocs-core/source";
 
 import { resolveDocsIcon } from "./docs-icons";
@@ -20,10 +20,20 @@ if (!v030DocsVersion) {
   throw new Error("Missing docs source config for v0.3.0");
 }
 
+const v040DocsVersion = docsVersions.find((version) => version.collection === "docsV040");
+if (!v040DocsVersion) {
+  throw new Error("Missing docs source config for v0.4.0");
+}
+
 const sources = {
   docs: loader({
     source: docs.toFumadocsSource(),
     baseUrl: docsRoute,
+    icon: resolveDocsIcon,
+  }),
+  docsV040: loader({
+    source: docsV040.toFumadocsSource(),
+    baseUrl: getDocsVersionBase(v040DocsVersion),
     icon: resolveDocsIcon,
   }),
   docsV030: loader({
