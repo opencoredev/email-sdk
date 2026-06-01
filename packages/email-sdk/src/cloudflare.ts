@@ -66,7 +66,7 @@ export function cloudflare(
         };
       },
       parseResponse(body) {
-        if (body.success === false) {
+        if (body.success !== true) {
           throw new EmailProviderError(cloudflareErrorMessage(body), {
             provider: "cloudflare",
             retryable: false,

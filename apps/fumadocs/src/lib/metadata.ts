@@ -5,7 +5,7 @@ import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 export const siteTitle = `${appName} - TypeScript email SDK for every provider`;
 export const siteImageAlt = "Email SDK unified email sending preview";
 export const siteKeywords =
-  "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, AWS SES SDK, SMTP TypeScript";
+  "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 
 export const siteMeta = [
   {
@@ -141,7 +141,7 @@ export const homeStructuredData = {
           name: "What is Email SDK?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK is a TypeScript email SDK that gives applications one typed client and one message shape for sending transactional email through providers such as Resend, SMTP, Postmark, SendGrid, Mailgun, and AWS SES.",
+            text: "Email SDK is a TypeScript email SDK that gives applications one typed client and one message shape for sending transactional email through providers such as Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare, and AWS SES.",
           },
         },
         {
@@ -149,7 +149,7 @@ export const homeStructuredData = {
           name: "Which email providers does Email SDK support?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Loops, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
+            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Loops, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
           },
         },
         {
