@@ -1,0 +1,170 @@
+---
+title: Create an adapter
+description: Write your first custom provider adapter.
+icon: Cable
+---
+
+An adapter connects Email SDK's normalized `EmailMessage` to one provider API. Start with a plain adapter. Wrap it as a plugin only when you want package-style reuse.
+
+## Adapter shape
+
+```ts
+import type { EmailProvider } from "@opencoredev/email-sdk";
+
+export type AcmeMailOptions = {
+  apiKey: string;
+  fetch?: typeof fetch;
+};
+
+export function acmeMail(options: AcmeMailOptions): EmailProvider {
+  const request = options.fetch ?? fetch;
+
+  return {
+    name: "acme-mail",
+    async send(message, context) {
+      const response = await request("https://api.acme-mail.example/send", {
+        method: "POST",
+        signal: context.signal,
+        headers: {
+          Authorization: `Bearer ${options.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(toAcmePayload(message, context)),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Acme Mail send failed: ${response.status}`);
+      }
+
+      const body = await response.json();
+
+      return {
+        provider: "acme-mail",
+        id: body.id,
+        messageId: body.message_id,
+        accepted: body.accepted,
+        rejected: body.rejected,
+        raw: body,
+      };
+    },
+  };
+}
+```
+
+## Map the payload
+
+Keep provider-specific mapping in a helper. That keeps the adapter easy to test.
+
+```ts
+import type { EmailMessage, EmailProviderContext } from "@opencoredev/email-sdk";
+
+function toAcmePayload(message: EmailMessage, context: EmailProviderContext) {
+  return {
+    from: message.from,
+    to: message.to,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    headers: message.headers,
+    tags: message.tags,
+    metadata: {
+      ...message.metadata,
+      idempotencyKey: context.idempotencyKey,
+      attempt: context.attempt,
+    },
+  };
+}
+```
+
+## Use the adapter directly
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmeMail } from "./acme-mail";
+
+const email = createEmailClient({
+  adapters: [acmeMail({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+## Wrap it as an adapter plugin
+
+Adapter plugins are best for community packages and shared internal packages.
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+import { acmeMail, type AcmeMailOptions } from "./acme-mail";
+
+export function acmeMailPlugin(options: AcmeMailOptions): EmailPlugin {
+  return {
+    id: "acme-mail",
+    adapters: [acmeMail(options)],
+  };
+}
+```
+
+Consumers can now mount it with the same `plugins` array as other extensions:
+
+```ts
+const email = createEmailClient({
+  plugins: [acmeMailPlugin({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+## Handle unsupported fields
+
+Do not silently drop fields your provider cannot send. Throw a clear error instead.
+
+```ts
+if (message.attachments?.length) {
+  throw new Error("Acme Mail adapter does not support attachments.");
+}
+```
+
+This is especially important for fallback routes. A backup adapter that drops attachments, tags, or reply-to values can make a send look successful while changing the email.
+
+## Test the adapter
+
+```ts
+import { describe, expect, test } from "bun:test";
+import { acmeMail } from "./acme-mail";
+
+describe("acmeMail", () => {
+  test("sends a normalized message", async () => {
+    const calls: unknown[] = [];
+    const adapter = acmeMail({
+      apiKey: "test",
+      fetch: async (_url, init) => {
+        calls.push(JSON.parse(String(init?.body)));
+        return Response.json({ id: "provider_123", message_id: "msg_123" });
+      },
+    });
+
+    const response = await adapter.send(
+      {
+        from: "test@example.com",
+        to: "user@example.com",
+        subject: "Hello",
+        text: "Hi",
+      },
+      { attempt: 1 },
+    );
+
+    expect(response.messageId).toBe("msg_123");
+    expect(calls).toHaveLength(1);
+  });
+});
+```
+
+If your adapter accepts injected `fetch`, document it. It makes tests easier and keeps users from reaching for global mocks.
+
+## Checklist
+
+- Use one stable adapter `name`.
+- Return `provider`, `id` or `messageId`, and `raw`.
+- Pass `context.signal` into provider requests.
+- Respect `context.idempotencyKey` when the provider supports it.
+- Throw on unsupported fields instead of dropping them.
+- Add tests for payload mapping and provider response mapping.
+
+See [Adapter contract](/docs/reference/adapter-contract) for the exact type reference.

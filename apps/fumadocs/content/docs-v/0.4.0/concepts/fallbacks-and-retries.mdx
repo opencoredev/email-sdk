@@ -1,0 +1,66 @@
+---
+title: Fallbacks and retries
+description: Retry transient failures and use a backup adapter.
+icon: Repeat2
+---
+
+Retries happen inside one adapter. Fallbacks happen after an adapter fails.
+
+```ts
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  retry: {
+    retries: 1,
+  },
+  fallback: ["smtp"],
+});
+```
+
+In this setup, Email SDK tries Resend first. If Resend fails with a retryable error, it retries once. If it still fails, it tries SMTP.
+
+## Override fallback for one send
+
+```ts
+await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: ["smtp"],
+});
+```
+
+## Override retries for one send
+
+```ts
+await email.send(message, {
+  retries: 2,
+});
+```
+
+## Retryable HTTP responses
+
+The fetch-based adapters mark these responses as retryable:
+
+| Status | Meaning                         |
+| ------ | ------------------------------- |
+| `408`  | Request timeout                 |
+| `409`  | Conflict                        |
+| `425`  | Too early                       |
+| `429`  | Rate limited                    |
+| `5xx`  | Adapter or network-side failure |
+
+Use an idempotency key for email that may be retried.
+
+```ts
+await email.send(message, {
+  idempotencyKey: "receipt:order_123",
+});
+```

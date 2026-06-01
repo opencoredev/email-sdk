@@ -1,5 +1,11 @@
 # @opencoredev/email-sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- 074d2a2: Add the Unosend REST API adapter, including the package subpath export, CLI adapter support, payload mapping, docs, and provider catalog entry.
+
 ## 0.4.0
 
 ### Minor Changes

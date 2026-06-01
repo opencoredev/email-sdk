@@ -1,0 +1,129 @@
+---
+title: Test email behavior
+description: Assert sends, retries, fallbacks, and plugin behavior.
+icon: FlaskConical
+---
+
+Use the memory provider when you want to replace the provider. Use the capture plugin when you want to observe the normal send pipeline.
+
+## Memory provider
+
+The memory provider stores successful sends and never calls an external API.
+
+```ts
+import { describe, expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryProvider } from "@opencoredev/email-sdk/testing";
+
+describe("welcome email", () => {
+  test("sends the expected subject", async () => {
+    const memory = memoryProvider();
+    const email = createEmailClient({
+      adapters: [memory],
+    });
+
+    await email.send({
+      from: "test@example.com",
+      to: "user@example.com",
+      subject: "Welcome",
+      text: "Hello",
+    });
+
+    expect(memory.raw.sent[0]?.message.subject).toBe("Welcome");
+  });
+});
+```
+
+## Capture plugin
+
+The capture plugin records lifecycle events. It can be used with the memory provider or with a custom test adapter.
+
+```ts
+import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
+
+const memory = memoryProvider();
+const email = createEmailClient({
+  adapters: [memory],
+  plugins: [capturePlugin()],
+});
+
+await email.send({
+  from: "test@example.com",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Hello",
+});
+
+expect(email.capture.events.map((event) => event.type)).toEqual(["beforeSend", "afterSend"]);
+```
+
+## Assert defaults
+
+Defaults run before message validation, so tests can assert the final message that reached the provider.
+
+```ts
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+
+const memory = memoryProvider();
+const email = createEmailClient({
+  adapters: [memory],
+  plugins: [
+    defaultsPlugin({
+      headers: { "X-App": "billing" },
+      sendMetadata: { service: "billing" },
+    }),
+  ],
+});
+
+await email.send(
+  {
+    from: "billing@example.com",
+    to: "user@example.com",
+    subject: "Receipt",
+    text: "Thanks.",
+  },
+  {
+    metadata: { route: "receipt" },
+  },
+);
+
+expect(memory.raw.sent[0]?.message.headers).toMatchObject({ "X-App": "billing" });
+```
+
+## Assert fallback
+
+Use a small failing adapter plus a memory adapter.
+
+```ts
+import type { EmailProvider } from "@opencoredev/email-sdk";
+
+const failing: EmailProvider = {
+  name: "failing",
+  async send() {
+    throw new Error("provider down");
+  },
+};
+
+const backup = memoryProvider("backup");
+const email = createEmailClient({
+  adapters: [failing, backup],
+  fallback: ["backup"],
+});
+
+await email.send({
+  from: "test@example.com",
+  to: "user@example.com",
+  subject: "Fallback",
+  text: "Hello",
+});
+
+expect(backup.raw.sent).toHaveLength(1);
+```
+
+## Test checklist
+
+- Use `memoryProvider()` for app tests that should not call real providers.
+- Use `capturePlugin()` when you need lifecycle events.
+- Assert provider field support with adapter unit tests.
+- Add one test for fallback if the route matters.
+- Add one test for plugin ordering when multiple plugins mutate the same message.
