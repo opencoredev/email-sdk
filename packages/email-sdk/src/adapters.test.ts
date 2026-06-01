@@ -308,7 +308,17 @@ describe("provider payloads", () => {
     const cases = [
       {
         name: "mailersend",
-        provider: mailersend({ apiKey: "key", fetch: jsonCapture({ message_id: "ms_123" }).fetch }),
+        provider: mailersend({
+          apiKey: "key",
+          fetch: jsonCapture(
+            {},
+            {
+              headers: {
+                "x-message-id": "ms_123",
+              },
+            },
+          ).fetch,
+        }),
         message: messageWithoutMetadata,
       },
       {
@@ -322,8 +332,10 @@ describe("provider payloads", () => {
       },
       {
         name: "mailtrap",
-        provider: mailtrap({ apiKey: "key", fetch: jsonCapture({ message_id: "mt_123" }).fetch }),
-        message: messageWithoutReplyToOrMetadata,
+        provider: mailtrap({
+          apiKey: "key",
+          fetch: jsonCapture({ message_ids: ["mt_123"] }).fetch,
+        }),
       },
       {
         name: "cloudflare",
@@ -351,6 +363,153 @@ describe("provider payloads", () => {
       const response = await item.provider.send(item.message ?? message, context);
       expect(response.provider).toBe(item.name);
     }
+  });
+
+  test("Mailtrap maps the current transactional API schema", async () => {
+    const capture = jsonCapture({ message_ids: ["mt_123"] });
+
+    const response = await mailtrap({ apiKey: "key", fetch: capture.fetch }).send(message, context);
+
+    expect(response.id).toBe("mt_123");
+    expect(response.messageId).toBe("mt_123");
+    expect(capture.calls[0]?.headers.get("api-token")).toBe("key");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: { email: "hello@example.com", name: "Acme" },
+      to: [{ email: "ada@example.com", name: "Ada" }],
+      cc: [{ email: "cc@example.com" }],
+      bcc: [{ email: "bcc@example.com" }],
+      reply_to: { email: "reply@example.com" },
+      custom_variables: { userId: "user_123" },
+      category: "welcome",
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toMatchObject({
+      filename: "hello.txt",
+      content: base64("hello"),
+      type: "text/plain",
+    });
+  });
+
+  test("Scaleway maps the REST API address, header, and attachment schema", async () => {
+    const capture = jsonCapture({ id: "scale_123" });
+
+    const response = await scaleway({
+      secretKey: "secret",
+      projectId: "project",
+      fetch: capture.fetch,
+    }).send({ ...messageWithoutMetadata, tags: undefined }, context);
+
+    expect(response.id).toBe("scale_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      project_id: "project",
+      from: { email: "hello@example.com", name: "Acme" },
+      to: [{ email: "ada@example.com", name: "Ada" }],
+      cc: [{ email: "cc@example.com" }],
+      bcc: [{ email: "bcc@example.com" }],
+      subject: "Welcome",
+      additional_headers: [
+        { key: "X-Test", value: "yes" },
+        { key: "Reply-To", value: "reply@example.com" },
+      ],
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      name: "hello.txt",
+      content: base64("hello"),
+      type: "text/plain",
+    });
+  });
+
+  test("Plunk maps current send fields and wrapped response IDs", async () => {
+    const capture = jsonCapture({
+      success: true,
+      data: {
+        emails: [
+          {
+            contact: { id: "cnt_123", email: "ada@example.com" },
+            email: "plunk_123",
+          },
+        ],
+      },
+    });
+
+    const response = await plunk({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        tags: undefined,
+        replyTo: { email: "reply@example.com", name: "Support" },
+      },
+      context,
+    );
+
+    expect(response.id).toBe("plunk_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      to: [{ email: "ada@example.com", name: "Ada" }],
+      from: { email: "hello@example.com", name: "Acme" },
+      headers: { "X-Test": "yes" },
+      reply: "reply@example.com",
+      data: { userId: "user_123" },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      filename: "hello.txt",
+      content: base64("hello"),
+      contentType: "text/plain",
+    });
+  });
+
+  test("Loops requires the transactional email ID provider option", () => {
+    expect(() =>
+      loops({
+        apiKey: "key",
+        transactionalId: "",
+        fetch: jsonCapture({ success: true }).fetch,
+      }),
+    ).toThrow("loops requires a transactionalId");
+  });
+
+  test("Loops maps transactional data variables and attachments", async () => {
+    const capture = jsonCapture({ id: "loop_123" });
+
+    const response = await loops({
+      apiKey: "key",
+      transactionalId: "tx",
+      fetch: capture.fetch,
+    }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        attachments: [
+          {
+            filename: "hello.bin",
+            content: "hello",
+          },
+        ],
+      },
+      context,
+    );
+
+    expect(response.id).toBe("loop_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      transactionalId: "tx",
+      email: "Ada <ada@example.com>",
+      addToAudience: false,
+      dataVariables: {
+        subject: "Welcome",
+        html: "<p>Hello</p>",
+        text: "Hello",
+        from: "Acme <hello@example.com>",
+        userId: "user_123",
+      },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      filename: "hello.bin",
+      contentType: "application/octet-stream",
+      data: base64("hello"),
+    });
   });
 
   test("ZeptoMail uses the official address shape", async () => {
@@ -419,6 +578,21 @@ describe("provider payloads", () => {
     ).rejects.toThrow("scaleway does not support");
 
     await expect(
+      scaleway({
+        secretKey: "secret",
+        projectId: "project",
+        fetch: jsonCapture({ id: "scale_123" }).fetch,
+      }).send(
+        {
+          ...messageWithoutProviderSpecificFields,
+          headers: { "Reply-To": "other@example.com" },
+          replyTo: "reply@example.com",
+        },
+        context,
+      ),
+    ).rejects.toThrow("scaleway cannot set replyTo");
+
+    await expect(
       resend({ apiKey: "key", fetch: jsonCapture({ id: "res_123" }).fetch }).send(
         { ...limitedMessage, metadata: { id: "nope" } },
         context,
@@ -447,14 +621,6 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("mailchimp does not support");
-
-    await expect(
-      mailtrap({ apiKey: "key", fetch: jsonCapture({ id: "mt_123" }).fetch }).send(
-        { ...limitedMessage, replyTo: "reply@example.com" },
-        context,
-      ),
-    ).rejects.toThrow("mailtrap does not support");
-
     await expect(
       cloudflare({
         apiToken: "token",

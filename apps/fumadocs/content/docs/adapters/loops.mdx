@@ -6,7 +6,7 @@ icon: loops
 
 <ProviderBadge adapter="loops" />
 
-Loops transactional sends normally use a `transactionalId`.
+Loops transactional sends require a `transactionalId`.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -27,8 +27,8 @@ const email = createEmailClient({
 | Option            | Type           | Required | Notes                                |
 | ----------------- | -------------- | -------- | ------------------------------------ |
 | `apiKey`          | `string`       | Yes      | Loops API key.                       |
-| `transactionalId` | `string`       | Usually  | Transactional email ID.              |
+| `transactionalId` | `string`       | Yes      | Transactional email ID.              |
 | `baseUrl`         | `string`       | No       | Defaults to `https://app.loops.so`.  |
 | `fetch`           | `typeof fetch` | No       | Useful for tests or custom runtimes. |
 
-Loops transactional sends support one recipient and metadata through `dataVariables`. Unsupported fields throw before the API call.
+Loops transactional sends support one recipient, metadata through `dataVariables`, and attachments through the transactional attachments payload. Loops documents that attachments require support enablement on the account, so accounts without that enablement should omit `attachments`. Unsupported fields throw before the API call.

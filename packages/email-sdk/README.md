@@ -286,8 +286,8 @@ npx --yes --package @opencoredev/email-sdk email-sdk adapters
 
 # after installing @opencoredev/email-sdk
 npx email-sdk adapters
-npx email-sdk doctor --adapter resend
-npx email-sdk send --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npx email-sdk send --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 npx email-sdk send --dry-run --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 ```
 

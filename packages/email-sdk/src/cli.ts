@@ -553,7 +553,7 @@ function printHelp() {
 Usage:
   email-sdk version
   email-sdk adapters
-  email-sdk doctor --adapter resend
+  RESEND_API_KEY="re_..." email-sdk doctor --adapter resend
   email-sdk send --adapter resend --from you@example.com --to them@example.com --subject "Hello" --text "It works"
 
 Send options:

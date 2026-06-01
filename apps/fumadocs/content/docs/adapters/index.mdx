@@ -4,7 +4,7 @@ description: Supported email service adapters and transports.
 icon: Cable
 ---
 
-Email SDK ships with 15+ adapters. Import only the adapter you use; the package does not ask you
+Email SDK ships with 17 adapters. Import only the adapter you use; the package does not ask you
 to configure providers that are not on your send path.
 
 Every adapter follows the same contract: map the fields it supports and throw a validation error for
@@ -15,14 +15,14 @@ before choosing fallback routes.
 
 ## Which adapter should I start with?
 
-| If you want...                           | Start with                                      |
-| ---------------------------------------- | ----------------------------------------------- |
-| The fastest first send                   | Resend                                          |
-| Mature transactional delivery controls   | Postmark, SendGrid, AWS SES, Mailgun, or Brevo  |
-| A backup route for production delivery   | A primary API adapter plus Postmark or SMTP     |
-| Product-triggered emails                 | Loops or Plunk                                  |
-| A cheap or self-managed transport        | SMTP                                            |
-| Heavy attachment support                 | Resend, Postmark, SendGrid, Mailgun, MailerSend |
+| If you want...                         | Start with                                                |
+| -------------------------------------- | --------------------------------------------------------- |
+| The fastest first send                 | Resend                                                    |
+| Mature transactional delivery controls | Postmark, SendGrid, AWS SES, Mailgun, or Brevo            |
+| A backup route for production delivery | A primary API adapter plus Postmark or SMTP               |
+| Product-triggered emails               | Loops or Plunk                                            |
+| A cheap or self-managed transport      | SMTP                                                      |
+| Heavy attachment support               | Resend, Postmark, SendGrid, Mailgun, MailerSend, Mailtrap |
 
 ## What the status labels mean
 

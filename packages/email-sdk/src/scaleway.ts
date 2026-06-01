@@ -1,10 +1,12 @@
+import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
-import { formatAddress, formatAddresses, optionalStringAddresses } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import { apiAddress, apiAddresses, base64Attachments, optionalApiAddresses } from "./payloads.js";
+import type { EmailMessage, EmailProvider } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
-  headersToObject,
+  formatAddresses,
+  headersToArray,
 } from "./utils.js";
 
 export type ScalewayProviderOptions = {
@@ -25,19 +27,25 @@ export function scaleway(options: ScalewayProviderOptions): EmailProvider<{ base
     headers: {
       "X-Auth-Token": options.secretKey,
     },
-    buildPayload(message) {
+    async buildPayload(message) {
       assertSupportedMessageFields("scaleway", message, SUPPORTED_MESSAGE_FIELDS.scaleway);
+      const attachments = await base64Attachments(message);
 
       return {
         project_id: options.projectId,
-        from: formatAddress(message.from),
-        to: formatAddresses(message.to),
-        cc: optionalStringAddresses(message.cc),
-        bcc: optionalStringAddresses(message.bcc),
+        from: apiAddress(message.from),
+        to: apiAddresses(message.to),
+        cc: optionalApiAddresses(message.cc),
+        bcc: optionalApiAddresses(message.bcc),
         subject: message.subject,
         text: message.text,
         html: message.html,
-        additional_headers: headersToObject(message.headers),
+        additional_headers: scalewayHeaders(message),
+        attachments: attachments?.map((attachment) => ({
+          name: attachment.filename,
+          type: attachment.contentType ?? "application/octet-stream",
+          content: attachment.content,
+        })),
       };
     },
     fetch: options.fetch,
@@ -49,4 +57,25 @@ export function scaleway(options: ScalewayProviderOptions): EmailProvider<{ base
       };
     },
   });
+}
+
+function scalewayHeaders(message: EmailMessage) {
+  const headers =
+    headersToArray(message.headers)?.map((header) => ({
+      key: header.name,
+      value: header.value,
+    })) ?? [];
+  const replyTo = formatAddresses(message.replyTo).join(", ");
+
+  if (replyTo) {
+    if (headers.some((header) => header.key.toLowerCase() === "reply-to")) {
+      throw new EmailValidationError(
+        "scaleway cannot set replyTo when headers already include Reply-To.",
+      );
+    }
+
+    headers.push({ key: "Reply-To", value: replyTo });
+  }
+
+  return headers.length > 0 ? headers : undefined;
 }

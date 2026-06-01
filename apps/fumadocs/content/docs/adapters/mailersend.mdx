@@ -24,3 +24,5 @@ const email = createEmailClient({
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.      |
 
 See <a href="/docs/adapters/field-support">field support</a> for supported message fields.
+
+MailerSend custom headers map to `headers`. MailerSend documents custom headers as available on Professional and Enterprise accounts, so lower-plan accounts may need to omit `headers`.

@@ -48,10 +48,12 @@ export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ 
         tags: message.tags?.map((tag) => tag.value),
       };
     },
-    parseResponse(body) {
+    parseResponse(body, _message, response) {
       return {
         provider: "mailersend",
-        id: firstString(body as Record<string, unknown>, ["message_id", "id"]),
+        id:
+          response.headers.get("x-message-id") ??
+          firstString(body as Record<string, unknown>, ["message_id", "id"]),
         raw: body,
       };
     },

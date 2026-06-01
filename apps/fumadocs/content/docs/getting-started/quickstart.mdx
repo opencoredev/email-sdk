@@ -48,7 +48,8 @@ console.log(result.provider);
 console.log(result.id);
 ```
 
-If the adapter returns a message ID, Email SDK exposes it as both `id` and `messageId`. Provider
+If the adapter returns a message ID, Email SDK exposes it through the normalized `id` field. Some
+adapters also include `messageId` as an alias when the provider uses that name directly. Provider
 responses are still available through `raw` when an adapter includes them.
 
 ## Verify from the CLI
@@ -74,7 +75,7 @@ npx --yes --package @opencoredev/email-sdk email-sdk send \
 When the package is installed in your project, the same command can run through the installed binary:
 
 ```bash
-npx email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 ```
 
 ## Add SMTP fallback

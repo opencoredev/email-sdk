@@ -23,4 +23,4 @@ const email = createEmailClient({
 | `baseUrl` | `string`       | No       | Defaults to `https://next-api.useplunk.com`. |
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.         |
 
-Plunk maps `metadata` to `data`. Unsupported fields throw before the API call.
+Plunk maps metadata to `data`, `replyTo` to `reply`, custom headers to `headers`, attachments to `attachments`, and the first returned `data.emails[].email` value to the SDK response ID. Unsupported fields throw before the API call.
