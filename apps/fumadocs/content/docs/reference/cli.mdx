@@ -37,7 +37,7 @@ The CLI supports Node 20+ and Bun 1.1+. The examples use `npx` because it is the
 ## Send
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk send \
+RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \
@@ -76,7 +76,7 @@ If `--adapter` is omitted, the CLI selects the first adapter with all required e
 ## Doctor
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
 `doctor` checks whether the selected adapter has the required environment variables or matching CLI credential flags.

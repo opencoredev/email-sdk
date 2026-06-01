@@ -1,16 +1,20 @@
 import { firstString, jsonProvider } from "./http.js";
-import { formatAddress, formatAddresses } from "./payloads.js";
+import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type LoopsProviderOptions = {
   apiKey: string;
-  transactionalId?: string;
+  transactionalId: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
 export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: string }> {
+  if (!options.transactionalId) {
+    throw new Error("loops requires a transactionalId.");
+  }
+
   return jsonProvider({
     name: "loops",
     baseUrl: options.baseUrl ?? "https://app.loops.so",
@@ -18,9 +22,10 @@ export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: s
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
     },
-    buildPayload(message) {
+    async buildPayload(message) {
       assertSupportedMessageFields("loops", message, SUPPORTED_MESSAGE_FIELDS.loops);
       const recipients = formatAddresses(message.to);
+      const attachments = await base64Attachments(message);
 
       if (recipients.length !== 1) {
         throw new Error("loops only supports one recipient per transactional send.");
@@ -37,6 +42,11 @@ export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: s
           from: formatAddress(message.from),
           ...message.metadata,
         },
+        attachments: attachments?.map((attachment) => ({
+          filename: attachment.filename,
+          contentType: attachment.contentType ?? "application/octet-stream",
+          data: attachment.content,
+        })),
       };
     },
     fetch: options.fetch,

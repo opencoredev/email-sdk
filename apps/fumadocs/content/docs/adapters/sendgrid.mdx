@@ -32,5 +32,5 @@ See <a href="/docs/adapters/field-support">field support</a> for headers, tags, 
 ## CLI
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk send --adapter sendgrid --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+SENDGRID_API_KEY="SG..." npx --yes --package @opencoredev/email-sdk email-sdk send --adapter sendgrid --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 ```

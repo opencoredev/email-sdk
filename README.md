@@ -85,7 +85,7 @@ npx --yes --package @opencoredev/email-sdk email-sdk adapters
 After adding the package to a project, run the installed binary:
 
 ```bash
-npx email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 ```
 
 ## Agent Skill
