@@ -4,7 +4,16 @@ description: Write your first custom provider adapter.
 icon: Cable
 ---
 
-An adapter connects Email SDK's normalized `EmailMessage` to one provider API. Start with a plain adapter. Wrap it as a plugin only when you want package-style reuse.
+An adapter connects Email SDK's normalized `EmailMessage` to one provider API. It is the thing that actually sends.
+
+A plugin can register that adapter for package-style reuse. It is the thing most community packages should ask users to install.
+
+| You are writing... | It should do...                                                | Users mount it with... |
+| ------------------ | -------------------------------------------------------------- | ---------------------- |
+| Adapter            | Map `EmailMessage` into one provider request and response.     | `adapters: [...]`      |
+| Adapter plugin     | Register one adapter from a reusable package or shared module. | `plugins: [...]`       |
+
+Start with the plain adapter because it is easier to test. Wrap it as a plugin when the adapter should be reused across projects or published as a community package.
 
 ## Adapter shape
 
@@ -78,6 +87,8 @@ function toAcmePayload(message: EmailMessage, context: EmailProviderContext) {
 
 ## Use the adapter directly
 
+Direct adapter registration is useful inside one app, one monorepo, or tests.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { acmeMail } from "./acme-mail";
@@ -89,7 +100,7 @@ const email = createEmailClient({
 
 ## Wrap it as an adapter plugin
 
-Adapter plugins are best for community packages and shared internal packages.
+Adapter plugins are best for community packages and shared internal packages. The plugin does not send by itself; it returns metadata and the adapter list Email SDK should register.
 
 ```ts
 import type { EmailPlugin } from "@opencoredev/email-sdk";
@@ -106,10 +117,15 @@ export function acmeMailPlugin(options: AcmeMailOptions): EmailPlugin {
 Consumers can now mount it with the same `plugins` array as other extensions:
 
 ```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmeMailPlugin } from "email-sdk-acme-mail";
+
 const email = createEmailClient({
   plugins: [acmeMailPlugin({ apiKey: process.env.ACME_MAIL_API_KEY! })],
 });
 ```
+
+If the package is public, follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) after the adapter tests pass.
 
 ## Handle unsupported fields
 
@@ -166,5 +182,7 @@ If your adapter accepts injected `fetch`, document it. It makes tests easier and
 - Respect `context.idempotencyKey` when the provider supports it.
 - Throw on unsupported fields instead of dropping them.
 - Add tests for payload mapping and provider response mapping.
+- If publishing, export both `{provider}` and `{provider}Plugin`.
+- If publishing, declare `@opencoredev/email-sdk` as a peer dependency.
 
 See [Adapter contract](/docs/reference/adapter-contract) for the exact type reference.

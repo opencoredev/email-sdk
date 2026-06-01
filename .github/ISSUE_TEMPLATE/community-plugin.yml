@@ -1,6 +1,6 @@
-name: Community plugin listing
+name: Community package listing
 description: Request a static docs listing for an Email SDK community plugin or adapter.
-title: "[Community plugin]: "
+title: "[Community package]: "
 labels: ["community-plugin", "needs-triage"]
 body:
   - type: markdown

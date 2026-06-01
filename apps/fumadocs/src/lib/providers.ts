@@ -37,15 +37,6 @@ export const providers = [
     liveStatus: "Live account required",
   },
   {
-    name: "Cloudflare Email Sending",
-    key: "cloudflare",
-    importPath: "@opencoredev/email-sdk/cloudflare",
-    docs: "/docs/adapters/cloudflare",
-    website: "https://developers.cloudflare.com/email-service/",
-    logo: "https://cdn.simpleicons.org/cloudflare",
-    category: "Infrastructure",
-  },
-  {
     name: "AWS SES",
     key: "ses",
     importPath: "@opencoredev/email-sdk/ses",
