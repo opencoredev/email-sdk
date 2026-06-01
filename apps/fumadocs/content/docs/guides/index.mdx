@@ -1,10 +1,25 @@
 ---
 title: Guides
-description: Task-based guides for extending Email SDK.
+description: Task-based guides for operating and extending Email SDK.
 icon: BookOpen
 ---
 
-Use these guides when you are building something that should live outside one send call: a reusable plugin, a custom provider adapter, a community package, or test helpers around email behavior.
+Use these guides when you are operating a production send path or building something that should live outside one send call: fallback routes, tests, reusable plugins, custom provider adapters, or community packages.
+
+## Operate
+
+<Cards>
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Combine adapters, validation, retries, fallback routes, observability, tests, and CLI checks."
+  />
+  <Card
+    title="Test email behavior"
+    href="/docs/guides/test-email-behavior"
+    description="Use memory providers and capture plugins to assert send behavior."
+  />
+</Cards>
 
 ## Build
 
@@ -23,16 +38,6 @@ Use these guides when you are building something that should live outside one se
     title="Publish a community adapter"
     href="/docs/guides/authoring/publish-community-adapter"
     description="Shape package exports, docs, names, and tests for reuse."
-  />
-</Cards>
-
-## Test
-
-<Cards>
-  <Card
-    title="Test email behavior"
-    href="/docs/guides/test-email-behavior"
-    description="Use memory providers and capture plugins to assert send behavior."
   />
 </Cards>
 

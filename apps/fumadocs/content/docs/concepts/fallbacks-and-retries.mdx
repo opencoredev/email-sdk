@@ -1,12 +1,43 @@
 ---
 title: Fallbacks and retries
-description: Retry transient failures and use a backup adapter.
+description: Route transactional email through retryable primary adapters and compatible backup adapters.
 icon: Repeat2
 ---
 
-Retries happen inside one adapter. Fallbacks happen after an adapter fails.
+## The short version
+
+Retries happen inside the currently selected adapter. Fallbacks happen after that adapter has finally failed.
+
+Use retries for transient failures on the same route, such as rate limits or temporary provider errors. Use fallbacks when another compatible adapter should try the same transactional email after the selected adapter fails.
+
+Fallback routes are only safe when the backup adapter can represent the same message fields that matter to your app. Check <a href="/docs/adapters/field-support">Field support</a> before adding a backup route.
+
+## Execution order
+
+For one `send` call, Email SDK:
+
+1. Runs `beforeSend` middleware from plugins.
+2. Validates the normalized message shape.
+3. Builds route order from the selected adapter and fallback adapters.
+4. Tries the selected adapter.
+5. Retries that adapter when retry rules allow it.
+6. Moves to the next fallback adapter after final failure.
+7. Returns the first successful normalized response.
+8. Throws if every attempted route fails.
+
+The route order is the selected adapter, followed by each fallback adapter. Duplicate route names are ignored.
+
+If a route name is not registered, Email SDK throws `EmailProviderNotFoundError` immediately for that route.
+
+## Configure a default fallback route
+
+This route sends through Resend first. If Resend fails, the SDK tries SMTP.
 
 ```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
 const email = createEmailClient({
   adapters: [
     resend({ apiKey: process.env.RESEND_API_KEY! }),
@@ -26,9 +57,11 @@ const email = createEmailClient({
 });
 ```
 
-In this setup, Email SDK tries Resend first. If Resend fails with a retryable error, it retries once. If it still fails, it tries SMTP.
+In this setup, Email SDK tries Resend first. If Resend fails with a retryable error, it retries Resend once. If Resend still fails, Email SDK tries SMTP.
 
-## Override fallback for one send
+## Override routes per send
+
+Use `adapter` to choose the primary route for one send. Use `fallbackAdapters` to replace the client-level `fallback` list for that send.
 
 ```ts
 await email.send(message, {
@@ -37,7 +70,89 @@ await email.send(message, {
 });
 ```
 
-## Override retries for one send
+`provider` and `fallbackProviders` are aliases for `adapter` and `fallbackAdapters`.
+
+Disable a default fallback for one send by passing an empty fallback list:
+
+```ts
+await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: [],
+});
+```
+
+Use this when a message includes fields that the default backup route cannot represent.
+
+## Recommended fallback routes
+
+Choose fallback routes by message shape, not by provider popularity.
+
+| Message type | Good fallback | Avoid |
+| --- | --- | --- |
+| Plain text/html transactional email | Resend -> SMTP, Resend -> Postmark | Product-email adapters unless they preserve the same email |
+| Attachments | Resend -> Postmark, SendGrid, Mailgun, MailerSend | SMTP, Loops, Plunk, Scaleway, MailPace |
+| Metadata-dependent sends | Postmark/SendGrid/Mailgun/Brevo pairs | Resend or SMTP if metadata matters |
+| Tag-heavy sends | SendGrid/Mailgun/Brevo/MailerSend pairs | Postmark when more than one tag matters |
+| Product/event template sends | Loops or Plunk primary, with an explicitly equivalent route | Generic SMTP fallback that changes the template semantics |
+| Simple backup transport | Primary API -> SMTP | SMTP for attachments, metadata, or tags |
+
+## Unsafe fallback routes
+
+Do not treat SMTP as a universal backup. SMTP is useful for simple transactional messages, but it does not map provider-only fields like tags or metadata, and this SDK's SMTP transport does not send attachments.
+
+Do not fall back from a rich API adapter to a narrow product-email adapter unless that adapter sends the same class of email. Loops and Plunk are useful product/event adapters, but they are not generic backups for messages with CC, BCC, reply-to, headers, tags, or attachments.
+
+Do not rely on fallback to fix an incompatible message shape. Adapter-level unsupported-field validation may fail during an adapter attempt. If the next route drops or cannot represent fields your app depends on, the fallback route is not safe.
+
+## Attachment-capable fallback
+
+Use a second API adapter when attachments matter.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+  ],
+  defaultAdapter: "resend",
+  fallback: ["postmark"],
+  retry: {
+    retries: 1,
+  },
+});
+
+await email.send(
+  {
+    from: "Acme <receipts@acme.com>",
+    to: "user@example.com",
+    subject: "Receipt",
+    text: "Thanks for your order.",
+    attachments: [
+      {
+        filename: "receipt.txt",
+        content: "Order #123",
+        contentType: "text/plain",
+      },
+    ],
+  },
+  {
+    idempotencyKey: "receipt:order_123",
+    metadata: {
+      route: "checkout.receipt",
+    },
+  },
+);
+```
+
+This example keeps the send metadata in `send` options for hooks and observability. It does not put metadata on the `EmailMessage`, because Resend does not map message metadata.
+
+## How retries work
+
+The client-level `retry` option applies to each adapter attempt path. The send-level `retries` option overrides the client-level retry count for that send.
 
 ```ts
 await email.send(message, {
@@ -45,22 +160,120 @@ await email.send(message, {
 });
 ```
 
-## Retryable HTTP responses
+Fetch-based adapters mark these HTTP responses as retryable:
 
-The fetch-based adapters mark these responses as retryable:
+| Status | Meaning |
+| ------ | ------- |
+| `408` | Request timeout |
+| `409` | Conflict |
+| `425` | Too early |
+| `429` | Rate limited |
+| `5xx` | Adapter or network-side failure |
 
-| Status | Meaning                         |
-| ------ | ------------------------------- |
-| `408`  | Request timeout                 |
-| `409`  | Conflict                        |
-| `425`  | Too early                       |
-| `429`  | Rate limited                    |
-| `5xx`  | Adapter or network-side failure |
+Some network-style runtime failures can also be retryable. Programming errors and unrelated runtime errors should fail instead of being retried.
 
-Use an idempotency key for email that may be retried.
+## What causes fallback
+
+Fallback is not only for retryable errors. Retryability controls whether Email SDK should retry the same adapter. Fallback controls whether Email SDK should try the next adapter after the current adapter has finally failed.
+
+If every attempted adapter fails, Email SDK throws the single failure when only one route was attempted. When multiple routes fail, it throws an SDK-level error with code `all_providers_failed` and the collected failures in `details`.
+
+## Idempotency
+
+Use an idempotency key for externally visible email that may be retried or sent through fallback routes.
 
 ```ts
 await email.send(message, {
   idempotencyKey: "receipt:order_123",
 });
 ```
+
+Adapters that support idempotency receive the key through provider context. Provider support still depends on the provider API.
+
+## Observability
+
+Hooks can show which route was attempted, which retry was scheduled, which route failed, and which route finally succeeded.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: process.env.SMTP_HOST!,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: ["smtp"],
+  retry: { retries: 1 },
+  hooks: {
+    beforeSend(event) {
+      console.log("email.attempt", event.provider, event.attempt);
+    },
+    onRetry(event) {
+      console.warn("email.retry", event.provider, event.nextAttempt);
+    },
+    onError(event) {
+      console.error("email.error", event.provider, event.error);
+    },
+    afterSend(event) {
+      console.log("email.sent", event.provider, event.response.id);
+    },
+  },
+});
+```
+
+Do not log API keys, SMTP passwords, raw tokens, full message bodies, or unnecessary recipient data.
+
+## Testing fallback behavior
+
+Use `memoryProvider()` for the successful backup route and `failingProvider()` for the primary route.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
+
+const backup = memoryProvider("backup");
+const email = createEmailClient({
+  adapters: [failingProvider("primary"), backup],
+  fallback: ["backup"],
+});
+
+const response = await email.send({
+  from: "test@example.com",
+  to: "user@example.com",
+  subject: "Fallback",
+  text: "Hello",
+});
+
+expect(response.provider).toBe("backup");
+expect(backup.raw.sent).toHaveLength(1);
+```
+
+Test fallback routes with the same message shape your production route sends.
+
+## Next
+
+<Cards>
+  <Card
+    title="Field support"
+    href="/docs/adapters/field-support"
+    description="Choose primary and fallback routes by message fields."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Combine routing, validation, retries, fallbacks, observability, tests, and CLI checks."
+  />
+  <Card
+    title="Test email behavior"
+    href="/docs/guides/test-email-behavior"
+    description="Assert sends, retries, fallbacks, and plugin behavior."
+  />
+</Cards>

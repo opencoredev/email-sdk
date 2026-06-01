@@ -39,6 +39,17 @@ Each hook receives:
 
 `afterSend` also receives `response`. `onRetry` receives `nextAttempt` and `delayMs`. `onError` receives `error`.
 
+## Observe retries and fallback
+
+Hooks expose the send pipeline without changing adapter code:
+
+- `beforeSend` runs for each adapter attempt.
+- `onRetry` shows retry scheduling for the same adapter.
+- `onError` shows adapter failures before fallback may continue.
+- `afterSend` shows the adapter that actually succeeded.
+
+For safer default redaction, use the <a href="/docs/plugins/built-in/observability">observability plugin</a>.
+
 ## Keep logs safe
 
 Do not log API keys, SMTP passwords, raw tokens, full message bodies, or unnecessary recipient data. For most production logs, routing name, status, subject category, template name, and message ID are enough.

@@ -13,7 +13,9 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 - `Values` means Email SDK sends each tag's value to the provider.
 - `One tag` means only one tag can be represented by that provider API. Sending more than one tag fails before the provider request.
 
-## Best fits
+## Choose routes by message shape
+
+Fallback routes are only safe when the backup adapter can represent the same message fields that matter to your app. Choose primary and backup routes from the fields your production messages use, not just from provider popularity.
 
 | Need                             | Start with                                                |
 | -------------------------------- | --------------------------------------------------------- |
@@ -25,6 +27,14 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 | Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Mailtrap |
 
 If you are unsure, start with Resend for the first send, then choose fallback routes from this table based on the exact fields your app sends. Do not add a fallback adapter until it can represent the same message shape as your primary route.
+
+## Fallback compatibility checklist
+
+- Does the backup adapter support every `EmailMessage` field your message uses?
+- Does the backup preserve attachments when receipts, exports, or files matter?
+- Does the backup preserve metadata or tags if your app uses them for provider dashboards, analytics, or routing?
+- Does the backup support reply-to and headers if support workflows depend on them?
+- Has the backup provider account been live-verified in the target environment?
 
 ## API adapters
 
@@ -66,7 +76,7 @@ SMTP is built in and does not use Nodemailer. It maps address fields and headers
 
 ## Validation behavior
 
-Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. That keeps production behavior boring: if a field matters, you find out before the provider request.
+Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. Fail-fast validation protects fallback routes from silent data loss: if a field matters, you find out before the provider request.
 
 Loops attachments map to the provider's transactional attachments payload. Loops documents that transactional attachments require support enablement on the account, so accounts without that enablement should omit `attachments`.
 

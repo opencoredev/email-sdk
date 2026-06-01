@@ -6,6 +6,8 @@ icon: Plug
 
 Plugins are add-ons for an email client. They can register adapters, change a message before validation, record send activity, or expose a small typed helper on the client.
 
+Plugins are how repeated send-pipeline behavior becomes reusable: defaults before validation, observability after attempts, capture in tests, and adapter registration for community routes. For a full production path, see <a href="/docs/guides/production-send-pipeline">Production send pipeline</a>.
+
 Most apps should start with the built-in plugins. If a behavior should be reused across apps, move it into a plugin.
 
 ## Built-in plugins

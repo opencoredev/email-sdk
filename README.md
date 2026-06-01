@@ -5,7 +5,7 @@
 [![Last commit](https://shieldcn.dev/github/last-commit/opencoredev/email-sdk.svg?variant=outline&mode=dark)](https://github.com/opencoredev/email-sdk/commits/main)
 [![Follow on X](https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark)](https://x.com/leodev)
 
-A lightweight TypeScript SDK for transactional email. Use one client in your app, pick the adapters you actually send through, add plugins for shared behavior, and keep provider-specific field support visible in the docs.
+A lightweight TypeScript SDK for transactional email send pipelines. Use one client in your app, pick the adapters you actually send through, validate provider compatibility before data is silently dropped, add retries and fallback routes, observe send behavior, and keep provider-specific field support visible in the docs.
 
 Docs: https://email-sdk.dev/docs
 
@@ -53,14 +53,20 @@ await email.send({
 ## SDK Surface
 
 - One normalized `EmailMessage` shape.
-- Direct provider adapters through `adapters`.
-- Adapter plugins through `plugins`.
-- Fallbacks, retries, hooks, and per-send routing.
+- Adapter routing through `defaultAdapter`, per-send `adapter`, `fallback`, and `fallbackAdapters`.
+- Fail-fast field support checks for fields a provider cannot represent.
+- Retries inside one adapter and fallback routes after an adapter fails.
+- Hooks and the `observability` plugin for logs, metrics, traces, retry visibility, and errors.
 - Built-in `defaults`, `observability`, and `capture` plugins.
+- Test capture and memory/failing adapters for app tests that should not call real providers.
+- CLI dry-runs, adapter discovery, setup checks, and smoke-test sends.
 - Built-in SMTP transport without Nodemailer.
-- Fail-fast adapter validation for fields a provider cannot represent.
 
-See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage examples, or read the public docs at https://email-sdk.dev/docs.
+See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage examples, read the public docs at https://email-sdk.dev/docs, or start with these pages:
+
+- [Production send pipeline](https://email-sdk.dev/docs/guides/production-send-pipeline)
+- [Fallbacks and retries](https://email-sdk.dev/docs/concepts/fallbacks-and-retries)
+- [Field support](https://email-sdk.dev/docs/adapters/field-support)
 
 ## Adapter Entry Points
 
