@@ -15,6 +15,7 @@ export function VersionPicker({ variant = "nav" }: VersionPickerProps) {
   const pathname = usePathname();
   const currentVersion = useSelectedDocsVersion();
   const isSidebar = variant === "sidebar";
+  const isDocsPath = pathname.startsWith("/docs");
   const versionLinks = getVersionLinks(currentVersion);
 
   return (
@@ -49,9 +50,10 @@ export function VersionPicker({ variant = "nav" }: VersionPickerProps) {
           {docsVersions.map((version) => (
             <a
               className="flex items-start gap-2 rounded-md px-2 py-2 text-sm transition hover:bg-fd-accent hover:text-fd-accent-foreground"
-              href={getDocsVersionHref(version, pathname)}
+              href={isDocsPath ? getDocsVersionHref(version, pathname) : pathname || "/"}
               key={version.label}
-              onClick={() => {
+              onClick={(event) => {
+                if (!isDocsPath) event.preventDefault();
                 rememberDocsVersion(version);
                 setOpen(false);
               }}

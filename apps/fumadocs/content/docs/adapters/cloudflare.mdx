@@ -32,7 +32,7 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
-bunx --yes @opencoredev/email-sdk send \
+npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter cloudflare \
   --api-token "$CLOUDFLARE_API_TOKEN" \
   --account-id "$CLOUDFLARE_ACCOUNT_ID" \
