@@ -6,10 +6,14 @@ import { VersionPicker } from "@/components/version-picker";
 import { appName, gitConfig } from "./shared";
 
 type BaseOptionsConfig = {
+  mainLinks?: boolean;
   versionPicker?: boolean;
 };
 
-export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): BaseLayoutProps {
+export function baseOptions({
+  mainLinks = true,
+  versionPicker = true,
+}: BaseOptionsConfig = {}): BaseLayoutProps {
   return {
     nav: {
       title: (
@@ -22,15 +26,33 @@ export function baseOptions({ versionPicker = true }: BaseOptionsConfig = {}): B
     themeSwitch: {
       component: <ThemeToggle />,
     },
-    links: versionPicker
-      ? [
-          {
-            type: "custom" as const,
-            secondary: true,
-            children: <VersionPicker />,
-          },
-        ]
-      : [],
+    links: [
+      ...(mainLinks
+        ? [
+            {
+              type: "main" as const,
+              text: "Docs",
+              url: "/docs",
+              active: "nested-url" as const,
+            },
+            {
+              type: "main" as const,
+              text: "Blog",
+              url: "/blog",
+              active: "nested-url" as const,
+            },
+          ]
+        : []),
+      ...(versionPicker
+        ? [
+            {
+              type: "custom" as const,
+              secondary: true,
+              children: <VersionPicker />,
+            },
+          ]
+        : []),
+    ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }

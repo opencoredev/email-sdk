@@ -23,7 +23,7 @@ export function ThemeToggle() {
       onClick={() => setTheme(nextTheme)}
       type="button"
     >
-      <Icon aria-hidden="true" className="size-4" fill="currentColor" strokeWidth={2} />
+      <Icon aria-hidden="true" className="size-4" strokeWidth={2} />
     </button>
   );
 }

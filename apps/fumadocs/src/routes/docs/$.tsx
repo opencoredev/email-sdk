@@ -47,9 +47,7 @@ export const Route = createFileRoute("/docs/$")({
       : appName;
     const description =
       data?.description ?? "Email SDK documentation for TypeScript email adapters.";
-    const docsPath = data?.path
-      .replace(/\/?index\.mdx$/, "")
-      .replace(/\.mdx$/, "");
+    const docsPath = data?.path.replace(/\/?index\.mdx$/, "").replace(/\.mdx$/, "");
     const canonicalPath = data?.docsBasePath
       ? docsPath
         ? `${data.docsBasePath}/${docsPath}`
@@ -103,9 +101,7 @@ const loader = createServerFn({
     };
   });
 
-function resolveMissingVersionedDocsPage(
-  resolved: ReturnType<typeof resolveDocsVersionedSlugs>,
-) {
+function resolveMissingVersionedDocsPage(resolved: ReturnType<typeof resolveDocsVersionedSlugs>) {
   if (resolved.version.current) return notFound();
 
   const latestPage = getDocsSource(latestDocsVersion).getPage(resolved.slugs);
@@ -179,7 +175,7 @@ function Page() {
 
   return (
     <DocsLayout
-      {...baseOptions({ versionPicker: false })}
+      {...baseOptions({ mainLinks: false, versionPicker: false })}
       sidebar={{
         footer: (
           <div className="mt-2">
