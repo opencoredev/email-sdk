@@ -1,11 +1,7 @@
 import emailSdkPackage from "../../../../packages/email-sdk/package.json";
 
 export const sdkPackageName = emailSdkPackage.name;
-// Keep this in sync with the npm-published versions that have matching docs archives.
-// It is intentionally decoupled from package.json because the workspace version can
-// lag or lead the live docs during Changesets release flows.
-export const publishedDocsVersions = ["0.2.0", "0.2.1", "0.3.0"] as const;
-export const latestPublishedVersion = publishedDocsVersions[publishedDocsVersions.length - 1];
+export const latestPublishedVersion = emailSdkPackage.version;
 export const docsVersion = `v${latestPublishedVersion}`;
 export const docsVersionRoutePrefix = "v";
 export const docsVersionStorageKey = "email-sdk-docs-version";
