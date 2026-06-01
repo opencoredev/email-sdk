@@ -21,6 +21,11 @@ import { formatBlogDate, getBlogPost, getBlogPostUrl, type BlogPost } from "@/li
 import { baseOptions } from "@/lib/layout.shared";
 import { siteOgImageUrl, siteUrl } from "@/lib/shared";
 
+type BlogPostLoaderData = {
+  fallbackPost: BlogPost | null;
+  post: BlogPost;
+};
+
 const blogCodeHighlighter = createHighlighterCoreSync({
   engine: createJavaScriptRegexEngine(),
   langs: [typescriptLanguage],
@@ -114,12 +119,19 @@ export const Route = createFileRoute("/blog/$slug")({
   loader: ({ params }) => {
     const post = getBlogPost(params.slug);
     if (!post) throw notFound();
-    return post;
+
+    return {
+      fallbackPost:
+        post.slug === "introducing-email-sdk"
+          ? (getBlogPost("email-provider-fallbacks") ?? null)
+          : null,
+      post,
+    };
   },
 });
 
 function BlogPostPage() {
-  const post = Route.useLoaderData() as BlogPost;
+  const { fallbackPost, post } = Route.useLoaderData() as BlogPostLoaderData;
 
   return (
     <HomeLayout {...baseOptions()}>
@@ -158,24 +170,22 @@ function BlogPostPage() {
             <img alt={post.imageAlt} className="w-full object-cover" src={post.image} />
           </figure>
 
-          <BlogPostContent slug={post.slug} />
+          <BlogPostContent fallbackPost={fallbackPost} slug={post.slug} />
         </article>
       </main>
     </HomeLayout>
   );
 }
 
-function BlogPostContent({ slug }: { slug: string }) {
-  if (slug === "introducing-email-sdk") return <IntroducingPost />;
+function BlogPostContent({ fallbackPost, slug }: { fallbackPost: BlogPost | null; slug: string }) {
+  if (slug === "introducing-email-sdk") return <IntroducingPost fallbackPost={fallbackPost} />;
   if (slug === "email-provider-fallbacks") return <FallbacksPost />;
   if (slug === "nodemailer-alternative-typescript") return <NodemailerAlternativePost />;
 
   throw new Error(`Missing blog post content for slug: ${slug}`);
 }
 
-function IntroducingPost() {
-  const fallbackPost = getBlogPost("email-provider-fallbacks");
-
+function IntroducingPost({ fallbackPost }: { fallbackPost: BlogPost | null }) {
   return (
     <BlogBody>
       <p>
