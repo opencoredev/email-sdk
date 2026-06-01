@@ -4,6 +4,7 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
 import SearchDialog from "@/components/search";
+import { chunkLoadGuardScript } from "@/lib/chunk-load-guard";
 import { domMutationGuardScript } from "@/lib/dom-mutation-guard";
 import { siteMeta } from "@/lib/metadata";
 
@@ -42,6 +43,10 @@ function RootComponent() {
         <script
           // Browser translation/extensions can mutate React-owned DOM before hydration finishes.
           dangerouslySetInnerHTML={{ __html: domMutationGuardScript }}
+        />
+        <script
+          // Stale clients can request chunks from a previous deployment; reload once onto current assets.
+          dangerouslySetInnerHTML={{ __html: chunkLoadGuardScript }}
         />
         <HeadContent />
       </head>
