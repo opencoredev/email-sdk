@@ -1,6 +1,6 @@
 # Email SDK
 
-A lightweight TypeScript SDK for transactional email. Use one typed client, pick the adapters your app actually sends through, and add plugins for defaults, observability, capture, or community providers.
+A lightweight TypeScript SDK for transactional email send pipelines. Use one typed client, pick the adapters your app actually sends through, validate provider compatibility before data is silently dropped, add retries and fallback routes, and use plugins for defaults, observability, capture, or community providers.
 
 Docs: https://email-sdk.dev/docs
 
@@ -168,6 +168,42 @@ await email.send(message, {
   retries: 0,
 });
 ```
+
+Retries happen inside the current adapter. Fallback happens after that adapter has finally failed. For one send, Email SDK validates the normalized message, tries the selected adapter, retries it when retry rules allow it, advances to each configured fallback adapter after final failure, returns the first successful response, and throws if every route fails.
+
+Use fallback routes only when the backup adapter can represent the same message fields that matter to your app. SMTP is a good backup for simple text/html sends with address fields and headers, but not for attachments, tags, or metadata.
+
+Override fallback for one send with `fallbackAdapters`:
+
+```ts
+await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: ["smtp"],
+});
+```
+
+Disable fallback for one send with an empty list:
+
+```ts
+await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: [],
+});
+```
+
+Use an idempotency key for externally visible email that may be retried or sent through a fallback route:
+
+```ts
+await email.send(message, {
+  idempotencyKey: "receipt:order_123",
+});
+```
+
+Read the full route guidance in the public docs:
+
+- https://email-sdk.dev/docs/guides/production-send-pipeline
+- https://email-sdk.dev/docs/concepts/fallbacks-and-retries
+- https://email-sdk.dev/docs/adapters/field-support
 
 ## Plugins
 

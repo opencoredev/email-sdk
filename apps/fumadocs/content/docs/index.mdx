@@ -1,18 +1,12 @@
 ---
 title: Email SDK
-description: TypeScript email SDK documentation for unified transactional sending across Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more.
+description: TypeScript email SDK documentation for production transactional send pipelines across Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more.
 icon: Mail
 ---
 
-Email SDK is a small TypeScript package for transactional email. It gives your application one client and one message shape while keeping provider-specific behavior visible in the adapter docs.
+Email SDK is a small TypeScript package for production transactional email send pipelines. It gives your application one typed message shape, explicit adapter routing, fail-fast provider compatibility checks, retries, fallback routes, observability hooks, reusable plugins, test capture, and CLI verification.
 
-Use Resend for a simple API path, SMTP when you want a cheap or self-managed route, or another provider when its field support fits your app better. Add plugins for shared defaults, observability, capture, or community adapters. Your application code still calls `send`; the adapter decides how that message maps to the provider.
-
-## What is an email SDK?
-
-An email SDK is a developer library that lets an application send email without hand-writing every provider API request. Email SDK is a TypeScript email SDK focused on transactional email: one typed client, one normalized message shape, and adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and other providers.
-
-Use Email SDK when you want provider choice without hiding provider limits. Each adapter documents the fields it can send, and unsupported fields fail before the provider request instead of disappearing silently.
+Use Email SDK when your app needs email sends that are portable, explicit, testable, observable, and safer to operate. Your application code still calls `send`; the configured adapters decide how that message maps to Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, or another provider.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -41,27 +35,27 @@ await email.send({
   <Card
     title="Send your first email"
     href="/docs/getting-started/quickstart"
-    description="Install the SDK, create a client, and send a message."
+    description="Install the SDK, create a client, send a message, and add a safe fallback."
   />
   <Card
-    title="Understand adapters"
-    href="/docs/concepts/adapter-model"
-    description="Learn how adapters and routing names work."
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Combine adapters, validation, retries, fallback routes, observability, tests, and CLI checks."
   />
   <Card
-    title="Browse adapters"
-    href="/docs/adapters"
-    description="See all supported email services."
+    title="Choose adapters"
+    href="/docs/adapters/field-support"
+    description="Pick primary and fallback routes by the fields your messages use."
+  />
+  <Card
+    title="Fallbacks and retries"
+    href="/docs/concepts/fallbacks-and-retries"
+    description="Understand route order, retry behavior, idempotency, and compatible backup routes."
   />
   <Card
     title="Use plugins"
     href="/docs/plugins"
     description="Add defaults, observability, capture, adapter plugins, and reusable send behavior."
-  />
-  <Card
-    title="Build an adapter"
-    href="/docs/guides/authoring/create-adapter"
-    description="Write your first custom provider adapter and package it for reuse."
   />
   <Card
     title="Read the API reference"
@@ -70,24 +64,23 @@ await email.send({
   />
 </Cards>
 
-## What is included
+## Core pieces
 
-- `createEmailClient` for one shared email client.
-- `email.send()` for one message.
-- `email.sendBatch()` for small batches where each result is reported separately.
-- 17 adapters, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
-- Retry and fallback options that run in the order you configure.
-- Hooks for logs, metrics, tracing, and retry visibility.
-- Plugins for defaults, observability, capture, community adapters, and reusable send behavior.
-- A small CLI for setup checks, dry runs, and smoke-test sends.
-- A repo-local agent skill for future coding agents.
+- One `createEmailClient` entry point and one normalized `EmailMessage` shape.
+- Adapter routing through `defaultAdapter`, per-send `adapter`, `fallback`, and `fallbackAdapters`.
+- Fail-fast field support checks so providers do not silently drop unsupported message data.
+- Retries inside one adapter and fallback routes after an adapter has finally failed.
+- Hooks and the observability plugin for logs, metrics, traces, retry visibility, and failures.
+- Plugins for shared defaults, adapter registration, client extensions, observability, and test capture.
+- Memory and failing test adapters plus the capture plugin for asserting send behavior without real providers.
+- A Bun CLI for adapter discovery, setup checks, dry-runs, and smoke-test sends.
 
 ## What stays small
 
-Email SDK does not try to be a template engine, campaign tool, queue, analytics platform, or full email operations suite. It is the layer many apps keep rebuilding: adapter setup, a consistent send call, typed errors, and a fallback path that is explicit enough to debug.
+Email SDK is not a campaign tool, queue, template engine, hosted analytics product, or full email operations suite. It is the layer many apps keep rebuilding: adapter setup, one consistent send call, typed errors, provider compatibility checks, and fallback routes that are explicit enough to debug.
 
 ## Provider behavior is not hidden
 
-Email providers do not all support the same fields. A fallback route is only safe when the backup adapter can represent the same class of message. Before choosing routes, read the <a href="/docs/adapters/field-support">field support guide</a>; unsupported fields should fail fast instead of being silently dropped.
+Email providers do not all support the same fields. A fallback route is only safe when the backup adapter can represent the same class of message. Read <a href="/docs/concepts/fallbacks-and-retries">Fallbacks and retries</a> for route behavior, use <a href="/docs/adapters/field-support">Field support</a> to choose compatible routes, then follow <a href="/docs/guides/production-send-pipeline">Production send pipeline</a> when wiring a real app.
 
-The official API adapters are covered by local payload and validation tests. A live provider send still depends on account setup: verified sender domains, sandbox mode, API scopes, regions, and rate limits. Use the CLI dry run first, then run one real smoke send from the environment that will send production email.
+The official API adapters are covered by local payload and validation tests. A live provider send still depends on account setup: verified sender domains, sandbox mode, API scopes, regions, rate limits, and provider policy. Use the CLI dry run first, then run one real smoke send from the environment that will send production email.

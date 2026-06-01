@@ -51,6 +51,12 @@ await email.send(message, {
 });
 ```
 
+## Adapters are route names
+
+Adapter names are the route identifiers used by `defaultAdapter`, per-send `adapter`, client-level `fallback`, per-send `fallbackAdapters`, and `withAdapter`.
+
+Use <a href="/docs/concepts/fallbacks-and-retries">Fallbacks and retries</a> to understand route order. Use <a href="/docs/adapters/field-support">Field support</a> before choosing backup routes.
+
 ## Bind one adapter
 
 ```ts

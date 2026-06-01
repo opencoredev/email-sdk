@@ -36,6 +36,14 @@ import {
 | `EmailProviderError`         | An adapter call fails.                  |
 | `EmailSdkError`              | A general SDK-level failure occurs.     |
 
+## Retries and fallbacks
+
+`retryable` means retrying the same adapter is reasonable. It is not required for fallback. After an adapter finally fails, Email SDK can advance to the next configured fallback adapter.
+
+`EmailValidationError` from top-level message validation stops the send before adapter attempts. Adapter-specific unsupported-field validation can surface during an adapter attempt, so do not rely on fallback to fix an incompatible message shape. Choose fallback adapters that can represent the same fields your message uses.
+
+When multiple attempted routes fail, Email SDK throws an `EmailSdkError` with code `all_providers_failed` and the collected failures in `details`.
+
 ## Handling adapter errors
 
 ```ts

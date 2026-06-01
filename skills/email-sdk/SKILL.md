@@ -50,6 +50,8 @@ When local source and external docs disagree, prefer the code/types for the exac
 
 Entry point names like `@opencoredev/email-sdk/resend` and `@opencoredev/email-sdk/smtp` are illustrative. Verify the exact exports from the installed version before copying these imports.
 
+Prefer wiring Email SDK as a production send pipeline: one normalized message shape, explicit adapter routes, fail-fast field support, retries, compatible fallback routes, secret-safe observability, tests, and CLI verification.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
@@ -71,6 +73,22 @@ export const email = createEmailClient({
   retry: { retries: 1 },
 });
 ```
+
+## Fallback and retry guidance
+
+- Choose fallback routes only after checking the current field support docs or adapter source.
+- Use fallback only when the backup adapter can send the same class of email and preserve the fields that matter to the app.
+- Do not treat SMTP as a universal backup; it is best for simple text/html sends with address fields and headers.
+- Use idempotency keys for externally visible transactional sends that may be retried or sent through fallback routes.
+- Use hooks or `observabilityPlugin()` for redacted route, attempt, retry, success, and error events.
+- Add tests with `memoryProvider()`, `failingProvider()`, and `capturePlugin()` when fallback or retry behavior matters.
+- Use the CLI `doctor` and `--dry-run` before live provider smoke tests.
+
+Inside this repo, the main public docs for this pattern are:
+
+- `apps/fumadocs/content/docs/guides/production-send-pipeline.mdx`
+- `apps/fumadocs/content/docs/concepts/fallbacks-and-retries.mdx`
+- `apps/fumadocs/content/docs/adapters/field-support.mdx`
 
 ## Validation
 

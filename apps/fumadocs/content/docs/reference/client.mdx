@@ -32,6 +32,8 @@ const email = createEmailClient({
 
 Routing names must be unique. At least one adapter must be registered directly or through a plugin.
 
+`fallback` is an ordered list of adapter routing names tried after the selected adapter fails. `retry` applies inside the current adapter before Email SDK advances to a fallback route.
+
 ## `email.send(message, options?)`
 
 Sends one message.
@@ -52,12 +54,27 @@ const result = await email.send(message, {
 | ------------------- | ------------------------- | ----------------------------------------- |
 | `adapter`           | `string`                  | Override the default routing name.        |
 | `provider`          | `string`                  | Alias for `adapter`.                      |
-| `fallbackAdapters`  | `string[]`                | Override fallback adapters for this send. |
+| `fallbackAdapters`  | `string[]`                | Replace client-level `fallback` for this send. Pass `[]` for no fallback. |
 | `fallbackProviders` | `string[]`                | Alias for `fallbackAdapters`.             |
-| `retries`           | `number`                  | Override retry count for this send.       |
+| `retries`           | `number`                  | Replace client-level retry count for this send. |
 | `signal`            | `AbortSignal`             | Abort provider work when supported.       |
 | `idempotencyKey`    | `string`                  | Passed to adapters that support it.       |
 | `metadata`          | `Record<string, unknown>` | Passed to hooks.                          |
+
+## Execution order
+
+For one send, Email SDK:
+
+1. Runs before-send middleware.
+2. Validates the normalized message.
+3. Builds the route order from the selected adapter and fallback adapters.
+4. Tries the selected adapter.
+5. Retries that adapter when retry rules allow it.
+6. Moves to the next fallback adapter after final failure.
+7. Returns the first successful response.
+8. Throws if every route fails.
+
+`provider` and `fallbackProviders` are compatibility aliases only. Prefer `adapter` and `fallbackAdapters` in new code.
 
 ## `email.sendBatch(messages, options?)`
 

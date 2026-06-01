@@ -78,14 +78,15 @@ When the package is installed in your project, the same command can run through 
 RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 ```
 
-## Add SMTP fallback
+## Add a safe fallback route
 
-Add SMTP when you want a second route for the same transactional email. The SMTP adapter is built in
+Add SMTP when you want a second route for a simple transactional email. The SMTP adapter is built in
 and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK
 upgrades with STARTTLS before authenticating.
 
 Only use fallback adapters that can send the same message shape. For example, SMTP supports address
 fields and headers, but not provider-only fields like tags, metadata, or attachments.
+Check <a href="/docs/adapters/field-support">Field support</a> before choosing backup routes.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -118,3 +119,5 @@ await email.send({
   text: "Thanks for your order.",
 });
 ```
+
+For route recipes, retries, observability, and tests, continue with <a href="/docs/guides/production-send-pipeline">Production send pipeline</a>.
