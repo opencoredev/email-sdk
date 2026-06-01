@@ -1,3 +1,26 @@
 {
-  "outputDirectory": "apps/fumadocs/.vercel/output/static"
+  "outputDirectory": "apps/fumadocs/.vercel/output/static",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org https://www.google.com; font-src 'self' data:; connect-src 'self' https://vitals.vercel-insights.com https://*.vercel-insights.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+        }
+      ]
+    }
+  ]
 }

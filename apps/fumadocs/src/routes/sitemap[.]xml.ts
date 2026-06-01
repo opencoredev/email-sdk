@@ -40,6 +40,18 @@ function getSitemapEntries() {
       changefreq: "weekly",
       priority: "0.8",
     },
+    {
+      loc: `${siteUrl}/privacy`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.3",
+    },
+    {
+      loc: `${siteUrl}/terms`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.3",
+    },
     ...blogPosts.map((post) => ({
       loc: `${siteUrl}${getBlogPostUrl(post.slug)}`,
       lastmod: post.updatedAt,
