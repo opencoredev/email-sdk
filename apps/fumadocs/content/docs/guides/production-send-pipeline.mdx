@@ -287,19 +287,19 @@ Test fallback routes with the same message fields your production route uses.
 List supported adapters:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 Check required configuration for one adapter:
 
 ```bash
-RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
 Validate message shape and adapter field support without sending:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk send \
+bunx --bun --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \

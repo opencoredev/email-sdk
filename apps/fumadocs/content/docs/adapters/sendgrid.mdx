@@ -10,12 +10,53 @@ icon: sendgrid
 
 Create a SendGrid API key with Mail Send permission and verify the sender identity or domain used in `from`. SendGrid account review, sandbox mode, or sender verification can block delivery even when the SDK payload validates.
 
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
 
 const email = createEmailClient({
   adapters: [sendgrid({ apiKey: process.env.SENDGRID_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: { email: "hello@acme.com", name: "Acme" },
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+  metadata: {
+    userId: "user_123",
+  },
+  tags: [{ name: "category", value: "welcome" }],
+});
+
+console.log(result.provider, result.id);
+```
+
+SendGrid maps Email SDK `metadata` to `custom_args` and tag values to `categories`.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Invoice ready",
+  html: "<p>Your invoice is attached.</p>",
+  attachments: [
+    {
+      filename: "invoice.txt",
+      content: "Invoice inv_123",
+      contentType: "text/plain",
+    },
+  ],
 });
 ```
 
@@ -29,8 +70,17 @@ const email = createEmailClient({
 
 See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
 
-## CLI
+## Response
+
+The adapter uses body `id` or `message_id` when present, then falls back to the `x-message-id` response header.
+
+## CLI smoke test
 
 ```bash
-SENDGRID_API_KEY="SG..." npx --yes --package @opencoredev/email-sdk email-sdk send --adapter sendgrid --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
+SENDGRID_API_KEY="SG..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+  --adapter sendgrid \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SendGrid test" \
+  --text "It works"
 ```

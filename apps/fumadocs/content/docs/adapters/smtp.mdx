@@ -35,6 +35,26 @@ const email = createEmailClient({
 });
 ```
 
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@example.com>",
+  to: "user@example.com",
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "SMTP delivery test",
+  text: "It works",
+  headers: {
+    "X-Trace-ID": "trace_123",
+  },
+});
+
+console.log(result.provider, result.accepted);
+```
+
+SMTP supports address fields and headers. It rejects attachments, tags, and metadata because those provider-specific fields cannot be represented in this built-in transport.
+
 ## Options
 
 | Option              | Type                             | Required | Notes                                     |
@@ -58,18 +78,36 @@ Rename adapters when you have multiple SMTP routes.
 ```ts
 const email = createEmailClient({
   adapters: [
-    smtp({ name: "purelymail", host: "smtp.purelymail.com" }),
-    smtp({ name: "backup-smtp", host: "smtp.backup.example" }),
+    smtp({
+      name: "purelymail",
+      host: "smtp.purelymail.com",
+      auth: {
+        user: process.env.PURELYMAIL_USER!,
+        pass: process.env.PURELYMAIL_PASS!,
+      },
+    }),
+    smtp({
+      name: "backup-smtp",
+      host: "smtp.backup.example",
+      auth: {
+        user: process.env.BACKUP_SMTP_USER!,
+        pass: process.env.BACKUP_SMTP_PASS!,
+      },
+    }),
   ],
   defaultAdapter: "purelymail",
   fallback: ["backup-smtp"],
 });
 ```
 
-## CLI
+## Response
+
+The adapter returns the SMTP server message ID when it can parse one. It also returns accepted recipients and an empty `rejected` array because failed recipients throw during the SMTP conversation.
+
+## CLI smoke test
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk send \
+bunx --bun --package @opencoredev/email-sdk email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --user hello@example.com \

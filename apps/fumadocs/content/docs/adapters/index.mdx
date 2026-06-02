@@ -72,6 +72,8 @@ Email SDK can catch unsupported fields before a request. It cannot make a provid
 
 ## Import pattern
 
+Start with one adapter. Add a fallback only after the fallback supports the same message shape your app sends.
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
@@ -90,6 +92,37 @@ const email = createEmailClient({
   ],
   fallback: ["smtp"],
 });
+```
+
+Route a single send through another configured adapter when a message has a provider-specific job.
+
+```ts
+const response = await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Password reset",
+    text: "Use this link to reset your password.",
+  },
+  {
+    adapter: "smtp",
+  },
+);
+
+console.log(response.provider);
+```
+
+Before adding the provider to production, run a dry run and then a live smoke test from the same environment that will send mail.
+
+```bash
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+  --dry-run \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Dry run" \
+  --text "Validate only"
 ```
 
 ## Adapter groups

@@ -85,7 +85,7 @@ Plugin entry points:
 Run the CLI without installing anything globally:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 After adding the package to a project, run the installed binary:

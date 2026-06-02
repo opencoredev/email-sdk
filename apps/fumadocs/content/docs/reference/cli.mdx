@@ -13,7 +13,7 @@ The npm package is `@opencoredev/email-sdk`; the CLI command it installs is `ema
 Run the CLI once with the scoped package:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 Install the SDK in a project:
@@ -32,12 +32,12 @@ Check the installed version before comparing behavior against the docs:
 npx email-sdk version
 ```
 
-The CLI supports Node 20+ and Bun 1.1+. The examples use `npx` because it is the broadest copy-paste path; Bun users can run the one-off CLI with `bunx --bun --package @opencoredev/email-sdk email-sdk adapters`.
+The CLI supports Node 20+ and Bun 1.1+. One-off examples use `bunx --bun --package @opencoredev/email-sdk email-sdk ...` because it executes the scoped package binary without installing anything globally. After installing `@opencoredev/email-sdk` in a project, use `npx email-sdk ...` from that project.
 
 ## Send
 
 ```bash
-RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk send \
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \
@@ -48,7 +48,7 @@ RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk sen
 ## Adapters
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 | Adapter      | Required environment                                       |
@@ -77,7 +77,7 @@ If `--adapter` is omitted, the CLI selects the first adapter with all required e
 ## Doctor
 
 ```bash
-RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
 `doctor` checks whether the selected adapter has the required environment variables or matching CLI credential flags.

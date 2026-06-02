@@ -10,6 +10,8 @@ icon: mailgun
 
 Create a Mailgun API key for the sending domain and use the base URL for the domain region. EU domains need the EU API base URL; US domains use the default. Verify DNS and sender setup before treating a successful SDK call as production-ready delivery.
 
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailgun } from "@opencoredev/email-sdk/mailgun";
@@ -24,6 +26,47 @@ const email = createEmailClient({
 });
 ```
 
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@mg.example.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Receipt",
+  html: "<p>Thanks for your order.</p>",
+  metadata: {
+    orderId: "ord_123",
+  },
+  tags: [{ name: "type", value: "receipt" }],
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Thanks for your order.",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.messageId);
+```
+
+Mailgun maps metadata as `v:*` variables and tag values as `o:tag`. Use `baseUrl: "https://api.eu.mailgun.net"` for EU-region domains.
+
+## Send with headers
+
+```ts
+await email.send({
+  from: "Acme <hello@mg.example.com>",
+  to: "user@example.com",
+  subject: "Support update",
+  text: "We received your request.",
+  headers: {
+    "X-Ticket-ID": "ticket_123",
+  },
+});
+```
+
 ## Options
 
 | Option    | Type           | Required | Notes                                                                                              |
@@ -34,3 +77,20 @@ const email = createEmailClient({
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.                                                               |
 
 Mailgun sends attachments as multipart form data. See <a href="/docs/adapters/field-support">field support</a> for the full mapping.
+
+## Response
+
+The adapter maps Mailgun `id` to the normalized `id` and `messageId` fields.
+
+## CLI smoke test
+
+```bash
+MAILGUN_API_KEY="key-..." \
+MAILGUN_DOMAIN="mg.example.com" \
+bunx --bun --package @opencoredev/email-sdk email-sdk send \
+  --adapter mailgun \
+  --from "Acme <hello@mg.example.com>" \
+  --to user@example.com \
+  --subject "Mailgun test" \
+  --text "It works"
+```

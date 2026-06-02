@@ -12,6 +12,8 @@ The Resend adapter calls the Resend Email API directly. It does not add a runtim
 
 Create a Resend API key and verify the sender domain or sender address you plan to use in `from`. A dry run can validate the Email SDK message shape, but only a live send from your target environment proves the Resend account, sender, and recipient policy are ready.
 
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
@@ -24,19 +26,35 @@ const email = createEmailClient({
 ## Send
 
 ```ts
-await email.send(
+const result = await email.send(
   {
     from: "Acme <hello@acme.com>",
-    to: "user@example.com",
+    to: [{ email: "user@example.com", name: "Ada" }],
+    cc: "billing@example.com",
+    replyTo: "support@example.com",
     subject: "Welcome",
     html: "<p>Your workspace is ready.</p>",
+    headers: {
+      "X-Template": "welcome",
+    },
     tags: [{ name: "type", value: "welcome" }],
+    attachments: [
+      {
+        filename: "welcome.txt",
+        content: "Welcome to Acme.",
+        contentType: "text/plain",
+      },
+    ],
   },
   {
     idempotencyKey: "welcome:user_123",
   },
 );
+
+console.log(result.provider, result.messageId);
 ```
+
+Resend supports attachments and tags, but it does not support Email SDK `metadata`. If metadata matters for routing or analytics, choose another fallback route.
 
 ## Options
 
@@ -54,7 +72,7 @@ The adapter returns the Resend `id` as `id` and `messageId`.
 ## CLI smoke test
 
 ```bash
-RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk send \
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
