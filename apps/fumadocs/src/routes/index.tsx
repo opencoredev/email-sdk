@@ -77,11 +77,13 @@ function Home() {
               </DocsVersionLink>
             </div>
 
-            <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
+            <div className="mt-8 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
               <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
               <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
               <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
             </div>
+
+            <SponsorSpotlight compact />
           </div>
 
           <div className="min-w-0">
@@ -100,10 +102,6 @@ function Home() {
               </pre>
             </div>
           </div>
-        </section>
-
-        <section className="mx-auto max-w-5xl px-6 pb-12 md:px-10 lg:px-14 xl:px-16">
-          <SponsorSpotlight />
         </section>
       </main>
     </HomeLayout>

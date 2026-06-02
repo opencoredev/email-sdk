@@ -4,21 +4,21 @@ description: Configure the Sequenzy transactional email adapter.
 icon: sequenzy
 ---
 
-The Sequenzy adapter calls the Sequenzy transactional email API directly. It does not add a runtime dependency.
-
 <ProviderBadge adapter="sequenzy" />
 
-Sequenzy is a sponsored adapter, and it is also generally recommended for product-led transactional emails. The SDK includes payload tests for the adapter and a local API-key auth check for development and release smoke work.
+Sequenzy is a sponsored product-led email adapter for transactional sends. It supports direct content, template slugs, metadata variables, one reply-to address, URL attachments, and Base64 attachments, but not CC, BCC, headers, or tags.
 
 ## Before live sends
 
-Create a Sequenzy API key and verify the sender domain or sender address you plan to use in `from`. Run the local API auth check before sending:
+Create a Sequenzy API key and verify the sender domain or sender address you plan to use in `from`. Run the local API auth check before sending from a new environment:
 
 ```bash
 SEQUENZY_API_KEY="seq_live_..." bun run live:sequenzy
 ```
 
 That command checks the authenticated account context. It does not send email unless you explicitly set `SEQUENZY_LIVE_SEND=true` with a test sender and recipient.
+
+## Configure
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -29,22 +29,25 @@ const email = createEmailClient({
 });
 ```
 
-## Send direct content
+## Send
 
 ```ts
-await email.send({
+const result = await email.send({
   from: "Acme <hello@acme.com>",
-  to: "user@example.com",
+  to: [{ email: "user@example.com", name: "Ada" }],
   subject: "Welcome",
   html: "<p>Your workspace is ready.</p>",
   replyTo: "support@acme.com",
   metadata: {
-    plan: "pro",
+    firstName: "Ada",
+    workspaceName: "Acme",
   },
 });
+
+console.log(result.provider, result.messageId);
 ```
 
-Flat `metadata` values map to Sequenzy `variables`. Reserved metadata keys are mapped to provider fields instead:
+Sequenzy maps flat `metadata` values to `variables`. Reserved metadata keys are mapped to provider fields instead:
 
 | Metadata key                                             | Sequenzy field         |
 | -------------------------------------------------------- | ---------------------- |
@@ -52,20 +55,47 @@ Flat `metadata` values map to Sequenzy `variables`. Reserved metadata keys are m
 | `sequenzyPreview` or `preview`                           | `preview`              |
 | `subscriberExternalId` or `sequenzySubscriberExternalId` | `subscriberExternalId` |
 
-Template sends can pass a slug while keeping the normalized Email SDK message shape:
+## Send with a template slug
 
 ```ts
 await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
   subject: "Welcome",
-  html: "<p>Template fallback body for local validation.</p>",
+  html: "<p>Fallback body for local validation.</p>",
   metadata: {
-    sequenzySlug: "welcome",
-    NAME: "Ada",
+    sequenzySlug: "welcome-workspace",
+    firstName: "Ada",
+    workspaceName: "Acme",
   },
 });
 ```
+
+When `metadata.sequenzySlug` or `metadata.slug` is present, the adapter sends a Sequenzy template request. The `subject`, `html`, and `text` fields stay useful for local Email SDK validation, but the provider payload uses the template slug and variables.
+
+## Send with attachments
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Export ready",
+  html: "<p>Your export is attached.</p>",
+  attachments: [
+    {
+      filename: "export.txt",
+      content: "name,total\nAda,42",
+      contentType: "text/plain",
+    },
+    {
+      filename: "invoice.pdf",
+      path: "https://cdn.example.com/invoices/inv_123.pdf",
+    },
+  ],
+});
+```
+
+URL attachments are sent as Sequenzy `path` values. Local file and in-memory attachments are encoded as Base64 `content`.
 
 ## Options
 
@@ -75,9 +105,13 @@ await email.send({
 | `baseUrl` | `string`       | No       | Defaults to `https://api.sequenzy.com/api/v1`. |
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
 
+## Response
+
+The adapter maps Sequenzy `jobId` to the normalized `id` and `messageId` fields, maps returned recipients to `accepted`, and keeps the provider response in `raw`.
+
 ## Field support
 
-Sequenzy maps `to`, `from`, `subject`, HTML/text body, a single `replyTo`, flat `metadata` variables, and attachments. URL attachments are sent as `path`; local file and in-memory attachments are encoded as Base64 `content`. Unsupported fields throw before the API call.
+Sequenzy maps one or more `to` recipients, `from`, `subject`, HTML/text body, one `replyTo`, flat metadata variables, template slugs, preview text, subscriber external IDs, and attachments. It rejects CC, BCC, headers, tags, and multiple reply-to addresses before the API call.
 
 See <a href="/docs/adapters/field-support">field support</a> before using Sequenzy in a fallback route.
 
