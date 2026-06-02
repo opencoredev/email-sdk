@@ -9,10 +9,11 @@ export function ProviderGrid() {
   const visibleProviders = selectedVersion.current
     ? providers
     : providers.filter((provider) => !("currentOnly" in provider && provider.currentOnly));
+  const orderedProviders = [...visibleProviders].sort((a, b) => providerRank(b) - providerRank(a));
 
   return (
     <div className="not-prose grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {visibleProviders.map((provider) => (
+      {orderedProviders.map((provider) => (
         <article
           className="rounded-lg border border-fd-border bg-fd-card p-4 text-fd-foreground transition hover:bg-fd-accent/40"
           key={provider.key}
@@ -27,8 +28,10 @@ export function ProviderGrid() {
           <div className="mt-3 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
             {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
+            <ProviderPill muted={provider.apiStatus !== "API tested"}>
+              {provider.apiStatus}
+            </ProviderPill>
             <ProviderPill>{provider.testStatus}</ProviderPill>
-            <ProviderPill muted>{provider.liveStatus}</ProviderPill>
           </div>
           <code className="mt-3 block text-xs text-fd-muted-foreground">{provider.importPath}</code>
           <div className="mt-4 flex items-center gap-2">
@@ -72,8 +75,10 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
             {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
+            <ProviderPill muted={provider.apiStatus !== "API tested"}>
+              {provider.apiStatus}
+            </ProviderPill>
             <ProviderPill>{provider.testStatus}</ProviderPill>
-            <ProviderPill muted>{provider.liveStatus}</ProviderPill>
           </div>
         </div>
       </div>
@@ -88,6 +93,15 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
       </a>
     </div>
   );
+}
+
+function providerRank(provider: (typeof providers)[number]) {
+  let rank = 0;
+
+  if ("sponsorship" in provider) rank += 4;
+  if (provider.apiStatus === "API tested") rank += 2;
+
+  return rank;
 }
 
 function ProviderPill({ children, muted = false }: { children: string; muted?: boolean }) {

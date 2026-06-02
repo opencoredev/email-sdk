@@ -82,6 +82,9 @@ export default defineConfig(({ mode }) => {
 
         pages: [
           {
+            path: "/",
+          },
+          {
             path: "/docs",
           },
           {

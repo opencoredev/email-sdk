@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Check, Copy, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,6 +9,86 @@ import { SponsorSpotlight } from "@/components/sponsors";
 import { baseOptions } from "@/lib/layout.shared";
 import { homeStructuredData, siteTitle } from "@/lib/metadata";
 import { appDescription, siteUrl } from "@/lib/shared";
+
+const providers = [
+  {
+    key: "resend",
+    label: "Resend",
+    import: "resend",
+    importPath: "@opencoredev/email-sdk/resend",
+    logo: "/og/provider-logos/resend.png",
+    rotationConfig: ["    resend({", "      apiKey: process.env.RESEND_API_KEY!,", "    }),"],
+  },
+  {
+    key: "sequenzy",
+    label: "Sequenzy",
+    import: "sequenzy",
+    importPath: "@opencoredev/email-sdk/sequenzy",
+    logo: "/og/provider-logos/sequenzy.jpeg",
+    rotationConfig: ["    sequenzy({", "      apiKey: process.env.SEQUENZY_API_KEY!,", "    }),"],
+  },
+  {
+    key: "loops",
+    label: "Loops",
+    import: "loops",
+    importPath: "@opencoredev/email-sdk/loops",
+    logo: "https://cdn.simpleicons.org/loops",
+    rotationConfig: [
+      "    loops({",
+      "      apiKey: process.env.LOOPS_API_KEY!,",
+      "      transactionalId: process.env.LOOPS_TRANSACTIONAL_ID!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "cloudflare",
+    label: "Cloudflare Email Sending",
+    import: "cloudflare",
+    importPath: "@opencoredev/email-sdk/cloudflare",
+    logo: "https://cdn.simpleicons.org/cloudflare",
+    rotationConfig: [
+      "    cloudflare({",
+      "      apiToken: process.env.CLOUDFLARE_API_TOKEN!,",
+      "      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "ses",
+    label: "AWS SES",
+    import: "ses",
+    importPath: "@opencoredev/email-sdk/ses",
+    logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
+    rotationConfig: [
+      "    ses({",
+      "      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,",
+      "      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,",
+      "      sessionToken: process.env.AWS_SESSION_TOKEN,",
+      "      region: process.env.AWS_REGION!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "smtp",
+    label: "SMTP",
+    import: "smtp",
+    importPath: "@opencoredev/email-sdk/smtp",
+    logo: "",
+    rotationConfig: [
+      "    smtp({",
+      '      host: "smtp.purelymail.com",',
+      "      port: 587,",
+      "      secure: false,",
+      "      auth: {",
+      "        user: process.env.SMTP_USER!,",
+      "        pass: process.env.SMTP_PASS!,",
+      "      },",
+      "    }),",
+    ],
+  },
+] as const;
+
+type ProviderProfile = (typeof providers)[number];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,33 +103,18 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const example = `import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { smtp } from "@opencoredev/email-sdk/smtp";
-
-const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    smtp({
-      host: process.env.SMTP_HOST!,
-      auth: {
-        user: process.env.SMTP_USER!,
-        pass: process.env.SMTP_PASS!,
-      },
-    }),
-  ],
-  fallback: ["smtp"],
-  retry: { retries: 1 },
-});
-
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Welcome",
-  text: "Your account is ready.",
-});`;
-
 function Home() {
+  const [providerIndex, setProviderIndex] = useState(0);
+  const activeProvider = providers[providerIndex];
+
+  const handleNextProvider = () => {
+    setProviderIndex((index) => (index + 1) % providers.length);
+  };
+
+  const handlePreviousProvider = () => {
+    setProviderIndex((index) => (index - 1 + providers.length) % providers.length);
+  };
+
   return (
     <HomeLayout {...baseOptions()}>
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
@@ -89,16 +154,73 @@ function Home() {
 
           <div className="min-w-0">
             <div className="overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10">
+              <div className="border-b border-fd-border bg-fd-background px-4 py-4">
+                <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center text-xs text-fd-muted-foreground">
+                  <span>Provider</span>
+                  <span className="max-w-48 truncate rounded-full bg-fd-muted px-3 py-1 font-medium text-fd-foreground sm:max-w-none">
+                    {activeProvider.label}
+                  </span>
+                  <span className="hidden justify-self-end sm:block">Use arrows or click a logo</span>
+                </div>
+                <div className="grid min-h-16 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 sm:grid-cols-[3rem_minmax(0,1fr)_3rem] sm:gap-3">
+                  <button
+                    aria-label="Show previous provider"
+                    className="inline-flex size-10 items-center justify-center rounded-full border border-fd-border text-fd-muted-foreground transition hover:border-fd-primary hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                    onClick={handlePreviousProvider}
+                    type="button"
+                  >
+                    <ChevronLeft className="size-4" strokeWidth={2} />
+                  </button>
+                  <div className="mx-auto flex w-full max-w-full items-center justify-start gap-1.5 overflow-x-auto px-1 sm:justify-center sm:gap-2">
+                    {providers.map((provider, index) => {
+                      const isActive = index === providerIndex;
+
+                      return (
+                        <button
+                          aria-label={`Select ${provider.label} adapter`}
+                          aria-pressed={isActive}
+                          className={`relative inline-flex size-10 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-12 ${
+                            isActive
+                              ? "bg-fd-muted text-fd-foreground"
+                              : "bg-transparent text-fd-muted-foreground hover:bg-fd-muted/45 hover:text-fd-foreground"
+                          }`}
+                          key={provider.key}
+                          onClick={() => {
+                            setProviderIndex(index);
+                          }}
+                          type="button"
+                        >
+                          {isActive ? (
+                            <span className="absolute -bottom-2 h-0.5 w-6 rounded-full bg-fd-primary" />
+                          ) : null}
+                          <ProviderLogo label={provider.label} logo={provider.logo} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    aria-label="Show next provider"
+                    className="inline-flex size-10 items-center justify-center justify-self-end rounded-full border border-fd-border text-fd-muted-foreground transition hover:border-fd-primary hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                    onClick={handleNextProvider}
+                    type="button"
+                  >
+                    <ChevronRight className="size-4" strokeWidth={2} />
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center justify-between border-b border-fd-border px-4 py-3">
                 <div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
                   <Terminal className="size-4" strokeWidth={2} />
                   <span>email.ts</span>
                 </div>
-                <CopyCodeButton />
+                <CopyCodeButton provider={activeProvider} />
               </div>
-              <pre className="overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
+              <pre
+                className="min-h-[460px] overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground transition duration-500 md:min-h-[520px] md:p-5 md:text-[13px] md:leading-[1.4]"
+                key={activeProvider.key}
+              >
                 <code>
-                  <SyntaxCode />
+                  <SyntaxCode key={activeProvider.key} provider={activeProvider} />
                 </code>
               </pre>
             </div>
@@ -109,7 +231,7 @@ function Home() {
   );
 }
 
-function CopyCodeButton() {
+function CopyCodeButton({ provider }: { provider: ProviderProfile }) {
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState("Copy");
   const [labelState, setLabelState] = useState("");
@@ -134,7 +256,9 @@ function CopyCodeButton() {
     }
   }
 
-  useEffect(() => clearTimers, []);
+  useEffect(() => {
+    return clearTimers;
+  }, []);
 
   function swapLabel(next: string) {
     const duration = readTextSwapDuration();
@@ -154,7 +278,7 @@ function CopyCodeButton() {
   async function handleCopy() {
     clearTimers();
 
-    const copiedToClipboard = await copyToClipboard(example);
+    const copiedToClipboard = await copyToClipboard(generateExample(provider));
     setCopied(copiedToClipboard);
     swapLabel(copiedToClipboard ? "Copied" : "Copy failed");
 
@@ -194,7 +318,9 @@ function ProofPoint({ label, text }: { label: string; text: string }) {
   );
 }
 
-function SyntaxCode() {
+function SyntaxCode({ provider }: { provider: ProviderProfile }) {
+  const adapterEndLine = 6 + provider.rotationConfig.length;
+
   return (
     <>
       <CodeLine number={1}>
@@ -202,85 +328,75 @@ function SyntaxCode() {
         <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
-        <Token tone="keyword">import</Token> {"{ resend }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"@opencoredev/email-sdk/resend"</Token>;
-      </CodeLine>
-      <CodeLine number={3}>
-        <Token tone="keyword">import</Token> {"{ smtp }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"@opencoredev/email-sdk/smtp"</Token>;
+        <Token tone="keyword">import</Token> {"{ "} <Token tone="function">{provider.import}</Token>{" "}
+        {" }"} <Token tone="keyword">from</Token>{" "}
+        <Token tone="string">{`"${provider.importPath}"`}</Token>;
       </CodeLine>
       <CodeLine />
-      <CodeLine number={5}>
+      <CodeLine number={4}>
         <Token tone="keyword">const</Token> <Token tone="variable">email</Token> ={" "}
         <Token tone="function">createEmailClient</Token>({"{"}
       </CodeLine>
-      <CodeLine number={6}>
+      <CodeLine number={5}>
         {"  "}
         <Token tone="property">adapters</Token>: [
       </CodeLine>
-      <CodeLine number={7}>
-        {"    "}
-        <Token tone="function">resend</Token>({"{"} <Token tone="property">apiKey</Token>:{" "}
-        <Token tone="variable">process</Token>.env.RESEND_API_KEY! {"}"}),
-      </CodeLine>
-      <CodeLine number={8}>
-        {"    "}
-        <Token tone="function">smtp</Token>({"{"}
-      </CodeLine>
-      <CodeLine number={9}>
-        {"      "}
-        <Token tone="property">host</Token>: <Token tone="variable">process</Token>.env.SMTP_HOST!,
-      </CodeLine>
-      <CodeLine number={10}>
-        {"      "}
-        <Token tone="property">auth</Token>: {"{"}
-      </CodeLine>
-      <CodeLine number={11}>
-        {"        "}
-        <Token tone="property">user</Token>: <Token tone="variable">process</Token>.env.SMTP_USER!,
-      </CodeLine>
-      <CodeLine number={12}>
-        {"        "}
-        <Token tone="property">pass</Token>: <Token tone="variable">process</Token>.env.SMTP_PASS!,
-      </CodeLine>
-      <CodeLine number={13}>{"      },"}</CodeLine>
-      <CodeLine number={14}>{"    }),"}</CodeLine>
-      <CodeLine number={15}>{"  ],"}</CodeLine>
-      <CodeLine number={16}>
-        {"  "}
-        <Token tone="property">fallback</Token>: [<Token tone="string">"smtp"</Token>],
-      </CodeLine>
-      <CodeLine number={17}>
+      {provider.rotationConfig.map((line, index) => (
+        <CodeLine key={`${provider.key}-${index}`} number={6 + index}>
+          {line}
+        </CodeLine>
+      ))}
+      <CodeLine number={adapterEndLine}>{"  ],"}</CodeLine>
+      <CodeLine number={adapterEndLine + 1}>
         {"  "}
         <Token tone="property">retry</Token>: {"{"} <Token tone="property">retries</Token>:{" "}
         <Token tone="number">1</Token> {"}"},
       </CodeLine>
-      <CodeLine number={18}>{"});"}</CodeLine>
+      <CodeLine number={adapterEndLine + 2}>{"});"}</CodeLine>
       <CodeLine />
-      <CodeLine number={20}>
+      <CodeLine number={adapterEndLine + 5}>
         <Token tone="keyword">await</Token> <Token tone="variable">email</Token>.
         <Token tone="function">send</Token>({"{"}
       </CodeLine>
-      <CodeLine number={21}>
+      <CodeLine number={adapterEndLine + 6}>
         {"  "}
         <Token tone="property">from</Token>:{" "}
         <Token tone="string">{'"Acme <hello@acme.com>"'}</Token>,
       </CodeLine>
-      <CodeLine number={22}>
+      <CodeLine number={adapterEndLine + 7}>
         {"  "}
         <Token tone="property">to</Token>: <Token tone="string">"user@example.com"</Token>,
       </CodeLine>
-      <CodeLine number={23}>
+      <CodeLine number={adapterEndLine + 8}>
         {"  "}
         <Token tone="property">subject</Token>: <Token tone="string">"Welcome"</Token>,
       </CodeLine>
-      <CodeLine number={24}>
+      <CodeLine number={adapterEndLine + 9}>
         {"  "}
         <Token tone="property">text</Token>: <Token tone="string">"Your account is ready."</Token>,
       </CodeLine>
-      <CodeLine number={25}>{"});"}</CodeLine>
+      <CodeLine number={adapterEndLine + 10}>{"});"}</CodeLine>
     </>
   );
+}
+
+function generateExample(provider: ProviderProfile) {
+  return `import { createEmailClient } from "@opencoredev/email-sdk";
+import { ${provider.import} } from "${provider.importPath}";
+
+const email = createEmailClient({
+  adapters: [
+${provider.rotationConfig.join("\n")}
+  ],
+  retry: { retries: 1 },
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});`;
 }
 
 function CodeLine({ children, number }: { children?: ReactNode; number?: number }) {
@@ -343,13 +459,54 @@ function copyWithTextarea(text: string) {
   } catch {
     return false;
   } finally {
-    if (textarea.parentNode) {
-      textarea.parentNode.removeChild(textarea);
-    }
+    textarea.remove();
   }
 }
 
 function readTextSwapDuration() {
   const value = getComputedStyle(document.documentElement).getPropertyValue("--text-swap-dur");
   return Number.parseFloat(value) || 200;
+}
+
+function ProviderLogo({ label, logo }: { label: string; logo: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (!logo || imageFailed) {
+    return (
+      <span className="m-auto flex size-8 items-center justify-center rounded-full bg-fd-foreground text-[9px] font-semibold text-fd-background sm:size-9 sm:text-[10px]">
+        {getProviderInitials(label)}
+      </span>
+    );
+  }
+
+  return (
+    <span className="m-auto flex size-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/10 sm:size-9">
+      <img
+        alt={label}
+        className="size-6 rounded-full object-contain sm:size-7"
+        loading="lazy"
+        src={logo}
+        onError={() => {
+          setImageFailed(true);
+        }}
+      />
+    </span>
+  );
+}
+
+function getProviderInitials(label: string) {
+  if (label === "SMTP") {
+    return "SMTP";
+  }
+
+  const words = label.split(" ");
+
+  if (words.length > 1) {
+    return words
+      .map((word) => word.charAt(0))
+      .join("")
+      .toUpperCase();
+  }
+
+  return label.slice(0, 2).toUpperCase();
 }
