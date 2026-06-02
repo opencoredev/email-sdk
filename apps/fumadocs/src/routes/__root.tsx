@@ -4,6 +4,7 @@ import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
 import SearchDialog from "@/components/search";
+import { StaleBuildNotice } from "@/components/stale-build-notice";
 import { chunkLoadGuardScript } from "@/lib/chunk-load-guard";
 import { domMutationGuardScript } from "@/lib/dom-mutation-guard";
 import { siteMeta } from "@/lib/metadata";
@@ -53,6 +54,7 @@ function RootComponent() {
       <body className="flex flex-col min-h-screen">
         <RootProvider search={{ SearchDialog }}>
           <Outlet />
+          <StaleBuildNotice />
         </RootProvider>
         <Analytics />
         <Scripts />

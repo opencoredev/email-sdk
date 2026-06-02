@@ -58,6 +58,7 @@ export default defineConfig(({ mode }) => {
     env.VITE_OG_IMAGE_VERSION ||
     env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
     new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const buildId = env.VITE_EMAIL_SDK_BUILD_ID || env.VERCEL_GIT_COMMIT_SHA || ogImageVersion;
 
   return {
     server: {
@@ -65,6 +66,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),
+      "import.meta.env.VITE_EMAIL_SDK_BUILD_ID": JSON.stringify(buildId),
     },
     plugins: [
       mdx(),
@@ -97,6 +99,9 @@ export default defineConfig(({ mode }) => {
           ...versionedDocsPages,
           {
             path: "/api/search",
+          },
+          {
+            path: "/api/build-info",
           },
           {
             path: "sitemap.xml",
