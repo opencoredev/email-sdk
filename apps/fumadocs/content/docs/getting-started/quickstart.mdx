@@ -8,7 +8,7 @@ Install the scoped package with the package manager your app already uses:
 
 <PackageInstallTabs />
 
-The SDK and CLI work in server-side Node 20+ and Bun runtimes. The installed CLI command is named `email-sdk`. If you only need the CLI for a quick check, run `bunx --bun --package @opencoredev/email-sdk email-sdk ...` instead. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
+The SDK and CLI work in server-side Node 20+ and Bun runtimes. The installed CLI command is named `email-sdk`. If you only need the CLI for a no-install check, run `bunx --bun --package @opencoredev/email-sdk email-sdk ...`. npm-only projects should install `@opencoredev/email-sdk` first, then run `npx email-sdk ...`. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
 
 ## Choose a first adapter
 
@@ -57,13 +57,13 @@ responses are still available through `raw` when an adapter includes them.
 Use `doctor` to check that the selected adapter has the required environment variables.
 
 ```bash
-RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 ```
 
 Use `--dry-run` to validate the message shape and adapter field support without sending email.
 
 ```bash
-bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to "user@example.com" \

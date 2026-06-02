@@ -115,8 +115,8 @@ console.log(response.provider);
 Before adding the provider to production, run a dry run and then a live smoke test from the same environment that will send mail.
 
 ```bash
-bunx --bun --package @opencoredev/email-sdk email-sdk adapters
-RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk adapters
+RESEND_API_KEY="re_..." npx email-sdk send \
   --dry-run \
   --adapter resend \
   --from "Acme <hello@acme.com>" \

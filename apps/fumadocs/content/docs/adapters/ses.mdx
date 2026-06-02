@@ -81,7 +81,7 @@ The adapter returns the SES `MessageId` as `id` and `messageId`.
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
 AWS_REGION=us-east-1 \
-bunx --bun --package @opencoredev/email-sdk email-sdk send --adapter ses \
+npx email-sdk send --adapter ses \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
   --subject "Welcome" \

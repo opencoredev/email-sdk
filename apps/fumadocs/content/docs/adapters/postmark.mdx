@@ -76,7 +76,7 @@ The adapter maps Postmark `MessageID` to `id` and `messageId`, and maps returned
 ## CLI smoke test
 
 ```bash
-POSTMARK_SERVER_TOKEN="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+POSTMARK_SERVER_TOKEN="..." npx email-sdk send \
   --adapter postmark \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

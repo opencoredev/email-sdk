@@ -77,7 +77,7 @@ The adapter uses body `id` or `message_id` when present, then falls back to the 
 ## CLI smoke test
 
 ```bash
-SENDGRID_API_KEY="SG..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+SENDGRID_API_KEY="SG..." npx email-sdk send \
   --adapter sendgrid \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

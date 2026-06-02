@@ -78,7 +78,7 @@ Mailchimp Transactional returns an array of recipient results. The adapter uses 
 ## CLI smoke test
 
 ```bash
-MAILCHIMP_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+MAILCHIMP_API_KEY="..." npx email-sdk send \
   --adapter mailchimp \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

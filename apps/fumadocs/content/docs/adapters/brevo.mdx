@@ -69,7 +69,7 @@ The adapter maps Brevo `messageId` or `id` to the normalized `id` and `messageId
 ## CLI smoke test
 
 ```bash
-BREVO_API_KEY="xkeysib-..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+BREVO_API_KEY="xkeysib-..." npx email-sdk send \
   --adapter brevo \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -82,7 +82,7 @@ The adapter maps SparkPost `results.id` or `results.transmission_id` to the norm
 ## CLI smoke test
 
 ```bash
-SPARKPOST_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+SPARKPOST_API_KEY="..." npx email-sdk send \
   --adapter sparkpost \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

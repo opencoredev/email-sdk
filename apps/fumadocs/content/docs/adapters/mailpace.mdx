@@ -68,7 +68,7 @@ The adapter maps MailPace `id` or `message_id` to the normalized `id` field.
 ## CLI smoke test
 
 ```bash
-MAILPACE_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+MAILPACE_API_KEY="..." npx email-sdk send \
   --adapter mailpace \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

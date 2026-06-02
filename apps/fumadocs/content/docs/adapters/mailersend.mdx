@@ -33,7 +33,9 @@ const result = await email.send({
   replyTo: "support@example.com",
   subject: "Invoice ready",
   html: "<p>Your invoice is ready.</p>",
-  headers: [{ name: "X-Invoice-ID", value: "inv_123" }],
+  headers: {
+    "X-Invoice-ID": "inv_123",
+  },
   tags: [{ name: "type", value: "invoice" }],
 });
 
@@ -79,7 +81,7 @@ The adapter uses the `x-message-id` response header when available, then falls b
 ## CLI smoke test
 
 ```bash
-MAILERSEND_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+MAILERSEND_API_KEY="..." npx email-sdk send \
   --adapter mailersend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

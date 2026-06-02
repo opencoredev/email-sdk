@@ -38,7 +38,9 @@ const result = await email.send({
   replyTo: "support@example.com",
   subject: "Scaleway Transactional Email test",
   html: "<p>It works.</p>",
-  headers: [{ name: "X-Trace-ID", value: "trace_123" }],
+  headers: {
+    "X-Trace-ID": "trace_123",
+  },
 });
 
 console.log(result.provider, result.id);
@@ -85,7 +87,7 @@ The adapter maps Scaleway `id` or `email_id` to the normalized `id` field.
 ```bash
 SCALEWAY_SECRET_KEY="..." \
 SCALEWAY_PROJECT_ID="..." \
-bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk send \
   --adapter scaleway \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -45,6 +45,8 @@ Check a provider configuration:
 RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
+If you are using npm without Bun, install `@opencoredev/email-sdk` in the project first, then run the installed `email-sdk` binary with `npx`.
+
 ## Run the CLI from an installed project
 
 After installing `@opencoredev/email-sdk`, run the installed binary:
@@ -53,7 +55,7 @@ After installing `@opencoredev/email-sdk`, run the installed binary:
 npx email-sdk adapters
 ```
 
-The command is still `email-sdk`; the package you installed is still `@opencoredev/email-sdk`. Avoid `npx email-sdk` outside an installed project because the unscoped npm package is unrelated. For one-off checks, use the `bunx --bun --package @opencoredev/email-sdk email-sdk ...` form shown above.
+The command is still `email-sdk`; the package you installed is still `@opencoredev/email-sdk`. Avoid `npx email-sdk` outside an installed project because the unscoped npm package is unrelated. For no-install checks, use the `bunx --bun --package @opencoredev/email-sdk email-sdk ...` form shown above.
 
 ## Prerequisites
 

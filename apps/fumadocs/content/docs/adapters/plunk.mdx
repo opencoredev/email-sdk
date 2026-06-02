@@ -80,7 +80,7 @@ The adapter first reads the first `data.emails[].email` value, then falls back t
 ## CLI smoke test
 
 ```bash
-PLUNK_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+PLUNK_API_KEY="..." npx email-sdk send \
   --adapter plunk \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

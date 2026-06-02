@@ -88,7 +88,7 @@ The adapter maps Loops `id` or `transactionalId` to the normalized `id` field wh
 ```bash
 LOOPS_API_KEY="loops_..." \
 LOOPS_TRANSACTIONAL_ID="cm..." \
-bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk send \
   --adapter loops \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -73,7 +73,7 @@ The adapter maps Cloudflare `delivered` and `queued` recipients to `accepted`, a
 ## CLI smoke test
 
 ```bash
-bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk send \
   --adapter cloudflare \
   --api-token "$CLOUDFLARE_API_TOKEN" \
   --account-id "$CLOUDFLARE_ACCOUNT_ID" \

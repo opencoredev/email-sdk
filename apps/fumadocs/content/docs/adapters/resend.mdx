@@ -72,7 +72,7 @@ The adapter returns the Resend `id` as `id` and `messageId`.
 ## CLI smoke test
 
 ```bash
-RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+RESEND_API_KEY="re_..." npx email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

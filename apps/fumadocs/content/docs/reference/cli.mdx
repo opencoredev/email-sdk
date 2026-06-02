@@ -32,7 +32,7 @@ Check the installed version before comparing behavior against the docs:
 npx email-sdk version
 ```
 
-The CLI supports Node 20+ and Bun 1.1+. One-off examples use `bunx --bun --package @opencoredev/email-sdk email-sdk ...` because it executes the scoped package binary without installing anything globally. After installing `@opencoredev/email-sdk` in a project, use `npx email-sdk ...` from that project.
+The CLI supports Node 20+ and Bun 1.1+. No-install examples use `bunx --bun --package @opencoredev/email-sdk email-sdk ...` because that verified path executes the scoped package binary directly. For npm-only projects, install `@opencoredev/email-sdk` first, then use `npx email-sdk ...` from that project.
 
 ## Send
 

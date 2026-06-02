@@ -75,7 +75,7 @@ The adapter maps ZeptoMail `request_id`, `messageId`, or `id` to the normalized 
 ## CLI smoke test
 
 ```bash
-ZEPTOMAIL_TOKEN="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+ZEPTOMAIL_TOKEN="..." npx email-sdk send \
   --adapter zeptomail \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

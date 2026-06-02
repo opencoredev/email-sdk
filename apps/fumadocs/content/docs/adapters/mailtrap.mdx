@@ -81,7 +81,7 @@ The adapter uses the first returned `message_ids` value, then falls back to `mes
 ## CLI smoke test
 
 ```bash
-MAILTRAP_API_KEY="..." bunx --bun --package @opencoredev/email-sdk email-sdk send \
+MAILTRAP_API_KEY="..." npx email-sdk send \
   --adapter mailtrap \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -75,6 +75,7 @@ await email.send({
 Do not use SMTP as a fallback for a message that depends on provider-only fields. This fails before a provider request instead of dropping data.
 
 ```ts
+// This client has SMTP as a fallback, but SMTP cannot send metadata or tags.
 await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",

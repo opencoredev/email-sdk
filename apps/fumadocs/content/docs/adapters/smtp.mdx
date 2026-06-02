@@ -107,7 +107,7 @@ The adapter returns the SMTP server message ID when it can parse one. It also re
 ## CLI smoke test
 
 ```bash
-bunx --bun --package @opencoredev/email-sdk email-sdk send \
+npx email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --user hello@example.com \
