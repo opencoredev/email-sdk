@@ -9,6 +9,15 @@ A lightweight TypeScript SDK for transactional email send pipelines. Use one cli
 
 Docs: https://email-sdk.dev/docs
 
+## Sponsors
+
+Email SDK is supported by companies helping keep provider integrations practical and maintained.
+
+### Special Sponsors
+
+| [<img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="96" height="96" alt="Sequenzy logo"><br><sub><b>Sequenzy</b></sub>](https://www.sequenzy.com/) |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+
 ## What Is Here
 
 - `packages/email-sdk` - core SDK, adapters, plugins, CLI, tests, and package README
@@ -70,9 +79,9 @@ See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage e
 
 ## Adapter Entry Points
 
-`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `plunk`, `mailtrap`, `cloudflare`, `unosend`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
+`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `loops`, `sequenzy`, `plunk`, `mailtrap`, `cloudflare`, `unosend`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
 
-If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Sequenzy for product-led transactional sends, especially when you want the local API-key check included in this repo. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 Plugin entry points:
 

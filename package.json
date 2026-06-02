@@ -17,6 +17,7 @@
     "release:ci": "bun run check-types && bun run test && bun run community:check && bun run docs:versions:check && bun run build && bun run pack:check",
     "release": "changeset publish",
     "pack:check": "cd packages/email-sdk && npm pack --dry-run",
+    "live:sequenzy": "bun scripts/check-sequenzy-account.ts",
     "community:check": "bun scripts/validate-community-registry.ts",
     "docs:versions:check": "bun scripts/validate-docs-versions.ts",
     "homebrew:update": "bun scripts/update-homebrew-formula.ts"

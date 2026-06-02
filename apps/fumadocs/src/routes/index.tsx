@@ -1,13 +1,94 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight, Check, Copy, Terminal } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Check, Copy, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
+import { SponsorSpotlight } from "@/components/sponsors";
 import { baseOptions } from "@/lib/layout.shared";
 import { homeStructuredData, siteTitle } from "@/lib/metadata";
 import { appDescription, siteUrl } from "@/lib/shared";
+
+const providers = [
+  {
+    key: "resend",
+    label: "Resend",
+    import: "resend",
+    importPath: "@opencoredev/email-sdk/resend",
+    logo: "https://cdn.simpleicons.org/resend/111111",
+    rotationConfig: ["    resend({", "      apiKey: process.env.RESEND_API_KEY!,", "    }),"],
+  },
+  {
+    key: "sequenzy",
+    label: "Sequenzy",
+    import: "sequenzy",
+    importPath: "@opencoredev/email-sdk/sequenzy",
+    logo: "/og/provider-logos/sequenzy.jpeg",
+    rotationConfig: ["    sequenzy({", "      apiKey: process.env.SEQUENZY_API_KEY!,", "    }),"],
+  },
+  {
+    key: "loops",
+    label: "Loops",
+    import: "loops",
+    importPath: "@opencoredev/email-sdk/loops",
+    logo: "https://cdn.simpleicons.org/loops",
+    rotationConfig: [
+      "    loops({",
+      "      apiKey: process.env.LOOPS_API_KEY!,",
+      "      transactionalId: process.env.LOOPS_TRANSACTIONAL_ID!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "cloudflare",
+    label: "Cloudflare Email Sending",
+    import: "cloudflare",
+    importPath: "@opencoredev/email-sdk/cloudflare",
+    logo: "https://cdn.simpleicons.org/cloudflare",
+    rotationConfig: [
+      "    cloudflare({",
+      "      apiToken: process.env.CLOUDFLARE_API_TOKEN!,",
+      "      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "ses",
+    label: "AWS SES",
+    import: "ses",
+    importPath: "@opencoredev/email-sdk/ses",
+    logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
+    rotationConfig: [
+      "    ses({",
+      "      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,",
+      "      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,",
+      "      sessionToken: process.env.AWS_SESSION_TOKEN,",
+      "      region: process.env.AWS_REGION!,",
+      "    }),",
+    ],
+  },
+  {
+    key: "smtp",
+    label: "SMTP",
+    import: "smtp",
+    importPath: "@opencoredev/email-sdk/smtp",
+    logo: "",
+    rotationConfig: [
+      "    smtp({",
+      '      host: "smtp.purelymail.com",',
+      "      port: 587,",
+      "      secure: false,",
+      "      auth: {",
+      "        user: process.env.SMTP_USER!,",
+      "        pass: process.env.SMTP_PASS!,",
+      "      },",
+      "    }),",
+    ],
+  },
+] as const;
+
+type ProviderProfile = (typeof providers)[number];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -22,33 +103,18 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const example = `import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { smtp } from "@opencoredev/email-sdk/smtp";
-
-const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    smtp({
-      host: process.env.SMTP_HOST!,
-      auth: {
-        user: process.env.SMTP_USER!,
-        pass: process.env.SMTP_PASS!,
-      },
-    }),
-  ],
-  fallback: ["smtp"],
-  retry: { retries: 1 },
-});
-
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Welcome",
-  text: "Your account is ready.",
-});`;
-
 function Home() {
+  const [providerIndex, setProviderIndex] = useState(0);
+  const activeProvider = providers[providerIndex];
+
+  const handleNextProvider = () => {
+    setProviderIndex((index) => (index + 1) % providers.length);
+  };
+
+  const handlePreviousProvider = () => {
+    setProviderIndex((index) => (index - 1 + providers.length) % providers.length);
+  };
+
   return (
     <HomeLayout {...baseOptions()}>
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
@@ -77,27 +143,96 @@ function Home() {
               </DocsVersionLink>
             </div>
 
-            <div className="mt-10 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
-              <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
+            <div className="mt-8 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
+              <ProofPoint label="Retries" text="Retry transient failures without changing code." />
               <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
               <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
             </div>
+
+            <SponsorSpotlight compact />
           </div>
 
           <div className="min-w-0">
-            <div className="overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10">
-              <div className="flex items-center justify-between border-b border-fd-border px-4 py-3">
-                <div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
-                  <Terminal className="size-4" strokeWidth={2} />
-                  <span>email.ts</span>
+            <div className="flex h-[680px] overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10 lg:h-[760px]">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="border-b border-fd-border bg-fd-background px-4 py-4">
+                  <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center text-xs text-fd-muted-foreground">
+                    <span>Provider</span>
+                    <span className="inline-flex h-7 min-w-32 items-center justify-center rounded-full bg-fd-muted px-3 text-[11px] font-semibold text-fd-foreground shadow-inner shadow-black/10 sm:min-w-40">
+                      <span className="max-w-32 truncate sm:max-w-36">
+                        {activeProvider.label}
+                      </span>
+                    </span>
+                    <span className="hidden justify-self-end sm:block">
+                      Use arrows or click a logo
+                    </span>
+                  </div>
+                  <div className="grid min-h-16 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 sm:grid-cols-[3.25rem_minmax(0,1fr)_3.25rem] sm:gap-3">
+                    <button
+                      aria-label="Show previous provider"
+                      className="inline-flex size-10 items-center justify-center rounded-full border border-fd-border bg-fd-card text-fd-muted-foreground transition hover:border-fd-primary hover:bg-fd-muted hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-11"
+                      onClick={handlePreviousProvider}
+                      type="button"
+                    >
+                      <ChevronLeft className="size-4" strokeWidth={2} />
+                    </button>
+                    <div className="mx-auto flex h-16 w-full max-w-full items-center justify-start gap-1.5 overflow-x-auto px-1 sm:justify-center sm:gap-2">
+                      {providers.map((provider, index) => {
+                        const isActive = index === providerIndex;
+
+                        return (
+                          <button
+                            aria-label={`Select ${provider.label} adapter`}
+                            aria-pressed={isActive}
+                            className={`relative inline-flex size-11 shrink-0 items-center justify-center rounded-full transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-12 ${
+                              isActive
+                                ? "bg-fd-foreground text-fd-background shadow-lg shadow-black/20"
+                                : "bg-transparent text-fd-muted-foreground opacity-70 hover:bg-fd-muted/45 hover:text-fd-foreground hover:opacity-100"
+                            }`}
+                            key={provider.key}
+                            onClick={() => {
+                              setProviderIndex(index);
+                            }}
+                            type="button"
+                          >
+                            {isActive ? (
+                              <span className="absolute -bottom-2 h-1 w-1 rounded-full bg-fd-primary" />
+                            ) : null}
+                            <ProviderLogo
+                              active={isActive}
+                              label={provider.label}
+                              logo={provider.logo}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      aria-label="Show next provider"
+                      className="inline-flex size-10 items-center justify-center justify-self-end rounded-full border border-fd-border bg-fd-card text-fd-muted-foreground transition hover:border-fd-primary hover:bg-fd-muted hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-11"
+                      onClick={handleNextProvider}
+                      type="button"
+                    >
+                      <ChevronRight className="size-4" strokeWidth={2} />
+                    </button>
+                  </div>
                 </div>
-                <CopyCodeButton />
+                <div className="flex items-center justify-between border-b border-fd-border px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-fd-muted-foreground">
+                    <Terminal className="size-4" strokeWidth={2} />
+                    <span>email.ts</span>
+                  </div>
+                  <CopyCodeButton provider={activeProvider} />
+                </div>
+                <pre
+                  className="min-h-0 flex-1 overflow-auto p-4 text-[12px] leading-[1.3] text-fd-foreground transition duration-500 md:p-5 md:text-[13px] md:leading-[1.4]"
+                  key={activeProvider.key}
+                >
+                  <code>
+                    <SyntaxCode key={activeProvider.key} provider={activeProvider} />
+                  </code>
+                </pre>
               </div>
-              <pre className="overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground md:p-5 md:text-[13px] md:leading-[1.4]">
-                <code>
-                  <SyntaxCode />
-                </code>
-              </pre>
             </div>
           </div>
         </section>
@@ -106,7 +241,7 @@ function Home() {
   );
 }
 
-function CopyCodeButton() {
+function CopyCodeButton({ provider }: { provider: ProviderProfile }) {
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState("Copy");
   const [labelState, setLabelState] = useState("");
@@ -131,7 +266,9 @@ function CopyCodeButton() {
     }
   }
 
-  useEffect(() => clearTimers, []);
+  useEffect(() => {
+    return clearTimers;
+  }, []);
 
   function swapLabel(next: string) {
     const duration = readTextSwapDuration();
@@ -151,7 +288,7 @@ function CopyCodeButton() {
   async function handleCopy() {
     clearTimers();
 
-    const copiedToClipboard = await copyToClipboard(example);
+    const copiedToClipboard = await copyToClipboard(generateExample(provider));
     setCopied(copiedToClipboard);
     swapLabel(copiedToClipboard ? "Copied" : "Copy failed");
 
@@ -191,7 +328,9 @@ function ProofPoint({ label, text }: { label: string; text: string }) {
   );
 }
 
-function SyntaxCode() {
+function SyntaxCode({ provider }: { provider: ProviderProfile }) {
+  const adapterEndLine = 6 + provider.rotationConfig.length;
+
   return (
     <>
       <CodeLine number={1}>
@@ -199,85 +338,168 @@ function SyntaxCode() {
         <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
-        <Token tone="keyword">import</Token> {"{ resend }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"@opencoredev/email-sdk/resend"</Token>;
-      </CodeLine>
-      <CodeLine number={3}>
-        <Token tone="keyword">import</Token> {"{ smtp }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">"@opencoredev/email-sdk/smtp"</Token>;
+        <Token tone="keyword">import</Token>{" { "}<Token tone="function">{provider.import}</Token>{" } "}<Token tone="keyword">from</Token>{" "}<Token tone="string">{`"${provider.importPath}"`}</Token>;
       </CodeLine>
       <CodeLine />
-      <CodeLine number={5}>
+      <CodeLine number={4}>
         <Token tone="keyword">const</Token> <Token tone="variable">email</Token> ={" "}
         <Token tone="function">createEmailClient</Token>({"{"}
       </CodeLine>
-      <CodeLine number={6}>
+      <CodeLine number={5}>
         {"  "}
         <Token tone="property">adapters</Token>: [
       </CodeLine>
-      <CodeLine number={7}>
-        {"    "}
-        <Token tone="function">resend</Token>({"{"} <Token tone="property">apiKey</Token>:{" "}
-        <Token tone="variable">process</Token>.env.RESEND_API_KEY! {"}"}),
-      </CodeLine>
-      <CodeLine number={8}>
-        {"    "}
-        <Token tone="function">smtp</Token>({"{"}
-      </CodeLine>
-      <CodeLine number={9}>
-        {"      "}
-        <Token tone="property">host</Token>: <Token tone="variable">process</Token>.env.SMTP_HOST!,
-      </CodeLine>
-      <CodeLine number={10}>
-        {"      "}
-        <Token tone="property">auth</Token>: {"{"}
-      </CodeLine>
-      <CodeLine number={11}>
-        {"        "}
-        <Token tone="property">user</Token>: <Token tone="variable">process</Token>.env.SMTP_USER!,
-      </CodeLine>
-      <CodeLine number={12}>
-        {"        "}
-        <Token tone="property">pass</Token>: <Token tone="variable">process</Token>.env.SMTP_PASS!,
-      </CodeLine>
-      <CodeLine number={13}>{"      },"}</CodeLine>
-      <CodeLine number={14}>{"    }),"}</CodeLine>
-      <CodeLine number={15}>{"  ],"}</CodeLine>
-      <CodeLine number={16}>
-        {"  "}
-        <Token tone="property">fallback</Token>: [<Token tone="string">"smtp"</Token>],
-      </CodeLine>
-      <CodeLine number={17}>
+      {provider.rotationConfig.map((line, index) => (
+        <CodeLine key={`${provider.key}-${index}`} number={6 + index}>
+          {renderConfigLine(line)}
+        </CodeLine>
+      ))}
+      <CodeLine number={adapterEndLine}>{"  ],"}</CodeLine>
+      <CodeLine number={adapterEndLine + 1}>
         {"  "}
         <Token tone="property">retry</Token>: {"{"} <Token tone="property">retries</Token>:{" "}
         <Token tone="number">1</Token> {"}"},
       </CodeLine>
-      <CodeLine number={18}>{"});"}</CodeLine>
+      <CodeLine number={adapterEndLine + 2}>{"});"}</CodeLine>
       <CodeLine />
-      <CodeLine number={20}>
+      <CodeLine number={adapterEndLine + 4}>
         <Token tone="keyword">await</Token> <Token tone="variable">email</Token>.
         <Token tone="function">send</Token>({"{"}
       </CodeLine>
-      <CodeLine number={21}>
+      <CodeLine number={adapterEndLine + 5}>
         {"  "}
         <Token tone="property">from</Token>:{" "}
         <Token tone="string">{'"Acme <hello@acme.com>"'}</Token>,
       </CodeLine>
-      <CodeLine number={22}>
+      <CodeLine number={adapterEndLine + 6}>
         {"  "}
         <Token tone="property">to</Token>: <Token tone="string">"user@example.com"</Token>,
       </CodeLine>
-      <CodeLine number={23}>
+      <CodeLine number={adapterEndLine + 7}>
         {"  "}
         <Token tone="property">subject</Token>: <Token tone="string">"Welcome"</Token>,
       </CodeLine>
-      <CodeLine number={24}>
+      <CodeLine number={adapterEndLine + 8}>
         {"  "}
         <Token tone="property">text</Token>: <Token tone="string">"Your account is ready."</Token>,
       </CodeLine>
-      <CodeLine number={25}>{"});"}</CodeLine>
+      <CodeLine number={adapterEndLine + 9}>{"});"}</CodeLine>
     </>
   );
+}
+
+function renderConfigLine(line: string) {
+  const leadingWhitespace = line.match(/^\s*/)?.[0] ?? "";
+  const trimmedLine = line.trim();
+  const callMatch = trimmedLine.match(/^([a-zA-Z]+)\(\{$/);
+  const envMatch = trimmedLine.match(/^([a-zA-Z]+): process\.env\.([A-Z0-9_]+)!?,?$/);
+  const stringMatch = trimmedLine.match(/^([a-zA-Z]+): "([^"]+)",?$/);
+  const numberMatch = trimmedLine.match(/^([a-zA-Z]+): ([0-9]+),?$/);
+  const booleanMatch = trimmedLine.match(/^([a-zA-Z]+): (true|false),?$/);
+  const objectMatch = trimmedLine.match(/^([a-zA-Z]+): \{$/);
+  const closingMatch = trimmedLine.match(/^([})]+),?$/);
+  const trailingComma = trimmedLine.endsWith(",");
+
+  if (callMatch?.[1]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="function">{callMatch[1]}</Token>({"{"}
+      </>
+    );
+  }
+
+  if (envMatch?.[1] && envMatch[2]) {
+    const suffix = trimmedLine.endsWith("!,")
+      ? "!,"
+      : trimmedLine.endsWith("!")
+        ? "!"
+        : trailingComma
+          ? ","
+          : "";
+
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="property">{envMatch[1]}</Token>:{" "}
+        <Token tone="variable">process</Token>.env.{envMatch[2]}
+        {suffix}
+      </>
+    );
+  }
+
+  if (stringMatch?.[1] && stringMatch[2]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="property">{stringMatch[1]}</Token>:{" "}
+        <Token tone="string">{`"${stringMatch[2]}"`}</Token>
+        {trailingComma ? "," : ""}
+      </>
+    );
+  }
+
+  if (numberMatch?.[1] && numberMatch[2]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="property">{numberMatch[1]}</Token>:{" "}
+        <Token tone="number">{numberMatch[2]}</Token>
+        {trailingComma ? "," : ""}
+      </>
+    );
+  }
+
+  if (booleanMatch?.[1] && booleanMatch[2]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="property">{booleanMatch[1]}</Token>:{" "}
+        <Token tone="keyword">{booleanMatch[2]}</Token>
+        {trailingComma ? "," : ""}
+      </>
+    );
+  }
+
+  if (objectMatch?.[1]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="property">{objectMatch[1]}</Token>: {"{"}
+      </>
+    );
+  }
+
+  if (closingMatch?.[1]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="keyword">{closingMatch[1]}</Token>
+        {trailingComma ? "," : ""}
+      </>
+    );
+  }
+
+  return line;
+}
+
+function generateExample(provider: ProviderProfile) {
+  return `import { createEmailClient } from "@opencoredev/email-sdk";
+import { ${provider.import} } from "${provider.importPath}";
+
+const email = createEmailClient({
+  adapters: [
+${provider.rotationConfig.join("\n")}
+  ],
+  retry: { retries: 1 },
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});`;
 }
 
 function CodeLine({ children, number }: { children?: ReactNode; number?: number }) {
@@ -340,13 +562,60 @@ function copyWithTextarea(text: string) {
   } catch {
     return false;
   } finally {
-    if (textarea.parentNode) {
-      textarea.parentNode.removeChild(textarea);
-    }
+    textarea.remove();
   }
 }
 
 function readTextSwapDuration() {
   const value = getComputedStyle(document.documentElement).getPropertyValue("--text-swap-dur");
   return Number.parseFloat(value) || 200;
+}
+
+function ProviderLogo({ active, label, logo }: { active: boolean; label: string; logo: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (!logo || imageFailed) {
+    return (
+      <span
+        className={`m-auto flex size-8 items-center justify-center rounded-full text-[9px] font-semibold sm:size-9 sm:text-[10px] ${
+          active
+            ? "bg-fd-background text-fd-foreground"
+            : "bg-fd-foreground text-fd-background"
+        }`}
+      >
+        {getProviderInitials(label)}
+      </span>
+    );
+  }
+
+  return (
+    <span className="m-auto flex size-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/10 sm:size-9">
+      <img
+        alt={label}
+        className="size-6 rounded-full object-contain sm:size-7"
+        loading="lazy"
+        src={logo}
+        onError={() => {
+          setImageFailed(true);
+        }}
+      />
+    </span>
+  );
+}
+
+function getProviderInitials(label: string) {
+  if (label === "SMTP") {
+    return "SMTP";
+  }
+
+  const words = label.split(" ");
+
+  if (words.length > 1) {
+    return words
+      .map((word) => word.charAt(0))
+      .join("")
+      .toUpperCase();
+  }
+
+  return label.slice(0, 2).toUpperCase();
 }
