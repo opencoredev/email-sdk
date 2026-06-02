@@ -665,6 +665,25 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.body).toBeUndefined();
   });
 
+  test("Sequenzy omits attachments when the message has none", async () => {
+    const capture = jsonCapture({ success: true, jobId: "job_123" });
+
+    await sequenzy({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        attachments: undefined,
+      },
+      context,
+    );
+
+    expect(capture.calls[0]?.json).not.toHaveProperty("attachments");
+  });
+
   test("Sequenzy surfaces provider envelope errors", async () => {
     await expect(
       sequenzy({

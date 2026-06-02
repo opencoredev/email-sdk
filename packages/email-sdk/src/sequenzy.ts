@@ -68,7 +68,9 @@ export function sequenzy(options: SequenzyProviderOptions): EmailProvider<{ base
         subscriberExternalId,
         from: formatAddress(message.from),
         replyTo: formatAddresses(message.replyTo)[0],
-        attachments: await Promise.all((message.attachments ?? []).map(toSequenzyAttachment)),
+        attachments: message.attachments?.length
+          ? await Promise.all(message.attachments.map(toSequenzyAttachment))
+          : undefined,
       };
     },
     parseResponse(body) {
