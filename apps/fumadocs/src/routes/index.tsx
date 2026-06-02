@@ -144,7 +144,7 @@ function Home() {
             </div>
 
             <div className="mt-8 divide-y divide-fd-border/80 border-y border-fd-border/80 text-sm">
-              <ProofPoint label="Fallbacks" text="Retry failed sends and move to backup routes." />
+              <ProofPoint label="Retries" text="Retry transient failures without changing code." />
               <ProofPoint label="Adapters" text="Keep provider-specific code out of your app." />
               <ProofPoint label="CLI" text="Run setup checks and test sends locally." />
             </div>
@@ -397,6 +397,7 @@ function renderConfigLine(line: string) {
   const numberMatch = trimmedLine.match(/^([a-zA-Z]+): ([0-9]+),?$/);
   const booleanMatch = trimmedLine.match(/^([a-zA-Z]+): (true|false),?$/);
   const objectMatch = trimmedLine.match(/^([a-zA-Z]+): \{$/);
+  const closingMatch = trimmedLine.match(/^([})]+),?$/);
   const trailingComma = trimmedLine.endsWith(",");
 
   if (callMatch?.[1]) {
@@ -457,6 +458,16 @@ function renderConfigLine(line: string) {
       <>
         {leadingWhitespace}
         <Token tone="property">{objectMatch[1]}</Token>: {"{"}
+      </>
+    );
+  }
+
+  if (closingMatch?.[1]) {
+    return (
+      <>
+        {leadingWhitespace}
+        <Token tone="keyword">{closingMatch[1]}</Token>
+        {trailingComma ? "," : ""}
       </>
     );
   }

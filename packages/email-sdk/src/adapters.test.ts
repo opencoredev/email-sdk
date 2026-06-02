@@ -730,6 +730,24 @@ describe("provider payloads", () => {
     ).rejects.toThrow("Template disabled");
   });
 
+  test("Sequenzy surfaces error bodies without success flags", async () => {
+    await expect(
+      sequenzy({
+        apiKey: "key",
+        fetch: jsonCapture({ error: "Unauthorized" }).fetch,
+      }).send(
+        {
+          ...message,
+          cc: undefined,
+          bcc: undefined,
+          headers: undefined,
+          tags: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("Unauthorized");
+  });
+
   test("ZeptoMail uses the official address shape", async () => {
     const capture = jsonCapture({ request_id: "zoho_123" });
 

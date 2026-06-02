@@ -71,7 +71,7 @@ export function sequenzy(options: SequenzyProviderOptions): EmailProvider<{ base
       };
     },
     parseResponse(body) {
-      if (body.success === false) {
+      if (body.success === false || body.error) {
         throw new EmailProviderError(`Sequenzy failed: ${body.error ?? "Unknown error"}`, {
           provider: "sequenzy",
           retryable: false,
