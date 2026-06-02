@@ -16,7 +16,7 @@ const providers = [
     label: "Resend",
     import: "resend",
     importPath: "@opencoredev/email-sdk/resend",
-    logo: "/og/provider-logos/resend.png",
+    logo: "https://cdn.simpleicons.org/resend/111111",
     rotationConfig: ["    resend({", "      apiKey: process.env.RESEND_API_KEY!,", "    }),"],
   },
   {
@@ -153,25 +153,26 @@ function Home() {
           </div>
 
           <div className="min-w-0">
-            <div className="overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10">
-              <div className="border-b border-fd-border bg-fd-background px-4 py-4">
-                <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center text-xs text-fd-muted-foreground">
+            <div className="flex h-[680px] overflow-hidden rounded-lg border border-fd-border bg-fd-card shadow-xl shadow-black/10 lg:h-[760px]">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="border-b border-fd-border bg-fd-background px-4 py-4">
+                  <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center text-xs text-fd-muted-foreground">
                   <span>Provider</span>
-                  <span className="max-w-48 truncate rounded-full bg-fd-muted px-3 py-1 font-medium text-fd-foreground sm:max-w-none">
-                    {activeProvider.label}
+                  <span className="inline-flex h-7 min-w-32 items-center justify-center rounded-full bg-fd-muted px-3 text-[11px] font-semibold text-fd-foreground shadow-inner shadow-black/10 sm:min-w-40">
+                    <span className="max-w-32 truncate sm:max-w-36">{activeProvider.label}</span>
                   </span>
                   <span className="hidden justify-self-end sm:block">Use arrows or click a logo</span>
                 </div>
-                <div className="grid min-h-16 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 sm:grid-cols-[3rem_minmax(0,1fr)_3rem] sm:gap-3">
+                  <div className="grid min-h-16 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 sm:grid-cols-[3.25rem_minmax(0,1fr)_3.25rem] sm:gap-3">
                   <button
                     aria-label="Show previous provider"
-                    className="inline-flex size-10 items-center justify-center rounded-full border border-fd-border text-fd-muted-foreground transition hover:border-fd-primary hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                    className="inline-flex size-10 items-center justify-center rounded-full border border-fd-border bg-fd-card text-fd-muted-foreground transition hover:border-fd-primary hover:bg-fd-muted hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-11"
                     onClick={handlePreviousProvider}
                     type="button"
                   >
                     <ChevronLeft className="size-4" strokeWidth={2} />
                   </button>
-                  <div className="mx-auto flex w-full max-w-full items-center justify-start gap-1.5 overflow-x-auto px-1 sm:justify-center sm:gap-2">
+                  <div className="mx-auto flex h-16 w-full max-w-full items-center justify-start gap-1.5 overflow-x-auto px-1 sm:justify-center sm:gap-2">
                     {providers.map((provider, index) => {
                       const isActive = index === providerIndex;
 
@@ -179,10 +180,10 @@ function Home() {
                         <button
                           aria-label={`Select ${provider.label} adapter`}
                           aria-pressed={isActive}
-                          className={`relative inline-flex size-10 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-12 ${
+                          className={`relative inline-flex size-11 shrink-0 items-center justify-center rounded-full transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-12 ${
                             isActive
-                              ? "bg-fd-muted text-fd-foreground"
-                              : "bg-transparent text-fd-muted-foreground hover:bg-fd-muted/45 hover:text-fd-foreground"
+                              ? "bg-fd-foreground text-fd-background shadow-lg shadow-black/20"
+                              : "bg-transparent text-fd-muted-foreground opacity-70 hover:bg-fd-muted/45 hover:text-fd-foreground hover:opacity-100"
                           }`}
                           key={provider.key}
                           onClick={() => {
@@ -191,16 +192,16 @@ function Home() {
                           type="button"
                         >
                           {isActive ? (
-                            <span className="absolute -bottom-2 h-0.5 w-6 rounded-full bg-fd-primary" />
+                            <span className="absolute -bottom-2 h-1 w-1 rounded-full bg-fd-primary" />
                           ) : null}
-                          <ProviderLogo label={provider.label} logo={provider.logo} />
+                          <ProviderLogo active={isActive} label={provider.label} logo={provider.logo} />
                         </button>
                       );
                     })}
                   </div>
                   <button
                     aria-label="Show next provider"
-                    className="inline-flex size-10 items-center justify-center justify-self-end rounded-full border border-fd-border text-fd-muted-foreground transition hover:border-fd-primary hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                    className="inline-flex size-10 items-center justify-center justify-self-end rounded-full border border-fd-border bg-fd-card text-fd-muted-foreground transition hover:border-fd-primary hover:bg-fd-muted hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:size-11"
                     onClick={handleNextProvider}
                     type="button"
                   >
@@ -216,13 +217,14 @@ function Home() {
                 <CopyCodeButton provider={activeProvider} />
               </div>
               <pre
-                className="min-h-[460px] overflow-x-auto p-4 text-[12px] leading-[1.3] text-fd-foreground transition duration-500 md:min-h-[520px] md:p-5 md:text-[13px] md:leading-[1.4]"
+                className="min-h-0 flex-1 overflow-auto p-4 text-[12px] leading-[1.3] text-fd-foreground transition duration-500 md:p-5 md:text-[13px] md:leading-[1.4]"
                 key={activeProvider.key}
               >
                 <code>
                   <SyntaxCode key={activeProvider.key} provider={activeProvider} />
                 </code>
               </pre>
+              </div>
             </div>
           </div>
         </section>
@@ -468,12 +470,18 @@ function readTextSwapDuration() {
   return Number.parseFloat(value) || 200;
 }
 
-function ProviderLogo({ label, logo }: { label: string; logo: string }) {
+function ProviderLogo({ active, label, logo }: { active: boolean; label: string; logo: string }) {
   const [imageFailed, setImageFailed] = useState(false);
 
   if (!logo || imageFailed) {
     return (
-      <span className="m-auto flex size-8 items-center justify-center rounded-full bg-fd-foreground text-[9px] font-semibold text-fd-background sm:size-9 sm:text-[10px]">
+      <span
+        className={`m-auto flex size-8 items-center justify-center rounded-full text-[9px] font-semibold sm:size-9 sm:text-[10px] ${
+          active
+            ? "bg-fd-background text-fd-foreground"
+            : "bg-fd-foreground text-fd-background"
+        }`}
+      >
         {getProviderInitials(label)}
       </span>
     );
