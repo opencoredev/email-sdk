@@ -3,7 +3,6 @@
   "icon": "Cable",
   "pages": [
     "index",
-    "recommendations",
     "field-support",
     "resend",
     "postmark",

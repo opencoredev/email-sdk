@@ -1,4 +1,8 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
+
+type SponsorSpotlightProps = {
+  compact?: boolean;
+};
 
 const sponsors = [
   {
@@ -9,45 +13,62 @@ const sponsors = [
   },
 ] as const;
 
-export function SponsorSpotlight() {
+const openSponsorSlots = [1, 2, 3] as const;
+const sponsorHref = "https://github.com/sponsors/opencoredev";
+
+export function SponsorSpotlight({ compact = false }: SponsorSpotlightProps) {
   return (
     <section
       aria-labelledby="sponsors-heading"
-      className="not-prose border-y border-fd-border/80 py-8"
+      className={`not-prose ${compact ? "pt-8" : "border-y border-fd-border/80 py-8"}`}
     >
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
+      <div className={compact ? "mb-4" : "mb-6"}>
+        <div className={compact ? "flex items-center gap-3" : ""}>
           <h2
-            className="text-2xl font-semibold tracking-normal text-fd-foreground"
+            className={
+              compact
+                ? "text-sm font-medium text-fd-muted-foreground"
+                : "text-2xl font-semibold tracking-normal text-fd-foreground"
+            }
             id="sponsors-heading"
           >
             Sponsors
           </h2>
-          <p className="mt-1 text-sm text-fd-muted-foreground">
-            Companies helping keep Email SDK moving.
+          <p
+            className={
+              compact ? "text-xs text-fd-muted-foreground" : "mt-1 text-sm text-fd-muted-foreground"
+            }
+          >
+            Companies helping keep Email SDK moving. Open slots are available.
           </p>
         </div>
-        <a
-          className="hidden text-sm font-medium text-fd-primary underline-offset-4 hover:underline sm:inline"
-          href={sponsors[0].href}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Visit Sequenzy
-        </a>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-8 sm:gap-10">
+      <div
+        className={
+          compact ? "flex flex-wrap gap-4" : "flex flex-wrap justify-center gap-8 sm:gap-10"
+        }
+      >
         {sponsors.map((sponsor) => (
           <a
             aria-label={`Visit ${sponsor.name}`}
-            className="group grid justify-items-center gap-3 text-center"
+            className={
+              compact
+                ? "group grid justify-items-center gap-2 text-center"
+                : "group grid justify-items-center gap-3 text-center"
+            }
             href={sponsor.href}
             key={sponsor.name}
             rel="noreferrer"
             target="_blank"
           >
-            <span className="grid size-24 place-items-center rounded-full border border-fd-border bg-white p-3 shadow-sm transition group-hover:-translate-y-0.5 group-hover:border-fd-primary/40 group-hover:shadow-md sm:size-28">
+            <span
+              className={
+                compact
+                  ? "grid size-14 place-items-center rounded-full border border-fd-border bg-white p-1.5 shadow-sm transition group-hover:-translate-y-0.5 group-hover:border-fd-primary/40 group-hover:shadow-md"
+                  : "grid size-24 place-items-center rounded-full border border-fd-border bg-white p-3 shadow-sm transition group-hover:-translate-y-0.5 group-hover:border-fd-primary/40 group-hover:shadow-md sm:size-28"
+              }
+            >
               <img
                 alt={`${sponsor.name} logo`}
                 className="size-full rounded-full object-contain"
@@ -56,12 +77,49 @@ export function SponsorSpotlight() {
                 width={88}
               />
             </span>
-            <span className="space-y-1">
-              <span className="block text-xs font-medium text-fd-muted-foreground">
-                {sponsor.label}
-              </span>
+            <span className={compact ? "space-y-0.5" : "space-y-1"}>
+              {!compact ? (
+                <span className="block text-xs font-medium text-fd-muted-foreground">
+                  {sponsor.label}
+                </span>
+              ) : null}
               <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-fd-foreground group-hover:text-fd-primary">
                 {sponsor.name}
+                <ExternalLink aria-hidden="true" className="size-3.5" strokeWidth={2} />
+              </span>
+            </span>
+          </a>
+        ))}
+        {openSponsorSlots.map((slot) => (
+          <a
+            aria-label="Sponsor Email SDK"
+            className={
+              compact
+                ? "group grid justify-items-center gap-2 text-center"
+                : "group grid justify-items-center gap-3 text-center"
+            }
+            href={sponsorHref}
+            key={`open-sponsor-slot-${slot}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span
+              className={
+                compact
+                  ? "grid size-14 place-items-center rounded-full border border-dashed border-fd-border bg-fd-muted/25 text-fd-muted-foreground transition group-hover:-translate-y-0.5 group-hover:border-fd-primary/60 group-hover:bg-fd-accent group-hover:text-fd-foreground"
+                  : "grid size-24 place-items-center rounded-full border border-dashed border-fd-border bg-fd-muted/25 text-fd-muted-foreground transition group-hover:-translate-y-0.5 group-hover:border-fd-primary/60 group-hover:bg-fd-accent group-hover:text-fd-foreground sm:size-28"
+              }
+            >
+              <Plus aria-hidden="true" className={compact ? "size-5" : "size-7"} strokeWidth={2} />
+            </span>
+            <span className={compact ? "space-y-0.5" : "space-y-1"}>
+              {!compact ? (
+                <span className="block text-xs font-medium text-fd-muted-foreground">
+                  Open slot
+                </span>
+              ) : null}
+              <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-fd-muted-foreground group-hover:text-fd-primary">
+                Sponsor
                 <ExternalLink aria-hidden="true" className="size-3.5" strokeWidth={2} />
               </span>
             </span>
