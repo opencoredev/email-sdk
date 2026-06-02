@@ -45,15 +45,15 @@ Do not add third-party provider experiments to the official package by default. 
 
 ## What the status labels mean
 
-Provider cards use three labels:
+Provider cards use these labels:
 
 - `Official` means the adapter ships in `@opencoredev/email-sdk`.
-- `Sponsored` means the provider has sponsored Email SDK. Sponsored adapters are still documented with the same field-support and verification language as the rest of the catalog.
-- `Payload-tested` means repository tests cover request mapping, responses, and fail-fast validation with injected fetch calls.
+- `Sponsor` means the provider supports Email SDK. Sponsor adapters appear first in the catalog.
+- `API tested` means a local check has successfully called a live provider API with a real key. It does not prove live delivery unless the adapter page says a send was performed.
+- `Not API tested` means we have not yet run a live provider API check for that adapter.
+- `Request tested` means repository tests cover request mapping, responses, and fail-fast validation with injected fetch calls.
 - `Built-in transport` means the adapter sends through Email SDK's own transport implementation instead of a provider API.
-- `Local API auth test` means the repository includes a local API-key check for that provider, but live delivery still depends on account setup.
-- `Live account required` means final delivery still depends on provider setup: verified domains, sender identities, API scopes, sandbox settings, regions, rate limits, and provider policy.
-- `SMTP server required` means final delivery depends on the SMTP host, credentials, and TLS settings you provide.
+- `No provider API` means the adapter does not call a hosted provider API.
 
 Email SDK can catch unsupported fields before a request. It cannot make a provider account ready to send from an unverified domain.
 

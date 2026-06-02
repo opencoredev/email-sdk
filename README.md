@@ -9,6 +9,15 @@ A lightweight TypeScript SDK for transactional email send pipelines. Use one cli
 
 Docs: https://email-sdk.dev/docs
 
+## Sponsors
+
+Email SDK is supported by companies helping keep provider integrations practical and maintained.
+
+### Special Sponsors
+
+| [<img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="96" height="96" alt="Sequenzy logo"><br><sub><b>Sequenzy</b></sub>](https://www.sequenzy.com/) |
+| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+
 ## What Is Here
 
 - `packages/email-sdk` - core SDK, adapters, plugins, CLI, tests, and package README

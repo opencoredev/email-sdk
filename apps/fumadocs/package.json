@@ -5,7 +5,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite dev --port=4000",
-    "build": "vite build",
+    "build": "vite build && bun scripts/ensure-root-index.ts",
     "start": "serve .output/public --config ../../serve.json",
     "preview": "vite preview",
     "test": "bun test",
