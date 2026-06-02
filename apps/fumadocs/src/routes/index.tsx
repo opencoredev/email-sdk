@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
+import { SponsorSpotlight } from "@/components/sponsors";
 import { baseOptions } from "@/lib/layout.shared";
 import { homeStructuredData, siteTitle } from "@/lib/metadata";
 import { appDescription, siteUrl } from "@/lib/shared";
@@ -99,6 +100,10 @@ function Home() {
               </pre>
             </div>
           </div>
+        </section>
+
+        <section className="mx-auto max-w-5xl px-6 pb-12 md:px-10 lg:px-14 xl:px-16">
+          <SponsorSpotlight />
         </section>
       </main>
     </HomeLayout>

@@ -17,14 +17,14 @@ Email SDK keeps one message shape, but email APIs do not all expose the same fea
 
 Fallback routes are only safe when the backup adapter can represent the same message fields that matter to your app. Choose primary and backup routes from the fields your production messages use, not just from provider popularity.
 
-| Need                             | Start with                                                |
-| -------------------------------- | --------------------------------------------------------- |
-| Most complete API field mapping  | Postmark, SendGrid, AWS SES, Mailgun, Brevo               |
-| Resend-style DX with attachments | Resend                                                    |
-| Cheap or self-managed delivery   | SMTP                                                      |
-| Product/event email              | Loops, Plunk                                              |
-| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark        |
-| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Mailtrap |
+| Need                             | Start with                                                          |
+| -------------------------------- | ------------------------------------------------------------------- |
+| Most complete API field mapping  | Postmark, SendGrid, AWS SES, Mailgun, Brevo                         |
+| Resend-style DX with attachments | Resend                                                              |
+| Cheap or self-managed delivery   | SMTP                                                                |
+| Product/event email              | Sequenzy, Loops, Plunk                                              |
+| Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark                  |
+| Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Mailtrap, Sequenzy |
 
 If you are unsure, start with Resend for the first send, then choose fallback routes from this table based on the exact fields your app sends. Do not add a fallback adapter until it can represent the same message shape as your primary route.
 
@@ -61,6 +61,7 @@ These adapters are useful, but their public APIs do not match the full `EmailMes
 | --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- |
 | SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
 | Loops     | No  | No  | No       | No      | Yes      | No     | Yes         |
+| Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         |
 | Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         |
 | Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         |
 | ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         |
@@ -79,6 +80,8 @@ SMTP is built in and does not use Nodemailer. It maps address fields and headers
 Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp Transactional rejects `replyTo`, and SMTP rejects attachments. Fail-fast validation protects fallback routes from silent data loss: if a field matters, you find out before the provider request.
 
 Loops attachments map to the provider's transactional attachments payload. Loops documents that transactional attachments require support enablement on the account, so accounts without that enablement should omit `attachments`.
+
+Sequenzy metadata maps to transactional `variables`. Reserved metadata keys map to provider fields: `sequenzySlug` or `slug`, `sequenzyPreview` or `preview`, and `subscriberExternalId` or `sequenzySubscriberExternalId`.
 
 The SDK's local checks are not a live deliverability guarantee. Provider accounts still need verified senders or domains, the correct region, API scopes, and any sandbox or recipient allow-list configuration required by that service.
 

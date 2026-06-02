@@ -3,6 +3,7 @@
   "icon": "Cable",
   "pages": [
     "index",
+    "recommendations",
     "field-support",
     "resend",
     "postmark",
@@ -15,6 +16,7 @@
     "mailchimp",
     "sparkpost",
     "loops",
+    "sequenzy",
     "plunk",
     "mailtrap",
     "cloudflare",

@@ -20,6 +20,7 @@ export function ProviderGrid() {
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
+            {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
             <ProviderPill>{provider.testStatus}</ProviderPill>
             <ProviderPill muted>{provider.liveStatus}</ProviderPill>
           </div>
@@ -28,6 +29,7 @@ export function ProviderGrid() {
             <DocsVersionLink
               className="inline-flex h-8 items-center justify-center rounded-md border border-fd-border px-3 text-xs font-medium transition hover:bg-fd-accent"
               docsPath={provider.docs}
+              forceLatest={"currentOnly" in provider && provider.currentOnly}
             >
               Docs
             </DocsVersionLink>
@@ -63,6 +65,7 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
           <code className="break-all text-xs text-fd-muted-foreground">{provider.importPath}</code>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
+            {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
             <ProviderPill>{provider.testStatus}</ProviderPill>
             <ProviderPill muted>{provider.liveStatus}</ProviderPill>
           </div>

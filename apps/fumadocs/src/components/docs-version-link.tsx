@@ -7,17 +7,19 @@ import { getDocsVersionHref } from "@/lib/versions";
 type DocsVersionLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
   children: ReactNode;
   docsPath?: string;
+  forceLatest?: boolean;
   preload?: "intent" | false;
 };
 
 export function DocsVersionLink({
   children,
   docsPath = "/docs",
+  forceLatest = false,
   preload = "intent",
   ...props
 }: DocsVersionLinkProps) {
   const selectedVersion = useSelectedDocsVersion();
-  const href = getDocsVersionHref(selectedVersion, docsPath);
+  const href = forceLatest ? docsPath : getDocsVersionHref(selectedVersion, docsPath);
   const splat = href.replace(/^\/docs\/?/, "");
 
   return (

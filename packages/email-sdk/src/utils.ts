@@ -271,6 +271,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
   sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
   loops: { attachments: true, metadata: true },
+  sequenzy: { replyTo: true, attachments: true, metadata: true },
   plunk: { replyTo: true, headers: true, attachments: true, metadata: true },
   mailtrap: {
     cc: true,

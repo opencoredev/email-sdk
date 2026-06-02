@@ -83,6 +83,10 @@
       "types": "./dist/loops.d.ts",
       "import": "./dist/loops.js"
     },
+    "./sequenzy": {
+      "types": "./dist/sequenzy.d.ts",
+      "import": "./dist/sequenzy.js"
+    },
     "./plunk": {
       "types": "./dist/plunk.d.ts",
       "import": "./dist/plunk.js"
