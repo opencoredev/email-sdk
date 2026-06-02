@@ -47,6 +47,8 @@ const result = await email.send({
 console.log(result.provider, result.messageId);
 ```
 
+Sequenzy accepts one provider `body` value. When both `html` and `text` are present, the adapter sends `html`; omit `html` when the Sequenzy route should send a plain-text body.
+
 Sequenzy maps flat `metadata` values to `variables`. Reserved metadata keys are mapped to provider fields instead:
 
 | Metadata key                                             | Sequenzy field         |
@@ -112,6 +114,8 @@ The adapter maps Sequenzy `jobId` to the normalized `id` and `messageId` fields,
 ## Field support
 
 Sequenzy maps one or more `to` recipients, `from`, `subject`, HTML/text body, one `replyTo`, flat metadata variables, template slugs, preview text, subscriber external IDs, and attachments. It rejects CC, BCC, headers, tags, and multiple reply-to addresses before the API call.
+
+Because Sequenzy has one body field, HTML takes priority over text when both content fields are present.
 
 See <a href="/docs/adapters/field-support">field support</a> before using Sequenzy in a fallback route.
 

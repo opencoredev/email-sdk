@@ -136,6 +136,8 @@ Loops attachments map to the provider's transactional attachments payload. Loops
 
 Sequenzy metadata maps to transactional `variables`. Reserved metadata keys map to provider fields: `sequenzySlug`, `sequenzyPreview`, and `subscriberExternalId` or `sequenzySubscriberExternalId`. Generic metadata keys like `slug` and `preview` remain variables.
 
+Sequenzy has one provider body field. If both `html` and `text` are present, Email SDK sends the HTML body to Sequenzy and keeps the text body for other routes.
+
 The SDK's local checks are not a live deliverability guarantee. Provider accounts still need verified senders or domains, the correct region, API scopes, and any sandbox or recipient allow-list configuration required by that service.
 
 ## Attachment rules
