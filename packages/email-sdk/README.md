@@ -53,7 +53,7 @@ await email.send({
 
 Each adapter is exported from its own entry point so apps only import what they use.
 
-If you are choosing a first adapter, start with Resend for the shortest setup path. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+If you are choosing a first adapter, start with Resend for the shortest setup path. Use Sequenzy for product-led transactional sends with the repo's local API-key check. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -86,6 +86,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/mailchimp`  | Mailchimp Transactional          |
 | `@opencoredev/email-sdk/sparkpost`  | SparkPost                        |
 | `@opencoredev/email-sdk/loops`      | Loops                            |
+| `@opencoredev/email-sdk/sequenzy`   | Sequenzy                         |
 | `@opencoredev/email-sdk/plunk`      | Plunk                            |
 | `@opencoredev/email-sdk/mailtrap`   | Mailtrap                         |
 | `@opencoredev/email-sdk/scaleway`   | Scaleway                         |

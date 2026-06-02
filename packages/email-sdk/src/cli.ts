@@ -16,6 +16,7 @@ import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
+import { sequenzy } from "./sequenzy.js";
 import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { smtp } from "./smtp.js";
@@ -70,6 +71,7 @@ const providerDocs = [
     env: ["LOOPS_API_KEY", "LOOPS_TRANSACTIONAL_ID"],
     note: "Loops transactional email",
   },
+  { name: "sequenzy", env: ["SEQUENZY_API_KEY"], note: "Sequenzy transactional email API" },
   { name: "plunk", env: ["PLUNK_API_KEY"], note: "Plunk public send API" },
   { name: "mailtrap", env: ["MAILTRAP_API_KEY"], note: "Mailtrap Email Sending API" },
   {
@@ -132,6 +134,11 @@ const factories = {
       apiKey: flagOrEnv(flags, "api-key", "LOOPS_API_KEY"),
       transactionalId: flagOrEnv(flags, "transactional-id", "LOOPS_TRANSACTIONAL_ID"),
     }),
+  sequenzy: (flags) =>
+    sequenzy({
+      apiKey: flagOrEnv(flags, "api-key", "SEQUENZY_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.SEQUENZY_BASE_URL,
+    }),
   plunk: (flags) => plunk({ apiKey: flagOrEnv(flags, "api-key", "PLUNK_API_KEY") }),
   mailtrap: (flags) => mailtrap({ apiKey: flagOrEnv(flags, "api-key", "MAILTRAP_API_KEY") }),
   scaleway: (flags) =>
@@ -178,6 +185,7 @@ const envFlagNames: Record<string, string> = {
   SPARKPOST_API_KEY: "api-key",
   LOOPS_API_KEY: "api-key",
   LOOPS_TRANSACTIONAL_ID: "transactional-id",
+  SEQUENZY_API_KEY: "api-key",
   PLUNK_API_KEY: "api-key",
   MAILTRAP_API_KEY: "api-key",
   SCALEWAY_SECRET_KEY: "secret-key",

@@ -4,6 +4,7 @@ import type { MDXComponents } from "mdx/types";
 import { CommunityPluginRegistry } from "./community-plugin-registry";
 import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
+import { SponsorSpotlight } from "./sponsors";
 
 type MdxComponentOptions = {
   docsBasePath?: string;
@@ -38,6 +39,7 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     PackageInstallTabs,
     ProviderBadge,
     ProviderGrid,
+    SponsorSpotlight,
     ...components,
   } satisfies MDXComponents;
 }

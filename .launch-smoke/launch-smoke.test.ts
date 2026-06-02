@@ -27,6 +27,7 @@ import { plunk } from "@opencoredev/email-sdk/plunk";
 import { postmark } from "@opencoredev/email-sdk/postmark";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
+import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
 import { ses } from "@opencoredev/email-sdk/ses";
 import { smtp } from "@opencoredev/email-sdk/smtp";
@@ -263,6 +264,18 @@ describe("documented adapter entry points", () => {
       loops({ apiKey: "test", transactionalId: "txn", fetch: fetchOk({ id: "loops_1" }).fetcher }),
       { ...simpleMessage, attachments: richMessage.attachments, metadata: richMessage.metadata },
       { id: "loops_1" },
+    ],
+    [
+      "sequenzy",
+      sequenzy({ apiKey: "test", fetch: fetchOk({ success: true, jobId: "sequenzy_1" }).fetcher }),
+      {
+        ...richMessage,
+        cc: undefined,
+        bcc: undefined,
+        headers: undefined,
+        tags: undefined,
+      },
+      { success: true, jobId: "sequenzy_1" },
     ],
     [
       "plunk",

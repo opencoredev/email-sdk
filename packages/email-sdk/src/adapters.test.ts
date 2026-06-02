@@ -12,6 +12,7 @@ import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
+import { sequenzy } from "./sequenzy.js";
 import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { sparkpost } from "./sparkpost.js";
@@ -574,6 +575,114 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Sequenzy maps direct transactional sends and reserved metadata", async () => {
+    const capture = jsonCapture({
+      success: true,
+      jobId: "job_123",
+      to: "Ada <ada@example.com>",
+      transactional: {
+        id: "txn_123",
+        slug: "welcome",
+      },
+    });
+
+    const response = await sequenzy({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        headers: undefined,
+        tags: undefined,
+        metadata: {
+          sequenzyPreview: "Preview text",
+          subscriberExternalId: "user_123",
+          plan: "pro",
+        },
+      },
+      context,
+    );
+
+    expect(response.id).toBe("job_123");
+    expect(response.accepted).toEqual(["Ada <ada@example.com>"]);
+    expect(capture.calls[0]?.url).toBe("https://api.sequenzy.com/api/v1/transactional/send");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer key");
+    expect(capture.calls[0]?.json).toMatchObject({
+      to: "Ada <ada@example.com>",
+      from: "Acme <hello@example.com>",
+      replyTo: "reply@example.com",
+      subject: "Welcome",
+      body: "<p>Hello</p>",
+      preview: "Preview text",
+      subscriberExternalId: "user_123",
+      variables: {
+        plan: "pro",
+      },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      filename: "hello.txt",
+      content: base64("hello"),
+    });
+  });
+
+  test("Sequenzy maps template slug sends and URL attachments", async () => {
+    const capture = jsonCapture({ success: true, jobId: "job_123" });
+
+    await sequenzy({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            path: "https://example.com/invoice.pdf",
+          },
+        ],
+        metadata: {
+          sequenzySlug: "welcome",
+          NAME: "Ada",
+        },
+      },
+      context,
+    );
+
+    expect(capture.calls[0]?.json).toMatchObject({
+      slug: "welcome",
+      variables: {
+        NAME: "Ada",
+      },
+      attachments: [
+        {
+          filename: "invoice.pdf",
+          path: "https://example.com/invoice.pdf",
+        },
+      ],
+    });
+    expect(capture.calls[0]?.json.subject).toBeUndefined();
+    expect(capture.calls[0]?.json.body).toBeUndefined();
+  });
+
+  test("Sequenzy surfaces provider envelope errors", async () => {
+    await expect(
+      sequenzy({
+        apiKey: "key",
+        fetch: jsonCapture({ success: false, error: "Template disabled" }).fetch,
+      }).send(
+        {
+          ...message,
+          cc: undefined,
+          bcc: undefined,
+          headers: undefined,
+          tags: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("Template disabled");
+  });
+
   test("ZeptoMail uses the official address shape", async () => {
     const capture = jsonCapture({ request_id: "zoho_123" });
 
@@ -683,6 +792,14 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("mailchimp does not support");
+
+    await expect(
+      sequenzy({ apiKey: "key", fetch: jsonCapture({ success: true }).fetch }).send(
+        { ...limitedMessage, cc: "cc@example.com" },
+        context,
+      ),
+    ).rejects.toThrow("sequenzy does not support");
+
     await expect(
       cloudflare({
         apiToken: "token",

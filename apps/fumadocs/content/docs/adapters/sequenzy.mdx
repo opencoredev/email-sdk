@@ -1,0 +1,93 @@
+---
+title: Sequenzy
+description: Configure the Sequenzy transactional email adapter.
+icon: sequenzy
+---
+
+The Sequenzy adapter calls the Sequenzy transactional email API directly. It does not add a runtime dependency.
+
+<ProviderBadge adapter="sequenzy" />
+
+Sequenzy is a sponsored adapter, and it is also generally recommended for product-led transactional emails. The SDK includes payload tests for the adapter and a local API-key auth check for development and release smoke work.
+
+## Before live sends
+
+Create a Sequenzy API key and verify the sender domain or sender address you plan to use in `from`. Run the local API auth check before sending:
+
+```bash
+SEQUENZY_API_KEY="seq_live_..." bun run live:sequenzy
+```
+
+That command checks the authenticated account context. It does not send email unless you explicitly set `SEQUENZY_LIVE_SEND=true` with a test sender and recipient.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
+
+const email = createEmailClient({
+  adapters: [sequenzy({ apiKey: process.env.SEQUENZY_API_KEY! })],
+});
+```
+
+## Send direct content
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+  replyTo: "support@acme.com",
+  metadata: {
+    plan: "pro",
+  },
+});
+```
+
+Flat `metadata` values map to Sequenzy `variables`. Reserved metadata keys are mapped to provider fields instead:
+
+| Metadata key                                             | Sequenzy field         |
+| -------------------------------------------------------- | ---------------------- |
+| `sequenzySlug` or `slug`                                 | `slug`                 |
+| `sequenzyPreview` or `preview`                           | `preview`              |
+| `subscriberExternalId` or `sequenzySubscriberExternalId` | `subscriberExternalId` |
+
+Template sends can pass a slug while keeping the normalized Email SDK message shape:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Template fallback body for local validation.</p>",
+  metadata: {
+    sequenzySlug: "welcome",
+    NAME: "Ada",
+  },
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                          |
+| --------- | -------------- | -------- | ---------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Sequenzy API key.                              |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.sequenzy.com/api/v1`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
+
+## Field support
+
+Sequenzy maps `to`, `from`, `subject`, HTML/text body, a single `replyTo`, flat `metadata` variables, and attachments. URL attachments are sent as `path`; local file and in-memory attachments are encoded as Base64 `content`. Unsupported fields throw before the API call.
+
+See <a href="/docs/adapters/field-support">field support</a> before using Sequenzy in a fallback route.
+
+## CLI smoke test
+
+```bash
+SEQUENZY_API_KEY="seq_live_..." npx --yes --package @opencoredev/email-sdk email-sdk send \
+  --adapter sequenzy \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Sequenzy test" \
+  --text "It works"
+```

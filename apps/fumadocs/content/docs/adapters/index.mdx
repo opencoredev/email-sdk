@@ -11,35 +11,20 @@ Every adapter follows the same contract: map the fields it supports and throw a 
 fields the provider API cannot represent. Use the <a href="/docs/adapters/field-support">SDK field support guide</a>
 before choosing fallback routes.
 
+<SponsorSpotlight />
+
 <ProviderGrid />
 
 ## Which adapter should I start with?
 
-| If you want...                         | Start with                                               |
-| -------------------------------------- | -------------------------------------------------------- |
-| The fastest first send                 | Resend                                                   |
-| Mature transactional delivery controls | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo  |
-| A backup route for production delivery | A primary API adapter plus Postmark or SMTP              |
-| Product-triggered emails               | Loops or Plunk                                           |
-| A cheap or self-managed transport      | SMTP                                                     |
-| Heavy attachment support               | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend |
-
-## Want to build a community adapter?
-
-Do not add third-party provider experiments to the official package by default. Publish a separate community package, export an adapter plugin, and list it in the community registry if you want discoverability.
-
-<Cards>
-  <Card
-    title="Create an adapter"
-    href="/docs/guides/authoring/create-adapter"
-    description="Implement the provider mapping and wrap it as an adapter plugin."
-  />
-  <Card
-    title="Publish a community adapter"
-    href="/docs/guides/authoring/publish-community-adapter"
-    description="Build and publish a third-party provider package without making it official."
-  />
-</Cards>
+| If you want...                         | Start with                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| The fastest first send                 | Resend                                                                       |
+| Mature transactional delivery controls | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo                      |
+| A backup route for production delivery | A primary API adapter plus Postmark or SMTP                                  |
+| Product-triggered emails               | Sequenzy, Loops, or Plunk                                                    |
+| A cheap or self-managed transport      | SMTP                                                                         |
+| Heavy attachment support               | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
 
 ## Want to build a community adapter?
 
@@ -63,8 +48,10 @@ Do not add third-party provider experiments to the official package by default. 
 Provider cards use three labels:
 
 - `Official` means the adapter ships in `@opencoredev/email-sdk`.
+- `Sponsored` means the provider has sponsored Email SDK. Sponsored adapters are still documented with the same field-support and verification language as the rest of the catalog.
 - `Payload-tested` means repository tests cover request mapping, responses, and fail-fast validation with injected fetch calls.
 - `Built-in transport` means the adapter sends through Email SDK's own transport implementation instead of a provider API.
+- `Local API auth test` means the repository includes a local API-key check for that provider, but live delivery still depends on account setup.
 - `Live account required` means final delivery still depends on provider setup: verified domains, sender identities, API scopes, sandbox settings, regions, rate limits, and provider policy.
 - `SMTP server required` means final delivery depends on the SMTP host, credentials, and TLS settings you provide.
 
@@ -127,9 +114,9 @@ RESEND_API_KEY="re_..." npx email-sdk send \
 
 ## Adapter groups
 
-| Group          | Adapters                                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| Popular APIs   | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Brevo, Mailchimp Transactional |
-| Infrastructure | Cloudflare Email Sending, SparkPost, Mailtrap, Scaleway, ZeptoMail, MailPace             |
-| Product-led    | Loops, Plunk                                                                             |
-| Transport      | Built-in SMTP                                                                            |
+| Group          | Adapters                                                                        |
+| -------------- | ------------------------------------------------------------------------------- |
+| Popular APIs   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional |
+| Infrastructure | Cloudflare Email Sending, SparkPost, Mailtrap, Scaleway, ZeptoMail, MailPace    |
+| Product-led    | Sequenzy, Loops, Plunk                                                          |
+| Transport      | Built-in SMTP                                                                   |
