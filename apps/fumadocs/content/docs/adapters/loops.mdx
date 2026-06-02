@@ -6,7 +6,13 @@ icon: loops
 
 <ProviderBadge adapter="loops" />
 
-Loops transactional sends require a `transactionalId`.
+Loops sends through a published Loops transactional email. It is best for product-triggered lifecycle messages where the template lives in Loops and your app passes data variables.
+
+## Before live sends
+
+Create or publish the transactional email in Loops, copy its `transactionalId`, and create an API key with permission to send transactional email. Loops may require account-level enablement for attachments, so omit attachments until that capability is enabled.
+
+## Configure
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -22,6 +28,46 @@ const email = createEmailClient({
 });
 ```
 
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+  metadata: {
+    firstName: "Ada",
+    workspaceName: "Acme",
+  },
+});
+
+console.log(result.provider, result.id);
+```
+
+Loops maps `metadata` into `dataVariables` together with `subject`, `html`, `text`, and `from`. It only supports one recipient per transactional send.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Export ready",
+  text: "Your export is attached.",
+  metadata: {
+    firstName: "Ada",
+  },
+  attachments: [
+    {
+      filename: "export.txt",
+      content: "name,total\nAda,42",
+      contentType: "text/plain",
+    },
+  ],
+});
+```
+
 ## Options
 
 | Option            | Type           | Required | Notes                                |
@@ -32,3 +78,20 @@ const email = createEmailClient({
 | `fetch`           | `typeof fetch` | No       | Useful for tests or custom runtimes. |
 
 Loops transactional sends support one recipient, metadata through `dataVariables`, and attachments through the transactional attachments payload. Loops documents that attachments require support enablement on the account, so accounts without that enablement should omit `attachments`. Unsupported fields throw before the API call.
+
+## Response
+
+The adapter maps Loops `id` or `transactionalId` to the normalized `id` field when the API returns one.
+
+## CLI smoke test
+
+```bash
+LOOPS_API_KEY="loops_..." \
+LOOPS_TRANSACTIONAL_ID="cm..." \
+npx email-sdk send \
+  --adapter loops \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Loops test" \
+  --text "It works"
+```

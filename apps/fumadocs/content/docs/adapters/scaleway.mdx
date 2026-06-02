@@ -6,6 +6,14 @@ icon: scaleway
 
 <ProviderBadge adapter="scaleway" />
 
+Scaleway Transactional Email supports address fields, headers, reply-to, and attachments. The adapter defaults to the `fr-par` region unless you pass a different region.
+
+## Before live sends
+
+Create a Scaleway secret key, confirm the project ID and region, and verify the sending domain in Scaleway Transactional Email. If your project uses a region other than `fr-par`, pass `region` in code or `SCALEWAY_REGION` in the CLI environment.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
@@ -16,6 +24,44 @@ const email = createEmailClient({
       secretKey: process.env.SCALEWAY_SECRET_KEY!,
       projectId: process.env.SCALEWAY_PROJECT_ID!,
     }),
+  ],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "Scaleway Transactional Email test",
+  html: "<p>It works.</p>",
+  headers: {
+    "X-Trace-ID": "trace_123",
+  },
+});
+
+console.log(result.provider, result.id);
+```
+
+Scaleway maps `replyTo` as a `Reply-To` additional header. If you already set a `Reply-To` header manually, omit `replyTo` to avoid a validation error.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Receipt",
+  text: "The receipt is attached.",
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Order ord_123",
+      contentType: "text/plain",
+    },
   ],
 });
 ```
@@ -31,3 +77,20 @@ const email = createEmailClient({
 | `fetch`     | `typeof fetch` | No       | Useful for tests or custom runtimes.    |
 
 Scaleway maps address objects, CC/BCC, attachments, custom headers, and `replyTo` through the Transactional Email REST API. Unsupported fields throw before the API call.
+
+## Response
+
+The adapter maps Scaleway `id` or `email_id` to the normalized `id` field.
+
+## CLI smoke test
+
+```bash
+SCALEWAY_SECRET_KEY="..." \
+SCALEWAY_PROJECT_ID="..." \
+npx email-sdk send \
+  --adapter scaleway \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Scaleway test" \
+  --text "It works"
+```

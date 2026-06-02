@@ -12,6 +12,8 @@ The Postmark adapter calls the Postmark Email API directly. It does not add a ru
 
 Create a Postmark server token for the server and message stream you want to send through. Make sure the sender signature or domain is approved in Postmark before using a production `from` address.
 
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { postmark } from "@opencoredev/email-sdk/postmark";
@@ -29,16 +31,33 @@ const email = createEmailClient({
 ## Send
 
 ```ts
-await email.send({
+const result = await email.send({
   from: "Acme <hello@acme.com>",
-  to: "user@example.com",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
   subject: "Receipt",
   html: "<p>Thanks for your order.</p>",
+  headers: {
+    "X-Order-ID": "ord_123",
+  },
   metadata: {
     orderId: "ord_123",
   },
+  tags: [{ name: "type", value: "receipt" }],
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Order ord_123",
+      contentType: "text/plain",
+    },
+  ],
 });
+
+console.log(result.provider, result.messageId);
 ```
+
+Postmark supports one Email SDK tag. The adapter serializes the first tag as `name:value` and rejects additional tags before the API call.
 
 ## Options
 
@@ -52,12 +71,12 @@ await email.send({
 
 ## Response
 
-The adapter maps Postmark `MessageID` to `id` and `messageId`.
+The adapter maps Postmark `MessageID` to `id` and `messageId`, and maps returned `To` to `accepted`.
 
 ## CLI smoke test
 
 ```bash
-POSTMARK_SERVER_TOKEN="..." npx --yes --package @opencoredev/email-sdk email-sdk send \
+POSTMARK_SERVER_TOKEN="..." npx email-sdk send \
   --adapter postmark \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

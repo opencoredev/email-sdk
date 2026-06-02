@@ -12,7 +12,7 @@ The command-line binary is named `email-sdk`. That means the package name and th
 | ------------------------------ | ------------------------------------------------------------ |
 | Install the package            | `npm install @opencoredev/email-sdk` or your package manager's install command |
 | Run the installed CLI          | `npx email-sdk ...`                                          |
-| Run the CLI without installing | `npx --yes --package @opencoredev/email-sdk email-sdk ...`   |
+| Run the CLI without installing | `bunx --bun --package @opencoredev/email-sdk email-sdk ...`  |
 
 Do not install the unscoped `email-sdk` package from npm. It is a different package.
 
@@ -36,14 +36,16 @@ The SDK and CLI run in server-side Node 20+ and Bun runtimes.
 Use the scoped package name when you want a quick adapter check without adding the package to a project.
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 Check a provider configuration:
 
 ```bash
-RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." bunx --bun --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
+
+If you are using npm without Bun, install `@opencoredev/email-sdk` in the project first, then run the installed `email-sdk` binary with `npx`.
 
 ## Run the CLI from an installed project
 
@@ -53,9 +55,7 @@ After installing `@opencoredev/email-sdk`, run the installed binary:
 npx email-sdk adapters
 ```
 
-The command is still `email-sdk`; the package you installed is still `@opencoredev/email-sdk`. Avoid `npx email-sdk` outside an installed project because the unscoped npm package is unrelated.
-
-Bun users can use the same package and binary. If you want Bun to execute the one-off CLI command, use `bunx --bun --package @opencoredev/email-sdk email-sdk adapters`.
+The command is still `email-sdk`; the package you installed is still `@opencoredev/email-sdk`. Avoid `npx email-sdk` outside an installed project because the unscoped npm package is unrelated. For no-install checks, use the `bunx --bun --package @opencoredev/email-sdk email-sdk ...` form shown above.
 
 ## Prerequisites
 
@@ -66,14 +66,14 @@ Bun users can use the same package and binary. If you want Bun to execute the on
 
 ## Verify the install
 
-Check the published package and CLI version:
+Check the installed package and CLI version:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk version
+npx email-sdk version
 ```
 
 List supported adapters:
 
 ```bash
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+npx email-sdk adapters
 ```

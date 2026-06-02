@@ -36,6 +36,58 @@ If you are unsure, start with Resend for the first send, then choose fallback ro
 - Does the backup support reply-to and headers if support workflows depend on them?
 - Has the backup provider account been live-verified in the target environment?
 
+## Fallback examples
+
+Use a narrow fallback only for a narrow message shape. This works because both Resend and SMTP can represent the fields used here.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: process.env.SMTP_HOST!,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  defaultAdapter: "resend",
+  fallback: ["smtp"],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Password reset",
+  text: "Use this link to reset your password.",
+  headers: {
+    "X-Template": "password-reset",
+  },
+});
+```
+
+Do not use SMTP as a fallback for a message that depends on provider-only fields. This fails before a provider request instead of dropping data.
+
+```ts
+// This client has SMTP as a fallback, but SMTP cannot send metadata or tags.
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Receipt",
+  html: "<p>Thanks for your order.</p>",
+  metadata: {
+    orderId: "ord_123",
+  },
+  tags: [{ name: "type", value: "receipt" }],
+});
+```
+
 ## API adapters
 
 These adapters cover most transactional email fields. They are the best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.

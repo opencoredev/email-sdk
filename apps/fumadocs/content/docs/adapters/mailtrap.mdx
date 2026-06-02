@@ -6,12 +6,59 @@ icon: mailtrap
 
 <ProviderBadge adapter="mailtrap" />
 
+Mailtrap sends through the Mailtrap Email Sending API. It supports broad API-style fields and is also useful for staging environments where you want provider-side message inspection.
+
+## Before live sends
+
+Create a Mailtrap API token for Email Sending and verify the sender or domain. If you use a Mailtrap sandbox or staging inbox, confirm the target environment is using the intended Mailtrap project before sending production mail.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
 
 const email = createEmailClient({
   adapters: [mailtrap({ apiKey: process.env.MAILTRAP_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  cc: "qa@example.com",
+  replyTo: "support@example.com",
+  subject: "Mailtrap smoke",
+  html: "<p>Message captured.</p>",
+  metadata: {
+    scenario: "staging-smoke",
+  },
+  tags: [{ name: "category", value: "staging" }],
+});
+
+console.log(result.provider, result.messageId);
+```
+
+Mailtrap accepts one Email SDK tag. The adapter maps that tag value to the provider `category` field and rejects additional tags.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Staging receipt",
+  text: "The receipt is attached.",
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Order ord_123",
+      contentType: "text/plain",
+    },
+  ],
 });
 ```
 
@@ -26,3 +73,18 @@ const email = createEmailClient({
 See <a href="/docs/adapters/field-support">field support</a> for supported message fields.
 
 Mailtrap maps `replyTo` to `reply_to`, metadata to `custom_variables`, and the first returned `message_ids` value to the SDK response ID.
+
+## Response
+
+The adapter uses the first returned `message_ids` value, then falls back to `message_id` or `id`, and exposes it as normalized `id` and `messageId`.
+
+## CLI smoke test
+
+```bash
+MAILTRAP_API_KEY="..." npx email-sdk send \
+  --adapter mailtrap \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Mailtrap test" \
+  --text "It works"
+```

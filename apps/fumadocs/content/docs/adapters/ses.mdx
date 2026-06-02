@@ -12,6 +12,8 @@ The AWS SES adapter calls the SES v2 SendEmail API directly with SigV4-signed fe
 
 Use credentials that can call SES v2 `SendEmail` in the selected region. Verify the sender identity in that same region, and confirm whether the AWS account is still in the SES sandbox before sending to arbitrary recipients.
 
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { ses } from "@opencoredev/email-sdk/ses";
@@ -31,14 +33,30 @@ const email = createEmailClient({
 ## Send
 
 ```ts
-await email.send({
+const result = await email.send({
   from: "Acme <hello@acme.com>",
-  to: "user@example.com",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
   subject: "Welcome",
   html: "<p>Your workspace is ready.</p>",
+  headers: {
+    "X-Template": "welcome",
+  },
   tags: [{ name: "type", value: "welcome" }],
+  attachments: [
+    {
+      filename: "welcome.txt",
+      content: "Welcome to Acme.",
+      contentType: "text/plain",
+    },
+  ],
 });
+
+console.log(result.provider, result.messageId);
 ```
+
+SES maps Email SDK tags to SES `EmailTags`, headers to `Simple.Headers`, and attachments to SES v2 `Simple.Attachments`. It does not map Email SDK `metadata`.
 
 ## Options
 
@@ -53,19 +71,19 @@ await email.send({
 | `charset`              | `string`       | No       | Defaults to `UTF-8`.                                  |
 | `configurationSetName` | `string`       | No       | SES configuration set for sends through this adapter. |
 
-## CLI
+## Response
+
+The adapter returns the SES `MessageId` as `id` and `messageId`.
+
+## CLI smoke test
 
 ```bash
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
 AWS_REGION=us-east-1 \
-npx --yes --package @opencoredev/email-sdk email-sdk send --adapter ses \
+npx email-sdk send --adapter ses \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
   --subject "Welcome" \
   --html "<p>Your workspace is ready.</p>"
 ```
-
-## Response
-
-The adapter returns the SES `MessageId` as `id` and `messageId`.

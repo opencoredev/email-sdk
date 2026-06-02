@@ -6,12 +6,48 @@ icon: mailpace
 
 <ProviderBadge adapter="mailpace" />
 
+MailPace is a narrow send API adapter for simple transactional email. Use it when your messages only need address fields, reply-to, text, or HTML.
+
+## Before live sends
+
+Create a MailPace server token and verify the sender or domain in MailPace. Because this adapter intentionally rejects headers, metadata, tags, and attachments, check your production message shape before using it as a fallback.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailpace } from "@opencoredev/email-sdk/mailpace";
 
 const email = createEmailClient({
   adapters: [mailpace({ apiKey: process.env.MAILPACE_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "Plain transactional update",
+  text: "Your account has been updated.",
+});
+
+console.log(result.provider, result.id);
+```
+
+MailPace is a narrow adapter for address fields plus text or HTML body content. It rejects headers, metadata, tags, and attachments before the API call.
+
+## Send HTML
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
 });
 ```
 
@@ -24,3 +60,18 @@ const email = createEmailClient({
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
 
 MailPace supports CC, BCC, and reply-to. Unsupported fields throw before the API call.
+
+## Response
+
+The adapter maps MailPace `id` or `message_id` to the normalized `id` field.
+
+## CLI smoke test
+
+```bash
+MAILPACE_API_KEY="..." npx email-sdk send \
+  --adapter mailpace \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "MailPace test" \
+  --text "It works"
+```

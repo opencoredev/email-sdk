@@ -6,12 +6,59 @@ icon: mailersend
 
 <ProviderBadge adapter="mailersend" />
 
+MailerSend supports transactional sends with CC, BCC, one reply-to address, custom headers, tag values, and attachments.
+
+## Before live sends
+
+Create a MailerSend API token, verify the sending domain, and confirm the account plan supports any custom headers you send. MailerSend documents custom headers as Professional and Enterprise features, so lower-plan accounts should omit `headers`.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailersend } from "@opencoredev/email-sdk/mailersend";
 
 const email = createEmailClient({
   adapters: [mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "Invoice ready",
+  html: "<p>Your invoice is ready.</p>",
+  headers: {
+    "X-Invoice-ID": "inv_123",
+  },
+  tags: [{ name: "type", value: "invoice" }],
+});
+
+console.log(result.provider, result.id);
+```
+
+MailerSend supports one `replyTo` address. The adapter rejects multiple reply-to addresses before it calls the API.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Invoice ready",
+  html: "<p>Your invoice is attached.</p>",
+  attachments: [
+    {
+      filename: "invoice.txt",
+      content: "Invoice inv_123",
+      contentType: "text/plain",
+    },
+  ],
 });
 ```
 
@@ -26,3 +73,18 @@ const email = createEmailClient({
 See <a href="/docs/adapters/field-support">field support</a> for supported message fields.
 
 MailerSend custom headers map to `headers`. MailerSend documents custom headers as available on Professional and Enterprise accounts, so lower-plan accounts may need to omit `headers`.
+
+## Response
+
+The adapter uses the `x-message-id` response header when available, then falls back to body `message_id` or `id`.
+
+## CLI smoke test
+
+```bash
+MAILERSEND_API_KEY="..." npx email-sdk send \
+  --adapter mailersend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "MailerSend test" \
+  --text "It works"
+```

@@ -318,7 +318,7 @@ The package includes a small CLI:
 
 ```bash
 # one-off: no install needed
-npx --yes --package @opencoredev/email-sdk email-sdk adapters
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
 
 # after installing @opencoredev/email-sdk
 npx email-sdk adapters
@@ -327,7 +327,7 @@ RESEND_API_KEY="re_..." npx email-sdk send --adapter resend --from hello@example
 npx email-sdk send --dry-run --adapter resend --from hello@example.com --to user@example.com --subject "Hello" --text "It works"
 ```
 
-The CLI can read provider credentials from environment variables or matching credential flags. Run `npx email-sdk adapters` to see the variables each adapter expects after the package is installed. `--dry-run` validates the message and selected adapter field support without sending email.
+The CLI can read provider credentials from environment variables or matching credential flags. Run `bunx --bun --package @opencoredev/email-sdk email-sdk adapters` for a one-off adapter list, or `npx email-sdk adapters` after installing the scoped package in a project. `--dry-run` validates the message and selected adapter field support without sending email.
 
 ## Provider Reality
 

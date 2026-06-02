@@ -6,6 +6,14 @@ icon: brevo
 
 <ProviderBadge adapter="brevo" />
 
+Brevo maps the transactional email API to the shared Email SDK message shape, including metadata as template `params`, tag values as Brevo tags, and attachments as Base64 content.
+
+## Before live sends
+
+Create a Brevo SMTP/API key that can send transactional email, verify the sender or domain you use in `from`, and confirm the account is allowed to send to your target recipients. A dry run checks SDK validation only; a live smoke send is still required for account readiness.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { brevo } from "@opencoredev/email-sdk/brevo";
@@ -14,6 +22,35 @@ const email = createEmailClient({
   adapters: [brevo({ apiKey: process.env.BREVO_API_KEY! })],
 });
 ```
+
+Use `baseUrl` only for test doubles or Brevo-compatible gateways.
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  subject: "Invoice ready",
+  html: "<p>Your invoice is ready.</p>",
+  metadata: {
+    invoiceId: "inv_123",
+  },
+  tags: [{ name: "type", value: "invoice" }],
+  attachments: [
+    {
+      filename: "invoice.txt",
+      content: "Invoice inv_123",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.id);
+```
+
+Brevo supports one `replyTo` address. The adapter rejects unsupported shapes before it calls Brevo, so fallback routes do not silently lose fields.
 
 ## Options
 
@@ -24,3 +61,18 @@ const email = createEmailClient({
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes. |
 
 See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
+
+## Response
+
+The adapter maps Brevo `messageId` or `id` to the normalized `id` and `messageId` fields.
+
+## CLI smoke test
+
+```bash
+BREVO_API_KEY="xkeysib-..." npx email-sdk send \
+  --adapter brevo \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Brevo test" \
+  --text "It works"
+```

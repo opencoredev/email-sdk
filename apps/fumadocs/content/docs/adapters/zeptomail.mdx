@@ -6,12 +6,55 @@ icon: zeptomail
 
 <ProviderBadge adapter="zeptomail" />
 
+ZeptoMail supports recipient objects, CC, BCC, reply-to, and attachments. It intentionally rejects headers, metadata, and tags because the adapter does not map them to the ZeptoMail API.
+
+## Before live sends
+
+Create a ZeptoMail API token and verify the sending domain in Zoho ZeptoMail. The adapter accepts tokens with or without the `Zoho-enczapikey` prefix.
+
+## Configure
+
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 
 const email = createEmailClient({
   adapters: [zeptomail({ token: process.env.ZEPTOMAIL_TOKEN! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: { email: "hello@acme.com", name: "Acme" },
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "ZeptoMail test",
+  html: "<p>It works.</p>",
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Thanks for your order.",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.id);
+```
+
+ZeptoMail supports recipients, reply-to, and attachments. It rejects headers, metadata, and tags before the API call.
+
+## Send text only
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Plain update",
+  text: "Your account has been updated.",
 });
 ```
 
@@ -24,3 +67,18 @@ const email = createEmailClient({
 | `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.                                          |
 
 ZeptoMail supports recipients, reply-to, and attachments. Unsupported fields throw before the API call.
+
+## Response
+
+The adapter maps ZeptoMail `request_id`, `messageId`, or `id` to the normalized `id` field.
+
+## CLI smoke test
+
+```bash
+ZEPTOMAIL_TOKEN="..." npx email-sdk send \
+  --adapter zeptomail \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "ZeptoMail test" \
+  --text "It works"
+```
