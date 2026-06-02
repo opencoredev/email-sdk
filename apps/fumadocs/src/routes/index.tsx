@@ -410,12 +410,20 @@ function renderConfigLine(line: string) {
   }
 
   if (envMatch?.[1] && envMatch[2]) {
+    const suffix = trimmedLine.endsWith("!,")
+      ? "!,"
+      : trimmedLine.endsWith("!")
+        ? "!"
+        : trailingComma
+          ? ","
+          : "";
+
     return (
       <>
         {leadingWhitespace}
         <Token tone="property">{envMatch[1]}</Token>:{" "}
         <Token tone="variable">process</Token>.env.{envMatch[2]}
-        {trimmedLine.includes("!,") ? "!," : trimmedLine.endsWith("!") ? "!" : ","}
+        {suffix}
       </>
     );
   }
