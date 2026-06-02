@@ -665,6 +665,34 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.body).toBeUndefined();
   });
 
+  test("Sequenzy keeps generic slug and preview metadata as variables", async () => {
+    const capture = jsonCapture({ success: true, jobId: "job_123" });
+
+    await sequenzy({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        attachments: undefined,
+        metadata: {
+          slug: "pricing-page-cta",
+          preview: "experiment-a",
+        },
+      },
+      context,
+    );
+
+    expect(capture.calls[0]?.json).not.toHaveProperty("slug");
+    expect(capture.calls[0]?.json).not.toHaveProperty("preview");
+    expect(capture.calls[0]?.json.variables).toEqual({
+      preview: "experiment-a",
+      slug: "pricing-page-cta",
+    });
+  });
+
   test("Sequenzy omits attachments when the message has none", async () => {
     const capture = jsonCapture({ success: true, jobId: "job_123" });
 

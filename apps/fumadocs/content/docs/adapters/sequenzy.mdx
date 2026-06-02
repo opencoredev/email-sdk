@@ -51,8 +51,8 @@ Sequenzy maps flat `metadata` values to `variables`. Reserved metadata keys are 
 
 | Metadata key                                             | Sequenzy field         |
 | -------------------------------------------------------- | ---------------------- |
-| `sequenzySlug` or `slug`                                 | `slug`                 |
-| `sequenzyPreview` or `preview`                           | `preview`              |
+| `sequenzySlug`                                           | `slug`                 |
+| `sequenzyPreview`                                        | `preview`              |
 | `subscriberExternalId` or `sequenzySubscriberExternalId` | `subscriberExternalId` |
 
 ## Send with a template slug
@@ -71,7 +71,7 @@ await email.send({
 });
 ```
 
-When `metadata.sequenzySlug` or `metadata.slug` is present, the adapter sends a Sequenzy template request. The `subject`, `html`, and `text` fields stay useful for local Email SDK validation, but the provider payload uses the template slug and variables.
+When `metadata.sequenzySlug` is present, the adapter sends a Sequenzy template request. The `subject`, `html`, and `text` fields stay useful for local Email SDK validation, but the provider payload uses the template slug and variables. Generic metadata keys like `slug` and `preview` remain variables so fallback routes do not accidentally change behavior.
 
 ## Send with attachments
 

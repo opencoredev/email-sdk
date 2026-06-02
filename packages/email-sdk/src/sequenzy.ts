@@ -29,9 +29,7 @@ type SequenzyResponse = {
 
 const reservedMetadataKeys = new Set([
   "sequenzySlug",
-  "slug",
   "sequenzyPreview",
-  "preview",
   "subscriberExternalId",
   "sequenzySubscriberExternalId",
 ]);
@@ -50,9 +48,8 @@ export function sequenzy(options: SequenzyProviderOptions): EmailProvider<{ base
       assertMaxItems("sequenzy", "recipient", formatAddresses(message.to), 50);
       assertMaxItems("sequenzy", "replyTo", formatAddresses(message.replyTo), 1);
 
-      const slug = stringMetadata(message, "sequenzySlug") ?? stringMetadata(message, "slug");
-      const preview =
-        stringMetadata(message, "sequenzyPreview") ?? stringMetadata(message, "preview");
+      const slug = stringMetadata(message, "sequenzySlug");
+      const preview = stringMetadata(message, "sequenzyPreview");
       const subscriberExternalId =
         stringMetadata(message, "subscriberExternalId") ??
         stringMetadata(message, "sequenzySubscriberExternalId");

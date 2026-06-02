@@ -134,7 +134,7 @@ Unsupported fields fail fast. For example, Resend rejects `metadata`, Mailchimp 
 
 Loops attachments map to the provider's transactional attachments payload. Loops documents that transactional attachments require support enablement on the account, so accounts without that enablement should omit `attachments`.
 
-Sequenzy metadata maps to transactional `variables`. Reserved metadata keys map to provider fields: `sequenzySlug` or `slug`, `sequenzyPreview` or `preview`, and `subscriberExternalId` or `sequenzySubscriberExternalId`.
+Sequenzy metadata maps to transactional `variables`. Reserved metadata keys map to provider fields: `sequenzySlug`, `sequenzyPreview`, and `subscriberExternalId` or `sequenzySubscriberExternalId`. Generic metadata keys like `slug` and `preview` remain variables.
 
 The SDK's local checks are not a live deliverability guarantee. Provider accounts still need verified senders or domains, the correct region, API scopes, and any sandbox or recipient allow-list configuration required by that service.
 
