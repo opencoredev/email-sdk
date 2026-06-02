@@ -338,9 +338,7 @@ function SyntaxCode({ provider }: { provider: ProviderProfile }) {
         <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
-        <Token tone="keyword">import</Token> {"{ "} <Token tone="function">{provider.import}</Token>{" "}
-        {" }"} <Token tone="keyword">from</Token>{" "}
-        <Token tone="string">{`"${provider.importPath}"`}</Token>;
+        <Token tone="keyword">import</Token>{" { "}<Token tone="function">{provider.import}</Token>{" } "}<Token tone="keyword">from</Token>{" "}<Token tone="string">{`"${provider.importPath}"`}</Token>;
       </CodeLine>
       <CodeLine />
       <CodeLine number={4}>
