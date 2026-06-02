@@ -15,8 +15,8 @@ Email SDK is supported by companies helping keep provider integrations practical
 
 ### Special Sponsors
 
-| [<img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="96" height="96" alt="Sequenzy logo"><br><sub><b>Sequenzy</b></sub>](https://www.sequenzy.com/) |
-| :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| [<img src="./apps/fumadocs/public/og/provider-logos/resend-wordmark.jpg" width="260" height="55" alt="Resend logo"><br><sub><b>Resend</b></sub>](https://go.resend.com/email-sdk)<br><sub>[Docs](https://email-sdk.dev/docs/adapters/resend)</sub> | [<img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="96" height="96" alt="Sequenzy logo"><br><sub><b>Sequenzy</b></sub>](https://www.sequenzy.com/)<br><sub>[Docs](https://email-sdk.dev/docs/adapters/sequenzy)</sub> |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 
 ## What Is Here
 
