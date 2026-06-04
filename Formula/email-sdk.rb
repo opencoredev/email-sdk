@@ -1,8 +1,8 @@
 class EmailSdk < Formula
   desc "Lightweight TypeScript SDK and CLI for unified email sending"
   homepage "https://github.com/opencoredev/email-sdk"
-  url "https://registry.npmjs.org/@opencoredev/email-sdk/-/email-sdk-0.5.0.tgz"
-  sha256 "c6155f76c538239fd32e13152a1a1cf75e3a8751283120fedbb50cf477083e4c"
+  url "https://registry.npmjs.org/@opencoredev/email-sdk/-/email-sdk-0.6.0.tgz"
+  sha256 "d5738ff719b9a4934774b64094e42966391c7879681054d2fe5adde428341c3f"
   license "MIT"
 
   depends_on "bun"
