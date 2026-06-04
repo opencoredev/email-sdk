@@ -1,4 +1,5 @@
 import type { EmailProviderResponse } from "@opencoredev/email-sdk";
+import type { FunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api.js";
@@ -17,9 +18,17 @@ import {
 } from "../shared/validators.js";
 
 const configKey = "default";
-const processEmailRef = (internal as any).worker.processEmail;
+type ProcessEmailRef = FunctionReference<
+  "action",
+  "internal",
+  { emailId: Id<"emails"> },
+  null
+>;
+const internalApi = internal as unknown as { worker: { processEmail: ProcessEmailRef } };
+const processEmailRef = internalApi.worker.processEmail;
 const processingTimeoutMs = 10 * 60 * 1_000;
 const cleanupBatchSize = 50;
+const maxBatchSize = 100;
 
 export const enqueue = mutation({
   args: vSendEmailArgs,
@@ -33,6 +42,13 @@ export const enqueueBatch = mutation({
   args: vSendBatchEmailsArgs,
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
+    if (args.messages.length > maxBatchSize) {
+      throw new ConvexError({
+        code: "BATCH_TOO_LARGE",
+        message: `sendBatch accepts at most ${maxBatchSize} messages per mutation. Split larger batches client-side.`,
+      });
+    }
+
     const ids: string[] = [];
 
     for (const message of args.messages) {
@@ -515,7 +531,7 @@ async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) 
   const cutoff = now - config.cleanupAfterDays * 24 * 60 * 60 * 1_000;
   const expired = await ctx.db
     .query("emails")
-    .withIndex("by_createdAt", (q: any) => q.lt("createdAt", cutoff))
+    .withIndex("by_terminalAt", (q: any) => q.lt("terminalAt", cutoff))
     .take(limit);
 
   for (const email of expired) {
@@ -567,11 +583,7 @@ async function insertEvent(
   });
 }
 
-function redactMessage(message: ConvexEmailSendArgs | ConvexEmailSendArgs["to"]) {
-  if (typeof message !== "object" || !("subject" in message)) {
-    return {};
-  }
-
+function redactMessage(message: ConvexEmailSendArgs) {
   return {
     subject: message.subject,
     toCount: countAddresses(message.to),

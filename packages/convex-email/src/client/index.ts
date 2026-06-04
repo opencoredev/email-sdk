@@ -65,6 +65,7 @@ type WebhookVerifier = (input: {
   body: string;
   headers: Record<string, string>;
 }) => boolean | Promise<boolean>;
+const maxBatchSize = 100;
 
 export type ConvexEmailOptions = {
   adapters?: ConvexEmailAdapterConfig[];
@@ -85,6 +86,10 @@ export class ConvexEmail {
   }
 
   sendBatch(ctx: MutationCtx, messages: ConvexEmailSendArgs[]) {
+    if (messages.length > maxBatchSize) {
+      throw new Error(`sendBatch accepts at most ${maxBatchSize} messages per mutation.`);
+    }
+
     return ctx.runMutation(this.component.lib.enqueueBatch as AnyMutationRef, {
       messages: messages.map((message) => this.withDefaults(message)),
     });
@@ -122,6 +127,10 @@ export class ConvexEmail {
     options: {
       pathPrefix?: string;
       providers?: string[];
+      /**
+       * Public webhook routes should pass a provider-specific signature or shared-secret verifier.
+       * Omitting this is intended for local development only.
+       */
       verify?: WebhookVerifier;
     } = {},
   ) {

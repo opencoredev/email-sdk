@@ -34,6 +34,7 @@ export default defineSchema({
     .index("by_status_and_updatedAt", ["status", "updatedAt"])
     .index("by_idempotencyKey", ["idempotencyKey"])
     .index("by_createdAt", ["createdAt"])
+    .index("by_terminalAt", ["terminalAt"])
     .index("by_providerMessageId", ["providerMessageId"]),
 
   emailEvents: defineTable({

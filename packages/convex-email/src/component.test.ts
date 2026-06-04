@@ -97,6 +97,20 @@ describe("convex-email component", () => {
     expect(secondId).toBe(firstId);
   });
 
+  test("limits batch size to avoid mutation operation blowups", async () => {
+    const t = createTest();
+
+    await expect(
+      t.mutation(api.lib.enqueueBatch, {
+        messages: Array.from({ length: 101 }, () => ({
+          ...message,
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        })),
+      }),
+    ).rejects.toThrow("sendBatch accepts at most 100 messages");
+  });
+
   test("test mode redirects recipients and strips copied recipients", async () => {
     const t = createTest();
 

@@ -193,6 +193,7 @@ export default http;
 ```
 
 This creates `POST /email/webhooks/resend` and records duplicate deliveries idempotently.
+Omitting `verify` is only suitable for local development; public routes should always verify provider signatures or a shared secret.
 
 ## Test Mode
 
@@ -220,7 +221,8 @@ The package exports Convex test helpers from `@opencoredev/convex-email/test`.
 
 ## Cleanup
 
-Set `cleanupAfterDays` to prune expired email rows, delivery records, and event history during scheduled queue sweeps.
+The component ships a five-minute cron sweep for missed queue work, stale `processing` recovery, and cleanup.
+Set `cleanupAfterDays` to prune expired terminal email rows, delivery records, and event history during that sweep.
 
 ```ts
 await email.setConfig(ctx, {
@@ -231,3 +233,5 @@ await email.setConfig(ctx, {
 ## Scope
 
 Convex Email Ops is not a campaign builder, contact database, template editor, hosted analytics product, or inbound email processor. It keeps the operational pieces apps usually rebuild: queueing, retries, fallback routing, idempotency, webhook records, attempted-adapter history, and queryable status.
+
+`sendBatch` accepts at most 100 messages per mutation. Split larger batches in your app so Convex mutation limits stay predictable.
