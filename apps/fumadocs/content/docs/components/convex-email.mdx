@@ -1,0 +1,238 @@
+---
+title: Convex Email Ops
+description: Queue transactional email from Convex with provider-portable adapters, status history, retries, fallback routes, idempotency, webhooks, and test mode.
+icon: Component
+---
+
+Convex Email Ops packages `@opencoredev/email-sdk` as a Convex Component. Use it when a Convex app needs transactional email to behave like app state: queued from mutations, retried outside the request path, visible through queries, and portable across providers.
+
+```bash
+bun add @opencoredev/convex-email @opencoredev/email-sdk
+```
+
+## Use this when
+
+- You want to enqueue email from Convex mutations without calling provider APIs inline.
+- You need status and event history in Convex tables.
+- You want fallback routes across providers such as Resend, Postmark, SendGrid, SES, SMTP, Mailgun, Brevo, or others.
+- You need idempotency keys for duplicate-safe sends.
+- You want provider webhooks captured as delivery events.
+- You need test mode that redirects real recipients to sandbox addresses.
+
+## Use official `@convex-dev/resend` when
+
+Use `@convex-dev/resend` for a Resend-only app that wants the official Resend integration. Use Convex Email Ops when provider portability, fallback routing, status history, or test-safe multi-provider operations matter more than a single-provider integration.
+
+## Add the component
+
+Declare the provider env vars your app owns, then pass those references into the component. Convex Components do not automatically see every parent app environment variable.
+
+```ts
+// convex/convex.config.ts
+import { defineApp } from "convex/server";
+import { v } from "convex/values";
+import convexEmail from "@opencoredev/convex-email/convex.config.js";
+
+const app = defineApp({
+  env: {
+    RESEND_API_KEY: v.optional(v.string()),
+    POSTMARK_SERVER_TOKEN: v.optional(v.string()),
+    SENDGRID_API_KEY: v.optional(v.string()),
+    SMTP_HOST: v.optional(v.string()),
+    SMTP_PORT: v.optional(v.string()),
+    SMTP_USER: v.optional(v.string()),
+    SMTP_PASS: v.optional(v.string()),
+  },
+});
+
+app.use(convexEmail, {
+  env: {
+    RESEND_API_KEY: app.env.RESEND_API_KEY,
+    POSTMARK_SERVER_TOKEN: app.env.POSTMARK_SERVER_TOKEN,
+    SENDGRID_API_KEY: app.env.SENDGRID_API_KEY,
+    SMTP_HOST: app.env.SMTP_HOST,
+    SMTP_PORT: app.env.SMTP_PORT,
+    SMTP_USER: app.env.SMTP_USER,
+    SMTP_PASS: app.env.SMTP_PASS,
+  },
+});
+
+export default app;
+```
+
+Set provider secrets with Convex environment variables:
+
+```bash
+bun x convex env set RESEND_API_KEY re_xxx
+```
+
+## Create a client
+
+```ts
+// convex/email.ts
+import { components } from "./_generated/api";
+import { ConvexEmail } from "@opencoredev/convex-email";
+
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [
+    {
+      kind: "resend",
+    },
+    {
+      kind: "smtp",
+      name: "backup-smtp",
+    },
+  ],
+  defaultAdapter: "resend",
+  fallbackAdapters: ["backup-smtp"],
+  maxAttempts: 3,
+});
+```
+
+## Send from a mutation
+
+```ts
+// convex/users.ts
+import { mutation } from "./_generated/server";
+import { email } from "./email";
+
+export const sendWelcomeEmail = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await email.send(ctx, {
+      from: "Acme <hello@acme.com>",
+      to: "ada@example.com",
+      subject: "Welcome",
+      text: "Your account is ready.",
+      idempotencyKey: "welcome:ada@example.com",
+    });
+  },
+});
+```
+
+`email.send()` returns the queued email document id. Use `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions to read status, attempted adapters, provider message ids, errors, and event history.
+
+## Provider coverage
+
+The component supports these serializable adapter configs:
+
+- `memory`
+- `resend`
+- `postmark`
+- `sendgrid`
+- `ses`
+- `smtp`
+- `brevo`
+- `cloudflare`
+- `iterable`
+- `loops`
+- `mailchimp`
+- `mailersend`
+- `mailgun`
+- `mailpace`
+- `mailtrap`
+- `plunk`
+- `scaleway`
+- `sequenzy`
+- `sparkpost`
+- `unosend`
+- `zeptomail`
+
+Default environment variable names:
+
+```txt
+RESEND_API_KEY
+POSTMARK_SERVER_TOKEN
+SENDGRID_API_KEY
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+AWS_REGION
+SMTP_HOST
+SMTP_PORT
+SMTP_SECURE
+SMTP_USER
+SMTP_PASS
+BREVO_API_KEY
+CLOUDFLARE_API_TOKEN
+CLOUDFLARE_ACCOUNT_ID
+ITERABLE_API_KEY
+ITERABLE_CAMPAIGN_ID
+LOOPS_API_KEY
+MAILCHIMP_API_KEY
+MAILERSEND_API_KEY
+MAILGUN_API_KEY
+MAILGUN_DOMAIN
+MAILPACE_API_KEY
+MAILTRAP_API_KEY
+PLUNK_API_KEY
+SCALEWAY_SECRET_KEY
+SCALEWAY_PROJECT_ID
+SCALEWAY_REGION
+SEQUENZY_API_KEY
+SPARKPOST_API_KEY
+UNOSEND_API_KEY
+ZEPTOMAIL_TOKEN
+```
+
+Each adapter config can override its env variable names with fields such as `apiKeyEnv`, `tokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, or `regionEnv`. Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not part of the component config.
+
+## Webhook verification
+
+Register webhook routes from `convex/http.ts`. The route lives in your app, so verify provider signatures or shared secrets before forwarding the body to the component.
+
+```ts
+// convex/http.ts
+import { httpRouter } from "convex/server";
+import { email } from "./email";
+
+const http = httpRouter();
+email.registerRoutes(http, {
+  pathPrefix: "/email",
+  providers: ["resend"],
+  verify: ({ headers }) => {
+    return headers["x-webhook-secret"] === process.env.EMAIL_WEBHOOK_SECRET;
+  },
+});
+
+export default http;
+```
+
+This creates `POST /email/webhooks/resend`. The component stores webhook deliveries by provider and delivery id so provider retries are idempotent.
+
+## Test mode
+
+Use `setConfig` to redirect sends while preserving the queue and provider flow:
+
+```ts
+await email.setConfig(ctx, {
+  testMode: true,
+  sandboxTo: ["dev@example.com"],
+});
+```
+
+For local or CI tests, use the memory adapter:
+
+```ts
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [{ kind: "memory" }],
+  defaultAdapter: "memory",
+});
+```
+
+The package also exports component test helpers from `@opencoredev/convex-email/test`.
+
+## Limitations
+
+Convex Email Ops is not a campaign builder, contact database, visual template editor, analytics dashboard, or inbound email processor. It is focused on transactional email operations that belong close to Convex app state: queueing, retries, fallback routing, idempotency, webhook records, and queryable status.
+
+Provider accounts still control whether a send succeeds. Verified domains, sandbox rules, API scopes, regions, rate limits, suppression lists, and provider policy are outside the component.
+
+## Submission checklist
+
+- Package: `@opencoredev/convex-email`
+- Display title: Convex Email Ops
+- Category: Third-Party Sync
+- Docs: `https://email-sdk.dev/docs/components/convex-email`
+- Repo: `https://github.com/opencoredev/email-sdk/tree/main/packages/convex-email`
+- Differentiator: use official Convex Resend for Resend-only installs; use Convex Email Ops for provider portability, fallback routing, status history, webhooks, and test-safe transactional email.
