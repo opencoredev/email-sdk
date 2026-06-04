@@ -1,0 +1,123 @@
+---
+title: Quickstart
+description: Create a client, send a first transactional email, and verify the CLI path.
+icon: Rocket
+---
+
+Install the scoped package with the package manager your app already uses:
+
+<PackageInstallTabs />
+
+The SDK and CLI work in server-side Node 20+ and Bun runtimes. The installed CLI command is named `email-sdk`. If you only need the CLI for a no-install check, run `bunx --bun --package @opencoredev/email-sdk email-sdk ...`. npm-only projects should install `@opencoredev/email-sdk` first, then run `npx email-sdk ...`. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
+
+## Choose a first adapter
+
+If you are new to Email SDK, start with Resend. It has the shortest setup path, supports the common transactional fields, and is the default example throughout these docs.
+
+Use Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+
+## Send through Resend
+
+Set `RESEND_API_KEY`, then create a client with the Resend adapter.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome to Acme",
+  text: "Your account is ready.",
+});
+```
+
+## Check the send result
+
+`send` resolves with the normalized adapter response. The `provider` value tells you which adapter
+actually handled the send.
+
+```ts
+const result = await email.send(message);
+
+console.log(result.provider);
+console.log(result.id);
+```
+
+If the adapter returns a message ID, Email SDK exposes it through the normalized `id` field. Some
+adapters also include `messageId` as an alias when the provider uses that name directly. Provider
+responses are still available through `raw` when an adapter includes them.
+
+## Verify from the CLI
+
+Use `doctor` to check that the selected adapter has the required environment variables.
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+```
+
+Use `--dry-run` to validate the message shape and adapter field support without sending email.
+
+```bash
+npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works" \
+  --dry-run
+```
+
+When the package is installed in your project, the same command can run through the installed binary:
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+```
+
+## Add a safe fallback route
+
+Add SMTP when you want a second route for a simple transactional email. The SMTP adapter is built in
+and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK
+upgrades with STARTTLS before authenticating.
+
+Only use fallback adapters that can send the same message shape. For example, SMTP supports address
+fields and headers, but not provider-only fields like tags, metadata, or attachments.
+Check <a href="/docs/adapters/field-support">Field support</a> before choosing backup routes.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: ["smtp"],
+});
+```
+
+Your application still sends the same way:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Receipt",
+  text: "Thanks for your order.",
+});
+```
+
+For route recipes, retries, observability, and tests, continue with <a href="/docs/guides/production-send-pipeline">Production send pipeline</a>.

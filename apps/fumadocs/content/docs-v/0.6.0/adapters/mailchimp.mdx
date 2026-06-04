@@ -1,0 +1,87 @@
+---
+title: Mailchimp Transactional
+description: Configure the Mailchimp Transactional adapter.
+icon: mailchimp
+---
+
+<ProviderBadge adapter="mailchimp" />
+
+Mailchimp Transactional is the API formerly known as Mandrill.
+
+## Before live sends
+
+Create a Mailchimp Transactional API key, verify the sending domain, and confirm the account can send to the target recipient class. Mailchimp returns per-recipient results, so check the provider `raw` response during live smoke tests if a message is accepted by the SDK but does not arrive.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
+
+const email = createEmailClient({
+  adapters: [mailchimp({ apiKey: process.env.MAILCHIMP_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  subject: "Receipt",
+  html: "<p>Thanks for your order.</p>",
+  metadata: {
+    orderId: "ord_123",
+  },
+  tags: [{ name: "type", value: "receipt" }],
+});
+
+console.log(result.provider, result.messageId);
+```
+
+Mailchimp Transactional maps CC/BCC, headers, metadata, tags, and attachments. It does not support `replyTo` in this adapter, so set replies through your provider template or omit the field.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Receipt",
+  text: "Thanks for your order.",
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Order ord_123",
+      contentType: "text/plain",
+    },
+  ],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                          |
+| --------- | -------------- | -------- | ---------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Mailchimp Transactional API key.               |
+| `baseUrl` | `string`       | No       | Defaults to `https://mandrillapp.com/api/1.0`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.
+
+## Response
+
+Mailchimp Transactional returns an array of recipient results. The adapter uses the first result's `_id` or `id` as the normalized `id` and `messageId`.
+
+## CLI smoke test
+
+```bash
+MAILCHIMP_API_KEY="..." npx email-sdk send \
+  --adapter mailchimp \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Mailchimp Transactional test" \
+  --text "It works"
+```

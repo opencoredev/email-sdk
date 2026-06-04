@@ -1,0 +1,85 @@
+---
+title: Postmark
+description: Configure the fetch-based Postmark adapter.
+icon: postmark
+---
+
+The Postmark adapter calls the Postmark Email API directly. It does not add a runtime dependency.
+
+<ProviderBadge adapter="postmark" />
+
+## Before live sends
+
+Create a Postmark server token for the server and message stream you want to send through. Make sure the sender signature or domain is approved in Postmark before using a production `from` address.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+
+const email = createEmailClient({
+  adapters: [
+    postmark({
+      serverToken: process.env.POSTMARK_SERVER_TOKEN!,
+      messageStream: "outbound",
+    }),
+  ],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "Receipt",
+  html: "<p>Thanks for your order.</p>",
+  headers: {
+    "X-Order-ID": "ord_123",
+  },
+  metadata: {
+    orderId: "ord_123",
+  },
+  tags: [{ name: "type", value: "receipt" }],
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Order ord_123",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.messageId);
+```
+
+Postmark supports one Email SDK tag. The adapter serializes the first tag as `name:value` and rejects additional tags before the API call.
+
+## Options
+
+| Option          | Type                     | Required | Notes                                      |
+| --------------- | ------------------------ | -------- | ------------------------------------------ |
+| `serverToken`   | `string`                 | Yes      | Postmark server token.                     |
+| `baseUrl`       | `string`                 | No       | Defaults to `https://api.postmarkapp.com`. |
+| `messageStream` | `string`                 | No       | Postmark message stream.                   |
+| `fetch`         | `typeof fetch`           | No       | Useful for tests or custom runtimes.       |
+| `headers`       | `Record<string, string>` | No       | Extra request headers.                     |
+
+## Response
+
+The adapter maps Postmark `MessageID` to `id` and `messageId`, and maps returned `To` to `accepted`.
+
+## CLI smoke test
+
+```bash
+POSTMARK_SERVER_TOKEN="..." npx email-sdk send \
+  --adapter postmark \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Postmark test" \
+  --text "It works"
+```

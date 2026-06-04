@@ -1,0 +1,80 @@
+---
+title: Adapter model
+description: How Email SDK adapters, routing names, and escape hatches work.
+icon: Plug
+---
+
+An adapter is an Email SDK module that knows how to send through one service or transport.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+  ],
+});
+```
+
+## Routing names
+
+Each adapter registers a routing name. Email SDK uses that name for defaults, fallbacks, and per-send overrides.
+
+| Adapter                 | Routing name |
+| ----------------------- | ------------ |
+| Resend                  | `resend`     |
+| SMTP                    | `smtp`       |
+| Postmark                | `postmark`   |
+| SendGrid                | `sendgrid`   |
+| Cloudflare              | `cloudflare` |
+| Unosend                 | `unosend`    |
+| AWS SES                 | `ses`        |
+| Mailgun                 | `mailgun`    |
+| MailerSend              | `mailersend` |
+| Brevo                   | `brevo`      |
+| Mailchimp Transactional | `mailchimp`  |
+| SparkPost               | `sparkpost`  |
+| Iterable                | `iterable`   |
+| Loops                   | `loops`      |
+| Plunk                   | `plunk`      |
+| Mailtrap                | `mailtrap`   |
+| Scaleway                | `scaleway`   |
+| ZeptoMail               | `zeptomail`  |
+| MailPace                | `mailpace`   |
+
+## Send with one adapter
+
+```ts
+await email.send(message, {
+  adapter: "postmark",
+});
+```
+
+## Adapters are route names
+
+Adapter names are the route identifiers used by `defaultAdapter`, per-send `adapter`, client-level `fallback`, per-send `fallbackAdapters`, and `withAdapter`.
+
+Use <a href="/docs/concepts/fallbacks-and-retries">Fallbacks and retries</a> to understand route order. Use <a href="/docs/adapters/field-support">Field support</a> before choosing backup routes.
+
+## Bind one adapter
+
+```ts
+const transactional = email.withAdapter("postmark");
+
+await transactional.send(message);
+```
+
+## Use adapter escape hatches
+
+Every adapter can expose `raw`. Keep provider-specific code close to the adapter and keep normal application code on the shared `send` path.
+
+```ts
+const adapter = email.adapter("resend");
+
+console.log(adapter.raw);
+```
+
+The older `provider`, `defaultProvider`, `email.provider()`, and `email.withProvider()` names still work as aliases.

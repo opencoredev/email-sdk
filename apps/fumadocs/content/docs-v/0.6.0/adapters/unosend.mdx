@@ -1,0 +1,78 @@
+---
+title: Unosend
+description: Configure the Unosend REST API adapter.
+icon: unosend
+---
+
+<ProviderBadge adapter="unosend" />
+
+The Unosend adapter calls the Unosend REST API directly. It is a good fit when you want API-based transactional delivery with CC, BCC, headers, tags, and attachments, but do not need Email SDK `metadata`.
+
+## Before live sends
+
+Create a server-side Unosend API key, verify the sending domain you use in `from`, and keep the key in `UNOSEND_API_KEY`. A dry run can validate the Email SDK message shape, but only a live send from your target environment proves the Unosend account and domain are ready.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { unosend } from "@opencoredev/email-sdk/unosend";
+
+const email = createEmailClient({
+  adapters: [unosend({ apiKey: process.env.UNOSEND_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "billing@example.com",
+  bcc: "audit@example.com",
+  replyTo: "support@example.com",
+  subject: "Welcome",
+  html: "<p>Your workspace is ready.</p>",
+  headers: {
+    "X-Template": "welcome",
+  },
+  tags: [{ name: "type", value: "welcome" }],
+  attachments: [
+    {
+      filename: "welcome.txt",
+      content: "Welcome to Acme.",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.messageId);
+```
+
+Unosend supports one `replyTo` address. The adapter rejects multiple reply-to addresses before it calls the API.
+
+## Options
+
+| Option    | Type           | Required | Notes                                 |
+| --------- | -------------- | -------- | ------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Unosend API key.                      |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.unosend.co`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.  |
+
+Unosend maps CC, BCC, one reply-to address, headers, tags, and Base64 attachments. `metadata` is not part of Unosend's send endpoint, so the adapter rejects metadata before the request instead of silently dropping it.
+
+## Response
+
+The adapter maps the Unosend email ID to `id` and `messageId`, and keeps the provider response in `raw`.
+
+## CLI smoke test
+
+```bash
+UNOSEND_API_KEY="un_..." npx email-sdk send \
+  --adapter unosend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```

@@ -1,0 +1,119 @@
+---
+title: SMTP
+description: Configure generic SMTP for PurelyMail or a custom server.
+icon: smtp
+---
+
+The SMTP adapter is built in. It uses Node/Bun TCP and TLS sockets directly, so it does not need Nodemailer.
+
+<ProviderBadge adapter="smtp" />
+
+When `auth` is configured with `secure: false`, the adapter sends `STARTTLS` before authenticating. Set `allowInsecureAuth: true` only for a trusted local server that does not support TLS.
+
+## Before live sends
+
+Confirm the SMTP host, port, TLS mode, username, and password with your provider. SMTP is a good fallback for simple transactional messages, but it does not support provider-only fields such as tags, metadata, or attachments.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@example.com>",
+  to: "user@example.com",
+  cc: "billing@example.com",
+  replyTo: "support@example.com",
+  subject: "SMTP delivery test",
+  text: "It works",
+  headers: {
+    "X-Trace-ID": "trace_123",
+  },
+});
+
+console.log(result.provider, result.accepted);
+```
+
+SMTP supports address fields and headers. It rejects attachments, tags, and metadata because those provider-specific fields cannot be represented in this built-in transport.
+
+## Options
+
+| Option              | Type                             | Required | Notes                                     |
+| ------------------- | -------------------------------- | -------- | ----------------------------------------- |
+| `host`              | `string`                         | Yes      | SMTP host.                                |
+| `port`              | `number`                         | No       | Common values are `587`, `465`, and `25`. |
+| `secure`            | `boolean`                        | No       | Use TLS from the start of the connection. |
+| `auth`              | `{ user: string; pass: string }` | No       | SMTP credentials.                         |
+| `defaults`          | `{ replyTo?: string }`           | No       | Default reply-to header.                  |
+| `tls`               | `Record<string, unknown>`        | No       | TLS options.                              |
+| `requireTLS`        | `boolean`                        | No       | Require STARTTLS.                         |
+| `allowInsecureAuth` | `boolean`                        | No       | Opt in to SMTP AUTH without TLS.          |
+| `name`              | `string`                         | No       | Defaults to `smtp`.                       |
+| `heloName`          | `string`                         | No       | EHLO name sent to the server.             |
+| `timeoutMs`         | `number`                         | No       | Socket timeout.                           |
+
+## Multiple SMTP routes
+
+Rename adapters when you have multiple SMTP routes.
+
+```ts
+const email = createEmailClient({
+  adapters: [
+    smtp({
+      name: "purelymail",
+      host: "smtp.purelymail.com",
+      auth: {
+        user: process.env.PURELYMAIL_USER!,
+        pass: process.env.PURELYMAIL_PASS!,
+      },
+    }),
+    smtp({
+      name: "backup-smtp",
+      host: "smtp.backup.example",
+      auth: {
+        user: process.env.BACKUP_SMTP_USER!,
+        pass: process.env.BACKUP_SMTP_PASS!,
+      },
+    }),
+  ],
+  defaultAdapter: "purelymail",
+  fallback: ["backup-smtp"],
+});
+```
+
+## Response
+
+The adapter returns the SMTP server message ID when it can parse one. It also returns accepted recipients and an empty `rejected` array because failed recipients throw during the SMTP conversation.
+
+## CLI smoke test
+
+```bash
+npx email-sdk send \
+  --adapter smtp \
+  --host smtp.purelymail.com \
+  --user hello@example.com \
+  --pass "$SMTP_PASS" \
+  --from "Acme <hello@example.com>" \
+  --to user@example.com \
+  --subject "SMTP test" \
+  --text "It works"
+```

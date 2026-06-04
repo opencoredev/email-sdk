@@ -1,0 +1,123 @@
+---
+title: Adapter contract
+description: Exact provider and plugin types for custom Email SDK adapters.
+icon: Plug
+---
+
+Custom adapters are plain objects that implement `EmailProvider`. They send one normalized Email SDK message through one provider.
+
+Adapter plugins are `EmailPlugin` objects that register adapters. Use them when the adapter is packaged for reuse.
+
+| Contract        | Purpose                                              |
+| --------------- | ---------------------------------------------------- |
+| `EmailProvider` | Provider implementation. Maps and sends the message. |
+| `EmailPlugin`   | Registration wrapper. Adds adapters to a client.     |
+
+```ts
+import type { EmailProvider } from "@opencoredev/email-sdk";
+
+export const customAdapter: EmailProvider = {
+  name: "custom",
+  async send(message, context) {
+    const response = await fetch("https://api.example.com/email", {
+      method: "POST",
+      signal: context.signal,
+      body: JSON.stringify(message),
+    });
+
+    const body = await response.json();
+
+    return {
+      provider: "custom",
+      id: body.id,
+      raw: body,
+    };
+  },
+};
+```
+
+Use a plain adapter directly:
+
+```ts
+createEmailClient({ adapters: [customAdapter] });
+```
+
+Or package it as an adapter plugin. The plugin should return a stable `id` and one or more adapters.
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function customAdapterPlugin(): EmailPlugin {
+  return {
+    id: "custom",
+    adapters: [customAdapter],
+  };
+}
+
+createEmailClient({ plugins: [customAdapterPlugin()] });
+```
+
+For community packages, export both forms from the package root:
+
+```ts
+export { customAdapter } from "./custom-adapter";
+export { customAdapterPlugin } from "./plugin";
+```
+
+## `EmailProvider`
+
+```ts
+type EmailProvider<TRaw = unknown> = {
+  name: string;
+  send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  raw?: TRaw;
+};
+```
+
+## `EmailProviderContext`
+
+| Field            | Type                      | Notes                                          |
+| ---------------- | ------------------------- | ---------------------------------------------- |
+| `signal`         | `AbortSignal`             | Optional abort signal.                         |
+| `idempotencyKey` | `string`                  | Optional key from the message or send options. |
+| `attempt`        | `number`                  | Attempt number for this adapter.               |
+| `metadata`       | `Record<string, unknown>` | Metadata passed to `send`.                     |
+
+## Adapter responses
+
+```ts
+type EmailProviderResponse = {
+  id?: string;
+  provider: string;
+  messageId?: string;
+  accepted?: string[];
+  rejected?: string[];
+  raw?: unknown;
+};
+```
+
+Return the provider's raw response in `raw` when it helps callers debug or inspect provider-specific fields.
+
+## `EmailPlugin` for adapter packages
+
+```ts
+type EmailPlugin = {
+  id: string;
+  adapters?: EmailProvider[] | ((ctx: EmailPluginContext) => EmailProvider[]);
+};
+```
+
+Adapter plugins should keep `adapters` synchronous. If the adapter needs credentials, accept them in the plugin factory and construct the adapter immediately.
+
+```ts
+export function customAdapterPlugin(options: { apiKey: string }): EmailPlugin {
+  const adapter = createCustomAdapter(options);
+
+  return {
+    id: "custom",
+    adapters: [adapter],
+  };
+}
+```
+
+Duplicate plugin IDs and duplicate adapter names throw during `createEmailClient`. Use one stable adapter name so routing, fallbacks, logs, and tests all refer to the same provider.

@@ -1,0 +1,89 @@
+---
+title: Plunk
+description: Configure the Plunk send API adapter.
+icon: plunk
+---
+
+<ProviderBadge adapter="plunk" />
+
+Plunk is a product-led email adapter for event-style sends. It supports reply-to, headers, metadata, and attachments, but not CC, BCC, or tags.
+
+## Before live sends
+
+Create a Plunk API key and verify the sender setup for your workspace. Check your message shape before using Plunk as a fallback because CC, BCC, and tags are rejected locally.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { plunk } from "@opencoredev/email-sdk/plunk";
+
+const email = createEmailClient({
+  adapters: [plunk({ apiKey: process.env.PLUNK_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: { email: "hello@acme.com", name: "Acme" },
+  to: [{ email: "user@example.com", name: "Ada" }],
+  replyTo: "support@example.com",
+  subject: "Product event",
+  html: "<p>Your export is ready.</p>",
+  headers: {
+    "X-Export-ID": "exp_123",
+  },
+  metadata: {
+    exportId: "exp_123",
+  },
+});
+
+console.log(result.provider, result.id);
+```
+
+Plunk maps `metadata` to `data` and `replyTo` to `reply`. It rejects CC, BCC, and tags before the API call.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Export ready",
+  html: "<p>Your export is attached.</p>",
+  attachments: [
+    {
+      filename: "export.txt",
+      content: "name,total\nAda,42",
+      contentType: "text/plain",
+    },
+  ],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                        |
+| --------- | -------------- | -------- | -------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Plunk API key.                               |
+| `baseUrl` | `string`       | No       | Defaults to `https://next-api.useplunk.com`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.         |
+
+Plunk maps metadata to `data`, `replyTo` to `reply`, custom headers to `headers`, attachments to `attachments`, and the first returned `data.emails[].email` value to the SDK response ID. Unsupported fields throw before the API call.
+
+## Response
+
+The adapter first reads the first `data.emails[].email` value, then falls back to body `id` or `emailId`.
+
+## CLI smoke test
+
+```bash
+PLUNK_API_KEY="..." npx email-sdk send \
+  --adapter plunk \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Plunk test" \
+  --text "It works"
+```

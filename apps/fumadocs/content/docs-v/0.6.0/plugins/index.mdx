@@ -1,0 +1,116 @@
+---
+title: Plugins
+description: Built-in plugins and extension points for Email SDK.
+icon: Plug
+---
+
+Plugins are add-ons for an email client. They can register adapters, change a message before validation, record send activity, or expose a small typed helper on the client.
+
+Plugins are how repeated send-pipeline behavior becomes reusable: defaults before validation, observability after attempts, capture in tests, and adapter registration for community routes. For a full production path, see <a href="/docs/guides/production-send-pipeline">Production send pipeline</a>.
+
+Most apps should start with the built-in plugins. If a behavior should be reused across apps, move it into a plugin.
+
+## Built-in plugins
+
+| Plugin        | Import                                         | Use it when                                                                         |
+| ------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Defaults      | `@opencoredev/email-sdk/plugins/defaults`      | Every send needs shared headers, tags, metadata, reply-to, or idempotency defaults. |
+| Observability | `@opencoredev/email-sdk/plugins/observability` | You want logs, metrics, or traces without leaking recipients or email body content. |
+| Capture       | `@opencoredev/email-sdk/plugins/capture`       | Tests need to inspect attempted sends, retries, responses, and errors.              |
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      headers: { "X-App": "billing" },
+      sendMetadata: { service: "billing" },
+    }),
+    observabilityPlugin({
+      log(event) {
+        console.log(event.type, event.provider);
+      },
+    }),
+  ],
+});
+```
+
+## What plugins can do
+
+| Capability        | Example                                                           |
+| ----------------- | ----------------------------------------------------------------- |
+| Register adapters | A community provider package can add its own `EmailProvider`.     |
+| Change a message  | Defaults can add headers before provider validation.              |
+| Observe sends     | Observability can emit redacted success, retry, and error events. |
+| Capture tests     | Capture can expose `email.capture.events`.                        |
+| Add helpers       | A plugin can add a small typed property to the returned client.   |
+
+## What plugins cannot do
+
+Email SDK plugins do not add databases, migrations, HTTP endpoints, route middleware, rate limits, or server/client plugin pairs. Those are framework-level features. Email SDK plugins stay focused on sending email.
+
+## Common plugin shapes
+
+| Shape                      | Where to start                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Shared defaults            | Use the [defaults plugin](/docs/plugins/built-in/defaults).                            |
+| Redacted logging           | Use the [observability plugin](/docs/plugins/built-in/observability).                  |
+| Test capture               | Use the [capture plugin](/docs/plugins/built-in/capture).                              |
+| Custom provider            | Follow [Create an adapter](/docs/guides/authoring/create-adapter).                     |
+| Reusable behavior          | Follow [Create your first plugin](/docs/guides/authoring/create-first-plugin).         |
+| Community adapter          | Follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter). |
+| Community behavior package | Follow [Publish a community plugin](/docs/guides/authoring/publish-community-plugin).  |
+
+## Order
+
+Plugin order is deterministic.
+
+1. Direct `adapters` register first.
+2. Plugins run in array order.
+3. Plugin adapters register in plugin order.
+4. Duplicate plugin IDs throw.
+5. Duplicate adapter names throw.
+6. `beforeSend` middleware runs before message validation.
+7. Plugin hooks run before user `hooks`.
+
+Use a custom `id` when mounting more than one instance of the same plugin type. If the plugin extends the client, also give each instance a distinct extension key, such as `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })`.
+
+## Next
+
+<Cards>
+  <Card
+    title="Defaults plugin"
+    href="/docs/plugins/built-in/defaults"
+    description="Apply shared message and send-option defaults."
+  />
+  <Card
+    title="Observability plugin"
+    href="/docs/plugins/built-in/observability"
+    description="Emit redacted log, metric, and trace events."
+  />
+  <Card
+    title="Capture plugin"
+    href="/docs/plugins/built-in/capture"
+    description="Record email behavior in tests."
+  />
+  <Card
+    title="Community plugins and adapters"
+    href="/docs/plugins/community"
+    description="Browse third-party package listings and verification labels."
+  />
+  <Card
+    title="Writing plugins"
+    href="/docs/guides/authoring/create-first-plugin"
+    description="Build a reusable policy plugin step by step."
+  />
+  <Card
+    title="Create an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Write a custom provider adapter and wrap it as a plugin."
+  />
+</Cards>
