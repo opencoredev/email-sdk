@@ -3,6 +3,7 @@
 import type { EmailMessage } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import { createHash } from "node:crypto";
 
 import { internal } from "./_generated/api.js";
 import { internalAction } from "./_generated/server.js";
@@ -118,7 +119,7 @@ function parseProviderWebhook(provider: string, body: string, headers: Record<st
       stringValue(record.id) ??
       headers["svix-id"] ??
       headers["resend-signature"] ??
-      crypto.randomUUID();
+      deterministicDeliveryId(provider, body);
     const providerMessageId = stringValue(data.email_id) ?? stringValue(data.id);
 
     return { deliveryId, providerMessageId, payload };
@@ -126,7 +127,12 @@ function parseProviderWebhook(provider: string, body: string, headers: Record<st
 
   const record = payload as Record<string, unknown>;
   return {
-    deliveryId: stringValue(record.id) ?? stringValue(record.eventId) ?? crypto.randomUUID(),
+    deliveryId:
+      stringValue(record.id) ??
+      stringValue(record.eventId) ??
+      stringValue(record.webhookId) ??
+      stringValue(record.deliveryId) ??
+      deterministicDeliveryId(provider, body),
     providerMessageId: stringValue(record.messageId) ?? stringValue(record.message_id),
     payload,
   };
@@ -142,4 +148,8 @@ function parseJson(body: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : undefined;
+}
+
+function deterministicDeliveryId(provider: string, body: string) {
+  return `body:${createHash("sha256").update(provider).update("\0").update(body).digest("hex")}`;
 }

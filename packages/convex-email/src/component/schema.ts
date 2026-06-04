@@ -31,6 +31,7 @@ export default defineSchema({
     terminalAt: v.optional(v.number()),
   })
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"])
+    .index("by_status_and_updatedAt", ["status", "updatedAt"])
     .index("by_idempotencyKey", ["idempotencyKey"])
     .index("by_createdAt", ["createdAt"])
     .index("by_providerMessageId", ["providerMessageId"]),
@@ -59,6 +60,7 @@ export default defineSchema({
     error: v.optional(v.string()),
   })
     .index("by_provider_and_deliveryId", ["provider", "deliveryId"])
+    .index("by_emailId", ["emailId"])
     .index("by_receivedAt", ["receivedAt"]),
 
   config: defineTable({

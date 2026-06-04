@@ -128,12 +128,48 @@ describe("convex-email component", () => {
     expect(status?.message.bcc).toBeUndefined();
   });
 
+  test("test mode requires sandbox recipients", async () => {
+    const t = createTest();
+
+    await t.mutation(api.lib.setConfig, {
+      config: {
+        testMode: true,
+        defaultFrom: "Ops <ops@example.com>",
+      },
+    });
+
+    await expect(
+      t.mutation(api.lib.enqueue, {
+        to: "real@example.com",
+        subject: "Sandbox",
+        text: "This should not send.",
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+      }),
+    ).rejects.toThrow("testMode is enabled but sandboxTo is not configured");
+  });
+
   test("records duplicate webhook deliveries idempotently", async () => {
     const t = createTest();
     const args = {
       provider: "resend",
       headers: { "svix-id": "evt_duplicate" },
       body: JSON.stringify({ data: { email_id: "msg_123" } }),
+    };
+
+    const first = await t.action(api.worker.handleWebhook, args);
+    const second = await t.action(api.worker.handleWebhook, args);
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: true, duplicate: true });
+  });
+
+  test("deduplicates generic webhooks without provider delivery ids", async () => {
+    const t = createTest();
+    const args = {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ type: "delivered", message_id: "msg_generic" }),
     };
 
     const first = await t.action(api.worker.handleWebhook, args);
@@ -154,5 +190,68 @@ describe("convex-email component", () => {
         defaultAdapter: "smtp",
       }),
     ).not.toThrow();
+  });
+
+  test("recovers emails stuck in processing", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+
+    Date.now = () => startedAt;
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 2,
+      });
+
+      await t.mutation(api.lib.markProcessing, { emailId });
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+
+      const recovered = await t.mutation(api.lib.processDueEmails, { limit: 25 });
+      const status = await t.query(api.lib.status, { emailId });
+      const events = await t.query(api.lib.listEvents, { emailId });
+
+      expect(recovered).toBe(1);
+      expect(status).toMatchObject({
+        status: "queued",
+        lastError: "Email processing exceeded recovery timeout.",
+      });
+      expect(events.map((event) => event.type)).toContain("retry_scheduled");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("cleanupAfterDays removes expired email history", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const createdAt = 1_000;
+
+    Date.now = () => createdAt;
+    try {
+      await t.mutation(api.lib.setConfig, {
+        config: { cleanupAfterDays: 1 },
+      });
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 1,
+      });
+      await flushScheduled(t);
+
+      Date.now = () => createdAt + 2 * 24 * 60 * 60 * 1_000;
+      const deleted = await t.mutation(api.lib.cleanupExpiredEmails, { limit: 25 });
+      const status = await t.query(api.lib.status, { emailId });
+      const events = await t.query(api.lib.listEvents, { emailId });
+
+      expect(deleted).toBe(1);
+      expect(status).toBeNull();
+      expect(events).toEqual([]);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 });

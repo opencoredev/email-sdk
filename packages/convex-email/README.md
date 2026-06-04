@@ -205,6 +205,8 @@ await email.setConfig(ctx, {
 });
 ```
 
+If `testMode` is enabled without `sandboxTo`, sends fail before enqueueing so real recipients are not contacted by mistake.
+
 For local or CI tests, use the memory adapter:
 
 ```ts
@@ -215,6 +217,16 @@ export const email = new ConvexEmail(components.convexEmail, {
 ```
 
 The package exports Convex test helpers from `@opencoredev/convex-email/test`.
+
+## Cleanup
+
+Set `cleanupAfterDays` to prune expired email rows, delivery records, and event history during scheduled queue sweeps.
+
+```ts
+await email.setConfig(ctx, {
+  cleanupAfterDays: 30,
+});
+```
 
 ## Scope
 
