@@ -225,6 +225,7 @@ The package exports Convex test helpers from `@opencoredev/convex-email/test`.
 
 The component ships a five-minute cron sweep for missed queue work, stale `processing` recovery, and cleanup.
 Set `cleanupAfterDays` to prune expired terminal email rows, delivery records, and event history during that sweep.
+Stale `processing` sends are only auto-retried when the email has an `idempotencyKey`; without one, the component fails closed because the provider request may already have been delivered.
 
 ```ts
 await email.setConfig(ctx, {

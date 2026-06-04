@@ -281,9 +281,17 @@ export const processDueEmails = internalMutation({
       await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
     }
     for (const email of staleProcessing) {
-      await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
-        immediate: true,
-      });
+      if (email.idempotencyKey) {
+        await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
+          immediate: true,
+        });
+      } else {
+        await markEmailTerminalFailed(
+          ctx,
+          email,
+          "Email processing exceeded recovery timeout. Convex Email will not retry stale processing sends without an idempotencyKey because the provider request may already have been delivered.",
+        );
+      }
     }
 
     return due.length + staleProcessing.length;
@@ -586,6 +594,26 @@ async function insertEvent(
   await ctx.db.insert("emailEvents", {
     ...event,
     createdAt: event.createdAt ?? Date.now(),
+  });
+}
+
+async function markEmailTerminalFailed(ctx: any, email: any, error: string) {
+  if (!email || email.status === "sent" || email.status === "canceled") {
+    return;
+  }
+
+  const now = Date.now();
+  await ctx.db.patch(email._id, {
+    status: "failed",
+    lastError: error,
+    updatedAt: now,
+    terminalAt: now,
+  });
+  await insertEvent(ctx, {
+    emailId: email._id,
+    type: "failed",
+    attempt: email.attemptCount,
+    error,
   });
 }
 

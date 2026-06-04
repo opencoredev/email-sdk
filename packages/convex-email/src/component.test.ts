@@ -231,6 +231,7 @@ describe("convex-email component", () => {
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
+        idempotencyKey: "stale-processing:ada@example.com",
         adapters: [{ kind: "memory" }],
         adapter: "memory",
         maxAttempts: 2,
@@ -249,6 +250,38 @@ describe("convex-email component", () => {
         lastError: "Email processing exceeded recovery timeout.",
       });
       expect(events.map((event) => event.type)).toContain("retry_scheduled");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("does not auto-retry stale processing emails without an idempotency key", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+
+    Date.now = () => startedAt;
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 2,
+      });
+
+      await t.mutation(api.lib.markProcessing, { emailId });
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+
+      const recovered = await t.mutation(api.lib.processDueEmails, { limit: 25 });
+      const status = await t.query(api.lib.status, { emailId });
+      const events = await t.query(api.lib.listEvents, { emailId });
+
+      expect(recovered).toBe(1);
+      expect(status).toMatchObject({
+        status: "failed",
+        lastError: expect.stringContaining("will not retry stale processing sends without an idempotencyKey"),
+      });
+      expect(events.map((event) => event.type)).toContain("failed");
     } finally {
       Date.now = originalNow;
     }
