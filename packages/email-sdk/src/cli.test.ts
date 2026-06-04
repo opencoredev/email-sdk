@@ -114,6 +114,42 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("unosend looks configured.");
   });
 
+  test("doctor accepts Iterable credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "iterable",
+      "--api-key",
+      "it_test",
+      "--campaign-id",
+      "123",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("iterable looks configured.");
+  });
+
+  test("dry run rejects Iterable messages over the recipient limit", async () => {
+    const { stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "iterable",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "ada@example.com,grace@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("iterable only supports 1 recipient per message");
+  });
+
   test("dry run rejects Cloudflare messages over the recipient limit", async () => {
     const { stderr, exitCode } = await runCli([
       "send",

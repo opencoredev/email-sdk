@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
+import { EmailValidationError } from "./errors.js";
+import { iterable } from "./iterable.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -748,6 +750,96 @@ describe("provider payloads", () => {
     ).rejects.toThrow("Unauthorized");
   });
 
+  test("Iterable maps campaign target sends", async () => {
+    const capture = jsonCapture({ code: "Success", msg: "Email sent" });
+
+    const response = await iterable({
+      apiKey: "iterable_key",
+      campaignId: 123,
+      allowRepeatMarketingSends: false,
+      sendAt: "2026-06-03 12:00:00",
+      dataFields: (emailMessage) => ({
+        plan: emailMessage.metadata?.plan,
+      }),
+      fetch: capture.fetch,
+    }).send(
+      {
+        ...message,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        attachments: undefined,
+        metadata: {
+          plan: "pro",
+        },
+      },
+      context,
+    );
+
+    expect(response.provider).toBe("iterable");
+    expect(response.raw).toEqual({ code: "Success", msg: "Email sent" });
+    expect(capture.calls[0]?.url).toBe("https://api.iterable.com/api/email/target");
+    expect(capture.calls[0]?.headers.get("api-key")).toBe("iterable_key");
+    expect(capture.calls[0]?.json).toMatchObject({
+      campaignId: 123,
+      recipientEmail: "ada@example.com",
+      allowRepeatMarketingSends: false,
+      sendAt: "2026-06-03 12:00:00",
+      dataFields: {
+        plan: "pro",
+        subject: "Welcome",
+        html: "<p>Hello</p>",
+        text: "Hello",
+        from: "Acme <hello@example.com>",
+      },
+      metadata: {
+        plan: "pro",
+      },
+    });
+  });
+
+  test("Iterable requires a numeric campaign ID", () => {
+    expect(() =>
+      iterable({
+        apiKey: "key",
+        campaignId: Number.NaN,
+        fetch: jsonCapture({ msg: "iterable_123" }).fetch,
+      }),
+    ).toThrow("iterable requires a numeric campaignId");
+
+    expect(() =>
+      iterable({
+        apiKey: "key",
+        campaignId: Number.NaN,
+        fetch: jsonCapture({ msg: "iterable_123" }).fetch,
+      }),
+    ).toThrow(EmailValidationError);
+  });
+
+  test("Iterable rejects direct sends without a recipient", async () => {
+    await expect(
+      iterable({
+        apiKey: "key",
+        campaignId: 123,
+        fetch: jsonCapture({ code: "Success", msg: "Email sent" }).fetch,
+      }).send(
+        {
+          ...message,
+          to: [],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+          attachments: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow(EmailValidationError);
+  });
+
   test("ZeptoMail uses the official address shape", async () => {
     const capture = jsonCapture({ request_id: "zoho_123" });
 
@@ -879,6 +971,14 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("unosend does not support");
+
+    await expect(
+      iterable({
+        apiKey: "key",
+        campaignId: 123,
+        fetch: jsonCapture({ msg: "iterable_123" }).fetch,
+      }).send({ ...limitedMessage, headers: { "X-Test": "yes" } }, context),
+    ).rejects.toThrow("iterable does not support");
   });
 
   test("empty optional field containers do not fail narrow adapters", async () => {
@@ -984,6 +1084,27 @@ describe("provider payloads", () => {
         fetch: jsonCapture({ success: true }).fetch,
       }).send(messageWithoutProviderSpecificFields, context),
     ).rejects.toThrow("cloudflare recipient fields only support plain email addresses");
+
+    await expect(
+      iterable({
+        apiKey: "key",
+        campaignId: 123,
+        fetch: jsonCapture({ msg: "iterable_123" }).fetch,
+      }).send(
+        {
+          ...message,
+          to: ["ada@example.com", "grace@example.com"],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+          attachments: undefined,
+          metadata: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("iterable only supports 1 recipient per message");
   });
 });
 
