@@ -1,0 +1,68 @@
+---
+title: Community registry
+description: Static schema and verification rules for community plugin listings.
+icon: ShieldCheck
+---
+
+The community registry lives at `apps/fumadocs/content/community/plugins.json`. It is a static JSON file rendered by the docs site for third-party plugins, adapters, and hybrid packages.
+
+Adapter packages use this registry too. Set `kind: "adapter"`, include the adapter routing name in `adapter`, and include the plugin factory export in `importName` when the package exposes one.
+
+## Entry shape
+
+```ts
+type CommunityRegistryEntry = {
+  name: string;
+  package: string;
+  kind: "adapter" | "plugin" | "hybrid";
+  status: "community" | "verified" | "official";
+  description: string;
+  href: string;
+  repo: string;
+  maintainer: string;
+  pluginId?: string;
+  adapter?: string;
+  importName?: string;
+  verifiedVersion?: string;
+  verification?: {
+    reviewedAt: string;
+    reviewedBy: string;
+    provenance: boolean;
+    noInstallScripts: boolean;
+    runtimeDependencies: number;
+    notes?: string;
+  };
+};
+```
+
+## Status labels
+
+| Status      | Meaning                                                 |
+| ----------- | ------------------------------------------------------- |
+| `community` | Listed package. The package is not endorsed or audited. |
+| `verified`  | Passed registry checks for `verifiedVersion`.           |
+| `official`  | Maintained by OpenCore or in the Email SDK repository.  |
+
+Verification applies to one package version. New releases must be checked before the registry entry updates `verifiedVersion`.
+
+## Verified package rules
+
+Verified entries must:
+
+1. Use npm trusted publishing or provenance.
+2. Use a public source repository that matches package metadata.
+3. Avoid `preinstall`, `install`, and `postinstall` scripts.
+4. Declare `@opencoredev/email-sdk` as a peer dependency.
+5. Avoid package binaries.
+6. Keep runtime dependencies small and documented.
+7. Avoid suspicious install-time or import-time behavior.
+
+Run the registry check before opening a pull request.
+
+```bash
+bun run community:check
+```
+
+In CI, verified and official entries also download the published npm tarball and check the package metadata, install scripts, peer dependency, binary field, repository link, runtime dependency count, and a small set of suspicious JavaScript tokens.
+
+The check is intentionally static. It lowers obvious supply-chain risk, but it does not prove that third-party code is harmless. Users should still read the source, pin versions, and apply their normal dependency review process.

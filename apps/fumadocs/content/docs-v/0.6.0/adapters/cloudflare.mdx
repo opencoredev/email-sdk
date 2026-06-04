@@ -1,0 +1,86 @@
+---
+title: Cloudflare Email Sending
+description: Configure the Cloudflare Email Sending REST API adapter.
+icon: cloudflare
+---
+
+<ProviderBadge adapter="cloudflare" />
+
+Cloudflare Email Sending uses Cloudflare's REST endpoint, not a Worker binding. It is useful when your sending domain already lives in Cloudflare and you want API-based delivery with CC, BCC, reply-to, headers, and attachments.
+
+## Before live sends
+
+Enable Cloudflare Email Sending for the account and DNS domain, create an API token with Email Sending permission, and verify whether the account is limited to approved recipients. The adapter can validate the message shape locally, but only Cloudflare can prove the domain and account are ready to deliver.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+
+const email = createEmailClient({
+  adapters: [
+    cloudflare({
+      apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+    }),
+  ],
+});
+```
+
+Use `baseUrl` only for tests or a Cloudflare-compatible proxy.
+
+## Send
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  cc: "ops@example.com",
+  replyTo: "support@example.com",
+  subject: "Cloudflare Email Sending test",
+  text: "It works",
+  headers: {
+    "X-Order-ID": "ord_123",
+  },
+  attachments: [
+    {
+      filename: "receipt.txt",
+      content: "Thanks for your order.",
+      contentType: "text/plain",
+    },
+  ],
+});
+
+console.log(result.provider, result.accepted);
+```
+
+Cloudflare recipient fields support plain email addresses. `from` and `replyTo` may include display names, but `to`, `cc`, and `bcc` must not. The adapter also limits total recipients to 50 and `replyTo` to one address.
+
+## Options
+
+| Option      | Type           | Required | Notes                                                     |
+| ----------- | -------------- | -------- | --------------------------------------------------------- |
+| `apiToken`  | `string`       | Yes      | Cloudflare API token with Email Sending permission.       |
+| `accountId` | `string`       | Yes      | Cloudflare account ID used in the Email Sending endpoint. |
+| `baseUrl`   | `string`       | No       | Defaults to `https://api.cloudflare.com/client/v4`.       |
+| `fetch`     | `typeof fetch` | No       | Useful for tests or custom runtimes.                      |
+
+## Response
+
+The adapter maps Cloudflare `delivered` and `queued` recipients to `accepted`, and `permanent_bounces` to `rejected`.
+
+## CLI smoke test
+
+```bash
+npx email-sdk send \
+  --adapter cloudflare \
+  --api-token "$CLOUDFLARE_API_TOKEN" \
+  --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+  --from "hello@example.com" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.

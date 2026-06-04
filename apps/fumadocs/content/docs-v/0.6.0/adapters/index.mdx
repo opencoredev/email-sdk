@@ -1,0 +1,122 @@
+---
+title: Adapters
+description: Supported email service adapters and transports.
+icon: Cable
+---
+
+Email SDK ships with 20 adapters. Import only the adapter you use; the package does not ask you
+to configure providers that are not on your send path.
+
+Every adapter follows the same contract: map the fields it supports and throw a validation error for
+fields the provider API cannot represent. Use the <a href="/docs/adapters/field-support">SDK field support guide</a>
+before choosing fallback routes.
+
+<SponsorSpotlight />
+
+<ProviderGrid />
+
+## Which adapter should I start with?
+
+| If you want...                         | Start with                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| The fastest first send                 | Resend                                                                       |
+| Mature transactional delivery controls | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo                      |
+| A backup route for production delivery | A primary API adapter plus Postmark or SMTP                                  |
+| Product-triggered emails               | Iterable, Sequenzy, Loops, or Plunk                                          |
+| A cheap or self-managed transport      | SMTP                                                                         |
+| Heavy attachment support               | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
+
+## Want to build a community adapter?
+
+Do not add third-party provider experiments to the official package by default. Publish a separate community package, export an adapter plugin, and list it in the community registry if you want discoverability.
+
+<Cards>
+  <Card
+    title="Create an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Implement the provider mapping and wrap it as an adapter plugin."
+  />
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="Build and publish a third-party provider package without making it official."
+  />
+</Cards>
+
+## What the status labels mean
+
+Provider cards use these labels:
+
+- `Official` means the adapter ships in `@opencoredev/email-sdk`.
+- `Sponsor` means the provider supports Email SDK. Sponsor adapters appear first in the catalog.
+- `API tested` means a local check has successfully called a live provider API with a real key. It does not prove live delivery unless the adapter page says a send was performed.
+- `Not API tested` means we have not yet run a live provider API check for that adapter.
+- `Request tested` means repository tests cover request mapping, responses, and fail-fast validation with injected fetch calls.
+- `Built-in transport` means the adapter sends through Email SDK's own transport implementation instead of a provider API.
+- `No provider API` means the adapter does not call a hosted provider API.
+
+Email SDK can catch unsupported fields before a request. It cannot make a provider account ready to send from an unverified domain.
+
+## Import pattern
+
+Start with one adapter. Add a fallback only after the fallback supports the same message shape your app sends.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: process.env.SMTP_HOST!,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: ["smtp"],
+});
+```
+
+Route a single send through another configured adapter when a message has a provider-specific job.
+
+```ts
+const response = await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Password reset",
+    text: "Use this link to reset your password.",
+  },
+  {
+    adapter: "smtp",
+  },
+);
+
+console.log(response.provider);
+```
+
+Before adding the provider to production, run a dry run and then a live smoke test from the same environment that will send mail.
+
+```bash
+npx email-sdk adapters
+RESEND_API_KEY="re_..." npx email-sdk send \
+  --dry-run \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Dry run" \
+  --text "Validate only"
+```
+
+## Adapter groups
+
+| Group          | Adapters                                                                        |
+| -------------- | ------------------------------------------------------------------------------- |
+| Popular APIs   | Resend, Postmark, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional |
+| Infrastructure | Cloudflare Email Sending, SparkPost, Mailtrap, Scaleway, ZeptoMail, MailPace    |
+| Product-led    | Iterable, Sequenzy, Loops, Plunk                                                |
+| Transport      | Built-in SMTP                                                                   |

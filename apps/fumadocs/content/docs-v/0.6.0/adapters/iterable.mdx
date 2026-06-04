@@ -1,0 +1,40 @@
+---
+title: Iterable
+description: Configure the Iterable target email adapter.
+icon: iterable
+---
+
+<ProviderBadge adapter="iterable" />
+
+Iterable target sends require a campaign ID. Email SDK sends one recipient to Iterable's
+`/api/email/target` endpoint and maps the normalized subject/body fields into `dataFields` for the campaign template.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { iterable } from "@opencoredev/email-sdk/iterable";
+
+const email = createEmailClient({
+  adapters: [
+    iterable({
+      apiKey: process.env.ITERABLE_API_KEY!,
+      campaignId: Number(process.env.ITERABLE_CAMPAIGN_ID!),
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option                      | Type                                                              | Required | Notes                                          |
+| --------------------------- | ----------------------------------------------------------------- | -------- | ---------------------------------------------- |
+| `apiKey`                    | `string`                                                          | Yes      | Iterable API key.                              |
+| `campaignId`                | `number`                                                          | Yes      | Iterable campaign ID.                          |
+| `allowRepeatMarketingSends` | `boolean`                                                         | No       | Sent to Iterable when provided.                |
+| `dataFields`                | `Record<string, unknown> \| (message) => Record<string, unknown>` | No       | Extra fields to merge into the campaign email. |
+| `sendAt`                    | `string`                                                          | No       | UTC timestamp in Iterable's expected format.   |
+| `baseUrl`                   | `string`                                                          | No       | Defaults to `https://api.iterable.com`.        |
+| `fetch`                     | `typeof fetch`                                                    | No       | Useful for tests or custom runtimes.           |
+
+Iterable target sends support one recipient and `metadata` for webhook callbacks. The adapter maps
+`subject`, `html`, `text`, and `from` into `dataFields`, and merges any configured `dataFields`
+before those normalized fields. Unsupported fields throw before the API call.

@@ -1,0 +1,91 @@
+---
+title: SparkPost
+description: Configure the SparkPost Transmissions API adapter.
+icon: sparkpost
+---
+
+<ProviderBadge adapter="sparkpost" />
+
+SparkPost sends transmissions with one normalized recipient list, reply-to, headers, metadata, tag-derived substitution data, and attachments. It does not support normalized CC or BCC through this adapter.
+
+## Before live sends
+
+Create a SparkPost API key with Transmissions permission, verify the sending domain, and choose whether to use SparkPost sandbox mode. Set `sandbox: true` for provider-side sandbox validation without normal delivery.
+
+## Configure
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
+
+const email = createEmailClient({
+  adapters: [sparkpost({ apiKey: process.env.SPARKPOST_API_KEY! })],
+});
+```
+
+## Send
+
+```ts
+const result = await email.send({
+  from: { email: "hello@acme.com", name: "Acme" },
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "SparkPost transmission",
+  html: "<p>Your report is ready.</p>",
+  headers: {
+    "X-Report-ID": "rep_123",
+  },
+  metadata: {
+    reportId: "rep_123",
+  },
+  tags: [{ name: "type", value: "report" }],
+});
+
+console.log(result.provider, result.id);
+```
+
+SparkPost does not expose normalized CC/BCC in this adapter. It maps metadata to `metadata` and tags to `substitution_data`.
+
+## Send with an attachment
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Report ready",
+  html: "<p>Your report is attached.</p>",
+  attachments: [
+    {
+      filename: "report.txt",
+      content: "Report rep_123",
+      contentType: "text/plain",
+    },
+  ],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                           |
+| --------- | -------------- | -------- | ----------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | SparkPost API key.                              |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.sparkpost.com/api/v1`. |
+| `sandbox` | `boolean`      | No       | Enables SparkPost sandbox mode.                 |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.            |
+
+SparkPost does not expose normalized CC/BCC in this adapter. See <a href="/docs/adapters/field-support">field support</a>.
+
+## Response
+
+The adapter maps SparkPost `results.id` or `results.transmission_id` to the normalized `id` field.
+
+## CLI smoke test
+
+```bash
+SPARKPOST_API_KEY="..." npx email-sdk send \
+  --adapter sparkpost \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SparkPost test" \
+  --text "It works"
+```
