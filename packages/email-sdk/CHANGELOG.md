@@ -1,5 +1,12 @@
 # @opencoredev/email-sdk
 
+## 0.6.0
+
+### Minor Changes
+
+- 4db1cd7: Add an official Iterable adapter for target campaign email sends.
+- 2b1fbf1: Add the Sequenzy transactional email adapter, CLI support, docs, tests, and a local API-auth smoke check.
+
 ## 0.5.0
 
 ### Minor Changes

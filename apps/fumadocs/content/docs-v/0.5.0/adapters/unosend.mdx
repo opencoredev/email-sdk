@@ -1,0 +1,42 @@
+---
+title: Unosend
+description: Configure the Unosend REST API adapter.
+icon: unosend
+---
+
+<ProviderBadge adapter="unosend" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { unosend } from "@opencoredev/email-sdk/unosend";
+
+const email = createEmailClient({
+  adapters: [unosend({ apiKey: process.env.UNOSEND_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                 |
+| --------- | -------------- | -------- | ------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Unosend API key.                      |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.unosend.co`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.  |
+
+## CLI
+
+```bash
+npx --yes --package @opencoredev/email-sdk email-sdk send \
+  --adapter unosend \
+  --api-key "$UNOSEND_API_KEY" \
+  --from "hello@example.com" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+Unosend requires a server-side Bearer API key and a verified sending domain. API keys start with `un_` and should be stored in `UNOSEND_API_KEY`.
+
+The adapter calls `POST https://api.unosend.co/emails`, maps CC, BCC, one reply-to address, headers, tags, and Base64 attachments, and returns the Unosend email ID as `id` and `messageId`. `metadata` is not part of Unosend's send endpoint, so the adapter rejects metadata before the request instead of silently dropping it.
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.

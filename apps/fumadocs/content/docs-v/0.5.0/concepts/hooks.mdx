@@ -1,0 +1,55 @@
+---
+title: Hooks
+description: Observe sends without changing adapter code.
+icon: Activity
+---
+
+Hooks are for logs, metrics, tracing, and retry visibility.
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  hooks: {
+    beforeSend(event) {
+      console.log("email.send", event.provider, event.message.subject);
+    },
+    afterSend(event) {
+      console.log("email.sent", event.response.id);
+    },
+    onRetry(event) {
+      console.warn("email.retry", event.provider, event.nextAttempt);
+    },
+    onError(event) {
+      console.error("email.error", event.provider, event.error);
+    },
+  },
+});
+```
+
+## Hook events
+
+Each hook receives:
+
+| Field      | Notes                               |
+| ---------- | ----------------------------------- |
+| `provider` | Routing name used for this attempt. |
+| `message`  | The original `EmailMessage`.        |
+| `attempt`  | Current attempt number.             |
+| `metadata` | Optional metadata passed to `send`. |
+
+`afterSend` also receives `response`. `onRetry` receives `nextAttempt` and `delayMs`. `onError` receives `error`.
+
+## Observe retries and fallback
+
+Hooks expose the send pipeline without changing adapter code:
+
+- `beforeSend` runs for each adapter attempt.
+- `onRetry` shows retry scheduling for the same adapter.
+- `onError` shows adapter failures before fallback may continue.
+- `afterSend` shows the adapter that actually succeeded.
+
+For safer default redaction, use the <a href="/docs/plugins/built-in/observability">observability plugin</a>.
+
+## Keep logs safe
+
+Do not log API keys, SMTP passwords, raw tokens, full message bodies, or unnecessary recipient data. For most production logs, routing name, status, subject category, template name, and message ID are enough.

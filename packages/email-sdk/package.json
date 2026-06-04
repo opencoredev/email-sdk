@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/email-sdk",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A TypeScript email SDK for unified transactional sending.",
   "keywords": [
     "bun",
@@ -11,6 +11,7 @@
     "postmark",
     "resend",
     "sendgrid",
+    "sequenzy",
     "ses",
     "smtp",
     "transactional-email",

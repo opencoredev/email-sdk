@@ -1,0 +1,28 @@
+---
+title: Mailtrap
+description: Configure the Mailtrap Email Sending API adapter.
+icon: mailtrap
+---
+
+<ProviderBadge adapter="mailtrap" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
+
+const email = createEmailClient({
+  adapters: [mailtrap({ apiKey: process.env.MAILTRAP_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                       |
+| --------- | -------------- | -------- | ------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Mailtrap API token.                         |
+| `baseUrl` | `string`       | No       | Defaults to `https://send.api.mailtrap.io`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.        |
+
+See <a href="/docs/adapters/field-support">field support</a> for supported message fields.
+
+Mailtrap maps `replyTo` to `reply_to`, metadata to `custom_variables`, and the first returned `message_ids` value to the SDK response ID.

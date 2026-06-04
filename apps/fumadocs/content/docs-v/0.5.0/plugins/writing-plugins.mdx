@@ -1,0 +1,145 @@
+---
+title: Writing plugins
+description: Create adapter, middleware, and community plugins.
+icon: PackagePlus
+---
+
+Write a plugin when email behavior should be reused across clients, apps, or packages.
+
+Start with one of these shapes:
+
+| Shape             | Use it for                                                    |
+| ----------------- | ------------------------------------------------------------- |
+| Adapter plugin    | Package a provider as `plugins: [providerPlugin()]`.          |
+| Middleware plugin | Add defaults, policy, capture, or observability around sends. |
+| Hook plugin       | Reuse existing `EmailHooks` callbacks.                        |
+| Client extension  | Add a small typed helper to the returned client.              |
+
+## Adapter plugin
+
+Adapter plugins are the best shape for community providers.
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function communityMail(options: { apiKey: string }): EmailPlugin {
+  return {
+    id: "community-mail",
+    adapters: [
+      {
+        name: "community-mail",
+        async send(message, context) {
+          const response = await fetch("https://api.example.com/send", {
+            method: "POST",
+            signal: context.signal,
+            headers: {
+              Authorization: `Bearer ${options.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(message),
+          });
+
+          const body = await response.json();
+
+          return {
+            provider: "community-mail",
+            id: body.id,
+            messageId: body.id,
+            raw: body,
+          };
+        },
+      },
+    ],
+  };
+}
+```
+
+Application code stays clean:
+
+```ts
+const email = createEmailClient({
+  plugins: [communityMail({ apiKey: process.env.COMMUNITY_MAIL_API_KEY! })],
+});
+```
+
+## Middleware plugin
+
+Use `beforeSend` when the plugin needs to change or block a message.
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function requireMetadata(key: string): EmailPlugin {
+  return {
+    id: `require-metadata:${key}`,
+    middleware: [
+      {
+        beforeSend(event) {
+          if (!event.options?.metadata?.[key]) {
+            throw new Error(`Missing email metadata: ${key}`);
+          }
+        },
+      },
+    ],
+  };
+}
+```
+
+`beforeSend` errors are not swallowed. Use it for policy.
+
+Use `afterSend` and `onError` for observability work that should not block provider behavior.
+
+## Programmatic adapter registration
+
+Use `ctx.addAdapter` when a plugin creates adapters dynamically.
+
+```ts
+export function regionalMail(options: RegionOptions): EmailPlugin {
+  return {
+    id: "regional-mail",
+    adapters(ctx) {
+      ctx.addAdapter(createRegionAdapter("mail-us", options.us));
+      ctx.addAdapter(createRegionAdapter("mail-eu", options.eu));
+
+      return [];
+    },
+  };
+}
+```
+
+Duplicate adapter names throw. If a factory both calls `ctx.addAdapter(adapter)` and returns the same adapter object, Email SDK registers it once.
+
+## Client extension
+
+Use `extendClient` for tiny helpers or stores. Keep it boring.
+
+```ts
+export function routeNamesPlugin(): EmailPlugin<{
+  routeNames: string[];
+}> {
+  return {
+    id: "route-names",
+    extendClient(ctx) {
+      return {
+        routeNames: [...ctx.adapters.keys()],
+      };
+    },
+  };
+}
+```
+
+Extension keys cannot collide with built-in client keys like `send`, `sendBatch`, `adapter`, or `defaultAdapter`.
+
+## Community adapter checklist
+
+- Use a stable plugin `id` and adapter `name`.
+- Keep credentials in plugin options.
+- Support `context.signal` for network requests.
+- Pass `context.idempotencyKey` when the provider supports idempotency.
+- Return normalized `id`, `messageId`, `accepted`, or `rejected` fields when available.
+- Put provider responses in `raw` when useful for debugging.
+- Map every supported `EmailMessage` field.
+- Reject unsupported fields before calling the provider.
+- Test payloads with injected `fetch` or a local test server.
+
+Community packages can export both a plain provider factory and an adapter plugin. Use the plugin shape when you want the one-call setup path.
