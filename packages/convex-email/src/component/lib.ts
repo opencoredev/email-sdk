@@ -529,10 +529,16 @@ async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) 
   }
 
   const cutoff = now - config.cleanupAfterDays * 24 * 60 * 60 * 1_000;
-  const expired = await ctx.db
+  const expiredCandidates = await ctx.db
     .query("emails")
     .withIndex("by_terminalAt", (q: any) => q.lt("terminalAt", cutoff))
     .take(limit);
+  const expired = expiredCandidates.filter(
+    (email: any) =>
+      typeof email.terminalAt === "number" &&
+      email.terminalAt < cutoff &&
+      (email.status === "sent" || email.status === "failed" || email.status === "canceled"),
+  );
 
   for (const email of expired) {
     const events = await ctx.db

@@ -219,6 +219,8 @@ export const email = new ConvexEmail(components.convexEmail, {
 
 The package exports Convex test helpers from `@opencoredev/convex-email/test`.
 
+`exposeApi()` intentionally omits `setConfig` and `getConfig` by default. Pass `{ includeConfigApi: true }` only from a module protected by your own server-side auth checks.
+
 ## Cleanup
 
 The component ships a five-minute cron sweep for missed queue work, stale `processing` recovery, and cleanup.

@@ -74,6 +74,13 @@ export type ConvexEmailOptions = {
   maxAttempts?: number;
   retryBaseMs?: number;
 };
+export type ConvexEmailExposeApiOptions = {
+  /**
+   * Exposes setConfig/getConfig as public Convex functions.
+   * Only enable this behind your own auth checks or for trusted server-only modules.
+   */
+  includeConfigApi?: boolean;
+};
 
 export class ConvexEmail {
   constructor(
@@ -163,8 +170,8 @@ export class ConvexEmail {
     }
   }
 
-  exposeApi() {
-    return {
+  exposeApi(options: ConvexEmailExposeApiOptions = {}) {
+    const publicApi = {
       send: mutationGeneric({
         args: vSendEmailArgs,
         returns: v.string(),
@@ -189,6 +196,19 @@ export class ConvexEmail {
         args: vCancelEmailArgs,
         returns: v.boolean(),
         handler: async (ctx, args) => (await this.cancel(ctx, args)) as boolean,
+      }),
+    };
+
+    if (!options.includeConfigApi) {
+      return publicApi;
+    }
+
+    return {
+      ...publicApi,
+      getConfig: queryGeneric({
+        args: {},
+        returns: v.union(vEmailConfig, v.null()),
+        handler: async (ctx) => (await this.getConfig(ctx)) as any,
       }),
       setConfig: mutationGeneric({
         args: { config: vEmailConfig },

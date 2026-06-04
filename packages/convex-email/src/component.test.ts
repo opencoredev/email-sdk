@@ -268,4 +268,32 @@ describe("convex-email component", () => {
       Date.now = originalNow;
     }
   });
+
+  test("cleanupAfterDays keeps non-terminal emails", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const createdAt = 1_000;
+
+    Date.now = () => createdAt;
+    try {
+      await t.mutation(api.lib.setConfig, {
+        config: { cleanupAfterDays: 1 },
+      });
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 1,
+      });
+
+      Date.now = () => createdAt + 2 * 24 * 60 * 60 * 1_000;
+      const deleted = await t.mutation(api.lib.cleanupExpiredEmails, { limit: 25 });
+      const status = await t.query(api.lib.status, { emailId });
+
+      expect(deleted).toBe(0);
+      expect(status?.status).toBe("queued");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
 });
