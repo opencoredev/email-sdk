@@ -1,0 +1,79 @@
+---
+title: Install
+description: Install the SDK package and run the email-sdk CLI.
+icon: Package
+---
+
+Email SDK is published on npm as `@opencoredev/email-sdk`.
+
+The command-line binary is named `email-sdk`. That means the package name and the command name are different on purpose:
+
+| What you want                  | Use this                                                     |
+| ------------------------------ | ------------------------------------------------------------ |
+| Install the package            | `npm install @opencoredev/email-sdk` or your package manager's install command |
+| Run the installed CLI          | `npx email-sdk ...`                                          |
+| Run the CLI without installing | `npx --yes --package @opencoredev/email-sdk email-sdk ...`   |
+
+Do not install the unscoped `email-sdk` package from npm. It is a different package.
+
+## Install in your app
+
+Choose the package manager your app already uses.
+
+<PackageInstallTabs />
+
+Then import the client and adapters from the scoped package:
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+```
+
+The SDK and CLI run in server-side Node 20+ and Bun runtimes.
+
+## Run the CLI once
+
+Use the scoped package name when you want a quick adapter check without adding the package to a project.
+
+```bash
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
+```
+
+Check a provider configuration:
+
+```bash
+RESEND_API_KEY="re_..." npx --yes --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+```
+
+## Run the CLI from an installed project
+
+After installing `@opencoredev/email-sdk`, run the installed binary:
+
+```bash
+npx email-sdk adapters
+```
+
+The command is still `email-sdk`; the package you installed is still `@opencoredev/email-sdk`. Avoid `npx email-sdk` outside an installed project because the unscoped npm package is unrelated.
+
+Bun users can use the same package and binary. If you want Bun to execute the one-off CLI command, use `bunx --bun --package @opencoredev/email-sdk email-sdk adapters`.
+
+## Prerequisites
+
+- Node 20 or newer is supported for SDK and CLI usage.
+- Bun 1.1 or newer is also supported.
+- Do not expose provider API keys in browser or client-side code.
+- Provider credentials must be set in environment variables or passed with CLI flags.
+
+## Verify the install
+
+Check the published package and CLI version:
+
+```bash
+npx --yes --package @opencoredev/email-sdk email-sdk version
+```
+
+List supported adapters:
+
+```bash
+npx --yes --package @opencoredev/email-sdk email-sdk adapters
+```

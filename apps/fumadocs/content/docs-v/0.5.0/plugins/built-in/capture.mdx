@@ -1,0 +1,81 @@
+---
+title: Capture plugin
+description: Record email events in tests.
+icon: ClipboardCheck
+---
+
+Use the capture plugin in tests when you need to assert what the email client tried to do.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
+import { memoryProvider } from "@opencoredev/email-sdk/testing";
+
+const memory = memoryProvider();
+const email = createEmailClient({
+  adapters: [memory],
+  plugins: [capturePlugin()],
+});
+
+await email.send({
+  from: "test@example.com",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Hello",
+});
+
+expect(email.capture.events).toHaveLength(2);
+expect(memory.raw.sent).toHaveLength(1);
+```
+
+## What gets captured
+
+| Event        | Meaning                                    |
+| ------------ | ------------------------------------------ |
+| `beforeSend` | The message entered the send pipeline.     |
+| `afterSend`  | A provider returned a normalized response. |
+| `retry`      | Email SDK scheduled another attempt.       |
+| `error`      | A provider attempt failed.                 |
+
+Captured events include the message and whichever provider, attempt, metadata, response, or error details exist at that point in the lifecycle.
+
+## Clear events
+
+```ts
+email.capture.clear();
+```
+
+## Bring your own store
+
+```ts
+import { capturePlugin, createEmailCaptureStore } from "@opencoredev/email-sdk/plugins/capture";
+
+const store = createEmailCaptureStore();
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [capturePlugin(store)],
+});
+```
+
+## Multiple capture stores
+
+Use a custom `id` for plugin identity and a custom `clientKey` for the typed client property.
+
+```ts
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [
+    capturePlugin({ id: "capture:primary", clientKey: "primaryCapture" }),
+    capturePlugin({ id: "capture:audit", clientKey: "auditCapture" }),
+  ],
+});
+
+email.primaryCapture.clear();
+email.auditCapture.clear();
+```
+
+## Capture vs memory provider
+
+`capturePlugin()` records lifecycle events. It does not stop real provider calls.
+
+`memoryProvider()` is the adapter you use when a test should avoid external email. In most tests, use both: memory avoids the network, capture proves the SDK pipeline behaved correctly.

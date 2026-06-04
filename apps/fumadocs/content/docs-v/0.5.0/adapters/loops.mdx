@@ -1,0 +1,34 @@
+---
+title: Loops
+description: Configure the Loops transactional email adapter.
+icon: loops
+---
+
+<ProviderBadge adapter="loops" />
+
+Loops transactional sends require a `transactionalId`.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { loops } from "@opencoredev/email-sdk/loops";
+
+const email = createEmailClient({
+  adapters: [
+    loops({
+      apiKey: process.env.LOOPS_API_KEY!,
+      transactionalId: process.env.LOOPS_TRANSACTIONAL_ID!,
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option            | Type           | Required | Notes                                |
+| ----------------- | -------------- | -------- | ------------------------------------ |
+| `apiKey`          | `string`       | Yes      | Loops API key.                       |
+| `transactionalId` | `string`       | Yes      | Transactional email ID.              |
+| `baseUrl`         | `string`       | No       | Defaults to `https://app.loops.so`.  |
+| `fetch`           | `typeof fetch` | No       | Useful for tests or custom runtimes. |
+
+Loops transactional sends support one recipient, metadata through `dataVariables`, and attachments through the transactional attachments payload. Loops documents that attachments require support enablement on the account, so accounts without that enablement should omit `attachments`. Unsupported fields throw before the API call.

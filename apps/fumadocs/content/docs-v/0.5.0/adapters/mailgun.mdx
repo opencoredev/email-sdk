@@ -1,0 +1,36 @@
+---
+title: Mailgun
+description: Configure the Mailgun Messages API adapter.
+icon: mailgun
+---
+
+<ProviderBadge adapter="mailgun" />
+
+## Before live sends
+
+Create a Mailgun API key for the sending domain and use the base URL for the domain region. EU domains need the EU API base URL; US domains use the default. Verify DNS and sender setup before treating a successful SDK call as production-ready delivery.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailgun } from "@opencoredev/email-sdk/mailgun";
+
+const email = createEmailClient({
+  adapters: [
+    mailgun({
+      apiKey: process.env.MAILGUN_API_KEY!,
+      domain: process.env.MAILGUN_DOMAIN!,
+    }),
+  ],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                                                                              |
+| --------- | -------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `apiKey`  | `string`       | Yes      | Mailgun API key.                                                                                   |
+| `domain`  | `string`       | Yes      | Sending domain.                                                                                    |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.mailgun.net`. Use the EU API base URL if your domain is in the EU region. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.                                                               |
+
+Mailgun sends attachments as multipart form data. See <a href="/docs/adapters/field-support">field support</a> for the full mapping.
