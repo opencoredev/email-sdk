@@ -11,6 +11,7 @@
     "postmark",
     "resend",
     "sendgrid",
+    "sequenzy",
     "ses",
     "smtp",
     "transactional-email",
