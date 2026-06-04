@@ -283,7 +283,8 @@ export async function hydrateAttachments(message: EmailMessage): Promise<EmailMe
         return attachment;
       }
 
-      const response = await fetch(url);
+      const safeUrl = safeAttachmentUrl(url, attachment.filename);
+      const response = await fetch(safeUrl);
       if (!response.ok) {
         throw new Error(`Failed to fetch email attachment "${attachment.filename}" from ${url}.`);
       }
@@ -297,6 +298,42 @@ export async function hydrateAttachments(message: EmailMessage): Promise<EmailMe
   );
 
   return { ...message, attachments };
+}
+
+function safeAttachmentUrl(value: string, filename: string) {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`Attachment "${filename}" has an invalid URL.`);
+  }
+
+  if (url.protocol !== "https:") {
+    throw new Error(`Attachment "${filename}" URL must use https.`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`Attachment "${filename}" URL cannot include credentials.`);
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal") ||
+    hostname === "metadata.google.internal" ||
+    isIpAddressLiteral(hostname)
+  ) {
+    throw new Error(`Attachment "${filename}" URL host is not allowed.`);
+  }
+
+  return url;
+}
+
+function isIpAddressLiteral(hostname: string) {
+  return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
 }
 
 function withName<TProvider extends EmailProvider>(provider: TProvider, name: string | undefined) {

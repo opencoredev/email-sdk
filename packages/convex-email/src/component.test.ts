@@ -3,7 +3,7 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient } from "./component/providers.js";
+import { buildEmailClient, hydrateAttachments } from "./component/providers.js";
 
 const modules = {
   "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
@@ -206,6 +206,22 @@ describe("convex-email component", () => {
     ).not.toThrow();
   });
 
+  test("rejects unsafe attachment URLs before server-side fetch", async () => {
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "metadata.txt", url: "http://169.254.169.254/latest" }],
+      }),
+    ).rejects.toThrow('Attachment "metadata.txt" URL must use https.');
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "loopback.txt", url: "https://127.0.0.1/private" }],
+      }),
+    ).rejects.toThrow('Attachment "loopback.txt" URL host is not allowed.');
+  });
+
   test("recovers emails stuck in processing", async () => {
     const t = createTest();
     const originalNow = Date.now;
@@ -292,6 +308,45 @@ describe("convex-email component", () => {
 
       expect(deleted).toBe(0);
       expect(status?.status).toBe("queued");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("cleanupAfterDays reaches expired terminal emails when active emails fill the batch", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const createdAt = 1_000;
+
+    Date.now = () => createdAt;
+    try {
+      await t.mutation(api.lib.setConfig, {
+        config: { cleanupAfterDays: 1 },
+      });
+      const terminalEmailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 1,
+      });
+      await flushScheduled(t);
+
+      for (let index = 0; index < 60; index += 1) {
+        await t.mutation(api.lib.enqueue, {
+          ...message,
+          to: `active-${index}@example.com`,
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+          maxAttempts: 1,
+        });
+      }
+
+      Date.now = () => createdAt + 2 * 24 * 60 * 60 * 1_000;
+      const deleted = await t.mutation(api.lib.cleanupExpiredEmails, { limit: 25 });
+      const terminalStatus = await t.query(api.lib.status, { emailId: terminalEmailId });
+
+      expect(deleted).toBe(1);
+      expect(terminalStatus).toBeNull();
     } finally {
       Date.now = originalNow;
     }

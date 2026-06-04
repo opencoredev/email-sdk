@@ -237,3 +237,5 @@ await email.setConfig(ctx, {
 Convex Email Ops is not a campaign builder, contact database, template editor, hosted analytics product, or inbound email processor. It keeps the operational pieces apps usually rebuild: queueing, retries, fallback routing, idempotency, webhook records, attempted-adapter history, and queryable status.
 
 `sendBatch` accepts at most 100 messages per mutation. Split larger batches in your app so Convex mutation limits stay predictable.
+
+URL attachments are fetched server-side only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected; fetch the content in your app first if you need a custom attachment source.

@@ -246,6 +246,8 @@ Provider accounts still control whether a send succeeds. Verified domains, sandb
 
 `sendBatch` accepts at most 100 messages per mutation. Split larger batches in your app so Convex mutation limits stay predictable.
 
+URL attachments are fetched server-side only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected; fetch the content in your app first if you need a custom attachment source.
+
 ## Submission checklist
 
 - Package: `@opencoredev/convex-email`
