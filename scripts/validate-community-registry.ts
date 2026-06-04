@@ -272,7 +272,7 @@ function readTarString(buffer: Buffer, start: number, length: number) {
   return buffer
     .subarray(start, start + length)
     .toString("utf8")
-    .replace(/\0.*$/, "");
+    .split("\u0000", 1)[0];
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
