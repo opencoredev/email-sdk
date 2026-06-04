@@ -2,6 +2,21 @@
   "name": "@opencoredev/email-sdk",
   "version": "0.5.0",
   "description": "A TypeScript email SDK for unified transactional sending.",
+  "keywords": [
+    "bun",
+    "email",
+    "email-sdk",
+    "iterable",
+    "mailgun",
+    "postmark",
+    "resend",
+    "sendgrid",
+    "ses",
+    "smtp",
+    "transactional-email",
+    "typescript",
+    "unosend"
+  ],
   "homepage": "https://email-sdk.dev",
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
@@ -15,20 +30,6 @@
   "bin": {
     "email-sdk": "dist/cli.js"
   },
-  "keywords": [
-    "email",
-    "email-sdk",
-    "transactional-email",
-    "typescript",
-    "smtp",
-    "resend",
-    "sendgrid",
-    "postmark",
-    "mailgun",
-    "unosend",
-    "ses",
-    "bun"
-  ],
   "files": [
     "dist",
     "README.md"
@@ -59,6 +60,10 @@
     "./unosend": {
       "types": "./dist/unosend.d.ts",
       "import": "./dist/unosend.js"
+    },
+    "./iterable": {
+      "types": "./dist/iterable.d.ts",
+      "import": "./dist/iterable.js"
     },
     "./ses": {
       "types": "./dist/ses.d.ts",

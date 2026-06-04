@@ -6,6 +6,7 @@ import { brevo } from "./brevo.js";
 import { assertCloudflareMessage, cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
+import { iterable } from "./iterable.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -56,6 +57,11 @@ const providerDocs = [
     note: "Cloudflare Email Sending REST API",
   },
   { name: "unosend", env: ["UNOSEND_API_KEY"], note: "Unosend REST API" },
+  {
+    name: "iterable",
+    env: ["ITERABLE_API_KEY", "ITERABLE_CAMPAIGN_ID"],
+    note: "Iterable target email API",
+  },
   {
     name: "ses",
     env: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"],
@@ -108,6 +114,16 @@ const factories = {
     unosend({
       apiKey: flagOrEnv(flags, "api-key", "UNOSEND_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.UNOSEND_BASE_URL,
+    }),
+  iterable: (flags) =>
+    iterable({
+      apiKey: flagOrEnv(flags, "api-key", "ITERABLE_API_KEY"),
+      campaignId: numberFlagOrEnv(flags, "campaign-id", "ITERABLE_CAMPAIGN_ID"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.ITERABLE_BASE_URL,
+      sendAt: stringFlag(flags, "send-at") ?? process.env.ITERABLE_SEND_AT,
+      allowRepeatMarketingSends:
+        booleanFlag(flags, "allow-repeat-marketing-sends") ??
+        booleanEnv("ITERABLE_ALLOW_REPEAT_MARKETING_SENDS"),
     }),
   ses: (flags) =>
     ses({
@@ -174,6 +190,8 @@ const envFlagNames: Record<string, string> = {
   CLOUDFLARE_API_TOKEN: "api-token",
   CLOUDFLARE_ACCOUNT_ID: "account-id",
   UNOSEND_API_KEY: "api-key",
+  ITERABLE_API_KEY: "api-key",
+  ITERABLE_CAMPAIGN_ID: "campaign-id",
   AWS_ACCESS_KEY_ID: "access-key-id",
   AWS_SECRET_ACCESS_KEY: "secret-access-key",
   AWS_REGION: "region",
@@ -267,6 +285,10 @@ function validateDryRun(name: string, message: EmailMessage) {
 
   if (name === "loops") {
     assertMaxItems("loops", "recipient", arrayify(message.to), 1);
+  }
+
+  if (name === "iterable") {
+    assertMaxItems("iterable", "recipient", arrayify(message.to), 1);
   }
 
   if (name === "cloudflare") {
@@ -431,6 +453,17 @@ function flagOrEnv(flags: CliFlags, flag: string, env: string) {
   return value;
 }
 
+function numberFlagOrEnv(flags: CliFlags, flag: string, env: string) {
+  const raw = flagOrEnv(flags, flag, env);
+  const value = Number(raw);
+
+  if (!Number.isFinite(value)) {
+    fail(`Invalid --${flag} or ${env}. Expected a number.`);
+  }
+
+  return value;
+}
+
 function stringFlag(flags: CliFlags, name: string) {
   const value = flags[name];
 
@@ -458,6 +491,26 @@ function selectedAdapter(flags: CliFlags) {
 function truthyFlag(flags: CliFlags, name: string) {
   const value = flags[name];
   return value === true || value === "true" || value === "1";
+}
+
+function booleanFlag(flags: CliFlags, name: string) {
+  const value = flags[name];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value === true || value === "true" || value === "1";
+}
+
+function booleanEnv(name: string) {
+  const value = process.env[name];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value === "true" || value === "1";
 }
 
 async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
@@ -593,11 +646,17 @@ Send options:
   --attachment <path[:type]>   Attach a local file. Repeatable.
   --message <path>             Read the EmailMessage JSON payload from a file.
   --dry-run                    Validate input and print the send plan without sending.
+  --base-url <url>             Overrides supported adapter base URL variables.
 
 Cloudflare options:
   --api-token <token>          Overrides CLOUDFLARE_API_TOKEN.
   --account-id <account>       Overrides CLOUDFLARE_ACCOUNT_ID.
-  --base-url <url>             Overrides CLOUDFLARE_BASE_URL.
+
+Iterable options:
+  --campaign-id <id>           Overrides ITERABLE_CAMPAIGN_ID.
+  --send-at <utc>              Overrides ITERABLE_SEND_AT.
+  --allow-repeat-marketing-sends
+                                Allows repeat marketing sends.
 
 SMTP options:
   --host <host>                Overrides SMTP_HOST.

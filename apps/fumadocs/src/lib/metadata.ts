@@ -149,7 +149,7 @@ export const homeStructuredData = {
           name: "Which email providers does Email SDK support?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Loops, Sequenzy, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
+            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Iterable, Loops, Sequenzy, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
           },
         },
         {

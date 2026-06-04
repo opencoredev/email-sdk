@@ -22,7 +22,7 @@ Fallback routes are only safe when the backup adapter can represent the same mes
 | Most complete API field mapping  | Postmark, SendGrid, AWS SES, Mailgun, Brevo                                  |
 | Resend-style DX with attachments | Resend                                                                       |
 | Cheap or self-managed delivery   | SMTP                                                                         |
-| Product/event email              | Sequenzy, Loops, Plunk                                                       |
+| Product/event email              | Iterable, Sequenzy, Loops, Plunk                                             |
 | Provider fallback for production | Resend plus SMTP, or one primary API plus Postmark                           |
 | Attachment-heavy transactional   | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
 
@@ -113,6 +113,7 @@ These adapters are useful, but their public APIs do not match the full `EmailMes
 | Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments |
 | --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- |
 | SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
+| Iterable  | No  | No  | No       | No      | Yes      | No     | No          |
 | Loops     | No  | No  | No       | No      | Yes      | No     | Yes         |
 | Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         |
 | Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         |
@@ -137,6 +138,8 @@ Loops attachments map to the provider's transactional attachments payload. Loops
 Sequenzy metadata maps to transactional `variables`. Reserved metadata keys map to provider fields: `sequenzySlug`, `sequenzyPreview`, and `subscriberExternalId` or `sequenzySubscriberExternalId`. Generic metadata keys like `slug` and `preview` remain variables.
 
 Sequenzy has one provider body field. If both `html` and `text` are present, Email SDK sends the HTML body to Sequenzy and keeps the text body for other routes.
+
+Iterable target sends map `metadata` to Iterable webhook metadata and core message fields into template `dataFields`. Iterable does not preserve CC, BCC, reply-to, headers, tags, or attachments through this adapter.
 
 The SDK's local checks are not a live deliverability guarantee. Provider accounts still need verified senders or domains, the correct region, API scopes, and any sandbox or recipient allow-list configuration required by that service.
 
