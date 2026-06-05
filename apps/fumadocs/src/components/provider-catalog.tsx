@@ -27,7 +27,6 @@ export function ProviderGrid() {
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
-            {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
             <ProviderPill muted={provider.apiStatus !== "API tested"}>
               {provider.apiStatus}
             </ProviderPill>
@@ -74,7 +73,6 @@ export function ProviderBadge({ adapter }: { adapter: string }) {
           <code className="break-all text-xs text-fd-muted-foreground">{provider.importPath}</code>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <ProviderPill>{provider.status}</ProviderPill>
-            {"sponsorship" in provider ? <ProviderPill>{provider.sponsorship}</ProviderPill> : null}
             <ProviderPill muted={provider.apiStatus !== "API tested"}>
               {provider.apiStatus}
             </ProviderPill>
