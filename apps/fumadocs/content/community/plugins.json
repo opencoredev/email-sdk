@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "name": "SMTP2GO",
+    "package": "email-sdk-smtp2go",
+    "kind": "adapter",
+    "status": "community",
+    "description": "Adds an SMTP2GO provider adapter for Email SDK.",
+    "href": "https://www.npmjs.com/package/email-sdk-smtp2go",
+    "repo": "https://github.com/stefandevo/email-sdk-smtp2go",
+    "maintainer": "stefandevo",
+    "pluginId": "smtp2go",
+    "adapter": "smtp2go",
+    "importName": "smtp2goPlugin"
+  }
+]
