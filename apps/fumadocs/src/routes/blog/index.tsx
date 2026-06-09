@@ -4,27 +4,77 @@ import { ArrowRight } from "lucide-react";
 
 import { formatBlogDate, getPublishedBlogPosts, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
-import { siteUrl } from "@/lib/shared";
+import { appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/blog/")({
-  head: () => ({
-    meta: [
-      { title: "Email SDK Blog - TypeScript email, adapters, and launch notes" },
-      {
-        name: "description",
-        content:
-          "Notes from the Email SDK team on TypeScript transactional email, provider adapters, fallbacks, and launch work.",
-      },
-      { property: "og:title", content: "Email SDK Blog" },
-      {
-        property: "og:description",
-        content:
-          "TypeScript email notes for developers who care about provider choice, fallbacks, and boring production behavior.",
-      },
-      { property: "og:url", content: `${siteUrl}/blog` },
-    ],
-    links: [{ rel: "canonical", href: `${siteUrl}/blog` }],
-  }),
+  head: ({ loaderData }) => {
+    const posts = (loaderData as BlogPost[] | undefined) ?? [];
+    const description =
+      "TypeScript email notes for developers who care about provider choice, fallbacks, testing, and boring production behavior.";
+
+    return {
+      meta: [
+        { title: "Email SDK Blog - TypeScript email, adapters, and launch notes" },
+        {
+          name: "description",
+          content: description,
+        },
+        { property: "og:type", content: "website" },
+        { property: "og:title", content: "Email SDK Blog" },
+        {
+          property: "og:description",
+          content: description,
+        },
+        { property: "og:url", content: `${siteUrl}/blog` },
+        { property: "og:image", content: siteOgImageUrl },
+        { property: "og:image:alt", content: "Email SDK blog preview" },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: "Email SDK Blog" },
+        { name: "twitter:description", content: description },
+        { name: "twitter:image", content: siteOgImageUrl },
+        { name: "twitter:image:alt", content: "Email SDK blog preview" },
+        {
+          "script:ld+json": {
+            "@context": "https://schema.org",
+            "@type": "Blog",
+            name: `${appName} Blog`,
+            url: `${siteUrl}/blog`,
+            description,
+            publisher: {
+              "@type": "Organization",
+              name: "OpenCore",
+              url: "https://opencore.dev",
+            },
+            blogPost: posts.map((post) => ({
+              "@type": "BlogPosting",
+              headline: post.title,
+              description: post.description,
+              datePublished: post.publishedAt,
+              dateModified: post.updatedAt,
+              url: `${siteUrl}/blog/${post.slug}`,
+              image: `${siteUrl}${post.image}`,
+            })),
+          },
+        },
+        {
+          "script:ld+json": {
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: `${appName} Blog posts`,
+            itemListElement: posts.map((post, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: post.title,
+              url: `${siteUrl}/blog/${post.slug}`,
+            })),
+          },
+        },
+      ],
+      links: [{ rel: "canonical", href: `${siteUrl}/blog` }],
+    };
+  },
   loader: () => getPublishedBlogPosts(),
   component: BlogIndex,
 });

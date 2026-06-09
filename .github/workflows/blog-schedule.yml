@@ -1,0 +1,30 @@
+name: Refresh scheduled blog posts
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Rebuild every Wednesday after the scheduled post date rolls over in UTC.
+    - cron: "30 13 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-blog-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Trigger Vercel rebuild
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy hook
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
+            echo "::notice::Set VERCEL_DEPLOY_HOOK_URL to refresh static blog, sitemap, RSS, and JSON feed every week."
+            exit 0
+          fi
+
+          curl --fail --show-error --silent --request POST "$VERCEL_DEPLOY_HOOK_URL"
