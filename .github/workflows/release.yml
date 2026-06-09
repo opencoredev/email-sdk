@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - ".changeset/**"
+      - "package.json"
+      - "packages/**"
+      - "scripts/**"
+      - "turbo.json"
 
 permissions:
   contents: write
