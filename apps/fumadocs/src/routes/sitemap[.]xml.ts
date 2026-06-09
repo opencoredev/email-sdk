@@ -27,6 +27,12 @@ export const Route = createFileRoute("/sitemap.xml")({
 });
 
 function getSitemapEntries() {
+  const publishedBlogPosts = getPublishedBlogPosts();
+  const latestBlogUpdate =
+    publishedBlogPosts.reduce(
+      (latest, post) => (post.updatedAt > latest ? post.updatedAt : latest),
+      "2026-06-01",
+    ) || "2026-06-01";
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
@@ -36,7 +42,7 @@ function getSitemapEntries() {
     },
     {
       loc: `${siteUrl}/blog`,
-      lastmod: "2026-06-01",
+      lastmod: latestBlogUpdate,
       changefreq: "weekly",
       priority: "0.8",
     },
@@ -52,7 +58,7 @@ function getSitemapEntries() {
       changefreq: "monthly",
       priority: "0.3",
     },
-    ...getPublishedBlogPosts().map((post) => ({
+    ...publishedBlogPosts.map((post) => ({
       loc: `${siteUrl}${getBlogPostUrl(post.slug)}`,
       lastmod: post.updatedAt,
       changefreq: "monthly" as const,
