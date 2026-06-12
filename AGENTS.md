@@ -7,6 +7,7 @@ These instructions are local to this repository. Keep repo-specific release guid
 - Published package: `@opencoredev/email-sdk`
 - CLI binary: `email-sdk`
 - Package directory: `packages/email-sdk`
+- Second published package: `@opencoredev/convex-email` in `packages/convex-email` (also covered by changesets and `pack:check`)
 - Prefer `bun` and `bunx`.
 
 ## SDK and CLI Changes
@@ -27,6 +28,22 @@ Changesets create random friendly filenames in `.changeset/`. The filename does 
 
 Normal feature PRs do not publish. Changesets accumulate on `main`; the `Version packages` PR is the release button.
 
+## Tests and Lint
+
+Run a single package's tests directly with Bun, optionally filtered by file name:
+
+```bash
+cd packages/email-sdk && bun test smtp
+```
+
+Lint and format the repo (oxlint + oxfmt, formats in place):
+
+```bash
+bun run check
+```
+
+<!-- TODO: `.launch-smoke/` holds standalone smoke tests that consume the local packages via `file:` dependencies, but it is not referenced by CI; document how/when to run it once the workflow is confirmed. -->
+
 ## Release Checks
 
 Before merging release-sensitive SDK or CLI work, run:
@@ -35,7 +52,7 @@ Before merging release-sensitive SDK or CLI work, run:
 bun run release:ci
 ```
 
-That runs type checks, tests, build, and npm package dry-run.
+That runs type checks, tests, community registry validation (`community:check`), docs version validation (`docs:versions:check`), build, and npm pack dry-runs for both `email-sdk` and `convex-email`. CI (`.depot/workflows/ci.yml`) runs the same command on every PR and push to `main`.
 
 For a quick local CLI smoke test:
 
