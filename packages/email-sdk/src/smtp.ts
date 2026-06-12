@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
 
-import { EmailProviderError } from "./errors.js";
+import { EmailProviderError, EmailValidationError } from "./errors.js";
 import type { EmailAddress, EmailMessage, EmailProvider } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   formatAddress,
   formatAddresses,
+  headersToArray,
   headersToObject,
 } from "./utils.js";
 
@@ -46,6 +47,7 @@ export function smtp(options: SmtpProviderOptions): EmailProvider<{ host: string
     },
     async send(message) {
       assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS.smtp);
+      assertSmtpMessage(message);
       const client = new SmtpClient(options, port);
 
       try {
@@ -308,6 +310,45 @@ function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["
   const body = message.html ?? message.text ?? "";
 
   return `${headerText}\r\nContent-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
+}
+
+// Envelope addresses are interpolated into MAIL FROM/RCPT TO commands. Any
+// whitespace (including CR/LF), control character, or angle bracket would let a
+// caller inject additional SMTP commands, so reject them before connecting.
+// oxlint-disable-next-line no-control-regex -- control characters are the point
+const SMTP_FORBIDDEN_ENVELOPE = /[\x00-\x20<>]/;
+
+// RFC 5322 header field names: printable US-ASCII (0x21-0x7e) excluding the
+// colon (0x3a). A name containing CR/LF would terminate the header and inject more.
+const SMTP_HEADER_NAME = /^[!-9;-~]+$/;
+
+function assertSmtpMessage(message: EmailMessage) {
+  const addresses = [
+    formatAddress(message.from),
+    ...formatAddresses(message.to),
+    ...formatAddresses(message.cc),
+    ...formatAddresses(message.bcc),
+  ];
+
+  for (const address of addresses) {
+    const envelope = parseEmailAddress(address);
+
+    if (envelope.length === 0 || SMTP_FORBIDDEN_ENVELOPE.test(envelope)) {
+      throw new EmailValidationError(
+        `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
+        { adapter: "smtp", address: envelope },
+      );
+    }
+  }
+
+  for (const header of headersToArray(message.headers) ?? []) {
+    if (!SMTP_HEADER_NAME.test(header.name)) {
+      throw new EmailValidationError(
+        `SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
+        { adapter: "smtp", header: header.name },
+      );
+    }
+  }
 }
 
 function envelopeAddress(address: EmailAddress) {
