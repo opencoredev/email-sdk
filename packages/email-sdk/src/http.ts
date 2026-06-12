@@ -15,18 +15,21 @@ export type JsonProviderOptions<TRaw = unknown> = {
 export function jsonProvider<TRaw = Record<string, unknown>>(
   options: JsonProviderOptions<TRaw>,
 ): EmailProvider<{ baseUrl: string }> {
+  const url = `${options.baseUrl}${options.endpoint}`;
+  const headers = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
   return {
     name: options.name,
     raw: { baseUrl: options.baseUrl },
     async send(message, context) {
       const fetcher = options.fetch ?? fetch;
-      const response = await fetcher(`${options.baseUrl}${options.endpoint}`, {
+      const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-        },
+        headers,
         body: JSON.stringify(await options.buildPayload(message)),
       });
 

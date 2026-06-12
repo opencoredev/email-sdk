@@ -30,6 +30,7 @@ export function ses(
   options: SesProviderOptions,
 ): EmailProvider<{ baseUrl: string; region: string }> {
   const baseUrl = options.baseUrl ?? `https://email.${options.region}.amazonaws.com`;
+  const signingKeyCache: SigningKeyCache = {};
 
   return {
     name: "ses",
@@ -50,6 +51,7 @@ export function ses(
         headers: {
           "content-type": "application/json",
         },
+        signingKeyCache,
       });
 
       const response = await fetcher(endpoint, {
@@ -139,6 +141,13 @@ async function toSesPayload(message: EmailMessage, options: SesProviderOptions) 
   };
 }
 
+type SigningKeyCache = {
+  value?: {
+    dateStamp: string;
+    key: Uint8Array;
+  };
+};
+
 async function signAwsRequest(input: {
   accessKeyId: string;
   secretAccessKey: string;
@@ -149,6 +158,7 @@ async function signAwsRequest(input: {
   url: URL;
   body: string;
   headers: Record<string, string>;
+  signingKeyCache: SigningKeyCache;
 }) {
   const now = new Date();
   const amzDate = toAmzDate(now);
@@ -182,13 +192,20 @@ async function signAwsRequest(input: {
     credentialScope,
     await sha256Hex(canonicalRequest),
   ].join("\n");
-  const signingKey = await getSigningKey(
-    input.secretAccessKey,
-    dateStamp,
-    input.region,
-    input.service,
-  );
-  const signature = await hmacHex(signingKey, stringToSign);
+  // The SigV4 signing key only depends on the secret key, UTC date, region, and
+  // service. Region, service, and secret are fixed per provider instance, so the
+  // four-step HMAC derivation only needs to rerun when the UTC date rolls over.
+  let cached = input.signingKeyCache.value;
+
+  if (!cached || cached.dateStamp !== dateStamp) {
+    cached = {
+      dateStamp,
+      key: await getSigningKey(input.secretAccessKey, dateStamp, input.region, input.service),
+    };
+    input.signingKeyCache.value = cached;
+  }
+
+  const signature = await hmacHex(cached.key, stringToSign);
 
   return {
     ...requestHeaders,
@@ -255,8 +272,10 @@ async function getSigningKey(
   return hmac(serviceKey, "aws4_request");
 }
 
+const textEncoder = new TextEncoder();
+
 function textBytes(value: string) {
-  return new TextEncoder().encode(value);
+  return textEncoder.encode(value);
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

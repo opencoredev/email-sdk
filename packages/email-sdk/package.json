@@ -147,7 +147,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "build": "rm -rf dist && tsc -p tsconfig.json && bun scripts/minify-dist.ts && chmod +x dist/cli.js",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
     "prepack": "bun run build"

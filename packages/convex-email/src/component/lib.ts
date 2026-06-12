@@ -49,10 +49,12 @@ export const enqueueBatch = mutation({
       });
     }
 
+    // Read the shared config once for the whole batch instead of once per message.
+    const config = await readConfig(ctx);
     const ids: string[] = [];
 
     for (const message of args.messages) {
-      ids.push(await enqueueEmail(ctx, message));
+      ids.push(await enqueueEmail(ctx, message, config));
     }
 
     return ids;
@@ -360,7 +362,11 @@ export const recordWebhook = internalMutation({
   },
 });
 
-async function enqueueEmail(ctx: any, args: ConvexEmailSendArgs) {
+async function enqueueEmail(
+  ctx: any,
+  args: ConvexEmailSendArgs,
+  preloadedConfig?: ConvexEmailConfig,
+) {
   const idempotencyKey = args.idempotencyKey;
 
   if (idempotencyKey) {
@@ -374,7 +380,7 @@ async function enqueueEmail(ctx: any, args: ConvexEmailSendArgs) {
     }
   }
 
-  const config = await readConfig(ctx);
+  const config = preloadedConfig ?? (await readConfig(ctx));
   const now = Date.now();
   const message = applyConfigToMessage(args, config);
   const emailId = await ctx.db.insert("emails", {

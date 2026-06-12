@@ -2,26 +2,9 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
-import { brevo } from "./brevo.js";
-import { assertCloudflareMessage, cloudflare } from "./cloudflare.js";
-import { createEmailClient } from "./core.js";
-import { EmailSdkError } from "./errors.js";
-import { iterable } from "./iterable.js";
-import { loops } from "./loops.js";
-import { mailchimp } from "./mailchimp.js";
-import { mailersend } from "./mailersend.js";
-import { mailgun } from "./mailgun.js";
-import { mailpace } from "./mailpace.js";
-import { mailtrap } from "./mailtrap.js";
-import { plunk } from "./plunk.js";
-import { postmark } from "./postmark.js";
-import { resend } from "./resend.js";
-import { scaleway } from "./scaleway.js";
-import { sequenzy } from "./sequenzy.js";
-import { ses } from "./ses.js";
-import { sendgrid } from "./sendgrid.js";
-import { smtp } from "./smtp.js";
-import { sparkpost } from "./sparkpost.js";
+// The CLI lazily imports adapters, validation helpers, and the client so each
+// command only loads and parses the modules it actually uses. Keep this file
+// free of static imports of other SDK runtime modules.
 import type {
   EmailAttachment,
   EmailHeader,
@@ -29,18 +12,10 @@ import type {
   EmailProvider,
   EmailTag,
 } from "./types.js";
-import {
-  SUPPORTED_MESSAGE_FIELDS,
-  arrayify,
-  assertMaxItems,
-  assertMessage,
-  assertSupportedMessageFields,
-} from "./utils.js";
-import { assertUnosendMessage, unosend } from "./unosend.js";
-import { zeptomail } from "./zeptomail.js";
+import type { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 
 type CliFlags = Record<string, string | string[] | true>;
-type ProviderFactory = (flags: CliFlags) => EmailProvider;
+type ProviderFactory = (flags: CliFlags) => Promise<EmailProvider>;
 type SupportedAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
 type PackageInfo = {
   name: string;
@@ -97,26 +72,30 @@ const providerDocs = [
 type ProviderName = (typeof providerDocs)[number]["name"];
 
 const factories = {
-  resend: (flags) => resend({ apiKey: flagOrEnv(flags, "api-key", "RESEND_API_KEY") }),
-  postmark: (flags) =>
-    postmark({
+  resend: async (flags) =>
+    (await import("./resend.js")).resend({ apiKey: flagOrEnv(flags, "api-key", "RESEND_API_KEY") }),
+  postmark: async (flags) =>
+    (await import("./postmark.js")).postmark({
       serverToken: flagOrEnv(flags, "server-token", "POSTMARK_SERVER_TOKEN"),
       messageStream: stringFlag(flags, "message-stream") ?? process.env.POSTMARK_MESSAGE_STREAM,
     }),
-  sendgrid: (flags) => sendgrid({ apiKey: flagOrEnv(flags, "api-key", "SENDGRID_API_KEY") }),
-  cloudflare: (flags) =>
-    cloudflare({
+  sendgrid: async (flags) =>
+    (await import("./sendgrid.js")).sendgrid({
+      apiKey: flagOrEnv(flags, "api-key", "SENDGRID_API_KEY"),
+    }),
+  cloudflare: async (flags) =>
+    (await import("./cloudflare.js")).cloudflare({
       apiToken: flagOrEnv(flags, "api-token", "CLOUDFLARE_API_TOKEN"),
       accountId: flagOrEnv(flags, "account-id", "CLOUDFLARE_ACCOUNT_ID"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.CLOUDFLARE_BASE_URL,
     }),
-  unosend: (flags) =>
-    unosend({
+  unosend: async (flags) =>
+    (await import("./unosend.js")).unosend({
       apiKey: flagOrEnv(flags, "api-key", "UNOSEND_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.UNOSEND_BASE_URL,
     }),
-  iterable: (flags) =>
-    iterable({
+  iterable: async (flags) =>
+    (await import("./iterable.js")).iterable({
       apiKey: flagOrEnv(flags, "api-key", "ITERABLE_API_KEY"),
       campaignId: numberFlagOrEnv(flags, "campaign-id", "ITERABLE_CAMPAIGN_ID"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.ITERABLE_BASE_URL,
@@ -125,8 +104,8 @@ const factories = {
         booleanFlag(flags, "allow-repeat-marketing-sends") ??
         booleanEnv("ITERABLE_ALLOW_REPEAT_MARKETING_SENDS"),
     }),
-  ses: (flags) =>
-    ses({
+  ses: async (flags) =>
+    (await import("./ses.js")).ses({
       accessKeyId: flagOrEnv(flags, "access-key-id", "AWS_ACCESS_KEY_ID"),
       secretAccessKey: flagOrEnv(flags, "secret-access-key", "AWS_SECRET_ACCESS_KEY"),
       sessionToken: stringFlag(flags, "session-token") ?? process.env.AWS_SESSION_TOKEN,
@@ -135,38 +114,58 @@ const factories = {
       configurationSetName:
         stringFlag(flags, "configuration-set") ?? process.env.AWS_SES_CONFIGURATION_SET,
     }),
-  mailgun: (flags) =>
-    mailgun({
+  mailgun: async (flags) =>
+    (await import("./mailgun.js")).mailgun({
       apiKey: flagOrEnv(flags, "api-key", "MAILGUN_API_KEY"),
       domain: flagOrEnv(flags, "domain", "MAILGUN_DOMAIN"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.MAILGUN_BASE_URL,
     }),
-  mailersend: (flags) => mailersend({ apiKey: flagOrEnv(flags, "api-key", "MAILERSEND_API_KEY") }),
-  brevo: (flags) => brevo({ apiKey: flagOrEnv(flags, "api-key", "BREVO_API_KEY") }),
-  mailchimp: (flags) => mailchimp({ apiKey: flagOrEnv(flags, "api-key", "MAILCHIMP_API_KEY") }),
-  sparkpost: (flags) => sparkpost({ apiKey: flagOrEnv(flags, "api-key", "SPARKPOST_API_KEY") }),
-  loops: (flags) =>
-    loops({
+  mailersend: async (flags) =>
+    (await import("./mailersend.js")).mailersend({
+      apiKey: flagOrEnv(flags, "api-key", "MAILERSEND_API_KEY"),
+    }),
+  brevo: async (flags) =>
+    (await import("./brevo.js")).brevo({ apiKey: flagOrEnv(flags, "api-key", "BREVO_API_KEY") }),
+  mailchimp: async (flags) =>
+    (await import("./mailchimp.js")).mailchimp({
+      apiKey: flagOrEnv(flags, "api-key", "MAILCHIMP_API_KEY"),
+    }),
+  sparkpost: async (flags) =>
+    (await import("./sparkpost.js")).sparkpost({
+      apiKey: flagOrEnv(flags, "api-key", "SPARKPOST_API_KEY"),
+    }),
+  loops: async (flags) =>
+    (await import("./loops.js")).loops({
       apiKey: flagOrEnv(flags, "api-key", "LOOPS_API_KEY"),
       transactionalId: flagOrEnv(flags, "transactional-id", "LOOPS_TRANSACTIONAL_ID"),
     }),
-  sequenzy: (flags) =>
-    sequenzy({
+  sequenzy: async (flags) =>
+    (await import("./sequenzy.js")).sequenzy({
       apiKey: flagOrEnv(flags, "api-key", "SEQUENZY_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.SEQUENZY_BASE_URL,
     }),
-  plunk: (flags) => plunk({ apiKey: flagOrEnv(flags, "api-key", "PLUNK_API_KEY") }),
-  mailtrap: (flags) => mailtrap({ apiKey: flagOrEnv(flags, "api-key", "MAILTRAP_API_KEY") }),
-  scaleway: (flags) =>
-    scaleway({
+  plunk: async (flags) =>
+    (await import("./plunk.js")).plunk({ apiKey: flagOrEnv(flags, "api-key", "PLUNK_API_KEY") }),
+  mailtrap: async (flags) =>
+    (await import("./mailtrap.js")).mailtrap({
+      apiKey: flagOrEnv(flags, "api-key", "MAILTRAP_API_KEY"),
+    }),
+  scaleway: async (flags) =>
+    (await import("./scaleway.js")).scaleway({
       secretKey: flagOrEnv(flags, "secret-key", "SCALEWAY_SECRET_KEY"),
       projectId: flagOrEnv(flags, "project-id", "SCALEWAY_PROJECT_ID"),
       region: stringFlag(flags, "region") ?? process.env.SCALEWAY_REGION,
     }),
-  zeptomail: (flags) => zeptomail({ token: flagOrEnv(flags, "token", "ZEPTOMAIL_TOKEN") }),
-  mailpace: (flags) => mailpace({ apiKey: flagOrEnv(flags, "api-key", "MAILPACE_API_KEY") }),
-  smtp: (flags) =>
-    smtp({
+  zeptomail: async (flags) =>
+    (await import("./zeptomail.js")).zeptomail({
+      token: flagOrEnv(flags, "token", "ZEPTOMAIL_TOKEN"),
+    }),
+  mailpace: async (flags) =>
+    (await import("./mailpace.js")).mailpace({
+      apiKey: flagOrEnv(flags, "api-key", "MAILPACE_API_KEY"),
+    }),
+  smtp: async (flags) =>
+    (await import("./smtp.js")).smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
       port: Number(stringFlag(flags, "port") ?? process.env.SMTP_PORT ?? 587),
       secure: truthyFlag(flags, "secure") || process.env.SMTP_SECURE === "true",
@@ -245,7 +244,7 @@ async function main() {
   const message = await buildMessage(flags);
 
   if (truthyFlag(flags, "dry-run")) {
-    validateDryRun(providerName, message);
+    await validateDryRun(providerName, message);
     console.log(
       JSON.stringify(
         {
@@ -260,14 +259,15 @@ async function main() {
     return;
   }
 
-  const provider = createProvider(providerName, flags);
+  const provider = await createProvider(providerName, flags);
+  const { createEmailClient } = await import("./core.js");
   const client = createEmailClient({ adapters: [provider] });
   const response = await client.send(message);
 
   console.log(JSON.stringify(response, null, 2));
 }
 
-function createProvider(name: string, flags: CliFlags): EmailProvider {
+function createProvider(name: string, flags: CliFlags): Promise<EmailProvider> {
   if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
@@ -275,10 +275,13 @@ function createProvider(name: string, flags: CliFlags): EmailProvider {
   return factories[name](flags);
 }
 
-function validateDryRun(name: string, message: EmailMessage) {
+async function validateDryRun(name: string, message: EmailMessage) {
   if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
+
+  const { SUPPORTED_MESSAGE_FIELDS, arrayify, assertMaxItems, assertMessage, assertSupportedMessageFields } =
+    await import("./utils.js");
 
   assertMessage(message);
   assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS[name]);
@@ -292,10 +295,12 @@ function validateDryRun(name: string, message: EmailMessage) {
   }
 
   if (name === "cloudflare") {
+    const { assertCloudflareMessage } = await import("./cloudflare.js");
     assertCloudflareMessage(message);
   }
 
   if (name === "unosend") {
+    const { assertUnosendMessage } = await import("./unosend.js");
     assertUnosendMessage(message);
   }
 }
@@ -677,6 +682,8 @@ function fail(message: string): never {
 try {
   await main();
 } catch (error) {
+  const { EmailSdkError } = await import("./errors.js");
+
   if (error instanceof EmailSdkError) {
     fail(error.message);
   }

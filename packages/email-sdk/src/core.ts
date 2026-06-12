@@ -84,6 +84,13 @@ export function createEmailClient<
   }
 
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
+  const sendConfig = {
+    hookList: hooks,
+    middleware,
+    retry: options.retry,
+    defaultProvider,
+    fallback: options.fallback,
+  };
   const client: EmailClient = {
     adapters,
     providers: adapters,
@@ -105,13 +112,7 @@ export function createEmailClient<
       return sendWithAdapters({
         adapters,
         message,
-        options: {
-          hookList: hooks,
-          middleware,
-          retry: options.retry,
-          defaultProvider,
-          fallback: options.fallback,
-        },
+        options: sendConfig,
         sendOptions,
       });
     },
@@ -183,10 +184,13 @@ async function sendWithAdapters(input: {
   };
   sendOptions?: SendOptions;
 }): Promise<EmailProviderResponse> {
-  const prepared = await applyBeforeSendMiddleware(input.options.middleware, {
-    message: input.message,
-    options: input.sendOptions,
-  });
+  const prepared =
+    input.options.middleware.length === 0
+      ? { message: input.message, options: input.sendOptions }
+      : await applyBeforeSendMiddleware(input.options.middleware, {
+          message: input.message,
+          options: input.sendOptions,
+        });
 
   assertMessage(prepared.message);
 
@@ -214,10 +218,10 @@ async function sendWithAdapters(input: {
         message: prepared.message,
         hookList: input.options.hookList,
         middleware: input.options.middleware,
-        retry: {
-          ...input.options.retry,
-          retries: prepared.options?.retries ?? input.options.retry?.retries,
-        },
+        retry:
+          prepared.options?.retries === undefined
+            ? input.options.retry
+            : { ...input.options.retry, retries: prepared.options.retries },
         sendOptions: prepared.options,
       });
     } catch (error) {
@@ -258,13 +262,18 @@ async function sendWithRetry(input: {
   const shouldRetry = input.retry?.shouldRetry ?? isRetryableEmailError;
   const delayFor = input.retry?.delay ?? defaultDelay;
 
+  const hasHooks = input.hookList.length > 0;
+  const hasMiddleware = input.middleware.length > 0;
+
   for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
-    await invokeHooks(input.hookList, "beforeSend", {
-      provider: input.provider.name,
-      message: input.message,
-      attempt,
-      metadata: input.sendOptions?.metadata,
-    });
+    if (hasHooks) {
+      await invokeHooks(input.hookList, "beforeSend", {
+        provider: input.provider.name,
+        message: input.message,
+        attempt,
+        metadata: input.sendOptions?.metadata,
+      });
+    }
 
     try {
       const response = await input.provider.send(input.message, {
@@ -274,21 +283,22 @@ async function sendWithRetry(input: {
         metadata: input.sendOptions?.metadata,
       });
 
-      const normalizedResponse = {
-        ...response,
-        provider: response.provider || input.provider.name,
-      };
+      const normalizedResponse = response.provider
+        ? response
+        : { ...response, provider: input.provider.name };
 
-      const afterEvent = {
-        provider: input.provider.name,
-        message: input.message,
-        attempt,
-        metadata: input.sendOptions?.metadata,
-        response: normalizedResponse,
-      };
+      if (hasHooks || hasMiddleware) {
+        const afterEvent = {
+          provider: input.provider.name,
+          message: input.message,
+          attempt,
+          metadata: input.sendOptions?.metadata,
+          response: normalizedResponse,
+        };
 
-      await invokeAfterSendMiddleware(input.middleware, afterEvent);
-      await invokeHooks(input.hookList, "afterSend", afterEvent);
+        await invokeAfterSendMiddleware(input.middleware, afterEvent);
+        await invokeHooks(input.hookList, "afterSend", afterEvent);
+      }
 
       return normalizedResponse;
     } catch (error) {
@@ -467,7 +477,11 @@ async function invokeHooks(
 }
 
 function resolveAdapterOrder(input: { adapter: string; fallbackAdapters?: string[] }) {
-  return [input.adapter, ...(input.fallbackAdapters ?? [])].filter((adapter, index, adapters) => {
+  if (!input.fallbackAdapters || input.fallbackAdapters.length === 0) {
+    return [input.adapter];
+  }
+
+  return [input.adapter, ...input.fallbackAdapters].filter((adapter, index, adapters) => {
     return adapters.indexOf(adapter) === index;
   });
 }
