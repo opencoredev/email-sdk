@@ -8,7 +8,7 @@ This guide tests email behavior without network calls: prove a send happened wit
 
 Two tools cover it all, both free of provider credentials:
 
-- [`memoryProvider()` and `failingProvider()`](/docs/reference/adapter-contract) from `@opencoredev/email-sdk/testing` replace real adapters.
+- `memoryProvider()` and `failingProvider()` from `@opencoredev/email-sdk/testing` replace real adapters — both are covered in the steps below.
 - The [capture plugin](/docs/plugins/built-in/capture) records lifecycle events (`beforeSend`, `afterSend`, `retry`, `error`) on the real send pipeline.
 
 <Steps>
