@@ -4,9 +4,9 @@ These instructions are local to this repository. Keep repo-specific release guid
 
 ## Project
 
-- Published package: `@opencoredev/email-sdk`
+- Published packages: `@opencoredev/email-sdk` and `@opencoredev/convex-email`
 - CLI binary: `email-sdk`
-- Package directory: `packages/email-sdk`
+- Package directories: `packages/email-sdk` and `packages/convex-email`
 - Prefer `bun` and `bunx`.
 
 ## SDK and CLI Changes
@@ -35,7 +35,7 @@ Before merging release-sensitive SDK or CLI work, run:
 bun run release:ci
 ```
 
-That runs type checks, tests, build, and npm package dry-run.
+That runs type checks, tests, community registry validation, docs versions validation, build, and npm pack dry-runs for both published packages. Depot CI runs the same command on every PR.
 
 For a quick local CLI smoke test:
 
@@ -43,6 +43,14 @@ For a quick local CLI smoke test:
 bun run build
 packages/email-sdk/dist/cli.js adapters
 ```
+
+## Other Commands
+
+- `bun run check` — lint and format (`oxlint`, then `oxfmt --write`).
+- `bun run community:check` — validate `apps/fumadocs/content/community/plugins.json` against the npm registry.
+- `bun run docs:versions:check` — validate versioned docs archives in `apps/fumadocs/content/docs-v/` against the published SDK version.
+- `bun run homebrew:update` — point `Formula/email-sdk.rb` at the published npm tarball and refresh its checksum. The release workflow runs this automatically after a publish; do not hand-edit the formula.
+- `bun run live:sequenzy` — live Sequenzy account check; requires `SEQUENZY_API_KEY` in the shell or `.env.local`.
 
 ## Major Versions
 
@@ -55,4 +63,6 @@ Do not merge a `Version packages` PR for a major version unless the migration pa
 - Depot CI lives in `.depot/workflows/ci.yml`.
 - Release publishing lives in `.github/workflows/release.yml`.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
+- After a successful publish, `release.yml` runs `bun run homebrew:update` and opens an automation PR updating `Formula/email-sdk.rb`.
+- `.github/workflows/blog-schedule.yml` triggers a weekly Vercel rebuild so scheduled blog posts go live.
 - Do not move npm publishing to Depot unless npm supports Depot as a trusted publisher or the project intentionally switches to token-based publishing.
