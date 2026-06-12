@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import net from "node:net";
 
 import { EmailValidationError } from "./errors.js";
 import { smtp } from "./smtp.js";
@@ -14,6 +15,57 @@ const baseMessage: EmailMessage = {
 function send(message: EmailMessage) {
   // host points at an unroutable port; validation must reject before any connect.
   return smtp({ host: "127.0.0.1", port: 1 }).send(message, { attempt: 1 });
+}
+
+// Runs a minimal in-process SMTP server, sends the message through the adapter,
+// and returns the raw DATA payload the client transmitted.
+async function captureSmtpData(message: EmailMessage) {
+  let captured = "";
+  let inData = false;
+
+  const server = net.createServer((socket) => {
+    socket.setEncoding("utf8");
+    socket.write("220 test.local\r\n");
+    socket.on("data", (chunk: string) => {
+      if (inData) {
+        captured += chunk;
+
+        if (captured.endsWith("\r\n.\r\n")) {
+          inData = false;
+          socket.write("250 queued as test-id\r\n");
+        }
+
+        return;
+      }
+
+      const command = chunk.trim().toUpperCase();
+
+      if (command.startsWith("EHLO")) {
+        socket.write("250 test.local\r\n");
+      } else if (command.startsWith("MAIL") || command.startsWith("RCPT")) {
+        socket.write("250 ok\r\n");
+      } else if (command === "DATA") {
+        inData = true;
+        socket.write("354 go ahead\r\n");
+      } else if (command === "QUIT") {
+        socket.write("221 bye\r\n");
+        socket.end();
+      } else {
+        socket.write("250 ok\r\n");
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as net.AddressInfo;
+
+  try {
+    await smtp({ host: "127.0.0.1", port }).send(message, { attempt: 1 });
+  } finally {
+    server.close();
+  }
+
+  return captured;
 }
 
 describe("smtp injection guards", () => {
@@ -53,11 +105,19 @@ describe("smtp injection guards", () => {
     );
   });
 
-  test("bare CR in a header value does not survive folding as an injection vector", async () => {
-    // foldHeader must neutralise lone \r so it cannot be used as a line separator
-    await expect(
-      send({ ...baseMessage, headers: { "X-Custom": "legit\rBcc: evil@example.com" } }),
-    ).rejects.not.toBeInstanceOf(EmailValidationError);
+  test("bare CR in a header value is folded before transmission", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      headers: { "X-Custom": "legit\rBcc: evil@example.com" },
+    });
+
+    // The lone \r is folded into a space, so the value stays on one header line
+    // and no injected Bcc header reaches the wire.
+    expect(transmitted).toContain("X-Custom: legit Bcc: evil@example.com");
+    const injected = transmitted
+      .split(/\r\n|[\r\n]/)
+      .some((line) => line.toLowerCase().startsWith("bcc:"));
+    expect(injected).toBe(false);
   });
 
   test("accepts addresses with hyphens and plus signs", async () => {
