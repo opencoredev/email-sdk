@@ -312,11 +312,12 @@ function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["
   return `${headerText}\r\nContent-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
 }
 
-// Envelope addresses are interpolated into MAIL FROM/RCPT TO commands. Any
-// whitespace (including CR/LF), control character, or angle bracket would let a
-// caller inject additional SMTP commands, so reject them before connecting.
+// Envelope addresses are interpolated into MAIL FROM/RCPT TO commands. RFC 5321
+// envelopes only allow printable US-ASCII, so reject whitespace (including
+// CR/LF), control characters (including DEL), angle brackets, and non-ASCII
+// characters before connecting.
 // oxlint-disable-next-line no-control-regex -- control characters are the point
-const SMTP_FORBIDDEN_ENVELOPE = /[\x00-\x20<>]/;
+const SMTP_FORBIDDEN_ENVELOPE = /[\x00-\x20<>\x7f-\uffff]/;
 
 // RFC 5322 header field names: printable US-ASCII (0x21-0x7e) excluding the
 // colon (0x3a). A name containing CR/LF would terminate the header and inject more.
@@ -365,7 +366,7 @@ function escapeData(value: string) {
 }
 
 function foldHeader(value: string) {
-  return value.replace(/\r?\n/g, " ");
+  return value.replace(/\r\n|[\r\n]/g, " ");
 }
 
 function extractSmtpMessageId(response: string) {

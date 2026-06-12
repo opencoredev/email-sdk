@@ -44,6 +44,22 @@ describe("smtp injection guards", () => {
     ).rejects.toBeInstanceOf(EmailValidationError);
   });
 
+  test("rejects DEL and non-ASCII characters in the envelope address", async () => {
+    await expect(send({ ...baseMessage, to: "victim\x7f@example.com" })).rejects.toBeInstanceOf(
+      EmailValidationError,
+    );
+    await expect(send({ ...baseMessage, to: "víctim@example.com" })).rejects.toBeInstanceOf(
+      EmailValidationError,
+    );
+  });
+
+  test("bare CR in a header value does not survive folding as an injection vector", async () => {
+    // foldHeader must neutralise lone \r so it cannot be used as a line separator
+    await expect(
+      send({ ...baseMessage, headers: { "X-Custom": "legit\rBcc: evil@example.com" } }),
+    ).rejects.not.toBeInstanceOf(EmailValidationError);
+  });
+
   test("accepts addresses with hyphens and plus signs", async () => {
     // A valid message should pass validation and fail later at the network layer,
     // never with a validation error.
