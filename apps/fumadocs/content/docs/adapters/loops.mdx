@@ -1,24 +1,22 @@
 ---
 title: Loops
-description: Configure the Loops transactional email adapter.
+description: Trigger a published Loops transactional email for one recipient, with metadata delivered as dataVariables.
 icon: loops
 ---
 
+The Loops adapter calls the [Loops transactional API](https://loops.so/docs/api-reference/send-transactional-email) over `fetch` — no extra dependency. It triggers a published transactional email by `transactionalId` for exactly one recipient and hands your message to the template as `dataVariables`.
+
 <ProviderBadge adapter="loops" />
-
-Loops sends through a published Loops transactional email. It is best for product-triggered lifecycle messages where the template lives in Loops and your app passes data variables.
-
-## Before live sends
-
-Create or publish the transactional email in Loops, copy its `transactionalId`, and create an API key with permission to send transactional email. Loops may require account-level enablement for attachments, so omit attachments until that capability is enabled.
 
 ## Configure
 
-```ts
+Create an API key in Loops with permission to send transactional email, then publish the transactional email and copy its `transactionalId`.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { loops } from "@opencoredev/email-sdk/loops";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     loops({
       apiKey: process.env.LOOPS_API_KEY!,
@@ -28,70 +26,72 @@ const email = createEmailClient({
 });
 ```
 
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Loops API key.",
+      type: "string",
+      required: true,
+    },
+    transactionalId: {
+      description: "Published transactional email to render. Must be non-empty — the adapter throws at construction otherwise.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://app.loops.so"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
 ## Send
+
+The Loops template renders the email. The adapter merges `subject`, `html`, `text`, `from`, and every `metadata` key into `dataVariables` — your template decides which of them appear. Exactly one `to` recipient is allowed per send.
 
 ```ts
 const result = await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
-  subject: "Welcome",
-  html: "<p>Your workspace is ready.</p>",
+  subject: "Reset your password",
+  html: "<p>Use the button below to reset your password.</p>",
   metadata: {
     firstName: "Ada",
-    workspaceName: "Acme",
+    resetUrl: "https://acme.com/reset/abc123",
   },
 });
 
-console.log(result.provider, result.id);
+console.log(result.id); // Loops id (or transactionalId) from the response
 ```
 
-Loops maps `metadata` into `dataVariables` together with `subject`, `html`, `text`, and `from`. It only supports one recipient per transactional send.
+Attachments are supported and sent as `{ filename, contentType, data }` with base64-encoded content.
 
-## Send with an attachment
+<Callout type="warn" title="Attachments need account enablement">
+  Loops only accepts transactional attachments on accounts where the capability has been enabled —
+  without it, sends with attachments fail at the API. Also note `cc`, `bcc`, `replyTo`, `headers`,
+  and `tags` throw an `EmailValidationError` before any request; see
+  [field support](/docs/adapters/field-support).
+</Callout>
 
-```ts
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Export ready",
-  text: "Your export is attached.",
-  metadata: {
-    firstName: "Ada",
-  },
-  attachments: [
-    {
-      filename: "export.txt",
-      content: "name,total\nAda,42",
-      contentType: "text/plain",
-    },
-  ],
-});
-```
-
-## Options
-
-| Option            | Type           | Required | Notes                                |
-| ----------------- | -------------- | -------- | ------------------------------------ |
-| `apiKey`          | `string`       | Yes      | Loops API key.                       |
-| `transactionalId` | `string`       | Yes      | Transactional email ID.              |
-| `baseUrl`         | `string`       | No       | Defaults to `https://app.loops.so`.  |
-| `fetch`           | `typeof fetch` | No       | Useful for tests or custom runtimes. |
-
-Loops transactional sends support one recipient, metadata through `dataVariables`, and attachments through the transactional attachments payload. Loops documents that attachments require support enablement on the account, so accounts without that enablement should omit `attachments`. Unsupported fields throw before the API call.
-
-## Response
-
-The adapter maps Loops `id` or `transactionalId` to the normalized `id` field when the API returns one.
-
-## CLI smoke test
+## Verify from the CLI
 
 ```bash
-LOOPS_API_KEY="loops_..." \
-LOOPS_TRANSACTIONAL_ID="cm..." \
-npx email-sdk send \
+LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npx email-sdk doctor --adapter loops
+```
+
+```bash
+LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npx email-sdk send \
   --adapter loops \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "Loops test" \
-  --text "It works"
+  --subject "Loops smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Drop `--dry-run` to trigger one real template send and confirm the API key and published transactional email are live.

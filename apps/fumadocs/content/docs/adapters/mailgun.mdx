@@ -1,22 +1,22 @@
 ---
 title: Mailgun
-description: Configure the Mailgun Messages API adapter.
+description: "Send through the Mailgun Messages API with domain-scoped multipart sends, h:/v:/o: field mapping, and full field support."
 icon: mailgun
 ---
 
+The Mailgun adapter calls the [Mailgun Messages API](https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Messages/) over `fetch` — no extra dependency. It is the one adapter that posts multipart form data instead of JSON, using Mailgun's prefixed field names: `h:` for headers, `v:` for metadata variables, `o:` for sending options. Every send is scoped to the `domain` you configure.
+
 <ProviderBadge adapter="mailgun" />
-
-## Before live sends
-
-Create a Mailgun API key for the sending domain and use the base URL for the domain region. EU domains need the EU API base URL; US domains use the default. Verify DNS and sender setup before treating a successful SDK call as production-ready delivery.
 
 ## Configure
 
-```ts
+Grab an API key from the [Mailgun dashboard](https://app.mailgun.com/settings/api_security) and note the sending domain it belongs to — both are required.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailgun } from "@opencoredev/email-sdk/mailgun";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     mailgun({
       apiKey: process.env.MAILGUN_API_KEY!,
@@ -26,71 +26,71 @@ const email = createEmailClient({
 });
 ```
 
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Mailgun API key, sent as Basic auth (api:key).",
+      type: "string",
+      required: true,
+    },
+    domain: {
+      description: "Sending domain. Requests go to /v3/{domain}/messages.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for the EU region.",
+      type: "string",
+      default: '"https://api.mailgun.net"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+<Callout type="warn" title="EU domains need the EU base URL">
+  Domains created in Mailgun's EU region only respond on
+  `baseUrl: "https://api.eu.mailgun.net"`. Against the default US origin they fail with a 404.
+</Callout>
+
 ## Send
+
+Mailgun maps every common field: `cc`, `bcc`, `replyTo`, `headers` (as `h:Name`), `attachments` (multipart `attachment`/`inline` parts by disposition), `tags` (values as `o:tag`), and `metadata` (as `v:key` variables, surfaced later in webhooks and logs).
 
 ```ts
 const result = await email.send({
-  from: "Acme <hello@mg.example.com>",
+  from: "Acme <hello@mg.acme.com>",
   to: "user@example.com",
-  replyTo: "support@example.com",
-  subject: "Receipt",
+  replyTo: "support@acme.com",
+  subject: "Your receipt from Acme",
   html: "<p>Thanks for your order.</p>",
-  metadata: {
-    orderId: "ord_123",
-  },
+  metadata: { orderId: "ord_123" },
   tags: [{ name: "type", value: "receipt" }],
-  attachments: [
-    {
-      filename: "receipt.txt",
-      content: "Thanks for your order.",
-      contentType: "text/plain",
-    },
-  ],
 });
 
-console.log(result.provider, result.messageId);
+console.log(result.id); // Mailgun message id, also exposed as result.messageId
 ```
 
-Mailgun maps metadata as `v:*` variables and tag values as `o:tag`. Use `baseUrl: "https://api.eu.mailgun.net"` for EU-region domains.
+The response `id` is Mailgun's queued message id from the response body — match it against delivery events in webhooks or the Mailgun logs.
 
-## Send with headers
-
-```ts
-await email.send({
-  from: "Acme <hello@mg.example.com>",
-  to: "user@example.com",
-  subject: "Support update",
-  text: "We received your request.",
-  headers: {
-    "X-Ticket-ID": "ticket_123",
-  },
-});
-```
-
-## Options
-
-| Option    | Type           | Required | Notes                                                                                              |
-| --------- | -------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `apiKey`  | `string`       | Yes      | Mailgun API key.                                                                                   |
-| `domain`  | `string`       | Yes      | Sending domain.                                                                                    |
-| `baseUrl` | `string`       | No       | Defaults to `https://api.mailgun.net`. Use the EU API base URL if your domain is in the EU region. |
-| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.                                                               |
-
-Mailgun sends attachments as multipart form data. See <a href="/docs/adapters/field-support">field support</a> for the full mapping.
-
-## Response
-
-The adapter maps Mailgun `id` to the normalized `id` and `messageId` fields.
-
-## CLI smoke test
+## Verify from the CLI
 
 ```bash
-MAILGUN_API_KEY="key-..." \
-MAILGUN_DOMAIN="mg.example.com" \
-npx email-sdk send \
-  --adapter mailgun \
-  --from "Acme <hello@mg.example.com>" \
-  --to user@example.com \
-  --subject "Mailgun test" \
-  --text "It works"
+MAILGUN_API_KEY="key-..." MAILGUN_DOMAIN="mg.acme.com" \
+  npx email-sdk doctor --adapter mailgun
 ```
+
+```bash
+MAILGUN_API_KEY="key-..." npx email-sdk send \
+  --adapter mailgun \
+  --domain mg.acme.com \
+  --from "Acme <hello@mg.acme.com>" \
+  --to user@example.com \
+  --subject "Mailgun smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Credentials also work as flags: `--api-key`, `--domain`, and `--base-url` (or `MAILGUN_BASE_URL`) override the environment. Drop `--dry-run` for one real send — that is the only check that proves the domain's DNS and the account are ready.

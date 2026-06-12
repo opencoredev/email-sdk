@@ -1,19 +1,22 @@
 ---
 title: Iterable
-description: Configure the Iterable target email adapter.
+description: Trigger an Iterable campaign template for one recipient, with message content delivered as dataFields.
 icon: iterable
 ---
 
+The Iterable adapter calls [Iterable's target email API](https://api.iterable.com/api/docs) over `fetch` — no extra dependency. Instead of sending raw content, it triggers an existing campaign template for exactly one recipient and hands your message to the template as `dataFields`.
+
 <ProviderBadge adapter="iterable" />
 
-Iterable target sends require a campaign ID. Email SDK sends one recipient to Iterable's
-`/api/email/target` endpoint and maps the normalized subject/body fields into `dataFields` for the campaign template.
+## Configure
 
-```ts
+Create a server-side API key in Iterable and copy the campaign ID of the template you want to trigger.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { iterable } from "@opencoredev/email-sdk/iterable";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     iterable({
       apiKey: process.env.ITERABLE_API_KEY!,
@@ -23,18 +26,81 @@ const email = createEmailClient({
 });
 ```
 
-## Options
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Iterable API key.",
+      type: "string",
+      required: true,
+    },
+    campaignId: {
+      description:
+        "Campaign whose template renders the email. Non-numeric values throw an EmailValidationError when the adapter is created.",
+      type: "number",
+      required: true,
+    },
+    allowRepeatMarketingSends: {
+      description: "Forwarded to Iterable to allow re-sending a marketing campaign to the same user.",
+      type: "boolean",
+    },
+    dataFields: {
+      description:
+        "Extra template fields — a static object or a function of the message. Merged in before the normalized fields, so subject/html/text/from win on conflicts.",
+      type: "Record<string, unknown> | (message) => Record<string, unknown>",
+    },
+    sendAt: {
+      description: "Schedule the send — UTC timestamp in Iterable's expected format.",
+      type: "string",
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.iterable.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
 
-| Option                      | Type                                                              | Required | Notes                                          |
-| --------------------------- | ----------------------------------------------------------------- | -------- | ---------------------------------------------- |
-| `apiKey`                    | `string`                                                          | Yes      | Iterable API key.                              |
-| `campaignId`                | `number`                                                          | Yes      | Iterable campaign ID.                          |
-| `allowRepeatMarketingSends` | `boolean`                                                         | No       | Sent to Iterable when provided.                |
-| `dataFields`                | `Record<string, unknown> \| (message) => Record<string, unknown>` | No       | Extra fields to merge into the campaign email. |
-| `sendAt`                    | `string`                                                          | No       | UTC timestamp in Iterable's expected format.   |
-| `baseUrl`                   | `string`                                                          | No       | Defaults to `https://api.iterable.com`.        |
-| `fetch`                     | `typeof fetch`                                                    | No       | Useful for tests or custom runtimes.           |
+## Send
 
-Iterable target sends support one recipient and `metadata` for webhook callbacks. The adapter maps
-`subject`, `html`, `text`, and `from` into `dataFields`, and merges any configured `dataFields`
-before those normalized fields. Unsupported fields throw before the API call.
+The campaign template renders the email. The adapter passes `subject`, `html`, `text`, and `from` into `dataFields` so the template can use them, and forwards `metadata` as Iterable webhook metadata.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Your trial ends in 3 days",
+  html: "<p>Upgrade to keep your workspace.</p>",
+  metadata: { userId: "user_123" },
+});
+
+console.log(result.raw); // Iterable returns no message id — inspect the raw response
+```
+
+<Callout type="warn" title="One recipient, template-only fields">
+  Iterable target sends accept exactly one `to` recipient and no `cc`, `bcc`, `replyTo`, `headers`,
+  `attachments`, or `tags` — any of those throw an `EmailValidationError` before a request is made.
+  Check [field support](/docs/adapters/field-support) before routing fallbacks through Iterable.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+ITERABLE_API_KEY="..." ITERABLE_CAMPAIGN_ID="12345" npx email-sdk doctor --adapter iterable
+```
+
+```bash
+ITERABLE_API_KEY="..." npx email-sdk send \
+  --adapter iterable \
+  --campaign-id 12345 \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Iterable smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+`--campaign-id` and `--send-at` override `ITERABLE_CAMPAIGN_ID` and `ITERABLE_SEND_AT`. Drop `--dry-run` to trigger one real campaign send and confirm the API key and campaign are live.

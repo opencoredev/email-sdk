@@ -1,65 +1,74 @@
 ---
 title: Capture plugin
-description: Record email events in tests.
+description: Record every send, retry, response, and error in tests — and assert on them through a typed client.capture store.
 icon: ClipboardCheck
 ---
 
-Use the capture plugin in tests when you need to assert what the email client tried to do.
+`capturePlugin` records send lifecycle events into a store and exposes it as `client.capture` — a typed property added through the plugin extension system. Pair it with the [memory adapter](/docs/guides/test-email-behavior) to assert exactly what the SDK tried to do, without a network call.
 
-```ts
+```ts title="email.test.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
 import { memoryProvider } from "@opencoredev/email-sdk/testing";
 
-const memory = memoryProvider();
 const email = createEmailClient({
-  adapters: [memory],
+  adapters: [memoryProvider()],
   plugins: [capturePlugin()],
 });
 
 await email.send({
-  from: "test@example.com",
+  from: "Acme <hello@acme.com>",
   to: "user@example.com",
   subject: "Welcome",
-  text: "Hello",
+  text: "Your account is ready.",
 });
 
-expect(email.capture.events).toHaveLength(2);
-expect(memory.raw.sent).toHaveLength(1);
+const sent = email.capture.events.find((event) => event.type === "afterSend");
+expect(sent?.provider).toBe("memory");
+expect(email.capture.events.map((event) => event.type)).toEqual(["beforeSend", "afterSend"]);
 ```
+
+`email.capture` is fully typed — `capturePlugin()` is an `EmailPlugin<{ capture: EmailCaptureStore }>`, so the extension flows into the client type with no casts.
 
 ## What gets captured
 
-| Event        | Meaning                                    |
-| ------------ | ------------------------------------------ |
-| `beforeSend` | The message entered the send pipeline.     |
-| `afterSend`  | A provider returned a normalized response. |
-| `retry`      | Email SDK scheduled another attempt.       |
-| `error`      | A provider attempt failed.                 |
+| Event type   | Fires when                                             | Extra fields                                  |
+| ------------ | ------------------------------------------------------ | ---------------------------------------------- |
+| `beforeSend` | The message enters the pipeline (once per send).       | `message`, send-option `metadata`              |
+| `afterSend`  | A provider returns a normalized response.              | `provider`, `attempt`, `response`              |
+| `retry`      | The SDK schedules another attempt on the same adapter. | `provider`, `attempt`, `nextAttempt`, `delayMs`, `error` |
+| `error`      | An adapter route fails after exhausting its retries.   | `provider`, `attempt`, `error`                 |
 
-Captured events include the message and whichever provider, attempt, metadata, response, or error details exist at that point in the lifecycle.
+Unlike the [observability plugin](/docs/plugins/built-in/observability), captured events hold the **full, unredacted message** — they are meant for test assertions, not production logs.
 
-## Clear events
+Reset between tests with `email.capture.clear()`.
 
-```ts
-email.capture.clear();
-```
+## Options
 
-## Bring your own store
+<TypeTable
+  type={{
+    id: {
+      description: "Plugin id. Override when mounting multiple capture instances.",
+      type: "string",
+      default: '"capture"',
+    },
+    store: {
+      description: "Bring your own store instead of an internal one.",
+      type: "EmailCaptureStore",
+    },
+    clientKey: {
+      description: "Property name added to the client. The literal type flows into the client.",
+      type: "string",
+      default: '"capture"',
+    },
+  }}
+/>
 
-```ts
-import { capturePlugin, createEmailCaptureStore } from "@opencoredev/email-sdk/plugins/capture";
+`capturePlugin(store)` is shorthand for `capturePlugin({ store })`.
 
-const store = createEmailCaptureStore();
-const email = createEmailClient({
-  adapters: [memoryProvider()],
-  plugins: [capturePlugin(store)],
-});
-```
+## Custom client key
 
-## Multiple capture stores
-
-Use a custom `id` for plugin identity and a custom `clientKey` for the typed client property.
+`clientKey` renames the client property, and the type follows the literal you pass:
 
 ```ts
 const email = createEmailClient({
@@ -70,12 +79,26 @@ const email = createEmailClient({
   ],
 });
 
-email.primaryCapture.clear();
+email.primaryCapture.events; // typed EmailCaptureStore
 email.auditCapture.clear();
 ```
 
-## Capture vs memory provider
+Multiple instances need distinct `id`s (duplicate plugin ids throw) **and** distinct `clientKey`s (a second plugin extending the client with an existing key throws).
 
-`capturePlugin()` records lifecycle events. It does not stop real provider calls.
+## Share a store
 
-`memoryProvider()` is the adapter you use when a test should avoid external email. In most tests, use both: memory avoids the network, capture proves the SDK pipeline behaved correctly.
+`createEmailCaptureStore()` creates a store you can hold a reference to directly — useful when the client is built inside a factory and your test only sees the store:
+
+```ts
+import { capturePlugin, createEmailCaptureStore } from "@opencoredev/email-sdk/plugins/capture";
+
+const store = createEmailCaptureStore();
+const email = buildTestClient({ plugins: [capturePlugin(store)] });
+
+await email.send(message);
+expect(store.events).toHaveLength(2);
+```
+
+## Capture vs memory adapter
+
+They answer different questions: `memoryProvider()` replaces the network so nothing real sends, while `capturePlugin()` records what the pipeline did — including retries and errors the adapter alone cannot show. Most tests use both. See [Test email behavior](/docs/guides/test-email-behavior) for the full testing setup.

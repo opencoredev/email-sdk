@@ -1,31 +1,26 @@
 ---
 title: SMTP
-description: Configure generic SMTP for PurelyMail or a custom server.
+description: Send over raw SMTP with the built-in TCP/TLS transport — no Nodemailer, no HTTP API.
 icon: smtp
 ---
 
-The SMTP adapter is built in. It uses Node/Bun TCP and TLS sockets directly, so it does not need Nodemailer.
+The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets — no Nodemailer, no HTTP, no dependency. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
 
 <ProviderBadge adapter="smtp" />
 
-When `auth` is configured with `secure: false`, the adapter sends `STARTTLS` before authenticating. Set `allowInsecureAuth: true` only for a trusted local server that does not support TLS.
-
-## Before live sends
-
-Confirm the SMTP host, port, TLS mode, username, and password with your provider. SMTP is a good fallback for simple transactional messages, but it does not support provider-only fields such as tags, metadata, or attachments.
-
 ## Configure
 
-```ts
+Get the host, port, TLS mode, and credentials from your SMTP provider.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { smtp } from "@opencoredev/email-sdk/smtp";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     smtp({
       host: "smtp.purelymail.com",
       port: 587,
-      secure: false,
       auth: {
         user: process.env.SMTP_USER!,
         pass: process.env.SMTP_PASS!,
@@ -35,64 +30,111 @@ const email = createEmailClient({
 });
 ```
 
+<TypeTable
+  type={{
+    host: {
+      description: "SMTP server hostname.",
+      type: "string",
+      required: true,
+    },
+    port: {
+      description: "SMTP server port.",
+      type: "number",
+      default: "465 when secure, else 587",
+    },
+    secure: {
+      description: "Connect with implicit TLS from the first byte (typically port 465).",
+      type: "boolean",
+      default: "false",
+    },
+    auth: {
+      description:
+        'SMTP credentials. method picks the AUTH mechanism; the default is "plain" (AUTH PLAIN), set "login" for AUTH LOGIN.',
+      type: '{ user: string; pass: string; method?: "plain" | "login" }',
+    },
+    requireTLS: {
+      description: "Force a STARTTLS upgrade even when no auth is configured.",
+      type: "boolean",
+      default: "false",
+    },
+    allowInsecureAuth: {
+      description: "Permit AUTH over a plaintext connection. Only for trusted local servers.",
+      type: "boolean",
+      default: "false",
+    },
+    tls: {
+      description: "Extra options merged into the TLS connection (e.g. ca, rejectUnauthorized).",
+      type: "tls.ConnectionOptions",
+    },
+    defaults: {
+      description: "Default Reply-To header applied when a message has no replyTo.",
+      type: "{ replyTo?: string }",
+    },
+    name: {
+      description: "Adapter name override — register several SMTP servers side by side.",
+      type: "string",
+      default: '"smtp"',
+    },
+    heloName: {
+      description: "Hostname announced in the EHLO command.",
+      type: "string",
+      default: '"localhost"',
+    },
+    timeoutMs: {
+      description: "Timeout for the connection and each SMTP command.",
+      type: "number",
+      default: "15000",
+    },
+  }}
+/>
+
+### TLS and auth semantics
+
+With `secure: true` the whole session is TLS. Otherwise the adapter connects in plaintext and upgrades with `STARTTLS` before authenticating whenever `requireTLS` is set or `auth` is present — credentials never travel unencrypted. Authenticating against a server that cannot do TLS requires an explicit `allowInsecureAuth: true`; without it the adapter throws instead of sending the password in the clear.
+
 ## Send
+
+SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey` (a random UUID otherwise), and an explicit `Message-ID` in `headers` overrides it — set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
-  from: "Acme <hello@example.com>",
-  to: "user@example.com",
-  cc: "billing@example.com",
-  replyTo: "support@example.com",
-  subject: "SMTP delivery test",
-  text: "It works",
-  headers: {
-    "X-Trace-ID": "trace_123",
-  },
+  from: "Acme <alerts@acme.com>",
+  to: "ops@example.com",
+  cc: "oncall@example.com",
+  subject: "Disk usage above 90% on db-1",
+  text: "db-1 is at 92% disk usage.",
+  html: "<p><strong>db-1</strong> is at 92% disk usage.</p>",
+  headers: { "X-Alert-ID": "alert_481" },
 });
 
-console.log(result.provider, result.accepted);
+console.log(result.accepted); // every recipient the server accepted
+console.log(result.id); // parsed from the server's "queued as ..." reply, else the idempotency key
 ```
 
-SMTP supports address fields and headers. It rejects attachments, tags, and metadata because those provider-specific fields cannot be represented in this built-in transport.
+`rejected` is always empty — a refused recipient fails the SMTP conversation instead, and every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
-## Options
-
-| Option              | Type                             | Required | Notes                                     |
-| ------------------- | -------------------------------- | -------- | ----------------------------------------- |
-| `host`              | `string`                         | Yes      | SMTP host.                                |
-| `port`              | `number`                         | No       | Common values are `587`, `465`, and `25`. |
-| `secure`            | `boolean`                        | No       | Use TLS from the start of the connection. |
-| `auth`              | `{ user: string; pass: string }` | No       | SMTP credentials.                         |
-| `defaults`          | `{ replyTo?: string }`           | No       | Default reply-to header.                  |
-| `tls`               | `Record<string, unknown>`        | No       | TLS options.                              |
-| `requireTLS`        | `boolean`                        | No       | Require STARTTLS.                         |
-| `allowInsecureAuth` | `boolean`                        | No       | Opt in to SMTP AUTH without TLS.          |
-| `name`              | `string`                         | No       | Defaults to `smtp`.                       |
-| `heloName`          | `string`                         | No       | EHLO name sent to the server.             |
-| `timeoutMs`         | `number`                         | No       | Socket timeout.                           |
+<Callout type="warn" title="No attachments, tags, or metadata">
+  The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
+  concept — any of these fields throws an `EmailValidationError` before connecting. See the
+  [field support matrix](/docs/adapters/field-support).
+</Callout>
 
 ## Multiple SMTP routes
 
-Rename adapters when you have multiple SMTP routes.
+`name` lets you register the adapter twice and use one route as the [fallback](/docs/concepts/fallbacks-and-retries) for the other.
 
 ```ts
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     smtp({
       name: "purelymail",
       host: "smtp.purelymail.com",
-      auth: {
-        user: process.env.PURELYMAIL_USER!,
-        pass: process.env.PURELYMAIL_PASS!,
-      },
+      auth: { user: process.env.PURELYMAIL_USER!, pass: process.env.PURELYMAIL_PASS! },
     }),
     smtp({
       name: "backup-smtp",
       host: "smtp.backup.example",
-      auth: {
-        user: process.env.BACKUP_SMTP_USER!,
-        pass: process.env.BACKUP_SMTP_PASS!,
-      },
+      auth: { user: process.env.BACKUP_SMTP_USER!, pass: process.env.BACKUP_SMTP_PASS! },
     }),
   ],
   defaultAdapter: "purelymail",
@@ -100,20 +142,27 @@ const email = createEmailClient({
 });
 ```
 
-## Response
+## Verify from the CLI
 
-The adapter returns the SMTP server message ID when it can parse one. It also returns accepted recipients and an empty `rejected` array because failed recipients throw during the SMTP conversation.
+`doctor` only checks `SMTP_HOST`; the other settings are optional.
 
-## CLI smoke test
+```bash
+SMTP_HOST=smtp.purelymail.com npx email-sdk doctor --adapter smtp
+```
 
 ```bash
 npx email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
-  --user hello@example.com \
+  --port 587 \
+  --require-tls \
+  --user hello@acme.com \
   --pass "$SMTP_PASS" \
-  --from "Acme <hello@example.com>" \
+  --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "SMTP test" \
-  --text "It works"
+  --subject "SMTP smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send — the only check that proves the host, TLS mode, and credentials actually deliver.

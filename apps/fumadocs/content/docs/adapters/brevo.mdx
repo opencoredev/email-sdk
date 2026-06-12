@@ -1,78 +1,85 @@
 ---
 title: Brevo
-description: Configure the Brevo transactional email adapter.
+description: Send through the Brevo transactional email API with full field support and metadata mapped to template params.
 icon: brevo
 ---
 
+The Brevo adapter calls the [Brevo transactional email API](https://developers.brevo.com/reference/sendtransacemail) over `fetch` — no extra dependency. It authenticates with Brevo's `api-key` header (not a Bearer token), supports every common field, and maps `metadata` to Brevo's `params` — the same values Brevo templates substitute.
+
 <ProviderBadge adapter="brevo" />
-
-Brevo maps the transactional email API to the shared Email SDK message shape, including metadata as template `params`, tag values as Brevo tags, and attachments as Base64 content.
-
-## Before live sends
-
-Create a Brevo SMTP/API key that can send transactional email, verify the sender or domain you use in `from`, and confirm the account is allowed to send to your target recipients. A dry run checks SDK validation only; a live smoke send is still required for account readiness.
 
 ## Configure
 
-```ts
+Create an API key under [SMTP & API in the Brevo dashboard](https://app.brevo.com/settings/keys/api) and verify the sender or domain you use in `from`.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { brevo } from "@opencoredev/email-sdk/brevo";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [brevo({ apiKey: process.env.BREVO_API_KEY! })],
 });
 ```
 
-Use `baseUrl` only for test doubles or Brevo-compatible gateways.
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Brevo API key, sent as the api-key request header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.brevo.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
 
 ## Send
+
+Brevo maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata` (as `params`). `replyTo` accepts a single address — two or more throw an `EmailValidationError` before any request.
 
 ```ts
 const result = await email.send({
   from: "Acme <hello@acme.com>",
   to: [{ email: "user@example.com", name: "Ada" }],
-  cc: "billing@example.com",
-  subject: "Invoice ready",
-  html: "<p>Your invoice is ready.</p>",
-  metadata: {
-    invoiceId: "inv_123",
-  },
-  tags: [{ name: "type", value: "invoice" }],
-  attachments: [
-    {
-      filename: "invoice.txt",
-      content: "Invoice inv_123",
-      contentType: "text/plain",
-    },
-  ],
+  replyTo: "support@acme.com",
+  subject: "You're invited to the Acme workspace",
+  html: "<p>Ada invited you to join the Acme workspace.</p>",
+  metadata: { workspaceId: "ws_123" },
+  tags: [{ name: "type", value: "invite" }],
 });
 
-console.log(result.provider, result.id);
+console.log(result.id); // Brevo messageId, also exposed as result.messageId
 ```
 
-Brevo supports one `replyTo` address. The adapter rejects unsupported shapes before it calls Brevo, so fallback routes do not silently lose fields.
+The response `id` is Brevo's `messageId` (falling back to `id`) — match it against events in Brevo's logs and webhooks.
 
-## Options
+<Callout type="warn" title="Metadata becomes template params">
+  `metadata` is sent as Brevo `params`, the values Brevo substitutes into templates. If you use
+  Brevo template syntax in your content, pick metadata keys that don't collide with template
+  placeholders.
+</Callout>
 
-| Option    | Type           | Required | Notes                                |
-| --------- | -------------- | -------- | ------------------------------------ |
-| `apiKey`  | `string`       | Yes      | Brevo API key.                       |
-| `baseUrl` | `string`       | No       | Defaults to `https://api.brevo.com`. |
-| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes. |
+## Verify from the CLI
 
-See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
-
-## Response
-
-The adapter maps Brevo `messageId` or `id` to the normalized `id` and `messageId` fields.
-
-## CLI smoke test
+```bash
+BREVO_API_KEY="xkeysib-..." npx email-sdk doctor --adapter brevo
+```
 
 ```bash
 BREVO_API_KEY="xkeysib-..." npx email-sdk send \
   --adapter brevo \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "Brevo test" \
-  --text "It works"
+  --subject "Brevo smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Drop `--dry-run` for one real send — that is the only check that proves the key, sender verification, and recipient policy are ready.

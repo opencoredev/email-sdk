@@ -1,41 +1,109 @@
 ---
 title: Agent skill
-description: Use the repo-local Email SDK skill when agents add or review email integrations.
+description: Install the Email SDK skill for coding agents and expose a send_email tool with createEmailAgentTools.
 icon: Bot
 ---
 
-This repo includes an agent skill at:
+Two ways to put Email SDK in front of an agent: a **skill** that teaches coding agents (Claude Code and compatible tools) how to integrate the SDK correctly, and a **tool factory** that lets a runtime agent send email through your configured client.
 
-```txt
-skills/email-sdk/SKILL.md
-```
+## The email-sdk skill
 
-Install it with the skills.sh CLI:
+The repo ships a skill at [`skills/email-sdk/SKILL.md`](https://github.com/opencoredev/email-sdk/blob/main/skills/email-sdk/SKILL.md). Install it with the skills CLI:
 
 ```bash
 npx skills add opencoredev/email-sdk --skill email-sdk
 ```
 
-Use it when an agent wires Email SDK into an app, reviews adapter setup, or updates these docs.
+Or copy the `skills/email-sdk/` directory into your repo's skills directory (`.claude/skills/email-sdk/` for Claude Code). Agents pick it up whenever they add, review, or document an Email SDK integration.
 
-## What it tells agents
+### What it enforces
 
-- Use `bun` and `bunx`.
-- Refresh the current README, package version, package exports, Fumadocs pages, and TypeScript declarations before implementing.
-- Keep adapter credentials in environment variables.
-- Import adapters from their own entry points.
-- Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
-- Use fallbacks only when the backup adapter can send the same class of email.
-- Add idempotency keys for externally visible transactional sends.
-- Run a narrow validation before calling the work done.
+- **Refresh docs first.** The skill is deliberately dynamic: before writing code, the agent reads the installed package's README, `package.json` exports, and TypeScript declarations — so it implements against the version actually installed, not stale training data.
+- **Correct imports and secrets.** Adapters come from their own entry points (`@opencoredev/email-sdk/resend`, `/smtp`, ...), credentials stay in environment variables, and no Nodemailer — the SDK includes its own SMTP transport.
+- **Compatible fallbacks.** Fallback routes only when the backup adapter supports the same fields, checked against [field support](/docs/adapters/field-support). Idempotency keys on externally visible sends that may retry.
+- **CLI smoke tests.** `email-sdk doctor` and `send --dry-run` before any live send, and no real external mail without your approval.
+- **Secret-safe observability.** [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) for redacted events — never API keys, message bodies, or unnecessary recipient data in logs.
+- **Narrow validation.** The smallest test or typecheck that covers the send path before declaring the work done.
 
-## Prompt example
+### Prompt example
 
 ```txt
-Use the repo-local Email SDK skill at skills/email-sdk/SKILL.md.
+Use the email-sdk skill.
 Wire Resend as the primary adapter and SMTP as fallback.
 Keep secrets in environment variables.
 Add one narrow test around the send path.
 ```
 
-The skill is dynamic on purpose. It teaches agents where to fetch the current docs and source first, so the skill does not need a manual update every time the SDK gains another adapter or option.
+## Agent tools: send email at runtime
+
+`createEmailAgentTools(client)` from `@opencoredev/email-sdk/agent-tools` turns an [email client](/docs/reference/client) into tool definitions an LLM agent can call:
+
+```ts title="lib/agent-email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { createEmailAgentTools } from "@opencoredev/email-sdk/agent-tools";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+export const { sendEmail } = createEmailAgentTools(email);
+```
+
+It returns one tool, `sendEmail`, as a plain `EmailAgentTool` object:
+
+<TypeTable
+  type={{
+    name: {
+      description: "Tool name the model calls.",
+      type: "string",
+      default: '"send_email"',
+    },
+    description: {
+      description:
+        "Instructs the model to ask for confirmation before sending user-visible or external email.",
+      type: "string",
+    },
+    parameters: {
+      description:
+        "JSON Schema for the input. Requires from, to, and subject; optional html, text, adapter, and provider.",
+      type: "Record<string, unknown>",
+    },
+    execute: {
+      description:
+        "Runs client.send with the input message. adapter / provider route the send to a specific registered adapter.",
+      type: "(input) => Promise<unknown>",
+    },
+  }}
+/>
+
+Because the tool is plain data plus an `execute` function, it maps onto any agent framework's tool format:
+
+```ts title="agent.ts"
+import { sendEmail } from "./lib/agent-email";
+
+// Most frameworks accept a name, a description, and a JSON Schema:
+const tools = [
+  {
+    name: sendEmail.name, // "send_email"
+    description: sendEmail.description,
+    inputSchema: sendEmail.parameters,
+  },
+];
+
+// When the model calls the tool, hand its arguments to execute:
+async function handleToolCall(name: string, input: unknown) {
+  if (name === sendEmail.name) {
+    return sendEmail.execute(input as Parameters<typeof sendEmail.execute>[0]);
+  }
+  throw new Error(`Unknown tool: ${name}`);
+}
+```
+
+`execute` goes through the full client pipeline — validation, [retries and fallbacks](/docs/concepts/fallbacks-and-retries), plugins, hooks — so an agent send behaves exactly like any other send in your app.
+
+<Callout type="warn" title="Gate agent sends">
+  The tool description asks the model to confirm before sending, but the model decides whether to
+  comply. For production agents, add your own approval step or sandbox the client with a [memory
+  adapter](/docs/guides/test-email-behavior) until the flow is trusted.
+</Callout>

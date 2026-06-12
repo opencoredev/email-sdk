@@ -1,12 +1,10 @@
 ---
 title: Guides
-description: Task-based guides for operating and extending Email SDK.
+description: Step-by-step guides for running Email SDK in production and extending it with your own adapters and plugins.
 icon: BookOpen
 ---
 
-Use these guides when you are operating a production send path or building something that should live outside one send call: fallback routes, tests, reusable plugins, custom provider adapters, or community packages.
-
-If you want to support a provider that Email SDK does not officially maintain, start with [Publish a community adapter](/docs/guides/authoring/publish-community-adapter). Community adapters live in their own npm packages and can be listed in the docs without becoming official.
+Guides walk one task end to end: a goal, the steps, and a verification at the end. For exact types and options, use the [reference](/docs/reference/client) pages instead.
 
 ## Operate
 
@@ -14,43 +12,36 @@ If you want to support a provider that Email SDK does not officially maintain, s
   <Card
     title="Production send pipeline"
     href="/docs/guides/production-send-pipeline"
-    description="Combine adapters, validation, retries, fallback routes, observability, tests, and CLI checks."
+    description="Build one production-ready client: retries, a compatible fallback, defaults, idempotency keys, observability, tests, and CLI checks."
   />
   <Card
     title="Test email behavior"
     href="/docs/guides/test-email-behavior"
-    description="Use memory providers and capture plugins to assert send behavior."
+    description="Assert sends, fallbacks, and retries in unit tests with the memory adapter and capture plugin — no provider account."
   />
 </Cards>
 
-## Build
+## Build and publish
 
 <Cards>
   <Card
     title="Create your first plugin"
     href="/docs/guides/authoring/create-first-plugin"
-    description="Build a policy plugin that blocks sends missing required metadata."
+    description="Build an audit-log plugin with middleware and a typed client extension."
   />
   <Card
     title="Create an adapter"
     href="/docs/guides/authoring/create-adapter"
-    description="Implement a provider adapter and expose it as a plugin."
+    description="Implement the adapter contract for a provider the SDK doesn't ship: payload mapping, fail-fast validation, retryable errors."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="Package a plugin for npm and list it in the community registry."
   />
   <Card
     title="Publish a community adapter"
     href="/docs/guides/authoring/publish-community-adapter"
-    description="Publish a third-party provider package and list it without making it official."
+    description="Ship a third-party provider adapter as its own package — naming, field-support docs, and the registry PR."
   />
 </Cards>
-
-## Where reference lives
-
-Guides are procedural. Use the reference pages when you need exact fields and contracts:
-
-| Need                       | Page                                                 |
-| -------------------------- | ---------------------------------------------------- |
-| Client options             | [Client](/docs/reference/client)                     |
-| Message shape              | [Message](/docs/reference/message)                   |
-| Adapter contract           | [Adapter contract](/docs/reference/adapter-contract) |
-| Plugin types and lifecycle | [Plugin API](/docs/plugins/api)                      |
-| Provider field limits      | [Field support](/docs/adapters/field-support)        |

@@ -1,77 +1,81 @@
 ---
 title: MailPace
-description: Configure the MailPace send API adapter.
+description: Send through the MailPace API — a deliberately minimal adapter for address fields and body content.
 icon: mailpace
 ---
 
+The MailPace adapter calls the [MailPace send API](https://docs.mailpace.com/reference/send) over `fetch` — no extra dependency. It is the smallest adapter surface in the SDK: addresses, subject, and body only, with recipient lists serialized as comma-separated strings.
+
 <ProviderBadge adapter="mailpace" />
-
-MailPace is a narrow send API adapter for simple transactional email. Use it when your messages only need address fields, reply-to, text, or HTML.
-
-## Before live sends
-
-Create a MailPace server token and verify the sender or domain in MailPace. Because this adapter intentionally rejects headers, metadata, tags, and attachments, check your production message shape before using it as a fallback.
 
 ## Configure
 
-```ts
+Create a server token in the MailPace dashboard and verify the sending domain.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { mailpace } from "@opencoredev/email-sdk/mailpace";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [mailpace({ apiKey: process.env.MAILPACE_API_KEY! })],
 });
 ```
 
+<TypeTable
+  type={{
+    apiKey: {
+      description: "MailPace server token, sent as the MailPace-Server-Token header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://app.mailpace.com/api/v1"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
 ## Send
+
+MailPace maps `cc`, `bcc`, and `replyTo` alongside `html`/`text` (sent as `htmlbody`/`textbody`). That is the whole surface — a good fit for sign-in alerts, receipts, and other plain notifications.
 
 ```ts
 const result = await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
-  cc: "billing@example.com",
-  replyTo: "support@example.com",
-  subject: "Plain transactional update",
-  text: "Your account has been updated.",
+  replyTo: "support@acme.com",
+  subject: "New sign-in to your account",
+  text: "A new sign-in from Berlin, Germany was detected. If this was not you, reset your password.",
 });
 
-console.log(result.provider, result.id);
+console.log(result.id); // MailPace message id (`id` or `message_id` in the response)
 ```
 
-MailPace is a narrow adapter for address fields plus text or HTML body content. It rejects headers, metadata, tags, and attachments before the API call.
+<Callout type="warn" title="No headers, attachments, tags, or metadata">
+  MailPace's send endpoint takes none of these, so any of them throws an `EmailValidationError`
+  before a request is made. Check your production message shape against the [field support
+  matrix](/docs/adapters/field-support) before routing through MailPace as a fallback.
+</Callout>
 
-## Send HTML
+## Verify from the CLI
 
-```ts
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Welcome",
-  html: "<p>Your workspace is ready.</p>",
-});
+```bash
+MAILPACE_API_KEY="..." npx email-sdk doctor --adapter mailpace
 ```
-
-## Options
-
-| Option    | Type           | Required | Notes                                          |
-| --------- | -------------- | -------- | ---------------------------------------------- |
-| `apiKey`  | `string`       | Yes      | MailPace server token.                         |
-| `baseUrl` | `string`       | No       | Defaults to `https://app.mailpace.com/api/v1`. |
-| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.           |
-
-MailPace supports CC, BCC, and reply-to. Unsupported fields throw before the API call.
-
-## Response
-
-The adapter maps MailPace `id` or `message_id` to the normalized `id` field.
-
-## CLI smoke test
 
 ```bash
 MAILPACE_API_KEY="..." npx email-sdk send \
   --adapter mailpace \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "MailPace test" \
-  --text "It works"
+  --subject "MailPace smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Drop `--dry-run` for one real send to confirm the token and verified domain work end to end.

@@ -1,66 +1,67 @@
 ---
 title: Quickstart
-description: Create a client, send a first transactional email, and verify the CLI path.
+description: Send your first transactional email, verify it from the CLI, and add a fallback route.
 icon: Rocket
 ---
 
-Install the scoped package with the package manager your app already uses:
+This page takes you from zero to a verified production-ready send path: one adapter, one `send()` call, a CLI check, and a fallback route.
+
+<Steps>
+<Step>
+
+### Install the package
 
 <PackageInstallTabs />
 
-The SDK and CLI work in server-side Node 20+ and Bun runtimes. The installed CLI command is named `email-sdk`. If you only need the CLI for a no-install check, run `bunx --bun --package @opencoredev/email-sdk email-sdk ...`. npm-only projects should install `@opencoredev/email-sdk` first, then run `npx email-sdk ...`. See <a href="/docs/getting-started/install">Install</a> for the package and CLI distinction.
+The SDK and CLI run server-side on Node 20+ and Bun 1.1+. See [Install](/docs/getting-started/install) for CLI-only usage.
 
-## Choose a first adapter
+</Step>
+<Step>
 
-If you are new to Email SDK, start with Resend. It has the shortest setup path, supports the common transactional fields, and is the default example throughout these docs.
+### Create a client
 
-Use Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+These docs use Resend first — shortest setup, broad field support. Any [adapter](/docs/adapters) works the same way; only the factory and credentials change.
 
-## Send through Resend
+Set `RESEND_API_KEY`, then:
 
-Set `RESEND_API_KEY`, then create a client with the Resend adapter.
-
-```ts
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
 });
+```
 
-await email.send({
+</Step>
+<Step>
+
+### Send an email
+
+```ts
+const result = await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
   subject: "Welcome to Acme",
   text: "Your account is ready.",
 });
+
+console.log(result.provider); // "resend" — the adapter that handled the send
+console.log(result.id); // provider message id, when the API returns one
 ```
 
-## Check the send result
+`send` resolves with a normalized [response](/docs/reference/client#response): `provider` tells you which adapter actually delivered, `id`/`messageId` carry the provider's message id, and `raw` keeps the untouched provider payload.
 
-`send` resolves with the normalized adapter response. The `provider` value tells you which adapter
-actually handled the send.
+</Step>
+<Step>
 
-```ts
-const result = await email.send(message);
+### Verify from the CLI
 
-console.log(result.provider);
-console.log(result.id);
-```
-
-If the adapter returns a message ID, Email SDK exposes it through the normalized `id` field. Some
-adapters also include `messageId` as an alias when the provider uses that name directly. Provider
-responses are still available through `raw` when an adapter includes them.
-
-## Verify from the CLI
-
-Use `doctor` to check that the selected adapter has the required environment variables.
+Check the environment, then validate a full message without sending:
 
 ```bash
 RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 ```
-
-Use `--dry-run` to validate the message shape and adapter field support without sending email.
 
 ```bash
 npx email-sdk send \
@@ -72,23 +73,16 @@ npx email-sdk send \
   --dry-run
 ```
 
-When the package is installed in your project, the same command can run through the installed binary:
+`--dry-run` validates the message shape and the adapter's [field support](/docs/adapters/field-support) and prints the message it would send. Drop the flag for one real smoke send.
 
-```bash
-RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
-```
+</Step>
+<Step>
 
-## Add a safe fallback route
+### Add a fallback route
 
-Add SMTP when you want a second route for a simple transactional email. The SMTP adapter is built in
-and does not require Nodemailer. When SMTP auth is configured on a non-secure connection, Email SDK
-upgrades with STARTTLS before authenticating.
+A second adapter keeps simple transactional email flowing when the primary fails. SMTP is built in (no Nodemailer) and pairs well with API providers for plain text/HTML messages:
 
-Only use fallback adapters that can send the same message shape. For example, SMTP supports address
-fields and headers, but not provider-only fields like tags, metadata, or attachments.
-Check <a href="/docs/adapters/field-support">Field support</a> before choosing backup routes.
-
-```ts
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { smtp } from "@opencoredev/email-sdk/smtp";
@@ -97,27 +91,47 @@ export const email = createEmailClient({
   adapters: [
     resend({ apiKey: process.env.RESEND_API_KEY! }),
     smtp({
-      host: "smtp.purelymail.com",
+      host: process.env.SMTP_HOST!,
       port: 587,
-      auth: {
-        user: process.env.SMTP_USER!,
-        pass: process.env.SMTP_PASS!,
-      },
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
     }),
   ],
   fallback: ["smtp"],
 });
 ```
 
-Your application still sends the same way:
+Your application code does not change — `email.send(...)` now tries Resend, then SMTP.
 
-```ts
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Receipt",
-  text: "Thanks for your order.",
-});
-```
+<Callout type="warn" title="Fallbacks must match your message shape">
+  A fallback only helps if the backup adapter supports the fields you send. SMTP cannot carry
+  tags, metadata, or attachments — sends using those fields throw instead of silently dropping
+  data. Check [field support](/docs/adapters/field-support) when picking backup routes.
+</Callout>
 
-For route recipes, retries, observability, and tests, continue with <a href="/docs/guides/production-send-pipeline">Production send pipeline</a>.
+</Step>
+</Steps>
+
+## Next
+
+<Cards>
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Retries, idempotency keys, observability, and tests around this exact setup."
+  />
+  <Card
+    title="Fallbacks and retries"
+    href="/docs/concepts/fallbacks-and-retries"
+    description="How route order, retry backoff, and error classification actually work."
+  />
+  <Card
+    title="All adapters"
+    href="/docs/adapters"
+    description="20 providers with per-adapter setup, options, and CLI smoke tests."
+  />
+  <Card
+    title="Test email behavior"
+    href="/docs/guides/test-email-behavior"
+    description="Assert sends in unit tests with memory adapters and the capture plugin."
+  />
+</Cards>
