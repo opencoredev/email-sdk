@@ -33,7 +33,7 @@ resend  attempt 3 → 429               retries exhausted → onError("resend")
 smtp    attempt 1 → accepted          response.provider === "smtp"
 ```
 
-The retry budget resets for each adapter on the route: the fallback adapter gets its own `retries: 2`.
+**The retry budget resets for each adapter on the route.** The fallback adapter gets its own `retries: 2`, so the worst case for this client is six provider attempts — size your retry budget with the whole route in mind.
 
 <Callout type="warn" title="Fallback routes must be field-compatible">
   A backup adapter only helps if it supports every `EmailMessage` field your messages actually use

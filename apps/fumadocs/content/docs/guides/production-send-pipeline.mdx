@@ -38,7 +38,7 @@ export const email = createEmailClient({
 });
 ```
 
-Only [retryable errors](/docs/reference/errors) are retried — HTTP 408, 409, 425, 429, 5xx, and network failures. Validation errors and hard rejections fail immediately. Backoff defaults to 100ms doubling per attempt, capped at 2s; both the delay and the retry predicate are configurable in [fallbacks and retries](/docs/concepts/fallbacks-and-retries).
+Only [retryable errors](/docs/reference/errors) are retried — HTTP 408, 409, 425, 429, 5xx, and network failures. Validation errors and hard rejections fail immediately. The default backoff is `min(100 * 2^(attempt - 1), 2000)` milliseconds — 100ms doubling per attempt, capped at 2s; see [fallbacks and retries](/docs/concepts/fallbacks-and-retries) for the full retry config, including custom `delay` and `shouldRetry`.
 
 </Step>
 <Step>

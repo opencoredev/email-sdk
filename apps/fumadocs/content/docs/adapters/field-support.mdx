@@ -80,6 +80,14 @@ await email.send({
 
 The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields — which is exactly the point.
 
+Before adding a backup route, run through this checklist:
+
+- Does the backup adapter support every `EmailMessage` field your messages use?
+- Does it preserve attachments when receipts, exports, or files matter?
+- Does it preserve `metadata` or `tags` your app relies on for provider dashboards, analytics, or routing?
+- Does it support `replyTo` and `headers` if support workflows depend on them?
+- Has the backup provider account been live-verified (one real smoke send) in the target environment?
+
 ## Attachment rules
 
 Attachment `content` is treated as raw data by default and Base64-encoded for APIs that need it:

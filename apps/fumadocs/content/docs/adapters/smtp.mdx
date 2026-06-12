@@ -94,7 +94,7 @@ With `secure: true` the whole session is TLS. Otherwise the adapter connects in 
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body; `idempotencyKey` becomes the `Message-ID`.
+SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey` (a random UUID otherwise), and an explicit `Message-ID` in `headers` overrides it — set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
