@@ -1,167 +1,194 @@
 ---
 title: Test email behavior
-description: Assert sends, retries, fallbacks, and plugin behavior.
+description: Assert sends, fallback routing, and retries in unit tests with the memory adapter, failing adapter, and capture plugin — no provider account needed.
 icon: FlaskConical
 ---
 
-Use the memory provider when you want to replace the provider. Use the capture plugin when you want to observe the normal send pipeline.
+This guide tests email behavior without network calls: prove a send happened with the right fields, prove the fallback route engages when the primary fails, and prove retries fire. Everything runs in plain unit tests — the examples use `bun:test`, but any runner works.
 
-## Memory provider
+Two tools cover it all, both free of provider credentials:
 
-The memory provider stores successful sends and never calls an external API.
+- [`memoryProvider()` and `failingProvider()`](/docs/reference/adapter-contract) from `@opencoredev/email-sdk/testing` replace real adapters.
+- The [capture plugin](/docs/plugins/built-in/capture) records lifecycle events (`beforeSend`, `afterSend`, `retry`, `error`) on the real send pipeline.
 
-```ts
-import { describe, expect, test } from "bun:test";
+<Steps>
+<Step>
+
+### Assert a send happened with the right fields
+
+`memoryProvider()` registers like any adapter but stores every message in `raw.sent` instead of calling an API. Plugins, defaults, and validation all run, so you assert the message the provider actually received:
+
+```ts title="welcome-email.test.ts"
+import { expect, test } from "bun:test";
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { memoryProvider } from "@opencoredev/email-sdk/testing";
 
-describe("welcome email", () => {
-  test("sends the expected subject", async () => {
-    const memory = memoryProvider();
-    const email = createEmailClient({
-      adapters: [memory],
-    });
+test("sends the welcome email", async () => {
+  const memory = memoryProvider();
+  const email = createEmailClient({ adapters: [memory] });
 
-    await email.send({
-      from: "test@example.com",
-      to: "user@example.com",
-      subject: "Welcome",
-      text: "Hello",
-    });
-
-    expect(memory.raw.sent[0]?.message.subject).toBe("Welcome");
-  });
-});
-```
-
-## Capture plugin
-
-The capture plugin records lifecycle events. It can be used with the memory provider or with a custom test adapter.
-
-```ts
-import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
-
-const memory = memoryProvider();
-const email = createEmailClient({
-  adapters: [memory],
-  plugins: [capturePlugin()],
-});
-
-await email.send({
-  from: "test@example.com",
-  to: "user@example.com",
-  subject: "Welcome",
-  text: "Hello",
-});
-
-expect(email.capture.events.map((event) => event.type)).toEqual(["beforeSend", "afterSend"]);
-```
-
-## Assert defaults
-
-Defaults run before message validation, so tests can assert the final message that reached the provider.
-
-```ts
-import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
-
-const memory = memoryProvider();
-const email = createEmailClient({
-  adapters: [memory],
-  plugins: [
-    defaultsPlugin({
-      headers: { "X-App": "billing" },
-      sendMetadata: { service: "billing" },
-    }),
-  ],
-});
-
-await email.send(
-  {
-    from: "billing@example.com",
+  await email.send({
+    from: "Acme <hello@acme.com>",
     to: "user@example.com",
-    subject: "Receipt",
-    text: "Thanks.",
-  },
-  {
-    metadata: { route: "receipt" },
-  },
-);
+    subject: "Welcome to Acme",
+    text: "Your account is ready.",
+  });
 
-expect(memory.raw.sent[0]?.message.headers).toMatchObject({ "X-App": "billing" });
+  expect(memory.raw.sent).toHaveLength(1);
+  expect(memory.raw.sent[0]?.message.subject).toBe("Welcome to Acme");
+  expect(memory.raw.sent[0]?.message.to).toBe("user@example.com");
+});
 ```
 
-## Assert fallback
+This also catches plugin transforms — mount a [defaults plugin](/docs/plugins/built-in/defaults) on the test client and assert the merged headers or reply-to landed on `message`.
 
-Use `failingProvider()` for the primary route and `memoryProvider()` for the backup route. Assert the response provider and the backup send store.
+</Step>
+<Step>
 
-```ts
+### Assert the fallback engaged when the primary fails
+
+`failingProvider("primary")` throws on every send. Pair it with a memory backup and the same `fallback` order production uses:
+
+```ts title="fallback.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
 import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
 
-const backup = memoryProvider("backup");
-const email = createEmailClient({
-  adapters: [failingProvider("primary"), backup],
-  fallback: ["backup"],
-});
+test("falls back to the backup route", async () => {
+  const backup = memoryProvider("backup");
+  const email = createEmailClient({
+    adapters: [failingProvider("primary"), backup],
+    fallback: ["backup"],
+  });
 
-const response = await email.send({
-  from: "test@example.com",
-  to: "user@example.com",
-  subject: "Fallback",
-  text: "Hello",
-});
+  const response = await email.send({
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Fallback",
+    text: "Hello",
+  });
 
-expect(response.provider).toBe("backup");
-expect(backup.raw.sent).toHaveLength(1);
+  expect(response.provider).toBe("backup");
+  expect(backup.raw.sent).toHaveLength(1);
+});
 ```
 
-## Assert retry
+Use the same message fields production sends. A backup adapter that cannot carry one of them fails this test now instead of failing during an outage.
 
-Use a provider that fails once with a retryable error, then succeeds.
+</Step>
+<Step>
 
-```ts
-import { EmailProviderError, createEmailClient } from "@opencoredev/email-sdk";
+### Assert retry events with the capture plugin
+
+The capture plugin extends the client with `email.capture.events`. To see a `retry` event, you need an adapter that fails with a retryable error and then succeeds — a five-line inline adapter does it:
+
+```ts title="retry.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient, EmailProviderError } from "@opencoredev/email-sdk";
 import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
 
-let attempts = 0;
-const retrying = {
-  name: "retrying",
-  send() {
-    attempts += 1;
+test("retries once on a transient failure", async () => {
+  let attempts = 0;
+  const flaky = {
+    name: "flaky",
+    send() {
+      attempts += 1;
 
-    if (attempts === 1) {
-      throw new EmailProviderError("Temporary failure", {
-        provider: "retrying",
-        retryable: true,
-      });
-    }
+      if (attempts === 1) {
+        throw new EmailProviderError("Temporary failure", {
+          provider: "flaky",
+          retryable: true,
+        });
+      }
 
-    return { provider: "retrying", id: "ok" };
-  },
-};
+      return { provider: "flaky", id: "ok" };
+    },
+  };
 
-const email = createEmailClient({
-  adapters: [retrying],
-  retry: { retries: 1, delay: () => 0 },
-  plugins: [capturePlugin()],
+  const email = createEmailClient({
+    adapters: [flaky],
+    retry: { retries: 1, delay: () => 0 },
+    plugins: [capturePlugin()],
+  });
+
+  await email.send({
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Retry",
+    text: "Hello",
+  });
+
+  expect(attempts).toBe(2);
+  expect(email.capture.events.map((event) => event.type)).toEqual([
+    "beforeSend",
+    "retry",
+    "afterSend",
+  ]);
 });
-
-const response = await email.send({
-  from: "test@example.com",
-  to: "user@example.com",
-  subject: "Retry",
-  text: "Hello",
-});
-
-expect(response.provider).toBe("retrying");
-expect(attempts).toBe(2);
-expect(email.capture.events.map((event) => event.type)).toContain("retry");
 ```
 
-## Test checklist
+`delay: () => 0` keeps the backoff out of your test runtime. `failingProvider` throws a plain `Error` (not retryable), so it tests fallback, not retries — retry tests need an error with `retryable: true`.
 
-- Use `memoryProvider()` for app tests that should not call real providers.
-- Use `capturePlugin()` when you need lifecycle events.
-- Assert provider field support with adapter unit tests.
-- Add one test for fallback if the route matters.
-- Test fallback routes with the same message shape used in production.
-- Add one test for plugin ordering when multiple plugins mutate the same message.
+</Step>
+<Step>
+
+### Clear stores between tests
+
+Both stores are plain arrays behind a `clear()` method. Reset them in `beforeEach` when a client outlives a single test:
+
+```ts
+import { beforeEach } from "bun:test";
+
+beforeEach(() => {
+  memory.raw.clear(); // memoryProvider's sent store
+  email.capture.clear(); // capture plugin's event store
+});
+```
+
+To assert capture events without going through the typed client extension, create the store yourself and hand it to the plugin:
+
+```ts
+import { capturePlugin, createEmailCaptureStore } from "@opencoredev/email-sdk/plugins/capture";
+
+const store = createEmailCaptureStore();
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [capturePlugin(store)],
+});
+
+// store.events and store.clear() work without touching `email`
+```
+
+</Step>
+<Step>
+
+### Run the suite
+
+```bash
+bun test
+```
+
+No environment variables, no network. If a test makes a real HTTP call, an adapter slipped in — test clients should only register `memoryProvider`, `failingProvider`, or inline test adapters.
+
+</Step>
+</Steps>
+
+## Next
+
+<Cards>
+  <Card
+    title="Capture plugin"
+    href="/docs/plugins/built-in/capture"
+    description="Event shapes, shared stores, and custom client keys."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="The pipeline these tests protect: retries, fallback, defaults, observability."
+  />
+  <Card
+    title="Fallbacks and retries"
+    href="/docs/concepts/fallbacks-and-retries"
+    description="Which errors retry, in what order routes run, and how to tune both."
+  />
+</Cards>

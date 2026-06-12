@@ -1,86 +1,123 @@
 ---
 title: Defaults plugin
-description: Apply shared message and send-option defaults.
+description: Merge org-wide headers, tags, reply-to, and idempotency key prefixes into every send — with message values winning.
 icon: Settings
 ---
 
-Use the defaults plugin when many sends need the same headers, tags, metadata, reply-to address, or idempotency key format.
+`defaultsPlugin` injects shared values into every message before validation, so org-wide headers, tags, and a reply-to address live in one place instead of every call site. Per-message values always take precedence over the defaults.
 
-```ts
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
 import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+import { resend } from "@opencoredev/email-sdk/resend";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
   plugins: [
     defaultsPlugin({
-      headers: { "X-App": "billing" },
-      tags: [{ name: "service", value: "billing" }],
-      sendMetadata: { service: "billing" },
-      replyTo: "support@example.com",
-      idempotencyKeyPrefix: "billing_",
+      headers: { "X-Entity-Ref": "acme-app" },
+      tags: [{ name: "env", value: process.env.NODE_ENV! }],
+      replyTo: "support@acme.com",
+      idempotencyKeyPrefix: "acme:",
     }),
   ],
 });
+
+// Every send now carries the header, the env tag, and the reply-to —
+// without repeating them in application code:
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
 ```
-
-## Use it for
-
-- App or service headers.
-- Shared tags for routing or provider dashboards.
-- Hook metadata such as `service`, `route`, or `template`.
-- A default reply-to address.
-- Idempotency key prefixes.
 
 ## Options
 
-| Option                 | Writes to                | Override rule                                                   |
-| ---------------------- | ------------------------ | --------------------------------------------------------------- |
-| `headers`              | `message.headers`        | Message headers win.                                            |
-| `tags`                 | `message.tags`           | Message tags are appended after default tags.                   |
-| `metadata`             | `message.metadata`       | Message metadata wins.                                          |
-| `sendMetadata`         | `sendOptions.metadata`   | Per-send metadata wins.                                         |
-| `replyTo`              | `message.replyTo`        | Used only when the message has no `replyTo`.                    |
-| `idempotencyKey`       | Message and send options | Used only when no idempotency key exists.                       |
-| `idempotencyKeyPrefix` | Message and send options | Added only when the key does not already start with the prefix. |
-
-## Override a default
-
-```ts
-await email.send(
-  {
-    from: "billing@example.com",
-    to: "user@example.com",
-    subject: "Receipt",
-    text: "Thanks for your order.",
+<TypeTable
+  type={{
+    id: {
+      description: "Plugin id. Override when mounting multiple defaults layers.",
+      type: "string",
+      default: '"defaults"',
+    },
     headers: {
-      "X-App": "checkout",
+      description: "Default message headers, merged under per-message headers.",
+      type: "Record<string, string> | EmailHeader[]",
     },
-  },
-  {
+    tags: {
+      description: "Default tags, prepended before per-message tags.",
+      type: "EmailTag[]",
+    },
     metadata: {
-      route: "checkout.receipt",
+      description: "Default message metadata, merged under per-message metadata.",
+      type: "Record<string, string | number | boolean | null>",
     },
-  },
-);
-```
+    sendMetadata: {
+      description: "Default send-option metadata (flows to hooks, not the message).",
+      type: "Record<string, unknown>",
+    },
+    replyTo: {
+      description: "Default reply-to, used only when the message has none.",
+      type: "EmailAddress | EmailAddress[]",
+    },
+    idempotencyKey: {
+      description: "Default idempotency key, used only when the message and send options have none.",
+      type: "string",
+    },
+    idempotencyKeyPrefix: {
+      description: "Prefix prepended to the idempotency key unless it already starts with it.",
+      type: "string",
+    },
+  }}
+/>
 
-Here, `X-App: checkout` wins over the default `X-App: billing`.
+## Merge semantics
 
-## Stack defaults
+Each option has an exact, predictable rule:
 
-Use custom IDs for multiple defaults layers.
+| Option                 | Rule                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `headers`              | Merged by name; a message header with the same name **wins** over the default.                                            |
+| `metadata`             | Merged by key; message metadata **wins**.                                                                                 |
+| `sendMetadata`         | Merged into `options.metadata`; per-send metadata **wins**.                                                                |
+| `tags`                 | Concatenated — defaults first, then message tags. Nothing is replaced.                                                    |
+| `replyTo`              | Applied only when the message has no `replyTo` at all.                                                                    |
+| `idempotencyKey`       | Applied only when neither the message nor send options carry a key.                                                       |
+| `idempotencyKeyPrefix` | Prepended to whichever key ends up applying — unless the key already starts with the prefix, so re-runs never double-prefix. |
+
+So with the client above, a message that sets `headers: { "X-Entity-Ref": "checkout" }` sends `checkout` (message wins), while its `tags` gain the `env` tag in front of its own.
+
+<Callout type="warn" title="Defaults are validated like any other field">
+  Defaults merge before adapter validation. If a default adds a field the selected route cannot
+  represent — tags on SMTP, for example — the send throws an `EmailValidationError` before any
+  request. Check [field support](/docs/adapters/field-support) when adding default tags or
+  metadata to a client with fallback routes.
+</Callout>
+
+## Stack layers
+
+Mount multiple defaults plugins with distinct `id`s; they apply in array order, so later layers see the merged result of earlier ones:
 
 ```ts
 plugins: [
-  defaultsPlugin({
-    id: "defaults:app",
-    headers: { "X-App": "acme" },
-  }),
-  defaultsPlugin({
-    id: "defaults:billing",
-    tags: [{ name: "team", value: "billing" }],
-  }),
+  defaultsPlugin({ id: "defaults:org", headers: { "X-Org": "acme" } }),
+  defaultsPlugin({ id: "defaults:billing", tags: [{ name: "team", value: "billing" }] }),
 ];
 ```
 
-Defaults run before adapter validation. If a default adds a field the selected adapter cannot represent, Email SDK throws before calling the provider.
+## Next
+
+<Cards>
+  <Card
+    title="Observability plugin"
+    href="/docs/plugins/built-in/observability"
+    description="Redacted sent/retry/error events for logs, metrics, and traces."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Defaults, retries, idempotency, and observability assembled for a real app."
+  />
+</Cards>

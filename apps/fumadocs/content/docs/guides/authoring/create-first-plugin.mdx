@@ -1,132 +1,203 @@
 ---
 title: Create your first plugin
-description: Build a reusable send policy plugin.
+description: Build an audit-log plugin end to end — middleware that records every send and a typed client extension that exposes the log.
 icon: PackagePlus
 ---
 
-This guide builds a small policy plugin that requires each send to include a metadata value. The same shape works for tenant checks, route enforcement, audit defaults, or environment-specific guardrails.
+This guide builds a real plugin from scratch: an audit log that records the outcome of every send and exposes the entries through a typed `email.auditLog` property. Along the way you use the two plugin capabilities that matter most — `middleware` for the send pipeline and `extendClient` for typed client extensions.
 
-## What you will build
+A plugin is a plain object: `{ id, adapters?, hooks?, middleware?, extendClient? }`. The full lifecycle is in [writing plugins](/docs/plugins/writing-plugins); exact types in the [plugin API](/docs/plugins/api).
 
-The plugin will:
+<Steps>
+<Step>
 
-1. Accept a required metadata key.
-2. Run before provider validation.
-3. Block the send when the key is missing.
-4. Add a tiny typed helper to the returned client.
+### Define the entry shape and factory
 
-## Create the plugin file
+Type the extension first. `EmailPlugin<TExtension>` is generic over what `extendClient` returns — that is what makes `email.auditLog` fully typed later.
 
-```ts
+```ts title="audit-log-plugin.ts"
 import type { EmailPlugin } from "@opencoredev/email-sdk";
 
-export type RequireMetadataPluginOptions = {
-  key: string;
+export type AuditLogEntry = {
+  at: Date;
+  status: "sent" | "failed";
+  provider: string;
+  attempt: number;
+  messageId?: string;
 };
 
-export function requireMetadataPlugin(
-  options: RequireMetadataPluginOptions,
-): EmailPlugin<{ requiredEmailMetadata: string }> {
-  return {
-    id: `require-metadata:${options.key}`,
-    middleware: [
-      {
-        beforeSend(event) {
-          const value = event.options?.metadata?.[options.key];
+export type AuditLog = {
+  readonly entries: AuditLogEntry[];
+  clear(): void;
+};
 
-          if (value === undefined || value === null || value === "") {
-            throw new Error(`Missing email metadata: ${options.key}`);
-          }
-        },
-      },
-    ],
-    extendClient() {
-      return {
-        requiredEmailMetadata: options.key,
-      };
-    },
+export function auditLogPlugin(): EmailPlugin<{ auditLog: AuditLog }> {
+  const entries: AuditLogEntry[] = [];
+
+  return {
+    id: "audit-log",
+    // middleware and extendClient added in the next steps
   };
 }
 ```
 
-## Use it
+Keep recipients and bodies out of the entry shape — an audit log should answer "did the receipt for order 42 go out, through which route?" without becoming a PII store. Put correlation data in send-scope `metadata` instead.
 
-```ts
+</Step>
+<Step>
+
+### Record outcomes with middleware
+
+Middleware runs on the send pipeline. `afterSend` fires once per successful delivery; `onError` fires when a route has exhausted its retries. Add both to the returned object:
+
+```ts title="audit-log-plugin.ts"
+    middleware: [
+      {
+        afterSend(event) {
+          entries.push({
+            at: new Date(),
+            status: "sent",
+            provider: event.provider,
+            attempt: event.attempt,
+            messageId: event.response.messageId ?? event.response.id,
+          });
+        },
+        onError(event) {
+          entries.push({
+            at: new Date(),
+            status: "failed",
+            provider: event.provider,
+            attempt: event.attempt,
+          });
+        },
+      },
+    ],
+```
+
+Exceptions thrown from `afterSend` and `onError` are swallowed — observers can never break a send. If you want a plugin that *blocks* sends (policy checks, allow-lists), throw from middleware `beforeSend`, which runs before validation and may also transform the message.
+
+</Step>
+<Step>
+
+### Expose the log with extendClient
+
+`extendClient` returns properties merged onto the client. The keys must not collide with built-in client members (`send`, `adapters`, ...) or another plugin's extension — collisions throw an `EmailValidationError` at `createEmailClient` time.
+
+```ts title="audit-log-plugin.ts"
+    extendClient() {
+      return {
+        auditLog: {
+          entries,
+          clear() {
+            entries.length = 0;
+          },
+        },
+      };
+    },
+```
+
+The complete plugin is the factory from step 1 with the `middleware` and `extendClient` blocks inside the returned object.
+
+</Step>
+<Step>
+
+### Mount it and use the typed extension
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
-import { requireMetadataPlugin } from "./require-metadata-plugin";
+import { auditLogPlugin } from "./audit-log-plugin";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  plugins: [requireMetadataPlugin({ key: "tenantId" })],
+  plugins: [auditLogPlugin()],
 });
 
-await email.send(
-  {
-    from: "billing@example.com",
-    to: "user@example.com",
-    subject: "Receipt",
-    text: "Thanks for your order.",
-  },
-  {
-    metadata: {
-      tenantId: "tenant_123",
-    },
-  },
-);
-```
-
-The returned client now has a typed `email.requiredEmailMetadata` property.
-
-## Block a send
-
-```ts
 await email.send({
-  from: "billing@example.com",
+  from: "Acme <hello@acme.com>",
   to: "user@example.com",
-  subject: "Receipt",
-  text: "Thanks for your order.",
+  subject: "Welcome",
+  text: "Your account is ready.",
 });
+
+console.log(email.auditLog.entries);
+// [{ at: ..., status: "sent", provider: "resend", attempt: 1, messageId: "..." }]
 ```
 
-That call throws before any adapter is called. `beforeSend` errors are not swallowed because policy plugins need to be able to stop unsafe sends.
+`email.auditLog` is typed — TypeScript infers the intersection of all plugin extensions from the `plugins` array, so `email.auditLog.entries[0]?.status` autocompletes.
 
-## Add tests
+</Step>
+<Step>
 
-```ts
-import { describe, expect, test } from "bun:test";
+### Test it
+
+Pair the plugin with the [testing adapters](/docs/guides/test-email-behavior) to verify both paths:
+
+```ts title="audit-log-plugin.test.ts"
+import { expect, test } from "bun:test";
 import { createEmailClient } from "@opencoredev/email-sdk";
-import { memoryProvider } from "@opencoredev/email-sdk/testing";
-import { requireMetadataPlugin } from "./require-metadata-plugin";
+import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
+import { auditLogPlugin } from "./audit-log-plugin";
 
-describe("requireMetadataPlugin", () => {
-  test("blocks sends without the required metadata", async () => {
-    const memory = memoryProvider();
-    const email = createEmailClient({
-      adapters: [memory],
-      plugins: [requireMetadataPlugin({ key: "tenantId" })],
-    });
+const message = {
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Hello",
+};
 
-    await expect(
-      email.send({
-        from: "test@example.com",
-        to: "user@example.com",
-        subject: "Hello",
-        text: "Hi",
-      }),
-    ).rejects.toThrow("Missing email metadata: tenantId");
-
-    expect(memory.raw.sent).toHaveLength(0);
+test("records successful sends", async () => {
+  const email = createEmailClient({
+    adapters: [memoryProvider()],
+    plugins: [auditLogPlugin()],
   });
+
+  await email.send(message);
+
+  expect(email.auditLog.entries).toHaveLength(1);
+  expect(email.auditLog.entries[0]).toMatchObject({ status: "sent", provider: "memory" });
+});
+
+test("records failures", async () => {
+  const email = createEmailClient({
+    adapters: [failingProvider()],
+    plugins: [auditLogPlugin()],
+  });
+
+  await expect(email.send(message)).rejects.toThrow("Provider failed");
+
+  expect(email.auditLog.entries[0]).toMatchObject({ status: "failed", provider: "failing" });
 });
 ```
 
-## Plugin rules
+`bun test` passes with no network and no credentials.
 
-- Use a stable `id`.
-- Make IDs unique when mounting multiple instances.
-- Use `beforeSend` for behavior that can block a send.
-- Use `afterSend`, `onError`, and hooks for observability work.
-- Keep client extensions small and avoid names like `send`, `adapter`, or `defaultAdapter`.
+</Step>
+</Steps>
 
-For exact types, see [Plugin API](/docs/plugins/api).
+## Rules of thumb
+
+- One stable `id` per plugin; make it configurable if users may mount two instances.
+- `middleware.beforeSend` for anything that blocks or transforms; `afterSend`, `onError`, and [hooks](/docs/concepts/hooks) for observation only.
+- Keep `extendClient` surfaces small, and never reuse built-in client member names.
+- Each factory call should own its state — two clients with two `auditLogPlugin()` instances must not share entries.
+
+## Next
+
+<Cards>
+  <Card
+    title="Writing plugins"
+    href="/docs/plugins/writing-plugins"
+    description="The full lifecycle: plugin adapters, hooks vs middleware, ordering."
+  />
+  <Card
+    title="Plugin API"
+    href="/docs/plugins/api"
+    description="EmailPlugin, middleware events, and extension typing in detail."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="Turn the plugin into an npm package and list it in the registry."
+  />
+</Cards>

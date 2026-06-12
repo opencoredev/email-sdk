@@ -1,3 +1,8 @@
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import { File, Files, Folder } from "fumadocs-ui/components/files";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
@@ -35,11 +40,21 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
         href={versionDocsHref(props.href, docsBasePath) as string}
       />
     ),
+    Accordion,
+    Accordions,
     CommunityPluginRegistry,
+    File,
+    Files,
+    Folder,
     PackageInstallTabs,
     ProviderBadge,
     ProviderGrid,
     SponsorSpotlight,
+    Step,
+    Steps,
+    Tab,
+    Tabs,
+    TypeTable,
     ...components,
   } satisfies MDXComponents;
 }

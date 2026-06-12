@@ -1,12 +1,10 @@
 ---
 title: Email SDK
-description: TypeScript email SDK documentation for production transactional send pipelines across Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, and more.
+description: One typed send() for 20 email providers — explicit routing, retries, fallbacks, and zero dependencies.
 icon: Mail
 ---
 
-Email SDK is a small TypeScript package for production transactional email send pipelines. It gives your application one typed message shape, explicit adapter routing, fail-fast provider compatibility checks, retries, fallback routes, observability hooks, reusable plugins, test capture, and CLI verification.
-
-Use Email SDK when your app needs email sends that are portable, explicit, testable, observable, and safer to operate. Your application code still calls `send`; the configured adapters decide how that message maps to Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, or another provider.
+Email SDK is a zero-dependency TypeScript library for transactional email. You write one typed message; configured adapters decide how it reaches Resend, Postmark, SendGrid, AWS SES, Mailgun, SMTP, or any of [20 providers](/docs/adapters). Switching providers — or surviving an outage with a fallback route — never touches your application code.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -24,73 +22,71 @@ await email.send({
 });
 ```
 
+## Why Email SDK
+
+- **One message shape, 20 providers.** Import only the adapter you use — each one is a separate entry point, and the core has zero runtime dependencies.
+- **No silent data loss.** Providers differ: Resend has no metadata, SMTP has no tags. Adapters either map a field or throw before the request — never drop it. See [field support](/docs/adapters/field-support).
+- **Retries and fallback routes, made explicit.** Exponential backoff inside an adapter, then explicit fallback adapters after it finally fails. [How routing works](/docs/concepts/fallbacks-and-retries).
+- **Observable without leaking PII.** [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) emit redacted events — counts and tag names, never bodies or recipients.
+- **Testable for free.** [Memory and failing adapters](/docs/guides/test-email-behavior) plus the [capture plugin](/docs/plugins/built-in/capture) assert send behavior without a real provider.
+- **A CLI for the boring parts.** `email-sdk doctor` checks your environment, `--dry-run` validates a message against an adapter, and `send` runs a real smoke test. [CLI reference](/docs/reference/cli).
+
 ## Start here
 
 <Cards>
   <Card
-    title="Install package and CLI"
-    href="/docs/getting-started/install"
-    description="Use the scoped npm package and the email-sdk command."
+    title="Quickstart"
+    href="/docs/getting-started/quickstart"
+    description="Install, create a client, send your first email, and add a fallback in ~5 minutes."
   />
   <Card
-    title="Send your first email"
-    href="/docs/getting-started/quickstart"
-    description="Install the SDK, create a client, send a message, and add a safe fallback."
+    title="Choose an adapter"
+    href="/docs/adapters"
+    description="Browse all 20 providers and pick primary and backup routes."
   />
   <Card
     title="Production send pipeline"
     href="/docs/guides/production-send-pipeline"
-    description="Combine adapters, validation, retries, fallback routes, observability, tests, and CLI checks."
+    description="Retries, fallbacks, idempotency, observability, and tests for a real app."
   />
   <Card
-    title="Choose adapters"
-    href="/docs/adapters/field-support"
-    description="Pick primary and fallback routes by the fields your messages use."
+    title="API reference"
+    href="/docs/reference/client"
+    description="Client options, the message shape, errors, and the CLI."
   />
+</Cards>
+
+## Beyond the core
+
+<Cards>
   <Card
-    title="Fallbacks and retries"
-    href="/docs/concepts/fallbacks-and-retries"
-    description="Understand route order, retry behavior, idempotency, and compatible backup routes."
-  />
-  <Card
-    title="Use plugins"
+    title="Plugins"
     href="/docs/plugins"
-    description="Add defaults, observability, capture, adapter plugins, and reusable send behavior."
+    description="Shared defaults, observability, test capture, and typed client extensions."
   />
   <Card
-    title="Use Convex Email Ops"
+    title="Convex Email Ops"
     href="/docs/components/convex-email"
-    description="Queue transactional email from Convex with status, retries, fallback routes, webhooks, and test mode."
+    description="Queued sends from Convex with status tracking, retries, webhooks, and test mode."
   />
   <Card
     title="Build an adapter"
     href="/docs/guides/authoring/create-adapter"
-    description="Write your first custom provider adapter and package it for reuse."
+    description="Wrap any provider API in the adapter contract and publish it for others."
   />
   <Card
-    title="Read the API reference"
-    href="/docs/reference/client"
-    description="Look up client options, messages, errors, and the CLI."
+    title="Agent skill"
+    href="/docs/agents/skill"
+    description="Teach Claude and other coding agents to integrate Email SDK correctly."
   />
 </Cards>
 
-## Core pieces
+## What it is not
 
-- One `createEmailClient` entry point and one normalized `EmailMessage` shape.
-- Adapter routing through `defaultAdapter`, per-send `adapter`, `fallback`, and `fallbackAdapters`.
-- Fail-fast field support checks so providers do not silently drop unsupported message data.
-- Retries inside one adapter and fallback routes after an adapter has finally failed.
-- Hooks and the observability plugin for logs, metrics, traces, retry visibility, and failures.
-- Plugins for shared defaults, adapter registration, client extensions, observability, and test capture.
-- Memory and failing test adapters plus the capture plugin for asserting send behavior without real providers.
-- A Bun CLI for adapter discovery, setup checks, dry-runs, and smoke-test sends.
+Email SDK is not a campaign tool, queue, template engine, or hosted analytics product. It is the layer apps keep rebuilding — adapter setup, one consistent send call, typed errors, compatibility checks, and fallback routes explicit enough to debug at 3 a.m.
 
-## What stays small
-
-Email SDK is not a campaign tool, queue, template engine, hosted analytics product, or full email operations suite. It is the layer many apps keep rebuilding: adapter setup, one consistent send call, typed errors, provider compatibility checks, and fallback routes that are explicit enough to debug.
-
-## Provider behavior is not hidden
-
-Email providers do not all support the same fields. A fallback route is only safe when the backup adapter can represent the same class of message. Read <a href="/docs/concepts/fallbacks-and-retries">Fallbacks and retries</a> for route behavior, use <a href="/docs/adapters/field-support">Field support</a> to choose compatible routes, then follow <a href="/docs/guides/production-send-pipeline">Production send pipeline</a> when wiring a real app.
-
-The official API adapters are covered by local payload and validation tests. A live provider send still depends on account setup: verified sender domains, sandbox mode, API scopes, regions, rate limits, and provider policy. Use the CLI dry run first, then run one real smoke send from the environment that will send production email.
+<Callout title="Local checks are not deliverability">
+  The SDK validates message shape and field support before every request, but live delivery still
+  depends on your provider account: verified sender domains, API scopes, regions, and sandbox
+  rules. Dry-run first, then run one real smoke send from your production environment.
+</Callout>

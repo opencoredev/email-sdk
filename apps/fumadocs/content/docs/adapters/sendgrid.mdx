@@ -1,86 +1,79 @@
 ---
 title: SendGrid
-description: Configure the Twilio SendGrid Mail Send API adapter.
+description: Send through the Twilio SendGrid Mail Send API with the fullest field support of any adapter.
 icon: sendgrid
 ---
 
+The SendGrid adapter calls the [Twilio SendGrid Mail Send API](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send) over `fetch` — no extra dependency. It supports every `EmailMessage` field: recipients land in a `personalizations` entry, `metadata` becomes `custom_args`, and tags become `categories`.
+
 <ProviderBadge adapter="sendgrid" />
-
-## Before live sends
-
-Create a SendGrid API key with Mail Send permission and verify the sender identity or domain used in `from`. SendGrid account review, sandbox mode, or sender verification can block delivery even when the SDK payload validates.
 
 ## Configure
 
-```ts
+Create an API key with Mail Send permission in the [SendGrid dashboard](https://app.sendgrid.com/settings/api_keys) and verify the sender identity or domain you use in `from`.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [sendgrid({ apiKey: process.env.SENDGRID_API_KEY! })],
 });
 ```
 
+<TypeTable
+  type={{
+    apiKey: {
+      description: "SendGrid API key with Mail Send permission.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.sendgrid.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
 ## Send
+
+Everything maps: `cc`, `bcc`, `headers`, `attachments`, `tags`, `metadata`, and even multiple `replyTo` addresses (sent as `reply_to_list`).
 
 ```ts
 const result = await email.send({
-  from: { email: "hello@acme.com", name: "Acme" },
+  from: "Acme <security@acme.com>",
   to: [{ email: "user@example.com", name: "Ada" }],
-  cc: "billing@example.com",
-  replyTo: "support@example.com",
-  subject: "Welcome",
-  html: "<p>Your workspace is ready.</p>",
-  metadata: {
-    userId: "user_123",
-  },
-  tags: [{ name: "category", value: "welcome" }],
+  subject: "Reset your password",
+  html: "<p>Click the link below to reset your password.</p>",
+  text: "Use the link below to reset your password.",
+  metadata: { userId: "user_123", flow: "password-reset" },
+  tags: [{ name: "type", value: "password-reset" }],
 });
 
-console.log(result.provider, result.id);
+console.log(result.id); // SendGrid message id from the x-message-id header
 ```
 
-SendGrid maps Email SDK `metadata` to `custom_args` and tag values to `categories`.
+SendGrid's send endpoint returns `202 Accepted` with an empty body, so the adapter reads `result.id` from the `x-message-id` response header. `metadata` values arrive in SendGrid event webhooks as `custom_args`; tag values arrive as `categories`.
 
-## Send with an attachment
-
-```ts
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Invoice ready",
-  html: "<p>Your invoice is attached.</p>",
-  attachments: [
-    {
-      filename: "invoice.txt",
-      content: "Invoice inv_123",
-      contentType: "text/plain",
-    },
-  ],
-});
-```
-
-## Options
-
-| Option    | Type           | Required | Notes                                   |
-| --------- | -------------- | -------- | --------------------------------------- |
-| `apiKey`  | `string`       | Yes      | SendGrid API key.                       |
-| `baseUrl` | `string`       | No       | Defaults to `https://api.sendgrid.com`. |
-| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.    |
-
-See <a href="/docs/adapters/field-support">field support</a> for headers, tags, metadata, and attachments.
-
-## Response
-
-The adapter uses body `id` or `message_id` when present, then falls back to the `x-message-id` response header.
-
-## CLI smoke test
+## Verify from the CLI
 
 ```bash
-SENDGRID_API_KEY="SG..." npx email-sdk send \
+SENDGRID_API_KEY="SG...." npx email-sdk doctor --adapter sendgrid
+```
+
+```bash
+SENDGRID_API_KEY="SG...." npx email-sdk send \
   --adapter sendgrid \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "SendGrid test" \
-  --text "It works"
+  --subject "SendGrid smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Drop `--dry-run` for one real send — account review and sender verification can block delivery even when the payload validates, and only a live send proves they are done.

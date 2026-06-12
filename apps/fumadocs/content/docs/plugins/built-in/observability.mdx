@@ -1,45 +1,71 @@
 ---
 title: Observability plugin
-description: Emit redacted log, metric, and trace events.
+description: Emit redacted sent/retry/error events to your logger, metrics, and tracer — counts and tag names, never recipients or bodies.
 icon: Activity
 ---
 
-Use the observability plugin when you want to see email behavior without logging recipients or message bodies.
+`observabilityPlugin` turns the send pipeline into structured events you can wire to any logger, metrics client, or tracer. Events are redacted by default: they carry counts, flags, and tag names — never recipient addresses, bodies, attachment content, or metadata values — so they are safe to ship to a log aggregator as-is.
 
-```ts
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
 import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+import { resend } from "@opencoredev/email-sdk/resend";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
   plugins: [
     observabilityPlugin({
       log(event) {
-        console.log(event.type, event.provider);
+        // any structured logger works the same way (pino, winston, console)
+        logger.info({ ...event }, event.type);
       },
       metric(event) {
-        statsd.increment(event.type, {
-          provider: event.provider,
-        });
-      },
-      trace(event) {
-        tracer.event("email", event);
+        metrics.increment(`email.${event.type}`, { provider: event.provider });
       },
     }),
   ],
 });
 ```
 
+## Options
+
+<TypeTable
+  type={{
+    id: {
+      description: "Plugin id. Override when mounting multiple instances.",
+      type: "string",
+      default: '"observability"',
+    },
+    log: {
+      description: "Logging callback. Receives every event.",
+      type: "(event: EmailObservabilityEvent) => MaybePromise<void>",
+    },
+    metric: {
+      description: "Metrics callback. Receives every event.",
+      type: "(event: EmailObservabilityEvent) => MaybePromise<void>",
+    },
+    trace: {
+      description: "Tracing callback. Receives every event.",
+      type: "(event: EmailObservabilityEvent) => MaybePromise<void>",
+    },
+    redactMessage: {
+      description: "Replace the default redaction with your own summary shape.",
+      type: "(message: EmailMessage) => RedactedEmailMessage",
+    },
+  }}
+/>
+
+`log`, `metric`, and `trace` are not filtered by event type — **all three receive every event** (dispatched via `Promise.allSettled`). Route inside each callback if you only want errors in one sink. Callback failures are swallowed so a broken logger never masks a provider failure.
+
 ## Events
 
-| Event         | Fires when                                 |
-| ------------- | ------------------------------------------ |
-| `email.sent`  | A provider returns a normalized response.  |
-| `email.retry` | Email SDK schedules another retry attempt. |
-| `email.error` | A provider attempt fails.                  |
+| Event         | Fires when                                                   | Extra fields                        |
+| ------------- | ------------------------------------------------------------ | ----------------------------------- |
+| `email.sent`  | A provider returns a normalized response.                    | `responseId`, `messageId`           |
+| `email.retry` | The SDK schedules another attempt on the same adapter.       | `nextAttempt`, `delayMs`, `error`   |
+| `email.error` | An adapter route fails after exhausting its retries.         | `error`                             |
 
-Each event includes provider name, attempt number, metadata, and a redacted message summary.
-
-## Redacted message shape
+Every event also carries `provider`, `attempt`, send-scope `metadata`, and the redacted `message`:
 
 ```ts
 type RedactedEmailMessage = {
@@ -55,9 +81,11 @@ type RedactedEmailMessage = {
 };
 ```
 
-By default, the plugin does not include recipient addresses, HTML, text, attachment content, or metadata values.
+Tag *names* and metadata *keys* are included; their values are not.
 
 ## Custom redaction
+
+Pass `redactMessage` when your team needs a different summary — for example, a template name from metadata:
 
 ```ts
 observabilityPlugin({
@@ -69,16 +97,27 @@ observabilityPlugin({
       hasAttachments: Boolean(message.attachments?.length),
     };
   },
-  log(event) {
-    console.log(event);
-  },
+  log: (event) => logger.info({ ...event }, event.type),
 });
 ```
 
-Keep secrets, raw tokens, recipient lists, and body content out of logs unless your app explicitly needs and protects that data.
+<Callout type="warn" title="You own redaction once you override it">
+  A custom `redactMessage` replaces the default entirely. Whatever it returns goes to every sink —
+  keep recipient lists, bodies, and secrets out unless your logging pipeline is built to protect
+  them.
+</Callout>
 
-## Failure behavior
+## Next
 
-Observability callbacks are non-blocking. If `log`, `metric`, or `trace` throws, Email SDK swallows that error so logging failures do not hide provider failures.
-
-Use a custom `beforeSend` middleware plugin when a rule should block a send.
+<Cards>
+  <Card
+    title="Hooks"
+    href="/docs/concepts/hooks"
+    description="The raw per-attempt callbacks this plugin is built on."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Wire observability into a full retry/fallback setup."
+  />
+</Cards>

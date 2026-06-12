@@ -1,89 +1,86 @@
 ---
 title: Plunk
-description: Configure the Plunk send API adapter.
+description: Send through the Plunk API with reply-to, headers, attachments, and metadata mapped to Plunk data.
 icon: plunk
 ---
 
+The Plunk adapter calls the [Plunk send API](https://docs.useplunk.com) over `fetch` — no extra dependency. Plunk takes a single `body` field, so the adapter sends `html` when present and falls back to `text`.
+
 <ProviderBadge adapter="plunk" />
-
-Plunk is a product-led email adapter for event-style sends. It supports reply-to, headers, metadata, and attachments, but not CC, BCC, or tags.
-
-## Before live sends
-
-Create a Plunk API key and verify the sender setup for your workspace. Check your message shape before using Plunk as a fallback because CC, BCC, and tags are rejected locally.
 
 ## Configure
 
-```ts
+Create a secret API key in your Plunk project and verify the sender you plan to use in `from`.
+
+```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { plunk } from "@opencoredev/email-sdk/plunk";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [plunk({ apiKey: process.env.PLUNK_API_KEY! })],
 });
 ```
 
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Plunk secret API key.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://next-api.useplunk.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
 ## Send
+
+Plunk supports `headers`, `attachments`, `metadata` (sent as Plunk `data`), and a single `replyTo` (sent as `reply`, email address only — a second reply-to throws an `EmailValidationError`).
 
 ```ts
 const result = await email.send({
-  from: { email: "hello@acme.com", name: "Acme" },
-  to: [{ email: "user@example.com", name: "Ada" }],
-  replyTo: "support@example.com",
-  subject: "Product event",
-  html: "<p>Your export is ready.</p>",
-  headers: {
-    "X-Export-ID": "exp_123",
-  },
-  metadata: {
-    exportId: "exp_123",
-  },
-});
-
-console.log(result.provider, result.id);
-```
-
-Plunk maps `metadata` to `data` and `replyTo` to `reply`. It rejects CC, BCC, and tags before the API call.
-
-## Send with an attachment
-
-```ts
-await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
-  subject: "Export ready",
-  html: "<p>Your export is attached.</p>",
+  replyTo: "support@acme.com",
+  subject: "Your export is ready",
+  html: "<p>Download your workspace export below.</p>",
+  headers: { "X-Export-ID": "exp_123" },
+  metadata: { exportId: "exp_123" },
   attachments: [
-    {
-      filename: "export.txt",
-      content: "name,total\nAda,42",
-      contentType: "text/plain",
-    },
+    { filename: "export.csv", content: "name,total\nAda,42", contentType: "text/csv" },
   ],
 });
+
+console.log(result.id); // Plunk email id from data.emails[0], falling back to id/emailId
 ```
 
-## Options
+<Callout type="warn" title="No cc, bcc, or tags">
+  Plunk has no `cc`, `bcc`, or `tags`, so any of them on a message throws an
+  `EmailValidationError` before a request is made. Check
+  [field support](/docs/adapters/field-support) before using Plunk in a fallback route.
+</Callout>
 
-| Option    | Type           | Required | Notes                                        |
-| --------- | -------------- | -------- | -------------------------------------------- |
-| `apiKey`  | `string`       | Yes      | Plunk API key.                               |
-| `baseUrl` | `string`       | No       | Defaults to `https://next-api.useplunk.com`. |
-| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.         |
-
-Plunk maps metadata to `data`, `replyTo` to `reply`, custom headers to `headers`, attachments to `attachments`, and the first returned `data.emails[].email` value to the SDK response ID. Unsupported fields throw before the API call.
-
-## Response
-
-The adapter first reads the first `data.emails[].email` value, then falls back to body `id` or `emailId`.
-
-## CLI smoke test
+## Verify from the CLI
 
 ```bash
-PLUNK_API_KEY="..." npx email-sdk send \
+PLUNK_API_KEY="sk_..." npx email-sdk doctor --adapter plunk
+```
+
+```bash
+PLUNK_API_KEY="sk_..." npx email-sdk send \
   --adapter plunk \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
-  --subject "Plunk test" \
-  --text "It works"
+  --subject "Plunk smoke test" \
+  --text "It works" \
+  --dry-run
 ```
+
+Drop `--dry-run` for one real smoke send to confirm the API key and verified sender work end to end.

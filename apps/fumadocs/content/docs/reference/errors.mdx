@@ -1,59 +1,117 @@
 ---
 title: Errors
-description: Reference for Email SDK error classes and retry flags.
+description: Every Email SDK error class and code, the retryable flag, and how to branch on failures in application code.
 icon: TriangleAlert
 ---
 
-Email SDK exports four error classes.
+Every error the SDK throws is an `EmailSdkError` (or subclass) with a machine-readable `code` and a `retryable` flag. Three subclasses narrow the common cases:
+
+```ts
+import {
+  EmailSdkError, // base class
+  EmailProviderError, // a provider call failed
+  EmailValidationError, // bad message or client config
+  EmailProviderNotFoundError, // unregistered routing name
+  isRetryableEmailError,
+} from "@opencoredev/email-sdk";
+```
+
+## Properties
+
+All four classes carry the same fields (plus the standard `Error` `message` and `cause`):
+
+<TypeTable
+  type={{
+    code: {
+      description: "Machine-readable error code. Branch on this, not on message text.",
+      type: "string",
+      required: true,
+    },
+    retryable: {
+      description: "Whether retrying the same adapter is reasonable.",
+      type: "boolean",
+      default: "false",
+      required: true,
+    },
+    provider: {
+      description: "Routing name of the adapter that failed, when known.",
+      type: "string",
+    },
+    status: {
+      description: "HTTP status from the provider, when there was one.",
+      type: "number",
+    },
+    details: {
+      description: "Parsed provider error body, validation context, or collected failures.",
+      type: "unknown",
+    },
+  }}
+/>
+
+## Classes and codes
+
+| Class | Code | Thrown when |
+| --- | --- | --- |
+| `EmailValidationError` | `validation_error` | The message fails [validation](/docs/reference/message#validation), an adapter rejects [unsupported fields](/docs/adapters/field-support), or client config is invalid (duplicate adapter/plugin, no adapters). Never retryable. |
+| `EmailProviderNotFoundError` | `provider_not_found` | A routing name is not registered — `Email provider "x" is not registered.` Never retryable. |
+| `EmailProviderError` | `provider_error` | A provider request fails: non-2xx response or network error. `status` and `details` carry the provider's answer. |
+| `EmailSdkError` | `all_providers_failed` | Two or more routes were attempted and all failed. `details` holds one error per adapter, in route order. |
+| `EmailSdkError` | `retry_loop_exited` | Internal guard for an impossible retry-loop exit. Treat as a bug if seen. |
+
+When only **one** route was attempted, its error is rethrown as-is — `all_providers_failed` only appears after a multi-adapter route exhausts every option. Errors adapters throw that are not already `EmailProviderError` are wrapped into one, keeping the original as `cause` (or in `details` for non-`Error` values).
+
+## What counts as retryable
+
+`retryable: true` is set for failures that may succeed on a re-attempt:
+
+- HTTP `408`, `409`, `425`, `429`, and any `5xx`
+- Network failures: `ECONNRESET`-family error codes, `fetch failed`, socket and timeout errors
+
+Everything else is non-retryable: `4xx` like `401`/`422`, validation errors, unknown routing names, and aborted requests (`AbortError`). This classification drives the default retry policy — see [fallbacks and retries](/docs/concepts/fallbacks-and-retries#what-retries-by-default).
+
+## `isRetryableEmailError(error)`
+
+```ts
+isRetryableEmailError(error: unknown): boolean
+```
+
+Returns `true` only for an `EmailSdkError` with `retryable: true`; any other value returns `false`. It is the default `shouldRetry` predicate, and safe to call on anything a `catch` block hands you.
+
+## Handling errors in app code
+
+Branch on class first, then on `code` and `retryable`:
 
 ```ts
 import {
   EmailProviderError,
-  EmailProviderNotFoundError,
   EmailSdkError,
   EmailValidationError,
 } from "@opencoredev/email-sdk";
-```
 
-## Error fields
-
-`EmailSdkError` includes:
-
-| Field       | Type      | Notes                                   |
-| ----------- | --------- | --------------------------------------- |
-| `code`      | `string`  | Machine-readable error code.            |
-| `provider`  | `string`  | Routing name when available.            |
-| `status`    | `number`  | HTTP status when available.             |
-| `retryable` | `boolean` | Whether retry is reasonable.            |
-| `details`   | `unknown` | Adapter response body or extra context. |
-
-## Common errors
-
-| Error                        | When it happens                         |
-| ---------------------------- | --------------------------------------- |
-| `EmailValidationError`       | A message or client config is invalid.  |
-| `EmailProviderNotFoundError` | The selected adapter is not registered. |
-| `EmailProviderError`         | An adapter call fails.                  |
-| `EmailSdkError`              | A general SDK-level failure occurs.     |
-
-## Retries and fallbacks
-
-`retryable` means retrying the same adapter is reasonable. It is not required for fallback. After an adapter finally fails, Email SDK can advance to the next configured fallback adapter.
-
-`EmailValidationError` from top-level message validation stops the send before adapter attempts. Adapter-specific unsupported-field validation can surface during an adapter attempt, so do not rely on fallback to fix an incompatible message shape. Choose fallback adapters that can represent the same fields your message uses.
-
-When multiple attempted routes fail, Email SDK throws an `EmailSdkError` with code `all_providers_failed` and the collected failures in `details`.
-
-## Handling adapter errors
-
-```ts
 try {
   await email.send(message);
 } catch (error) {
-  if (error instanceof EmailProviderError && error.retryable) {
-    // Queue a later retry, alert, or switch to another flow.
+  if (error instanceof EmailValidationError) {
+    // Bad message shape or unsupported field — fix the code path, do not retry.
+    throw error;
+  }
+
+  if (error instanceof EmailProviderError) {
+    console.error(`${error.provider} failed`, error.status, error.details);
+    if (error.retryable) {
+      await queue.retryLater(message); // transient — re-enqueue
+      return;
+    }
+    throw error; // 401/422-style failure: needs a config or account fix
+  }
+
+  if (error instanceof EmailSdkError && error.code === "all_providers_failed") {
+    // Every route failed; details is one error per adapter, in route order.
+    console.error(error.details);
   }
 
   throw error;
 }
 ```
+
+Inside a send, you rarely handle retries yourself — configure the client's [`retry` and `fallback`](/docs/concepts/fallbacks-and-retries) options and let the SDK exhaust them before anything reaches your `catch`.

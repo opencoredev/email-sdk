@@ -1,68 +1,133 @@
 ---
 title: Community registry
-description: Static schema and verification rules for community plugin listings.
+description: The plugins.json entry schema, status labels, and the validation that gates every registry change in CI.
 icon: ShieldCheck
 ---
 
-The community registry lives at `apps/fumadocs/content/community/plugins.json`. It is a static JSON file rendered by the docs site for third-party plugins, adapters, and hybrid packages.
+The community registry is one static JSON file — `apps/fumadocs/content/community/plugins.json` in the [SDK repository](https://github.com/opencoredev/email-sdk) — listing third-party adapters, plugins, and hybrid packages. The docs site renders it on the [community page](/docs/plugins/community); changes land by pull request and are validated by a script in CI.
 
-Adapter packages use this registry too. Set `kind: "adapter"`, include the adapter routing name in `adapter`, and include the plugin factory export in `importName` when the package exposes one.
+To list a package, build it first: [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) or [Publish a community plugin](/docs/guides/authoring/publish-community-plugin).
 
-## Entry shape
+## Entry schema
 
-```ts
-type CommunityRegistryEntry = {
-  name: string;
-  package: string;
-  kind: "adapter" | "plugin" | "hybrid";
-  status: "community" | "verified" | "official";
-  description: string;
-  href: string;
-  repo: string;
-  maintainer: string;
-  pluginId?: string;
-  adapter?: string;
-  importName?: string;
-  verifiedVersion?: string;
-  verification?: {
-    reviewedAt: string;
-    reviewedBy: string;
-    provenance: boolean;
-    noInstallScripts: boolean;
-    runtimeDependencies: number;
-    notes?: string;
-  };
-};
+```json title="apps/fumadocs/content/community/plugins.json"
+[
+  {
+    "name": "SMTP2GO",
+    "package": "email-sdk-smtp2go",
+    "kind": "adapter",
+    "status": "community",
+    "description": "Adds an SMTP2GO provider adapter for Email SDK.",
+    "href": "https://www.npmjs.com/package/email-sdk-smtp2go",
+    "repo": "https://github.com/stefandevo/email-sdk-smtp2go",
+    "maintainer": "stefandevo",
+    "pluginId": "smtp2go",
+    "adapter": "smtp2go",
+    "importName": "smtp2goPlugin"
+  }
+]
 ```
+
+<TypeTable
+  type={{
+    name: {
+      description: "Display name. Must be unique across the registry.",
+      type: "string",
+      required: true,
+    },
+    package: {
+      description: "npm package name (valid lowercase name, scoped or not). Unique.",
+      type: "string",
+      required: true,
+    },
+    kind: {
+      description: "What the package adds.",
+      type: '"adapter" | "plugin" | "hybrid"',
+      required: true,
+    },
+    status: {
+      description: "Trust label. Anything beyond community requires verification metadata.",
+      type: '"community" | "verified" | "official"',
+      required: true,
+    },
+    description: {
+      description: "One-line summary shown in the registry.",
+      type: "string",
+      required: true,
+    },
+    href: {
+      description: "Package or docs link. Must be https.",
+      type: "string",
+      required: true,
+    },
+    repo: {
+      description: "Public source repository. Must be https and match the package metadata for verified entries.",
+      type: "string",
+      required: true,
+    },
+    maintainer: {
+      description: "Maintainer handle.",
+      type: "string",
+      required: true,
+    },
+    pluginId: {
+      description: "The plugin's id, when the package exports a plugin factory. Unique.",
+      type: "string",
+    },
+    adapter: {
+      description: "Adapter routing name. Required for adapter and hybrid entries.",
+      type: "string",
+    },
+    importName: {
+      description: "The export users import, e.g. the plugin factory.",
+      type: "string",
+    },
+    verifiedVersion: {
+      description: "Exact package version the verification applies to. Required for verified and official entries.",
+      type: "string",
+    },
+    verification: {
+      description: "Review metadata. Required for verified and official entries.",
+      type: "object",
+    },
+  }}
+/>
+
+`verification` itself requires `reviewedAt` (ISO date), `reviewedBy`, `provenance: true`, `noInstallScripts: true`, and `runtimeDependencies` (a non-negative integer); `notes` is optional.
 
 ## Status labels
 
-| Status      | Meaning                                                 |
-| ----------- | ------------------------------------------------------- |
-| `community` | Listed package. The package is not endorsed or audited. |
-| `verified`  | Passed registry checks for `verifiedVersion`.           |
-| `official`  | Maintained by OpenCore or in the Email SDK repository.  |
+| Status | Meaning |
+| --- | --- |
+| `community` | Listed by pull request. Not endorsed or audited. |
+| `verified` | Passed the static checks and npm audit for exactly `verifiedVersion`. |
+| `official` | Maintained by OpenCore or in the Email SDK repository. |
 
-Verification applies to one package version. New releases must be checked before the registry entry updates `verifiedVersion`.
+Verification is per version: a new release is unverified until the entry's `verifiedVersion` is updated and the checks pass again.
 
-## Verified package rules
+## Validation
 
-Verified entries must:
-
-1. Use npm trusted publishing or provenance.
-2. Use a public source repository that matches package metadata.
-3. Avoid `preinstall`, `install`, and `postinstall` scripts.
-4. Declare `@opencoredev/email-sdk` as a peer dependency.
-5. Avoid package binaries.
-6. Keep runtime dependencies small and documented.
-7. Avoid suspicious install-time or import-time behavior.
-
-Run the registry check before opening a pull request.
+Run the check locally before opening a pull request:
 
 ```bash
 bun run community:check
 ```
 
-In CI, verified and official entries also download the published npm tarball and check the package metadata, install scripts, peer dependency, binary field, repository link, runtime dependency count, and a small set of suspicious JavaScript tokens.
+That runs `scripts/validate-community-registry.ts`, which enforces the schema above: required fields, valid npm package names, https-only links, the enum values, no duplicate `name`/`package`/`pluginId`, `adapter` on non-plugin entries, and complete `verification` blocks on verified and official entries.
 
-The check is intentionally static. It lowers obvious supply-chain risk, but it does not prove that third-party code is harmless. Users should still read the source, pin versions, and apply their normal dependency review process.
+### The npm audit in CI
+
+With `--network` (or automatically when `CI=true` — the same script runs in CI via `bun run release:ci`), verified and official entries get a deeper audit. The script downloads the published npm tarball for `verifiedVersion` and fails the build if the package:
+
+1. Has a `repository` that does not match the entry's `repo`.
+2. Defines `preinstall`, `install`, or `postinstall` scripts.
+3. Has a runtime dependency count that differs from `verification.runtimeDependencies`.
+4. Does not declare `@opencoredev/email-sdk` as a peer dependency.
+5. Exposes a `bin` entry.
+6. Contains suspicious tokens in shipped JavaScript (`child_process`, `eval(`, `Function(`, token-stealing env reads, `curl `/`wget `).
+
+<Callout title="Static checks, not a security guarantee">
+  The audit lowers obvious supply-chain risk; it does not prove third-party code is safe. Read the
+  source, pin versions, and apply your normal dependency review before installing any listed
+  package.
+</Callout>
