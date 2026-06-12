@@ -36,6 +36,7 @@ import {
   assertMessage,
   assertSupportedMessageFields,
 } from "./utils.js";
+import { getTelemetry, normalizeAdapterName } from "./telemetry.js";
 import { assertUnosendMessage, unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
@@ -669,16 +670,63 @@ SMTP options:
 `);
 }
 
+class CliFailure extends Error {}
+
 function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
+  throw new CliFailure(message);
 }
+
+function normalizeCliCommand(command: string | undefined) {
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    return "help";
+  }
+
+  if (command === "version" || command === "--version" || command === "-v") {
+    return "version";
+  }
+
+  if (command === "adapters" || command === "providers") {
+    return "adapters";
+  }
+
+  if (command === "doctor" || command === "send") {
+    return command;
+  }
+
+  return "unknown";
+}
+
+async function captureCliRun(input: { success: boolean; startedAt: number; error?: unknown }) {
+  const [command, ...args] = process.argv.slice(2);
+  const flags = parseFlags(args);
+  const adapter = selectedAdapter(flags);
+
+  await getTelemetry().capture("cli command run", {
+    command: normalizeCliCommand(command),
+    adapter: adapter ? normalizeAdapterName(adapter) : undefined,
+    dry_run: truthyFlag(flags, "dry-run"),
+    success: input.success,
+    duration_ms: Date.now() - input.startedAt,
+    error_code:
+      input.error instanceof EmailSdkError
+        ? input.error.code
+        : input.success
+          ? undefined
+          : "cli_error",
+  });
+}
+
+const startedAt = Date.now();
 
 try {
   await main();
+  await captureCliRun({ success: true, startedAt });
 } catch (error) {
-  if (error instanceof EmailSdkError) {
-    fail(error.message);
+  await captureCliRun({ success: false, startedAt, error });
+
+  if (error instanceof CliFailure || error instanceof EmailSdkError) {
+    console.error(error.message);
+    process.exit(1);
   }
 
   throw error;

@@ -22,7 +22,8 @@ import type {
   SendBatchResult,
   SendOptions,
 } from "./types.js";
-import { assertMessage, toProviderError } from "./utils.js";
+import { getTelemetry, normalizeAdapterName } from "./telemetry.js";
+import { arrayify, assertMessage, toProviderError } from "./utils.js";
 
 const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
@@ -83,6 +84,15 @@ export function createEmailClient<
     throw new EmailProviderNotFoundError(defaultProvider);
   }
 
+  const telemetry = options.telemetry === false ? undefined : getTelemetry();
+
+  void telemetry?.capture("client created", {
+    adapters: [...adapters.keys()].map(normalizeAdapterName),
+    adapter_count: adapters.size,
+    plugin_count: options.plugins?.length ?? 0,
+    default_adapter: normalizeAdapterName(defaultProvider),
+  });
+
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
   const client: EmailClient = {
     adapters,
@@ -102,18 +112,47 @@ export function createEmailClient<
       return client.adapter<TProvider>(name);
     },
     async send(message, sendOptions) {
-      return sendWithAdapters({
-        adapters,
-        message,
-        options: {
-          hookList: hooks,
-          middleware,
-          retry: options.retry,
-          defaultProvider,
-          fallback: options.fallback,
-        },
-        sendOptions,
-      });
+      const startedAt = Date.now();
+      const messageFacts = {
+        recipients: arrayify(message.to).length,
+        has_attachments: (message.attachments?.length ?? 0) > 0,
+      };
+
+      try {
+        const response = await sendWithAdapters({
+          adapters,
+          message,
+          options: {
+            hookList: hooks,
+            middleware,
+            retry: options.retry,
+            defaultProvider,
+            fallback: options.fallback,
+          },
+          sendOptions,
+        });
+
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: normalizeAdapterName(response.provider),
+          success: true,
+          duration_ms: Date.now() - startedAt,
+        });
+
+        return response;
+      } catch (error) {
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: normalizeAdapterName(
+            sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider,
+          ),
+          success: false,
+          duration_ms: Date.now() - startedAt,
+          error_code: error instanceof EmailSdkError ? error.code : "unknown",
+        });
+
+        throw error;
+      }
     },
     async sendBatch(messages, sendOptions) {
       const results: SendBatchResult[] = [];

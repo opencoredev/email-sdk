@@ -113,6 +113,26 @@ npx skills add opencoredev/email-sdk --skill email-sdk
 
 The skill is stored in `skills/email-sdk/SKILL.md`. It tells agents to refresh the current README, Fumadocs pages, package exports, and TypeScript declarations before implementing, so the guidance stays useful as the SDK evolves without needing every new adapter or option copied into the skill.
 
+## Telemetry
+
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+
+What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, recipient counts, SDK version, OS, and Node.js version — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+
+Opt out at any time with an environment variable:
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+or per client in code:
+
+```ts
+const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: false });
+```
+
+Telemetry is also disabled automatically when `NODE_ENV=test`.
+
 ## Development
 
 ```bash
