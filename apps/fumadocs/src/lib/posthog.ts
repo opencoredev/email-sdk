@@ -19,6 +19,9 @@ export function initPostHog() {
     defaults: "2026-01-30",
     capture_exceptions: true,
     capture_performance: { web_vitals: true },
+    // Docs traffic is anonymous (we never identify), so no person profiles are
+    // created — mirroring the SDK's server-side $process_person_profile: false.
+    person_profiles: "identified_only",
     // Flip to false (plus a sampling rate in project settings) to enable replay.
     disable_session_recording: true,
   });

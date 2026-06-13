@@ -385,7 +385,10 @@ const URL_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
 // Lookarounds (not \b) anchor the full token alphabet: \b sits between word and
 // non-word chars, so it would skip trailing base64 padding like "==" and leak it.
 const TOKEN_PATTERN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{24,}(?![A-Za-z0-9+/_=-])/g;
-const HOME_DIR_PATTERN = /\/(?:Users|home)\/[^\s/]+/g;
+// Matches both separators so other users' home paths are caught on Windows
+// (\Users\name) as well as macOS/Linux (/Users|/home). The current user's exact
+// home is already collapsed by the homedir() split above.
+const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
 
 /**
  * Strips the values most likely to carry personal or secret data from error

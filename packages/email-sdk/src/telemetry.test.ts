@@ -296,6 +296,8 @@ describe("telemetry exceptions", () => {
     ["auth dXNlcjpzdXBlcnNlY3JldA== bad", "auth <token> bad"],
     ["basic YWxhZGRpbjpvcGVuc2VzYW1l== denied", "basic <token> denied"],
     ["read /home/leo/app/.env first", "read ~/app/.env first"],
+    // Another user's Windows home path (backslashes) must redact too.
+    ["open C:\\Users\\bob\\secret.txt failed", "open C:~\\secret.txt failed"],
     // A long alphanumeric username must collapse to "~" before TOKEN_PATTERN runs,
     // never leak as "/home/<token>".
     ["spawn /home/abcdefghijklmnopqrstuvwx/bin", "spawn ~/bin"],
