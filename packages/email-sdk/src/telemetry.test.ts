@@ -269,9 +269,25 @@ describe("telemetry exceptions", () => {
     });
   });
 
+  test("reduces project-relative frame paths to basenames", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error("boom");
+    // tsx/bun running source directly emits project-relative frames.
+    error.stack = ["Error: boom", "    at handler (src/emails/transactional/welcome.ts:12:3)"].join(
+      "\n",
+    );
+
+    await telemetry.captureException(error, { source: "sdk", handled: true });
+
+    const frames = exceptionList(calls[0])[0]?.stacktrace?.frames ?? [];
+    expect(frames[0]).toMatchObject({ filename: "welcome.ts", function: "handler", in_app: false });
+  });
+
   test.each([
     ["sent to leo@example.com today", "sent to <email> today"],
     ["fetch https://api.resend.com/emails?x=1 failed", "fetch <url> failed"],
+    // Non-http connection strings (with embedded credentials) must redact whole.
+    ["connect smtp://user:s3cr3tpw@mail.example.com:587 refused", "connect <url> refused"],
     ['Unknown adapter "acme-internal".', 'Unknown adapter "<redacted>".'],
     ["bad value 'super secret'", "bad value '<redacted>'"],
     ["template `welcome email` missing", "template `<redacted>` missing"],

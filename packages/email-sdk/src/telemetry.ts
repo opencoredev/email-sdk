@@ -368,15 +368,20 @@ function sanitizeFrameFilename(raw: string): string {
     return filename.slice(nodeModulesIndex);
   }
 
-  if (filename.startsWith("/") || /^[A-Za-z]:\//.test(filename)) {
-    return filename.split("/").at(-1) || filename;
+  // Node built-in frames (node:internal/...) carry no user data; keep them whole.
+  if (filename.startsWith("node:")) {
+    return filename;
   }
 
-  return filename;
+  // Everything else — absolute or project-relative source — collapses to its
+  // basename so reports never carry usernames, home dirs, or project layouts.
+  return filename.split("/").at(-1) || filename;
 }
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
+// Any scheme://… so SMTP/AMQP/DB connection strings with embedded credentials are
+// scrubbed too, not just http(s).
+const URL_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
 // Lookarounds (not \b) anchor the full token alphabet: \b sits between word and
 // non-word chars, so it would skip trailing base64 padding like "==" and leak it.
 const TOKEN_PATTERN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{24,}(?![A-Za-z0-9+/_=-])/g;
@@ -398,8 +403,10 @@ function redactErrorMessage(message: string): string {
 
   redacted = redacted
     .replace(HOME_DIR_PATTERN, "~")
-    .replace(EMAIL_PATTERN, "<email>")
+    // URLs before emails so a "scheme://user:pass@host" is redacted whole rather
+    // than the email pass catching only the "pass@host" portion.
     .replace(URL_PATTERN, "<url>")
+    .replace(EMAIL_PATTERN, "<email>")
     .replace(/"[^"]*"/g, '"<redacted>"')
     .replace(/'[^']*'/g, "'<redacted>'")
     .replace(/`[^`]*`/g, "`<redacted>`")

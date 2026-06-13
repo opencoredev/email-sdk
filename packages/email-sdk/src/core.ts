@@ -177,6 +177,7 @@ export function createEmailClient<
     async sendBatch(messages, sendOptions) {
       const startedAt = Date.now();
       const results: SendBatchResult[] = [];
+      const usedAdapters = new Set<string>();
       let failedCount = 0;
       let firstFailureCode: string | undefined;
 
@@ -184,6 +185,7 @@ export function createEmailClient<
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
         const resolvedAdapter =
           adapter ?? provider ?? sendOptions?.adapter ?? sendOptions?.provider;
+        usedAdapters.add(normalizeAdapterName(resolvedAdapter ?? defaultProvider));
         const resolvedFallbackAdapters =
           fallbackAdapters ??
           fallbackProviders ??
@@ -206,6 +208,16 @@ export function createEmailClient<
         }
       }
 
+      // A batch may mix adapters across items; report the single one when uniform,
+      // else "mixed" (per-item adapters stay accurate on the "email sent" events).
+      const [firstAdapter, ...otherAdapters] = usedAdapters;
+      const batchAdapter =
+        usedAdapters.size === 0
+          ? normalizeAdapterName(sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider)
+          : otherAdapters.length === 0
+            ? firstAdapter
+            : "mixed";
+
       // Per-item telemetry (including failure exceptions) fires inside client.send;
       // this summary event only describes the batch shape.
       void telemetry?.capture("email batch sent", {
@@ -217,9 +229,7 @@ export function createEmailClient<
             total + arrayify(item.to).length + arrayify(item.cc).length + arrayify(item.bcc).length,
           0,
         ),
-        adapter: normalizeAdapterName(
-          sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider,
-        ),
+        adapter: batchAdapter,
         success: failedCount === 0,
         duration_ms: Date.now() - startedAt,
         error_code: firstFailureCode,

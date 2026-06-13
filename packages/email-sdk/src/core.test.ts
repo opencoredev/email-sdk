@@ -391,8 +391,28 @@ describe("createEmailClient telemetry", () => {
       success: false,
       error_code: "provider_not_found",
       source: "sdk",
+      // Both items normalize to the same adapter, so the summary is uniform.
+      adapter: "custom",
     });
     // Per-item events still fire through send().
     expect(events.filter((item) => item.event === "email sent")).toHaveLength(2);
+  });
+
+  test("reports a mixed adapter when batch items differ", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({
+        adapters: [memoryProvider("resend"), memoryProvider("smtp")],
+        defaultAdapter: "resend",
+      });
+      await client.sendBatch([
+        { ...message, adapter: "resend" },
+        { ...message, adapter: "smtp" },
+      ]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    expect(batch[0]?.properties).toMatchObject({ adapter: "mixed", message_count: 2 });
   });
 });
