@@ -214,10 +214,7 @@ const envFlagNames: Record<string, string> = {
   SMTP_HOST: "host",
 };
 
-async function main() {
-  const [command, ...args] = process.argv.slice(2);
-  const flags = parseFlags(args);
-
+async function main(command: string | undefined, flags: CliFlags) {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp();
     return;
@@ -696,15 +693,20 @@ function normalizeCliCommand(command: string | undefined) {
   return "unknown";
 }
 
-async function captureCliRun(input: { success: boolean; startedAt: number; error?: unknown }) {
-  const [command, ...args] = process.argv.slice(2);
-  const flags = parseFlags(args);
-  const adapter = selectedAdapter(flags);
+async function captureCliRun(input: {
+  command: string | undefined;
+  flags: CliFlags;
+  success: boolean;
+  startedAt: number;
+  error?: unknown;
+}) {
+  const adapter = selectedAdapter(input.flags);
+  const telemetry = getTelemetry();
 
-  await getTelemetry().capture("cli command run", {
-    command: normalizeCliCommand(command),
+  await telemetry.capture("cli command run", {
+    command: normalizeCliCommand(input.command),
     adapter: adapter ? normalizeAdapterName(adapter) : undefined,
-    dry_run: truthyFlag(flags, "dry-run"),
+    dry_run: truthyFlag(input.flags, "dry-run"),
     success: input.success,
     duration_ms: Date.now() - input.startedAt,
     error_code:
@@ -714,15 +716,21 @@ async function captureCliRun(input: { success: boolean; startedAt: number; error
           ? undefined
           : "cli_error",
   });
+
+  // Settle the fire-and-forget captures from core.ts before process.exit(1)
+  // can tear down the event loop and silently drop them.
+  await telemetry.flush();
 }
 
 const startedAt = Date.now();
+const [cliCommand, ...cliArgs] = process.argv.slice(2);
+const cliFlags = parseFlags(cliArgs);
 
 try {
-  await main();
-  await captureCliRun({ success: true, startedAt });
+  await main(cliCommand, cliFlags);
+  await captureCliRun({ command: cliCommand, flags: cliFlags, success: true, startedAt });
 } catch (error) {
-  await captureCliRun({ success: false, startedAt, error });
+  await captureCliRun({ command: cliCommand, flags: cliFlags, success: false, startedAt, error });
 
   if (error instanceof CliFailure || error instanceof EmailSdkError) {
     console.error(error.message);

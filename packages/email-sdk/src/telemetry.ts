@@ -32,6 +32,8 @@ export type Telemetry = {
   readonly enabled: boolean;
   /** Resolves once the event is delivered or dropped. Never rejects. */
   capture(event: TelemetryEventName, properties?: TelemetryProperties): Promise<void>;
+  /** Resolves once every in-flight capture has settled. Never rejects. */
+  flush(): Promise<void>;
 };
 
 const KNOWN_ADAPTER_NAMES = new Set(Object.keys(SUPPORTED_MESSAGE_FIELDS));
@@ -54,6 +56,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     return {
       enabled: false,
       capture: () => Promise.resolve(),
+      flush: () => Promise.resolve(),
     };
   }
 
@@ -74,31 +77,45 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     ci: env.CI === "true" || env.CI === "1",
   };
 
+  const pending = new Set<Promise<void>>();
+
+  async function deliver(event: TelemetryEventName, properties?: TelemetryProperties) {
+    try {
+      const response = await fetcher(`${POSTHOG_HOST}/capture/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: captureTimeoutSignal(),
+        body: JSON.stringify({
+          api_key: POSTHOG_PROJECT_KEY,
+          event,
+          distinct_id: state.anonymousId,
+          timestamp: new Date().toISOString(),
+          properties: {
+            ...commonProperties,
+            ...properties,
+            $process_person_profile: false,
+          },
+        }),
+      });
+
+      await response.body?.cancel();
+    } catch {
+      // Telemetry must never break sending email.
+    }
+  }
+
   return {
     enabled: true,
-    async capture(event, properties) {
-      try {
-        const response = await fetcher(`${POSTHOG_HOST}/capture/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: captureTimeoutSignal(),
-          body: JSON.stringify({
-            api_key: POSTHOG_PROJECT_KEY,
-            event,
-            distinct_id: state.anonymousId,
-            timestamp: new Date().toISOString(),
-            properties: {
-              ...commonProperties,
-              ...properties,
-              $process_person_profile: false,
-            },
-          }),
-        });
+    capture(event, properties) {
+      const delivery = deliver(event, properties);
+      pending.add(delivery);
+      void delivery.finally(() => pending.delete(delivery));
 
-        await response.body?.cancel();
-      } catch {
-        // Telemetry must never break sending email.
-      }
+      return delivery;
+    },
+    async flush() {
+      // Captures never reject, so waiting on the in-flight set is safe.
+      await Promise.all(pending);
     },
   };
 }
@@ -110,6 +127,15 @@ export function getTelemetry(): Telemetry {
   return sharedTelemetry;
 }
 
+/**
+ * Drops the cached shared instance so the next getTelemetry() call re-reads the
+ * environment. Lets long-running processes and tests pick up env changes made
+ * after the singleton was first created.
+ */
+export function resetTelemetry() {
+  sharedTelemetry = undefined;
+}
+
 function isTelemetryDisabled(env: Record<string, string | undefined>) {
   const optOut = env.EMAIL_SDK_TELEMETRY?.toLowerCase();
 
@@ -117,6 +143,8 @@ function isTelemetryDisabled(env: Record<string, string | undefined>) {
     return true;
   }
 
+  // Honour the standard DNT value "1" as well as the common "true" alias.
+  // Any other value (including "0") is treated as not opting out.
   const doNotTrack = env.DO_NOT_TRACK?.toLowerCase();
 
   if (doNotTrack === "1" || doNotTrack === "true") {
@@ -133,9 +161,9 @@ type TelemetryState = {
 
 function loadTelemetryState(configDir: string): TelemetryState {
   try {
-    const parsed = JSON.parse(readFileSync(join(configDir, "telemetry.json"), "utf8")) as Partial<
-      TelemetryState
-    >;
+    const parsed = JSON.parse(
+      readFileSync(join(configDir, "telemetry.json"), "utf8"),
+    ) as Partial<TelemetryState>;
 
     if (typeof parsed.anonymousId === "string" && parsed.anonymousId) {
       return {

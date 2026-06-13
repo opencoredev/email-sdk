@@ -114,7 +114,8 @@ export function createEmailClient<
     async send(message, sendOptions) {
       const startedAt = Date.now();
       const messageFacts = {
-        recipients: arrayify(message.to).length,
+        recipients:
+          arrayify(message.to).length + arrayify(message.cc).length + arrayify(message.bcc).length,
         has_attachments: (message.attachments?.length ?? 0) > 0,
       };
 
