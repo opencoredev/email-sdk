@@ -276,6 +276,9 @@ describe("telemetry exceptions", () => {
     ["bad value 'super secret'", "bad value '<redacted>'"],
     ["template `welcome email` missing", "template `<redacted>` missing"],
     ["key re_AbCdEfGhIjKlMnOpQrStUvWx12 rejected", "key <token> rejected"],
+    // Base64 secrets ending in "=" padding must redact whole, not leak the tail.
+    ["auth dXNlcjpzdXBlcnNlY3JldA== bad", "auth <token> bad"],
+    ["basic YWxhZGRpbjpvcGVuc2VzYW1l== denied", "basic <token> denied"],
     ["read /home/leo/app/.env first", "read ~/app/.env first"],
     // A long alphanumeric username must collapse to "~" before TOKEN_PATTERN runs,
     // never leak as "/home/<token>".

@@ -172,12 +172,10 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
       // Hostile error shapes (throwing getters, non-standard fields) must never
       // turn error reporting into an error source itself.
       try {
-        if (typeof error === "object" && error !== null) {
-          if (seenErrorObjects.has(error)) {
-            return Promise.resolve();
-          }
+        const isErrorObject = typeof error === "object" && error !== null;
 
-          seenErrorObjects.add(error);
+        if (isErrorObject && seenErrorObjects.has(error)) {
+          return Promise.resolve();
         }
 
         const exceptionList = buildExceptionList(error, context.handled);
@@ -192,6 +190,12 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
         if (seenErrorClasses.has(classKey) || exceptionBudget <= 0) {
           return Promise.resolve();
+        }
+
+        // Mark the object seen only once it is actually reported, so a budget or
+        // class-duplicate bail-out never silently consumes a distinct error.
+        if (isErrorObject) {
+          seenErrorObjects.add(error);
         }
 
         seenErrorClasses.add(classKey);
@@ -373,7 +377,9 @@ function sanitizeFrameFilename(raw: string): string {
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
-const TOKEN_PATTERN = /\b[A-Za-z0-9+/_=-]{24,}\b/g;
+// Lookarounds (not \b) anchor the full token alphabet: \b sits between word and
+// non-word chars, so it would skip trailing base64 padding like "==" and leak it.
+const TOKEN_PATTERN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{24,}(?![A-Za-z0-9+/_=-])/g;
 const HOME_DIR_PATTERN = /\/(?:Users|home)\/[^\s/]+/g;
 
 /**
