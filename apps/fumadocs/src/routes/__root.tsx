@@ -8,6 +8,7 @@ import { StaleBuildNotice } from "@/components/stale-build-notice";
 import { chunkLoadGuardScript } from "@/lib/chunk-load-guard";
 import { domMutationGuardScript } from "@/lib/dom-mutation-guard";
 import { siteMeta } from "@/lib/metadata";
+import { initPostHog } from "@/lib/posthog";
 
 import appCss from "@/styles/app.css?url";
 
@@ -38,6 +39,10 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  React.useEffect(() => {
+    initPostHog();
+  }, []);
+
   return (
     <html suppressHydrationWarning>
       <head>

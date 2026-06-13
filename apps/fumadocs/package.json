@@ -23,6 +23,7 @@
     "fumadocs-mdx": "15.0.9",
     "fumadocs-ui": "16.9.1",
     "lucide-react": "^1.16.0",
+    "posthog-js": "^1.386.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "shiki": "4.1.0",
