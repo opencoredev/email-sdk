@@ -169,6 +169,11 @@ export type EmailClientOptions<TPlugins extends readonly EmailPlugin[] = readonl
    * here or `EMAIL_SDK_TELEMETRY=0` / `DO_NOT_TRACK=1` in the environment to opt out.
    */
   telemetry?: boolean;
+  /**
+   * @internal Tags telemetry events with their origin. The bundled CLI sets
+   * "cli"; library consumers should not set this. Defaults to "sdk".
+   */
+  telemetrySource?: "sdk" | "cli";
 };
 
 export type SendBatchItem = EmailMessage & {

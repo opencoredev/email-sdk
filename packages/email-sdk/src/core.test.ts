@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
 import { EmailProviderError, EmailValidationError } from "./errors.js";
+import {
+  resetTelemetry,
+  setSharedTelemetry,
+  type CaptureExceptionContext,
+  type Telemetry,
+  type TelemetryEventName,
+  type TelemetryProperties,
+} from "./telemetry.js";
 import { failingProvider, memoryProvider } from "./testing.js";
 
 const message = {
@@ -279,5 +287,112 @@ describe("createEmailClient", () => {
     await expect(client.send(message)).rejects.toMatchObject({
       provider: "failing",
     });
+  });
+});
+
+type CapturedEvent = { event: TelemetryEventName; properties?: TelemetryProperties };
+type CapturedException = { error: unknown; context: CaptureExceptionContext };
+
+function stubTelemetry() {
+  const events: CapturedEvent[] = [];
+  const exceptions: CapturedException[] = [];
+  const telemetry: Telemetry = {
+    enabled: true,
+    capture(event, properties) {
+      events.push({ event, properties });
+      return Promise.resolve();
+    },
+    captureException(error, context) {
+      exceptions.push({ error, context });
+      return Promise.resolve();
+    },
+    flush: () => Promise.resolve(),
+  };
+
+  return { events, exceptions, telemetry };
+}
+
+function withTelemetry<T>(telemetry: Telemetry, run: () => Promise<T>) {
+  setSharedTelemetry(telemetry);
+
+  return run().finally(() => resetTelemetry());
+}
+
+describe("createEmailClient telemetry", () => {
+  test("tags events with their source", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      await createEmailClient({ adapters: [memoryProvider()] }).send(message);
+      await createEmailClient({
+        adapters: [memoryProvider()],
+        telemetrySource: "cli",
+      }).send(message);
+    });
+
+    const created = events.filter((item) => item.event === "client created");
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(created.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
+    expect(sent.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
+    expect(sent[0]?.properties).toMatchObject({ success: true, recipients: 1 });
+  });
+
+  test("reports failed sends as handled exceptions", async () => {
+    const { events, exceptions, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [failingProvider()] });
+      await expect(client.send(message)).rejects.toBeInstanceOf(EmailProviderError);
+    });
+
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent[0]?.properties).toMatchObject({ success: false, error_code: "provider_error" });
+    expect(exceptions).toHaveLength(1);
+    expect(exceptions[0]?.context).toMatchObject({
+      source: "sdk",
+      handled: true,
+      adapter: "custom",
+    });
+    expect(exceptions[0]?.error).toBeInstanceOf(EmailProviderError);
+  });
+
+  test("does not report usage errors as exceptions", async () => {
+    const { events, exceptions, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider()] });
+      await expect(client.send(message, { adapter: "missing" })).rejects.toThrow(
+        'Email provider "missing" is not registered.',
+      );
+    });
+
+    expect(events.filter((item) => item.event === "email sent")).toHaveLength(1);
+    expect(exceptions).toHaveLength(0);
+  });
+
+  test("summarizes sendBatch runs", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider()] });
+      await client.sendBatch([
+        { ...message, cc: "copy@example.com" },
+        { ...message, adapter: "missing" },
+      ]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    expect(batch).toHaveLength(1);
+    expect(batch[0]?.properties).toMatchObject({
+      message_count: 2,
+      succeeded: 1,
+      failed: 1,
+      recipients: 3,
+      success: false,
+      error_code: "provider_not_found",
+      source: "sdk",
+    });
+    // Per-item events still fire through send().
+    expect(events.filter((item) => item.event === "email sent")).toHaveLength(2);
   });
 });

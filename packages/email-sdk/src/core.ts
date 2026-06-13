@@ -22,7 +22,12 @@ import type {
   SendBatchResult,
   SendOptions,
 } from "./types.js";
-import { getTelemetry, normalizeAdapterName } from "./telemetry.js";
+import {
+  getTelemetry,
+  isReportableSendError,
+  normalizeAdapterName,
+  type TelemetrySource,
+} from "./telemetry.js";
 import { arrayify, assertMessage, toProviderError } from "./utils.js";
 
 const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
@@ -85,12 +90,14 @@ export function createEmailClient<
   }
 
   const telemetry = options.telemetry === false ? undefined : getTelemetry();
+  const telemetrySource: TelemetrySource = options.telemetrySource === "cli" ? "cli" : "sdk";
 
   void telemetry?.capture("client created", {
     adapters: [...adapters.keys()].map(normalizeAdapterName),
     adapter_count: adapters.size,
     plugin_count: options.plugins?.length ?? 0,
     default_adapter: normalizeAdapterName(defaultProvider),
+    source: telemetrySource,
   });
 
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
@@ -138,25 +145,40 @@ export function createEmailClient<
           adapter: normalizeAdapterName(response.provider),
           success: true,
           duration_ms: Date.now() - startedAt,
+          source: telemetrySource,
         });
 
         return response;
       } catch (error) {
+        const failedAdapter = normalizeAdapterName(
+          sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider,
+        );
+
         void telemetry?.capture("email sent", {
           ...messageFacts,
-          adapter: normalizeAdapterName(
-            sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider,
-          ),
+          adapter: failedAdapter,
           success: false,
           duration_ms: Date.now() - startedAt,
           error_code: error instanceof EmailSdkError ? error.code : "unknown",
+          source: telemetrySource,
         });
+
+        if (telemetry && isReportableSendError(error)) {
+          void telemetry.captureException(error, {
+            source: telemetrySource,
+            handled: true,
+            adapter: failedAdapter,
+          });
+        }
 
         throw error;
       }
     },
     async sendBatch(messages, sendOptions) {
+      const startedAt = Date.now();
       const results: SendBatchResult[] = [];
+      let failedCount = 0;
+      let firstFailureCode: string | undefined;
 
       for (const [index, item] of messages.entries()) {
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
@@ -178,9 +200,31 @@ export function createEmailClient<
           });
           results.push({ ok: true, index, response });
         } catch (error) {
+          failedCount += 1;
+          firstFailureCode ??= error instanceof EmailSdkError ? error.code : "unknown";
           results.push({ ok: false, index, error });
         }
       }
+
+      // Per-item telemetry (including failure exceptions) fires inside client.send;
+      // this summary event only describes the batch shape.
+      void telemetry?.capture("email batch sent", {
+        message_count: messages.length,
+        succeeded: results.length - failedCount,
+        failed: failedCount,
+        recipients: messages.reduce(
+          (total, item) =>
+            total + arrayify(item.to).length + arrayify(item.cc).length + arrayify(item.bcc).length,
+          0,
+        ),
+        adapter: normalizeAdapterName(
+          sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider,
+        ),
+        success: failedCount === 0,
+        duration_ms: Date.now() - startedAt,
+        error_code: firstFailureCode,
+        source: telemetrySource,
+      });
 
       return results;
     },

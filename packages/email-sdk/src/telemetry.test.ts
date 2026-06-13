@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { TELEMETRY_NOTICE, createTelemetry, normalizeAdapterName } from "./telemetry.js";
+import { EmailProviderError, EmailProviderNotFoundError, EmailValidationError } from "./errors.js";
+import {
+  TELEMETRY_NOTICE,
+  createTelemetry,
+  detectCiVendor,
+  isReportableSendError,
+  normalizeAdapterName,
+} from "./telemetry.js";
 
 type CapturedRequest = {
   url: string;
@@ -182,6 +189,219 @@ describe("telemetry notice", () => {
       noticeShown: boolean;
     };
     expect(state.noticeShown).toBe(true);
+  });
+});
+
+function exceptionTelemetry() {
+  const { calls, fetchFn } = fetchCapture();
+  const telemetry = createTelemetry({
+    env: {},
+    fetch: fetchFn,
+    configDir: tempConfigDir(),
+    notify: () => {},
+  });
+
+  return { calls, telemetry };
+}
+
+type ExceptionListItem = {
+  type: string;
+  value: string;
+  mechanism: { handled: boolean; type: string; synthetic: boolean };
+  stacktrace?: { type: string; frames: Array<Record<string, unknown>> };
+};
+
+function exceptionList(call: CapturedRequest | undefined) {
+  return (call?.body.properties.$exception_list ?? []) as ExceptionListItem[];
+}
+
+describe("telemetry exceptions", () => {
+  test("posts $exception events with sanitized raw stack frames", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new EmailProviderError("request failed", { provider: "resend" });
+    error.stack = [
+      "EmailProviderError: request failed",
+      "    at sendWithRetry (/Users/leo/projects/app/node_modules/@opencoredev/email-sdk/dist/core.js:280:13)",
+      "    at processTicksAndRejections (node:internal/process/task_queues:95:5)",
+      "    at async runMailer (/Users/leo/app/src/mailer.ts:42:9)",
+    ].join("\n");
+
+    await telemetry.captureException(error, {
+      source: "sdk",
+      handled: true,
+      adapter: "resend",
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body.event).toBe("$exception");
+    expect(calls[0]?.body.properties).toMatchObject({
+      $exception_level: "error",
+      $exception_fingerprint: "EmailProviderError:provider_error",
+      error_name: "EmailProviderError",
+      error_code: "provider_error",
+      source: "sdk",
+      handled: true,
+      adapter: "resend",
+      $process_person_profile: false,
+    });
+
+    const [item] = exceptionList(calls[0]);
+    expect(item?.type).toBe("EmailProviderError");
+    expect(item?.mechanism).toEqual({ handled: true, type: "generic", synthetic: false });
+    expect(item?.stacktrace?.type).toBe("raw");
+
+    // Frames are Sentry-ordered: outermost call first, throw site last.
+    const frames = item?.stacktrace?.frames ?? [];
+    expect(frames).toHaveLength(3);
+    expect(frames[0]).toMatchObject({
+      platform: "node:javascript",
+      function: "async runMailer",
+      filename: "mailer.ts",
+      lineno: 42,
+      colno: 9,
+      in_app: false,
+    });
+    expect(frames[1]).toMatchObject({ filename: "node:internal/process/task_queues" });
+    expect(frames.at(-1)).toMatchObject({
+      filename: "node_modules/@opencoredev/email-sdk/dist/core.js",
+      function: "sendWithRetry",
+      in_app: true,
+    });
+  });
+
+  test.each([
+    ["sent to leo@example.com today", "sent to <email> today"],
+    ["fetch https://api.resend.com/emails?x=1 failed", "fetch <url> failed"],
+    ['Unknown adapter "acme-internal".', 'Unknown adapter "<redacted>".'],
+    ["bad value 'super secret'", "bad value '<redacted>'"],
+    ["template `welcome email` missing", "template `<redacted>` missing"],
+    ["key re_AbCdEfGhIjKlMnOpQrStUvWx12 rejected", "key <token> rejected"],
+    ["read /home/leo/app/.env first", "read ~/app/.env first"],
+  ])("redacts %j", async (input, expected) => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error(input);
+    error.stack = undefined;
+
+    await telemetry.captureException(error, { source: "cli", handled: false });
+
+    expect(exceptionList(calls[0])[0]?.value).toBe(expected);
+  });
+
+  test("replaces the current home directory and truncates long messages", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error(`ENOENT ${homedir()}/mail.json ${"lorem ipsum ".repeat(40)}`);
+    error.stack = undefined;
+
+    await telemetry.captureException(error, { source: "sdk", handled: true });
+
+    const value = exceptionList(calls[0])[0]?.value ?? "";
+    expect(value).toContain("ENOENT ~/mail.json");
+    expect(value).not.toContain(homedir());
+    expect(value).toHaveLength(301);
+    expect(value.endsWith("…")).toBe(true);
+  });
+
+  test("walks cause chains and marks non-Error throws synthetic", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const root = new Error("root");
+    root.stack = undefined;
+    const middle = new Error("middle", { cause: root });
+    middle.stack = undefined;
+    const top = new Error("top", { cause: middle });
+    top.stack = undefined;
+
+    await telemetry.captureException(top, { source: "sdk", handled: true });
+    await telemetry.captureException("string failure", { source: "sdk", handled: false });
+
+    const chained = exceptionList(calls[0]);
+    expect(chained.map((item) => item.value)).toEqual(["top", "middle", "root"]);
+    expect(calls[0]?.body.properties.$exception_fingerprint).toBeUndefined();
+
+    const synthetic = exceptionList(calls[1]);
+    expect(synthetic[0]?.mechanism.synthetic).toBe(true);
+    expect(synthetic[0]?.type).toBe("Error");
+  });
+
+  test("dedupes by error object, error class, and process budget", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error("same object");
+    error.stack = undefined;
+
+    await telemetry.captureException(error, { source: "sdk", handled: true });
+    await telemetry.captureException(error, { source: "cli", handled: false });
+    expect(calls).toHaveLength(1);
+
+    const sibling = new Error("same object");
+    sibling.stack = undefined;
+    await telemetry.captureException(sibling, { source: "sdk", handled: true });
+    expect(calls).toHaveLength(1);
+
+    for (let index = 0; index < 8; index += 1) {
+      const distinct = new Error(`distinct ${index}`);
+      distinct.stack = undefined;
+      distinct.name = `Error${index}`;
+      await telemetry.captureException(distinct, { source: "sdk", handled: true });
+    }
+
+    expect(calls).toHaveLength(5);
+  });
+
+  test("does nothing when telemetry is disabled", async () => {
+    const { calls, fetchFn } = fetchCapture();
+    const telemetry = createTelemetry({
+      env: { EMAIL_SDK_TELEMETRY: "0" },
+      fetch: fetchFn,
+      configDir: tempConfigDir(),
+      notify: () => {},
+    });
+
+    await expect(
+      telemetry.captureException(new Error("boom"), { source: "sdk", handled: true }),
+    ).resolves.toBeUndefined();
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("isReportableSendError", () => {
+  test("excludes caller usage errors", () => {
+    expect(isReportableSendError(new EmailValidationError("bad message"))).toBe(false);
+    expect(isReportableSendError(new EmailProviderNotFoundError("acme"))).toBe(false);
+  });
+
+  test("includes provider failures and unknown throws", () => {
+    expect(isReportableSendError(new EmailProviderError("boom", {}))).toBe(true);
+    expect(isReportableSendError(new Error("boom"))).toBe(true);
+  });
+});
+
+describe("detectCiVendor", () => {
+  test.each([
+    [{ GITHUB_ACTIONS: "true" }, "github_actions"],
+    [{ GITLAB_CI: "true" }, "gitlab"],
+    [{ CIRCLECI: "true" }, "circleci"],
+    [{ JENKINS_URL: "https://ci.example.com" }, "jenkins"],
+    [{ TRAVIS: "true" }, "travis"],
+    [{ BUILDKITE: "true" }, "buildkite"],
+    [{ VERCEL: "1" }, "vercel"],
+    [{ CI: "true" }, "generic"],
+    [{ CI: "1" }, "generic"],
+  ])("detects %o as %s", (env, vendor) => {
+    expect(detectCiVendor(env)).toBe(vendor);
+  });
+
+  test("returns undefined outside CI and stamps common properties", async () => {
+    expect(detectCiVendor({})).toBeUndefined();
+
+    const { calls, fetchFn } = fetchCapture();
+    const telemetry = createTelemetry({
+      env: { GITHUB_ACTIONS: "true" },
+      fetch: fetchFn,
+      configDir: tempConfigDir(),
+      notify: () => {},
+    });
+
+    await telemetry.capture("cli command run", { command: "send" });
+    expect(calls[0]?.body.properties).toMatchObject({ ci: true, ci_vendor: "github_actions" });
   });
 });
 

@@ -117,7 +117,7 @@ The skill is stored in `skills/email-sdk/SKILL.md`. It tells agents to refresh t
 
 Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
 
-What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), SDK version, OS, and Node.js version — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), whether usage comes from the library or the bundled CLI, and redacted error reports — the error type, Email SDK error code, and stack traces with file paths reduced to package-relative names, with error messages scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
 
 Opt out at any time with an environment variable:
 

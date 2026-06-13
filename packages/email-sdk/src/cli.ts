@@ -259,7 +259,7 @@ async function main(command: string | undefined, flags: CliFlags) {
   }
 
   const provider = createProvider(providerName, flags);
-  const client = createEmailClient({ adapters: [provider] });
+  const client = createEmailClient({ adapters: [provider], telemetrySource: "cli" });
   const response = await client.send(message);
 
   console.log(JSON.stringify(response, null, 2));
@@ -707,6 +707,7 @@ async function captureCliRun(input: {
     command: normalizeCliCommand(input.command),
     adapter: adapter ? normalizeAdapterName(adapter) : undefined,
     dry_run: truthyFlag(input.flags, "dry-run"),
+    source: "cli",
     success: input.success,
     duration_ms: Date.now() - input.startedAt,
     error_code:
@@ -730,6 +731,17 @@ try {
   await main(cliCommand, cliFlags);
   await captureCliRun({ command: cliCommand, flags: cliFlags, success: true, startedAt });
 } catch (error) {
+  if (!(error instanceof CliFailure) && !(error instanceof EmailSdkError)) {
+    // Unexpected crash, not a usage or provider failure. Reported before the run
+    // summary so captureCliRun's flush() settles it too. Errors rethrown out of
+    // client.send were already reported there; the per-object dedupe drops this one.
+    void getTelemetry().captureException(error, {
+      source: "cli",
+      handled: false,
+      command: normalizeCliCommand(cliCommand),
+    });
+  }
+
   await captureCliRun({ command: cliCommand, flags: cliFlags, success: false, startedAt, error });
 
   if (error instanceof CliFailure || error instanceof EmailSdkError) {
