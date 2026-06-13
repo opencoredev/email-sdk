@@ -185,7 +185,6 @@ export function createEmailClient<
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
         const resolvedAdapter =
           adapter ?? provider ?? sendOptions?.adapter ?? sendOptions?.provider;
-        usedAdapters.add(normalizeAdapterName(resolvedAdapter ?? defaultProvider));
         const resolvedFallbackAdapters =
           fallbackAdapters ??
           fallbackProviders ??
@@ -200,8 +199,12 @@ export function createEmailClient<
             fallbackAdapters: resolvedFallbackAdapters,
             fallbackProviders: undefined,
           });
+          // Record the adapter that actually delivered (fallbacks change it), so the
+          // summary matches the per-item "email sent" events.
+          usedAdapters.add(normalizeAdapterName(response.provider));
           results.push({ ok: true, index, response });
         } catch (error) {
+          usedAdapters.add(normalizeAdapterName(resolvedAdapter ?? defaultProvider));
           failedCount += 1;
           firstFailureCode ??= error instanceof EmailSdkError ? error.code : "unknown";
           results.push({ ok: false, index, error });

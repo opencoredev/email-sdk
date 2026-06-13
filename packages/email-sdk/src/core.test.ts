@@ -415,4 +415,19 @@ describe("createEmailClient telemetry", () => {
     const batch = events.filter((item) => item.event === "email batch sent");
     expect(batch[0]?.properties).toMatchObject({ adapter: "mixed", message_count: 2 });
   });
+
+  test("batch adapter reflects the adapter that actually delivered", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({
+        adapters: [failingProvider("resend"), memoryProvider("smtp")],
+      });
+      await client.sendBatch([{ ...message, adapter: "resend", fallbackAdapters: ["smtp"] }]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    // Primary "resend" failed and "smtp" delivered, so the summary names smtp.
+    expect(batch[0]?.properties).toMatchObject({ adapter: "smtp", succeeded: 1, failed: 0 });
+  });
 });
