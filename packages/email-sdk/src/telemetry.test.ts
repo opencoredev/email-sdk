@@ -277,6 +277,9 @@ describe("telemetry exceptions", () => {
     ["template `welcome email` missing", "template `<redacted>` missing"],
     ["key re_AbCdEfGhIjKlMnOpQrStUvWx12 rejected", "key <token> rejected"],
     ["read /home/leo/app/.env first", "read ~/app/.env first"],
+    // A long alphanumeric username must collapse to "~" before TOKEN_PATTERN runs,
+    // never leak as "/home/<token>".
+    ["spawn /home/abcdefghijklmnopqrstuvwx/bin", "spawn ~/bin"],
   ])("redacts %j", async (input, expected) => {
     const { calls, telemetry } = exceptionTelemetry();
     const error = new Error(input);
@@ -285,6 +288,36 @@ describe("telemetry exceptions", () => {
     await telemetry.captureException(error, { source: "cli", handled: false });
 
     expect(exceptionList(calls[0])[0]?.value).toBe(expected);
+  });
+
+  test("never throws on a hostile non-string stack", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error("boom");
+    // Some Error subclasses overwrite stack with a non-string.
+    Object.defineProperty(error, "stack", { value: { frames: [] } });
+
+    await expect(
+      telemetry.captureException(error, { source: "sdk", handled: true }),
+    ).resolves.toBeUndefined();
+
+    const [item] = exceptionList(calls[0]);
+    expect(item?.value).toBe("boom");
+    expect(item?.stacktrace).toBeUndefined();
+  });
+
+  test("never throws when reading the error throws", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    const error = new Error("trap");
+    Object.defineProperty(error, "stack", {
+      get() {
+        throw new Error("stack getter exploded");
+      },
+    });
+
+    await expect(
+      telemetry.captureException(error, { source: "sdk", handled: true }),
+    ).resolves.toBeUndefined();
+    expect(calls).toHaveLength(0);
   });
 
   test("replaces the current home directory and truncates long messages", async () => {

@@ -169,48 +169,54 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
       return enqueue(deliver(event, properties));
     },
     captureException(error, context) {
-      if (typeof error === "object" && error !== null) {
-        if (seenErrorObjects.has(error)) {
+      // Hostile error shapes (throwing getters, non-standard fields) must never
+      // turn error reporting into an error source itself.
+      try {
+        if (typeof error === "object" && error !== null) {
+          if (seenErrorObjects.has(error)) {
+            return Promise.resolve();
+          }
+
+          seenErrorObjects.add(error);
+        }
+
+        const exceptionList = buildExceptionList(error, context.handled);
+        const head = exceptionList[0];
+
+        if (!head) {
           return Promise.resolve();
         }
 
-        seenErrorObjects.add(error);
-      }
+        const errorCode = error instanceof EmailSdkError ? error.code : "unknown";
+        const classKey = `${head.type}:${error instanceof EmailSdkError ? error.code : head.value.slice(0, 60)}`;
 
-      const exceptionList = buildExceptionList(error, context.handled);
-      const head = exceptionList[0];
+        if (seenErrorClasses.has(classKey) || exceptionBudget <= 0) {
+          return Promise.resolve();
+        }
 
-      if (!head) {
+        seenErrorClasses.add(classKey);
+        exceptionBudget -= 1;
+
+        const properties: Record<string, unknown> = {
+          $exception_list: exceptionList,
+          $exception_level: "error",
+          error_name: head.type,
+          error_code: errorCode,
+          source: context.source,
+          handled: context.handled,
+          adapter: context.adapter,
+          command: context.command,
+        };
+
+        if (error instanceof EmailSdkError) {
+          // Redacted messages vary; the stable name:code pair keeps issue grouping useful.
+          properties.$exception_fingerprint = `${head.type}:${error.code}`;
+        }
+
+        return enqueue(deliver("$exception", properties));
+      } catch {
         return Promise.resolve();
       }
-
-      const errorCode = error instanceof EmailSdkError ? error.code : "unknown";
-      const classKey = `${head.type}:${error instanceof EmailSdkError ? error.code : head.value.slice(0, 60)}`;
-
-      if (seenErrorClasses.has(classKey) || exceptionBudget <= 0) {
-        return Promise.resolve();
-      }
-
-      seenErrorClasses.add(classKey);
-      exceptionBudget -= 1;
-
-      const properties: Record<string, unknown> = {
-        $exception_list: exceptionList,
-        $exception_level: "error",
-        error_name: head.type,
-        error_code: errorCode,
-        source: context.source,
-        handled: context.handled,
-        adapter: context.adapter,
-        command: context.command,
-      };
-
-      if (error instanceof EmailSdkError) {
-        // Redacted messages vary; the stable name:code pair keeps issue grouping useful.
-        properties.$exception_fingerprint = `${head.type}:${error.code}`;
-      }
-
-      return enqueue(deliver("$exception", properties));
     },
     async flush() {
       // Captures never reject, so waiting on the in-flight set is safe.
@@ -309,8 +315,9 @@ function buildExceptionList(error: unknown, handled: boolean): ExceptionListItem
 
 const STACK_LINE_PATTERN = /^\s*at (?:(.*?) \()?((?:file:\/\/)?[^()]+?):(\d+):(\d+)\)?\s*$/;
 
-function parseStackFrames(stack: string | undefined): ExceptionFrame[] {
-  if (!stack) {
+function parseStackFrames(stack: unknown): ExceptionFrame[] {
+  // Error.prototype.stack is non-standard; subclasses can put anything here.
+  if (typeof stack !== "string") {
     return [];
   }
 
@@ -374,21 +381,23 @@ const HOME_DIR_PATTERN = /\/(?:Users|home)\/[^\s/]+/g;
  * messages: addresses, URLs, quoted user input, long tokens, and home paths.
  */
 function redactErrorMessage(message: string): string {
-  let redacted = message
-    .replace(EMAIL_PATTERN, "<email>")
-    .replace(URL_PATTERN, "<url>")
-    .replace(/"[^"]*"/g, '"<redacted>"')
-    .replace(/'[^']*'/g, "'<redacted>'")
-    .replace(/`[^`]*`/g, "`<redacted>`")
-    .replace(TOKEN_PATTERN, "<token>");
-
+  // Home paths go first: a long alphanumeric username must collapse into "~"
+  // rather than being consumed by TOKEN_PATTERN and leaving "/home/<token>".
+  let redacted = message;
   const home = homedir();
 
   if (home && home !== "/") {
     redacted = redacted.split(home).join("~");
   }
 
-  redacted = redacted.replace(HOME_DIR_PATTERN, "~");
+  redacted = redacted
+    .replace(HOME_DIR_PATTERN, "~")
+    .replace(EMAIL_PATTERN, "<email>")
+    .replace(URL_PATTERN, "<url>")
+    .replace(/"[^"]*"/g, '"<redacted>"')
+    .replace(/'[^']*'/g, "'<redacted>'")
+    .replace(/`[^`]*`/g, "`<redacted>`")
+    .replace(TOKEN_PATTERN, "<token>");
 
   return redacted.length > MAX_MESSAGE_LENGTH
     ? `${redacted.slice(0, MAX_MESSAGE_LENGTH)}…`
