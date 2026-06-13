@@ -436,7 +436,8 @@ describe("detectCiVendor", () => {
     [{ JENKINS_URL: "https://ci.example.com" }, "jenkins"],
     [{ TRAVIS: "true" }, "travis"],
     [{ BUILDKITE: "true" }, "buildkite"],
-    [{ VERCEL: "1" }, "vercel"],
+    // Vercel builds set CI=1, so a CI build resolves to generic...
+    [{ VERCEL: "1", CI: "1" }, "generic"],
     [{ CI: "true" }, "generic"],
     [{ CI: "1" }, "generic"],
   ])("detects %o as %s", (env, vendor) => {
@@ -445,6 +446,8 @@ describe("detectCiVendor", () => {
 
   test("returns undefined outside CI and stamps common properties", async () => {
     expect(detectCiVendor({})).toBeUndefined();
+    // ...but a Vercel production serverless runtime (VERCEL=1, no CI) is not CI.
+    expect(detectCiVendor({ VERCEL: "1" })).toBeUndefined();
 
     const { calls, fetchFn } = fetchCapture();
     const telemetry = createTelemetry({

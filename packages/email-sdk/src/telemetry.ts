@@ -84,7 +84,9 @@ export function detectCiVendor(env: Record<string, string | undefined>) {
   if (env.JENKINS_URL) return "jenkins";
   if (env.TRAVIS) return "travis";
   if (env.BUILDKITE) return "buildkite";
-  if (env.VERCEL) return "vercel";
+  // Deliberately no VERCEL check: VERCEL=1 is set in production serverless
+  // runtimes too, so it would mislabel live sends as CI. Vercel builds still set
+  // CI=1 and fall through to "generic" below.
   if (env.CI === "true" || env.CI === "1") return "generic";
   return undefined;
 }
