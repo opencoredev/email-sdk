@@ -159,6 +159,7 @@ function createDocsClientLoader(collection: (typeof browserCollections)[DocsVers
 
 const clientLoaders = {
   docs: createDocsClientLoader(browserCollections.docs),
+  docsV061: createDocsClientLoader(browserCollections.docsV061),
   docsV060: createDocsClientLoader(browserCollections.docsV060),
   docsV050: createDocsClientLoader(browserCollections.docsV050),
   docsV040: createDocsClientLoader(browserCollections.docsV040),

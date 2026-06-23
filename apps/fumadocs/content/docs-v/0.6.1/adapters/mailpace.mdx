@@ -1,0 +1,81 @@
+---
+title: MailPace
+description: Send through the MailPace API — a deliberately minimal adapter for address fields and body content.
+icon: mailpace
+---
+
+The MailPace adapter calls the [MailPace send API](https://docs.mailpace.com/reference/send) over `fetch` — no extra dependency. It is the smallest adapter surface in the SDK: addresses, subject, and body only, with recipient lists serialized as comma-separated strings.
+
+<ProviderBadge adapter="mailpace" />
+
+## Configure
+
+Create a server token in the MailPace dashboard and verify the sending domain.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailpace } from "@opencoredev/email-sdk/mailpace";
+
+export const email = createEmailClient({
+  adapters: [mailpace({ apiKey: process.env.MAILPACE_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "MailPace server token, sent as the MailPace-Server-Token header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://app.mailpace.com/api/v1"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+MailPace maps `cc`, `bcc`, and `replyTo` alongside `html`/`text` (sent as `htmlbody`/`textbody`). That is the whole surface — a good fit for sign-in alerts, receipts, and other plain notifications.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@acme.com",
+  subject: "New sign-in to your account",
+  text: "A new sign-in from Berlin, Germany was detected. If this was not you, reset your password.",
+});
+
+console.log(result.id); // MailPace message id (`id` or `message_id` in the response)
+```
+
+<Callout type="warn" title="No headers, attachments, tags, or metadata">
+  MailPace's send endpoint takes none of these, so any of them throws an `EmailValidationError`
+  before a request is made. Check your production message shape against the [field support
+  matrix](/docs/adapters/field-support) before routing through MailPace as a fallback.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+MAILPACE_API_KEY="..." npx email-sdk doctor --adapter mailpace
+```
+
+```bash
+MAILPACE_API_KEY="..." npx email-sdk send \
+  --adapter mailpace \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "MailPace smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send to confirm the token and verified domain work end to end.

@@ -1,0 +1,163 @@
+---
+title: Publish a community plugin
+description: Package an Email SDK plugin for npm and list it in the community registry.
+icon: PackageCheck
+---
+
+This guide publishes a plugin — built in [Create your first plugin](/docs/guides/authoring/create-first-plugin) — as an npm package and lists it in the [community registry](/docs/plugins/community). The registry is a static JSON file in the docs repo; there is no hosted plugin service.
+
+If your package adds a new email provider, follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) instead — same process, plus field-support documentation.
+
+<Steps>
+<Step>
+
+### Shape the package
+
+Name it `email-sdk-{plugin}` and export the plugin factory (and its options type) from the package root:
+
+```txt
+email-sdk-audit-log/
+  src/
+    index.ts
+    audit-log.ts
+    audit-log.test.ts
+  package.json
+  README.md
+```
+
+```ts title="src/index.ts"
+export { auditLogPlugin } from "./audit-log";
+export type { AuditLog, AuditLogEntry } from "./audit-log";
+```
+
+The bar: apps use it in one line inside `plugins`.
+
+```ts
+createEmailClient({
+  plugins: [auditLogPlugin()],
+});
+```
+
+</Step>
+<Step>
+
+### Set the package.json requirements
+
+Declare `@opencoredev/email-sdk` as a peer dependency so apps never end up with two copies of the core types:
+
+```json title="package.json"
+{
+  "name": "email-sdk-audit-log",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^0.6.0"
+  }
+}
+```
+
+Plugin packages should be boring libraries. To qualify for a `verified` listing later, the package must have:
+
+- A public source repository (matching the registry entry).
+- npm provenance or trusted publishing.
+- No `preinstall`, `install`, or `postinstall` scripts.
+- No binaries.
+- A small runtime dependency surface.
+- No network calls during import or plugin construction.
+
+These checks reduce supply-chain risk; they do not make third-party code risk-free.
+
+</Step>
+<Step>
+
+### Test registration and behavior
+
+At minimum, prove the plugin registers with `createEmailClient` and does its job against the [memory adapter](/docs/guides/test-email-behavior):
+
+```ts title="src/audit-log.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryProvider } from "@opencoredev/email-sdk/testing";
+import { auditLogPlugin } from "./index";
+
+test("records sends on the extended client", async () => {
+  const email = createEmailClient({
+    adapters: [memoryProvider()],
+    plugins: [auditLogPlugin()],
+  });
+
+  await email.send({
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Hello",
+    text: "Hi",
+  });
+
+  expect(email.auditLog.entries).toHaveLength(1);
+});
+```
+
+Add a README with the install command, a minimal client example, and what the plugin extends the client with.
+
+</Step>
+<Step>
+
+### Publish and open the registry PR
+
+Publish to npm from your own repository, then add an entry to `apps/fumadocs/content/community/plugins.json` in the Email SDK repo:
+
+```json
+{
+  "name": "Audit log",
+  "package": "email-sdk-audit-log",
+  "kind": "plugin",
+  "status": "community",
+  "description": "Records every send outcome on a typed client extension.",
+  "href": "https://www.npmjs.com/package/email-sdk-audit-log",
+  "repo": "https://github.com/acme/email-sdk-audit-log",
+  "maintainer": "acme",
+  "pluginId": "audit-log"
+}
+```
+
+Every field except `pluginId` is required; `href` and `repo` must be `https` URLs, and name, package, and plugin id must be unique across the registry. Start with `status: "community"` — `verified` requires a per-version review with `verifiedVersion` and `verification` metadata in the entry.
+
+</Step>
+<Step>
+
+### Verify the entry
+
+```bash
+bun run community:check
+```
+
+CI runs the same validation on the PR. For `verified` and `official` entries it also downloads the published tarball and audits it: install scripts, binaries, the peer dependency, repository match, and runtime dependency count.
+
+</Step>
+</Steps>
+
+## Next
+
+<Cards>
+  <Card
+    title="Community registry reference"
+    href="/docs/reference/community-registry"
+    description="All entry fields, statuses, and the verification block."
+  />
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="The extra steps for packages that add a provider."
+  />
+  <Card
+    title="Writing plugins"
+    href="/docs/plugins/writing-plugins"
+    description="Hooks vs middleware, plugin adapters, and typed extensions."
+  />
+</Cards>

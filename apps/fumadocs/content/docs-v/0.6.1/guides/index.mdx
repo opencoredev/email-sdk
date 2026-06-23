@@ -1,0 +1,47 @@
+---
+title: Guides
+description: Step-by-step guides for running Email SDK in production and extending it with your own adapters and plugins.
+icon: BookOpen
+---
+
+Guides walk one task end to end: a goal, the steps, and a verification at the end. For exact types and options, use the [reference](/docs/reference/client) pages instead.
+
+## Operate
+
+<Cards>
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Build one production-ready client: retries, a compatible fallback, defaults, idempotency keys, observability, tests, and CLI checks."
+  />
+  <Card
+    title="Test email behavior"
+    href="/docs/guides/test-email-behavior"
+    description="Assert sends, fallbacks, and retries in unit tests with the memory adapter and capture plugin — no provider account."
+  />
+</Cards>
+
+## Build and publish
+
+<Cards>
+  <Card
+    title="Create your first plugin"
+    href="/docs/guides/authoring/create-first-plugin"
+    description="Build an audit-log plugin with middleware and a typed client extension."
+  />
+  <Card
+    title="Create an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Implement the adapter contract for a provider the SDK doesn't ship: payload mapping, fail-fast validation, retryable errors."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="Package a plugin for npm and list it in the community registry."
+  />
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="Ship a third-party provider adapter as its own package — naming, field-support docs, and the registry PR."
+  />
+</Cards>

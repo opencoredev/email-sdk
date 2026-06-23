@@ -1,6 +1,7 @@
 {
   "name": "@opencoredev/convex-email",
   "version": "0.1.0",
+  "private": true,
   "description": "Convex Email Ops: provider-portable transactional email with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
   "keywords": [
     "convex",
@@ -77,9 +78,6 @@
       "types": "./dist/component/_generated/component.d.ts",
       "import": "./dist/component/_generated/component.js"
     }
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "codegen": "convex codegen --component-dir src/component",
