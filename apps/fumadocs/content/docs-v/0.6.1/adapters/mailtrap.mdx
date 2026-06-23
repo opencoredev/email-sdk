@@ -1,0 +1,87 @@
+---
+title: Mailtrap
+description: Send through the Mailtrap Email Sending API with full field support and provider-side message inspection.
+icon: mailtrap
+---
+
+The Mailtrap adapter calls the [Mailtrap Email Sending API](https://api-docs.mailtrap.io/) over `fetch` — no extra dependency. It supports every common transactional field, and Mailtrap's inspection tooling makes it a natural pick for staging environments.
+
+<ProviderBadge adapter="mailtrap" />
+
+## Configure
+
+Create a Mailtrap API token with Email Sending permission and verify your sending domain.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
+
+export const email = createEmailClient({
+  adapters: [mailtrap({ apiKey: process.env.MAILTRAP_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Mailtrap API token, sent as the Api-Token header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://send.api.mailtrap.io"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Mailtrap maps `cc`, `bcc`, `headers`, `attachments`, `metadata`, and `tags` — with two limits: at most one tag (its value becomes the Mailtrap `category`) and at most one `replyTo`. `metadata` is sent as `custom_variables` with values stringified (`null` becomes `""`).
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  cc: "billing@acme.com",
+  replyTo: "support@acme.com",
+  subject: "Your receipt for order ord_123",
+  html: "<p>Thanks for your order — receipt attached.</p>",
+  tags: [{ name: "type", value: "receipt" }],
+  metadata: { orderId: "ord_123" },
+  attachments: [
+    { filename: "receipt.pdf", path: "./receipts/ord_123.pdf" },
+  ],
+});
+
+console.log(result.messageId); // first entry of Mailtrap's message_ids
+```
+
+<Callout type="warn" title="One tag, one reply-to">
+  A second tag or a second `replyTo` throws an `EmailValidationError` before any request. Trim to
+  one of each when Mailtrap sits in a [fallback route](/docs/concepts/fallbacks-and-retries) behind
+  a multi-tag adapter.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+MAILTRAP_API_KEY="..." npx email-sdk doctor --adapter mailtrap
+```
+
+```bash
+MAILTRAP_API_KEY="..." npx email-sdk send \
+  --adapter mailtrap \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Mailtrap smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real smoke send — and confirm the token targets the intended Mailtrap project before pointing production at it.

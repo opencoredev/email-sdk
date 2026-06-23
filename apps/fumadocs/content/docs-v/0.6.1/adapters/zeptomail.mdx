@@ -1,0 +1,83 @@
+---
+title: ZeptoMail
+description: Send through Zoho ZeptoMail with automatic send-mail token prefixing.
+icon: zeptomail
+---
+
+The ZeptoMail adapter calls the [Zoho ZeptoMail email API](https://www.zoho.com/zeptomail/help/api/email-sending.html) over `fetch` — no extra dependency. Paste your send mail token as-is: the adapter prepends Zoho's `Zoho-enczapikey ` authorization prefix automatically when it is missing.
+
+<ProviderBadge adapter="zeptomail" />
+
+## Configure
+
+Create a Mail Agent in ZeptoMail, copy its send mail token, and verify the sending domain.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
+
+export const email = createEmailClient({
+  adapters: [zeptomail({ token: process.env.ZEPTOMAIL_TOKEN! })],
+});
+```
+
+<TypeTable
+  type={{
+    token: {
+      description:
+        'ZeptoMail send mail token. Works with or without the "Zoho-enczapikey " prefix.',
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.zeptomail.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+ZeptoMail maps `cc`, `bcc`, `replyTo`, and `attachments`. Display names carry through to ZeptoMail's `email_address` recipient objects, and `html`/`text` become `htmlbody`/`textbody`.
+
+```ts
+const result = await email.send({
+  from: { email: "security@acme.com", name: "Acme Security" },
+  to: [{ email: "user@example.com", name: "Ada" }],
+  replyTo: "support@acme.com",
+  subject: "Reset your password",
+  html: '<p><a href="https://acme.com/reset?t=abc123">Reset your password</a></p>',
+  text: "Reset your password: https://acme.com/reset?t=abc123",
+});
+
+console.log(result.id); // ZeptoMail request_id (falls back to messageId or id)
+```
+
+<Callout type="warn" title="No headers, tags, or metadata">
+  The adapter does not map custom headers, tags, or metadata to the ZeptoMail API, so any of them
+  throws an `EmailValidationError` before a request is made. See the [field support
+  matrix](/docs/adapters/field-support) for alternatives.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+ZEPTOMAIL_TOKEN="..." npx email-sdk doctor --adapter zeptomail
+```
+
+```bash
+ZEPTOMAIL_TOKEN="..." npx email-sdk send \
+  --adapter zeptomail \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "ZeptoMail smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send — that is the check that proves the token, Mail Agent, and sender domain are ready.
