@@ -72,12 +72,14 @@ export default defineConfig(({ mode }) => {
       mdx(),
       tailwindcss(),
       tanstackStart({
-        spa: {
+        // Full static prerendering (SSG), not SPA mode. SPA mode reserves "/" for the
+        // pending-fallback shell and ships an empty <body> at the root — invisible to AI
+        // crawlers and search engines. Top-level prerender renders every route, including
+        // the homepage, to static HTML with real content; the client still hydrates for
+        // interactivity (provider switcher, search, theme toggle).
+        prerender: {
           enabled: true,
-          prerender: {
-            enabled: true,
-            crawlLinks: true,
-          },
+          crawlLinks: true,
         },
 
         pages: [
@@ -89,6 +91,12 @@ export default defineConfig(({ mode }) => {
           },
           {
             path: "/blog",
+          },
+          {
+            path: "/about",
+          },
+          {
+            path: "/contact",
           },
           {
             path: "/privacy",

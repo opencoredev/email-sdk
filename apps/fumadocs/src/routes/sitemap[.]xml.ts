@@ -47,6 +47,18 @@ function getSitemapEntries() {
       priority: "0.8",
     },
     {
+      loc: `${siteUrl}/about`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.5",
+    },
+    {
+      loc: `${siteUrl}/contact`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.5",
+    },
+    {
       loc: `${siteUrl}/privacy`,
       lastmod: "2026-06-01",
       changefreq: "monthly",
