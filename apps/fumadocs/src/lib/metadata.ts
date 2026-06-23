@@ -93,6 +93,18 @@ export const homeStructuredData = {
       name: "OpenCore",
       url: "https://opencore.dev",
       logo: `${siteUrl}/logo.png`,
+      // sameAs links let agents disambiguate the brand against real, verifiable profiles.
+      sameAs: [
+        "https://github.com/opencoredev",
+        "https://github.com/opencoredev/email-sdk",
+        "https://www.npmjs.com/package/@opencoredev/email-sdk",
+      ],
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "technical support",
+        url: "https://github.com/opencoredev/email-sdk/issues",
+        availableLanguage: "English",
+      },
     },
     {
       "@type": "WebSite",
@@ -161,6 +173,39 @@ export const homeStructuredData = {
           },
         },
       ],
+    },
+    {
+      // Machine-readable enumeration of supported providers so agents can resolve
+      // "does Email SDK support <provider>?" without parsing prose.
+      "@type": "ItemList",
+      "@id": `${siteUrl}/#supported-providers`,
+      name: "Email providers supported by Email SDK",
+      itemListElement: [
+        "Resend",
+        "SMTP",
+        "Postmark",
+        "SendGrid",
+        "Mailgun",
+        "Cloudflare Email Sending",
+        "Unosend",
+        "AWS SES",
+        "MailerSend",
+        "Brevo",
+        "Mailchimp Transactional",
+        "SparkPost",
+        "Iterable",
+        "Loops",
+        "Sequenzy",
+        "Plunk",
+        "Mailtrap",
+        "Scaleway",
+        "ZeptoMail",
+        "MailPace",
+      ].map((name, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name,
+      })),
     },
   ],
 } as const;

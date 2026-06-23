@@ -1,0 +1,28 @@
+{
+  "name": "Email SDK",
+  "description": "TypeScript SDK that sends transactional email through 20+ providers (Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks.",
+  "homepage": "https://email-sdk.dev",
+  "guide": "https://email-sdk.dev/agents.md",
+  "docs": "https://email-sdk.dev/docs",
+  "llmsTxt": "https://email-sdk.dev/llms.txt",
+  "repository": "https://github.com/opencoredev/email-sdk",
+  "package": "@opencoredev/email-sdk",
+  "skills": [
+    {
+      "name": "email-sdk",
+      "description": "Use when adding, reviewing, or documenting Email SDK integrations in TypeScript/Bun apps. Covers adapter selection, fallbacks, CLI smoke tests, hooks, and secret-safe observability.",
+      "install": "npx skills add opencoredev/email-sdk --skill email-sdk",
+      "source": "https://github.com/opencoredev/email-sdk/blob/main/skills/email-sdk/SKILL.md"
+    }
+  ],
+  "tools": [
+    {
+      "name": "send_email",
+      "description": "Send a transactional email through the app's configured Email SDK client. Requires from, to, and subject; optional html, text, adapter, and provider. Runs the full validate/retry/fallback pipeline.",
+      "package": "@opencoredev/email-sdk/agent-tools",
+      "factory": "createEmailAgentTools",
+      "docs": "https://email-sdk.dev/docs/agents/skill",
+      "requiresApproval": true
+    }
+  ]
+}

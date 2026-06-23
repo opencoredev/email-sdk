@@ -1,19 +1,54 @@
+# Email SDK — crawler policy
+# Default: every well-behaved crawler may index the whole site.
 User-agent: *
 Allow: /
 
+# AI assistants and answer engines that fetch on behalf of a user, drive traffic,
+# and cite sources are explicitly welcome.
 User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
 Allow: /
 
 User-agent: ChatGPT-User
 Allow: /
 
-User-agent: PerplexityBot
+User-agent: ClaudeBot
 Allow: /
 
-User-agent: ClaudeBot
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
 Allow: /
 
 User-agent: anthropic-ai
 Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Bulk training-data scrapers with no user-facing product and no attribution are disallowed.
+User-agent: CCBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
 
 Sitemap: https://email-sdk.dev/sitemap.xml

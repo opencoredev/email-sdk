@@ -39,7 +39,7 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <html suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           // Browser translation/extensions can mutate React-owned DOM before hydration finishes.
