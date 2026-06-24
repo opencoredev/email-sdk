@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/opencoredev/email-sdk.git",
