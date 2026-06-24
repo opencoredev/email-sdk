@@ -288,6 +288,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
   mailpace: { cc: true, bcc: true, replyTo: true },
   smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+  primitive: { attachments: true },
 } satisfies Record<string, MessageFieldSupport>;
 
 export function assertSupportedMessageFields(

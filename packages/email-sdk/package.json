@@ -9,6 +9,7 @@
     "iterable",
     "mailgun",
     "postmark",
+    "primitive",
     "resend",
     "sendgrid",
     "sequenzy",
@@ -121,6 +122,10 @@
     "./smtp": {
       "types": "./dist/smtp.d.ts",
       "import": "./dist/smtp.js"
+    },
+    "./primitive": {
+      "types": "./dist/primitive.d.ts",
+      "import": "./dist/primitive.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",

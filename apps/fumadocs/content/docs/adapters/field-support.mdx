@@ -40,6 +40,9 @@ Useful services whose public APIs cover less of the `EmailMessage` shape. The SD
 | Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         |
 | ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         |
 | MailPace  | Yes | Yes | Yes      | No      | No       | No     | No          |
+| Primitive | No  | No  | No       | No      | No       | No     | Yes         |
+
+Primitive also accepts a single recipient per send: a message with more than one `to` address fails fast with an `EmailValidationError`.
 
 ## SMTP transport
 

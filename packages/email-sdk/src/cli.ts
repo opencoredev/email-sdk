@@ -15,6 +15,7 @@ import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
 import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
+import { assertPrimitiveMessage, primitive } from "./primitive.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
 import { sequenzy } from "./sequenzy.js";
@@ -88,6 +89,7 @@ const providerDocs = [
   { name: "zeptomail", env: ["ZEPTOMAIL_TOKEN"], note: "Zoho ZeptoMail API" },
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
+  { name: "primitive", env: ["PRIMITIVE_API_KEY"], note: "Primitive outbound send API" },
 ] as const satisfies ReadonlyArray<{
   name: SupportedAdapterName;
   env: readonly string[];
@@ -165,6 +167,11 @@ const factories = {
     }),
   zeptomail: (flags) => zeptomail({ token: flagOrEnv(flags, "token", "ZEPTOMAIL_TOKEN") }),
   mailpace: (flags) => mailpace({ apiKey: flagOrEnv(flags, "api-key", "MAILPACE_API_KEY") }),
+  primitive: (flags) =>
+    primitive({
+      apiKey: flagOrEnv(flags, "api-key", "PRIMITIVE_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.PRIMITIVE_BASE_URL,
+    }),
   smtp: (flags) =>
     smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
@@ -211,6 +218,7 @@ const envFlagNames: Record<string, string> = {
   ZEPTOMAIL_TOKEN: "token",
   MAILPACE_API_KEY: "api-key",
   SMTP_HOST: "host",
+  PRIMITIVE_API_KEY: "api-key",
 };
 
 async function main() {
@@ -297,6 +305,10 @@ function validateDryRun(name: string, message: EmailMessage) {
 
   if (name === "unosend") {
     assertUnosendMessage(message);
+  }
+
+  if (name === "primitive") {
+    assertPrimitiveMessage(message);
   }
 }
 

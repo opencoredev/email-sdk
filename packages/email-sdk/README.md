@@ -93,6 +93,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/scaleway`   | Scaleway                         |
 | `@opencoredev/email-sdk/zeptomail`  | ZeptoMail                        |
 | `@opencoredev/email-sdk/mailpace`   | MailPace                         |
+| `@opencoredev/email-sdk/primitive`  | Primitive                        |
 | `@opencoredev/email-sdk/smtp`       | SMTP                             |
 | `@opencoredev/email-sdk/testing`    | Memory and failing test adapters |
 

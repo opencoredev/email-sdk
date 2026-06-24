@@ -23,6 +23,7 @@
     "scaleway",
     "zeptomail",
     "mailpace",
+    "primitive",
     "smtp"
   ]
 }

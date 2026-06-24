@@ -79,7 +79,7 @@ See [packages/email-sdk/README.md](packages/email-sdk/README.md) for SDK usage e
 
 ## Adapter Entry Points
 
-`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `iterable`, `loops`, `sequenzy`, `plunk`, `mailtrap`, `cloudflare`, `unosend`, `scaleway`, `zeptomail`, `mailpace`, `smtp`, and `testing` are exported from separate package entry points.
+`resend`, `postmark`, `sendgrid`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `iterable`, `loops`, `sequenzy`, `plunk`, `mailtrap`, `cloudflare`, `unosend`, `scaleway`, `zeptomail`, `mailpace`, `primitive`, `smtp`, and `testing` are exported from separate package entry points.
 
 If you are choosing your first adapter, start with Resend for the shortest path to a first send. Use Iterable or Sequenzy for product-led transactional sends. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when you need broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
 

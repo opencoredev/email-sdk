@@ -12,6 +12,7 @@ import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
 import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
+import { primitive } from "./primitive.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
 import { sequenzy } from "./sequenzy.js";
@@ -294,6 +295,100 @@ describe("provider payloads", () => {
         }).fetch,
       }).send(messageWithoutMetadata, context),
     ).rejects.toThrow("unosend failed: Sending domain is not verified.");
+  });
+
+  const primitiveMessage: EmailMessage = {
+    from: "Acme <hello@example.com>",
+    to: [{ email: "ada@example.com", name: "Ada" }],
+    subject: "Welcome",
+    text: "Hello",
+    html: "<p>Hello</p>",
+    attachments: [{ filename: "hello.txt", content: "hello", contentType: "text/plain" }],
+  };
+
+  test("Primitive maps normalized fields and reads the success envelope", async () => {
+    const capture = jsonCapture({
+      success: true,
+      data: {
+        id: "snt_123",
+        queue_id: "q_456",
+        status: "submitted_to_agent",
+        accepted: ["ada@example.com"],
+        rejected: [],
+      },
+    });
+
+    const response = await primitive({
+      apiKey: "prim_test",
+      fetch: capture.fetch,
+      wait: true,
+      waitTimeoutMs: 5000,
+    }).send(primitiveMessage, context);
+
+    expect(response.id).toBe("snt_123");
+    expect(response.messageId).toBe("q_456");
+    expect(response.accepted).toEqual(["ada@example.com"]);
+    expect(capture.calls[0]?.url).toBe("https://api.primitive.dev/v1/send-mail");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer prim_test");
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "Acme <hello@example.com>",
+      to: "Ada <ada@example.com>",
+      subject: "Welcome",
+      body_text: "Hello",
+      body_html: "<p>Hello</p>",
+      wait: true,
+      wait_timeout_ms: 5000,
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toMatchObject({
+      filename: "hello.txt",
+      content_type: "text/plain",
+      content_base64: base64("hello"),
+    });
+  });
+
+  test("Primitive falls back to the attempt id when no relay queue id is present", async () => {
+    const capture = jsonCapture({ success: true, data: { id: "snt_123", queue_id: null } });
+
+    const response = await primitive({ apiKey: "prim_test", fetch: capture.fetch }).send(
+      primitiveMessage,
+      context,
+    );
+
+    expect(response.messageId).toBe("snt_123");
+  });
+
+  test("Primitive surfaces error envelope messages", async () => {
+    await expect(
+      primitive({
+        apiKey: "prim_test",
+        fetch: jsonCapture(
+          {
+            success: false,
+            error: { code: "validation_error", message: "Sender domain is not verified." },
+          },
+          { status: 400 },
+        ).fetch,
+      }).send(primitiveMessage, context),
+    ).rejects.toThrow("primitive failed with 400: Sender domain is not verified.");
+  });
+
+  test("Primitive rejects more than one recipient", async () => {
+    await expect(
+      primitive({
+        apiKey: "prim_test",
+        fetch: jsonCapture({ success: true, data: { id: "x" } }).fetch,
+      }).send({ ...primitiveMessage, to: ["ada@example.com", "grace@example.com"] }, context),
+    ).rejects.toThrow("primitive only supports 1 recipient per message");
+  });
+
+  test("Primitive rejects unsupported fields", async () => {
+    await expect(
+      primitive({
+        apiKey: "prim_test",
+        fetch: jsonCapture({ success: true, data: { id: "x" } }).fetch,
+      }).send({ ...primitiveMessage, cc: "cc@example.com" }, context),
+    ).rejects.toThrow("primitive does not support");
   });
 
   test("SES signs and maps simple email payloads", async () => {

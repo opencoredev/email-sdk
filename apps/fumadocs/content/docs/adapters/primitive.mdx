@@ -1,0 +1,95 @@
+---
+title: Primitive
+description: Send through Primitive's outbound relay, a single Bearer-authenticated endpoint for one-recipient sends with attachments.
+icon: primitive
+---
+
+The Primitive adapter calls [Primitive's](https://www.primitive.dev) `/send-mail` endpoint over `fetch` with no extra dependency. Primitive is an inbound and outbound email platform; this adapter covers the outbound send path. One Bearer-authenticated endpoint, one API key, and the sender domain must be a verified outbound domain for your organization.
+
+<ProviderBadge adapter="primitive" />
+
+## Configure
+
+Create a server-side API key (it carries a `prim_` prefix) and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { primitive } from "@opencoredev/email-sdk/primitive";
+
+export const email = createEmailClient({
+  adapters: [primitive({ apiKey: process.env.PRIMITIVE_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Primitive API key (the prim_-prefixed token).",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for the legacy compatibility host or a proxy.",
+      type: "string",
+      default: '"https://api.primitive.dev/v1"',
+    },
+    wait: {
+      description: "Wait for the first downstream SMTP delivery outcome before resolving.",
+      type: "boolean",
+      default: "false",
+    },
+    waitTimeoutMs: {
+      description: "Max time to wait for a delivery outcome when wait is true (1000-30000 ms).",
+      type: "number",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Primitive maps `from`, `to`, `subject`, `text`, `html`, and `attachments`.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome to Acme",
+  html: "<p>It works.</p>",
+});
+
+console.log(result.id); // Primitive sent-email attempt id
+console.log(result.messageId); // outbound relay queue id, when assigned
+```
+
+The send resolves once Primitive's relay accepts the message. Set `wait: true` on the adapter to block until the first downstream SMTP delivery outcome instead. `result.accepted` and `result.rejected` carry the recipient addresses the relay accepted or rejected.
+
+<Callout type="warn" title="One recipient, no extra fields">
+  Primitive's outbound send accepts a single recipient and does not expose `cc`, `bcc`, `replyTo`,
+  custom `headers`, `tags`, or `metadata`. A message with more than one `to` address, or with any of
+  those fields, throws an `EmailValidationError` before any request is made. Pick a
+  [broader adapter](/docs/adapters/field-support) when you need them.
+</Callout>
+
+The adapter reads Primitive's `{ success, data }` envelope and throws an `EmailProviderError` carrying the platform's `error.message` when a send fails.
+
+## Verify from the CLI
+
+```bash
+PRIMITIVE_API_KEY="prim_..." npx email-sdk doctor --adapter primitive
+```
+
+```bash
+PRIMITIVE_API_KEY="prim_..." npx email-sdk send \
+  --adapter primitive \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Primitive smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send. That is the only check that proves the API key and verified outbound domain are ready.
