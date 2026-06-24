@@ -1,9 +1,9 @@
 <p align="center">
-  <img alt="Email SDK" src="https://shieldcn.dev/header/gradient.svg?title=Email+SDK&subtitle=Unified+transactional+email+for+TypeScript&mode=dark" />
+  <img alt="Email SDK — Send email without provider lock-in" src="./Background-with-text.png" width="820" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/opencoredev/email-sdk/releases"><img alt="Latest release" src="https://shieldcn.dev/github/opencoredev/email-sdk/release.svg?variant=secondary&mode=dark" /></a>
+  <a href="https://www.npmjs.com/package/@opencoredev/email-sdk"><img alt="npm version" src="https://shieldcn.dev/npm/@opencoredev/email-sdk.svg?variant=secondary&mode=dark" /></a>
   <a href="https://github.com/opencoredev/email-sdk/stargazers"><img alt="GitHub stars" src="https://shieldcn.dev/github/opencoredev/email-sdk/stars.svg?variant=branded&mode=dark" /></a>
   <a href="https://x.com/leodev"><img alt="Follow @leodev on X" src="https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark" /></a>
 </p>
