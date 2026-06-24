@@ -76,4 +76,4 @@ Email SDK is supported by companies that help keep provider integrations practic
   <a href="https://github.com/opencoredev/email-sdk/stargazers"><img alt="Star history" src="https://shieldcn.dev/chart/github/stars/opencoredev/email-sdk.svg?mode=dark" /></a>
 </p>
 
-<p align="center"><sub>MIT License · Built by <a href="https://x.com/leodev">@leodev</a></sub></p>
+<p align="center"><sub><a href="./LICENSE">MIT License</a> · Built by <a href="https://x.com/leodev">@leodev</a></sub></p>
