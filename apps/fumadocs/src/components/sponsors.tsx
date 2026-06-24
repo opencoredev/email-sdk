@@ -20,9 +20,14 @@ const sponsors = [
     logo: "/og/provider-logos/sequenzy.jpeg",
     forceLatestDocs: true,
   },
+  {
+    name: "Preflight",
+    href: "https://preflight.sh/",
+    logo: "/og/provider-logos/preflight.png",
+  },
 ] as const;
 
-const openSponsorSlots = [1, 2] as const;
+const openSponsorSlots = [1] as const;
 const sponsorHref = "https://github.com/sponsors/opencoredev";
 
 export function SponsorSpotlight({ compact = false }: SponsorSpotlightProps) {
@@ -113,13 +118,15 @@ function SponsorLink({
           {sponsor.name}
           <ExternalLink aria-hidden="true" className="size-3.5" strokeWidth={2} />
         </a>
-        <DocsVersionLink
-          className="text-xs font-medium text-fd-muted-foreground transition hover:text-fd-primary"
-          docsPath={sponsor.docs}
-          forceLatest={"forceLatestDocs" in sponsor && sponsor.forceLatestDocs}
-        >
-          Docs
-        </DocsVersionLink>
+        {"docs" in sponsor ? (
+          <DocsVersionLink
+            className="text-xs font-medium text-fd-muted-foreground transition hover:text-fd-primary"
+            docsPath={sponsor.docs}
+            forceLatest={"forceLatestDocs" in sponsor && sponsor.forceLatestDocs}
+          >
+            Docs
+          </DocsVersionLink>
+        ) : null}
       </span>
     </div>
   );
