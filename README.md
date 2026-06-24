@@ -1,13 +1,25 @@
-# Email SDK
+<p align="center">
+  <img alt="Email SDK" src="https://shieldcn.dev/header/gradient.svg?title=Email+SDK&subtitle=Unified+transactional+email+for+TypeScript&mode=dark" />
+</p>
 
-[![GitHub stars](https://shieldcn.dev/github/stars/opencoredev/email-sdk.svg?variant=branded&mode=dark)](https://github.com/opencoredev/email-sdk/stargazers)
-[![GitHub issues](https://shieldcn.dev/github/issues/opencoredev/email-sdk.svg?variant=secondary&mode=dark)](https://github.com/opencoredev/email-sdk/issues)
-[![Last commit](https://shieldcn.dev/github/last-commit/opencoredev/email-sdk.svg?variant=outline&mode=dark)](https://github.com/opencoredev/email-sdk/commits/main)
-[![Follow on X](https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark)](https://x.com/leodev)
+<p align="center">
+  <a href="https://github.com/opencoredev/email-sdk/releases"><img alt="Latest release" src="https://shieldcn.dev/github/opencoredev/email-sdk/release.svg?variant=secondary&mode=dark" /></a>
+  <a href="https://github.com/opencoredev/email-sdk/stargazers"><img alt="GitHub stars" src="https://shieldcn.dev/github/opencoredev/email-sdk/stars.svg?variant=branded&mode=dark" /></a>
+  <a href="https://x.com/leodev"><img alt="Follow @leodev on X" src="https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark" /></a>
+</p>
+
+## Overview
 
 A lightweight TypeScript SDK for transactional email send pipelines. Use one client in your app, pick the adapters you actually send through, validate provider compatibility before data is silently dropped, add retries and fallback routes, observe send behavior, and keep provider-specific field support visible in the docs.
 
-Docs: https://email-sdk.dev/docs
+- 🔌 Adapters for 18+ email providers behind one normalized message
+- 🔁 Retries within an adapter, plus fallback routes across adapters
+- 🛟 Fail-fast field-support checks before a provider silently drops data
+- 🔭 Observability hooks and plugin for logs, metrics, traces, and retries
+- 🧪 Test adapters that capture sends instead of calling real providers
+- ⌨️ CLI for adapter discovery, doctor checks, and dry-run smoke sends
+
+📖 [Read the docs](https://email-sdk.dev/docs)
 
 ## Sponsors
 
@@ -141,3 +153,9 @@ Do not start the docs dev server unless you actually want a local preview.
 The SDK validates messages locally and adapter tests verify payload mapping with injected fetch calls. Real provider sends still depend on live account setup: verified domains, sender identities, API scopes, sandbox settings, regions, rate limits, and provider-specific policy.
 
 Before production use, configure one primary adapter, add a fallback adapter where delivery matters, and run a live smoke send from the target environment.
+
+## Star History
+
+<p align="center">
+  <a href="https://github.com/opencoredev/email-sdk/stargazers"><img alt="Star history" src="https://shieldcn.dev/chart/github/stars/opencoredev/email-sdk.svg?mode=dark" /></a>
+</p>
