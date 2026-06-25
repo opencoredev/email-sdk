@@ -7,6 +7,7 @@ import { assertCloudflareMessage, cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { iterable } from "./iterable.js";
+import { jetemail } from "./jetemail.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -78,6 +79,7 @@ const providerDocs = [
     note: "Loops transactional email",
   },
   { name: "sequenzy", env: ["SEQUENZY_API_KEY"], note: "Sequenzy transactional email API" },
+  { name: "jetemail", env: ["JETEMAIL_API_KEY"], note: "JetEmail transactional email API" },
   { name: "plunk", env: ["PLUNK_API_KEY"], note: "Plunk public send API" },
   { name: "mailtrap", env: ["MAILTRAP_API_KEY"], note: "Mailtrap Email Sending API" },
   {
@@ -155,6 +157,11 @@ const factories = {
       apiKey: flagOrEnv(flags, "api-key", "SEQUENZY_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.SEQUENZY_BASE_URL,
     }),
+  jetemail: (flags) =>
+    jetemail({
+      apiKey: flagOrEnv(flags, "api-key", "JETEMAIL_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.JETEMAIL_BASE_URL,
+    }),
   plunk: (flags) => plunk({ apiKey: flagOrEnv(flags, "api-key", "PLUNK_API_KEY") }),
   mailtrap: (flags) => mailtrap({ apiKey: flagOrEnv(flags, "api-key", "MAILTRAP_API_KEY") }),
   scaleway: (flags) =>
@@ -204,6 +211,7 @@ const envFlagNames: Record<string, string> = {
   LOOPS_API_KEY: "api-key",
   LOOPS_TRANSACTIONAL_ID: "transactional-id",
   SEQUENZY_API_KEY: "api-key",
+  JETEMAIL_API_KEY: "api-key",
   PLUNK_API_KEY: "api-key",
   MAILTRAP_API_KEY: "api-key",
   SCALEWAY_SECRET_KEY: "secret-key",

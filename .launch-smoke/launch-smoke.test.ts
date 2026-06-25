@@ -17,6 +17,7 @@ import {
   observabilityPlugin,
   type EmailObservabilityEvent,
 } from "@opencoredev/email-sdk/plugins/observability";
+import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { loops } from "@opencoredev/email-sdk/loops";
 import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
 import { mailersend } from "@opencoredev/email-sdk/mailersend";
@@ -276,6 +277,12 @@ describe("documented adapter entry points", () => {
         tags: undefined,
       },
       { success: true, jobId: "sequenzy_1" },
+    ],
+    [
+      "jetemail",
+      jetemail({ apiKey: "test", fetch: fetchOk({ id: "jetemail_1" }).fetcher }),
+      { ...richMessage, tags: undefined, metadata: undefined },
+      { id: "jetemail_1" },
     ],
     [
       "plunk",

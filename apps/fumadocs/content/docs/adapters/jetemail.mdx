@@ -1,0 +1,101 @@
+---
+title: JetEmail
+description: Send through the JetEmail transactional API over fetch — CC, BCC, reply-to, custom headers, and base64 attachments, with idempotent retries.
+icon: jetemail
+---
+
+The JetEmail adapter calls JetEmail's transactional `POST /email` endpoint over `fetch` — no extra dependency. JetEmail runs its own sending infrastructure (anycast IPs, managed reputation), and the adapter maps the normalized `EmailMessage` straight onto its REST payload.
+
+<ProviderBadge adapter="jetemail" />
+
+## Configure
+
+Create a JetEmail **transactional** API key (prefixed `transactional_`) in the [JetEmail dashboard](https://dash.jetemail.com) and verify the domain you send `from`.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { jetemail } from "@opencoredev/email-sdk/jetemail";
+
+export const email = createEmailClient({
+  adapters: [jetemail({ apiKey: process.env.JETEMAIL_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "JetEmail transactional API key (prefixed transactional_).",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.jetemail.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+    headers: {
+      description: "Extra headers merged into every request.",
+      type: "Record<string, string>",
+    },
+  }}
+/>
+
+## Send
+
+JetEmail accepts up to 50 recipients each across `to`, `cc`, and `bcc`, and maps `headers` to custom email headers. Attachments are base64-encoded automatically (40MB total).
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  cc: "team@acme.com",
+  replyTo: "support@acme.com",
+  subject: "Welcome to Acme",
+  html: "<p>Thanks for joining Acme.</p>",
+  text: "Thanks for joining Acme.",
+});
+
+console.log(result.id); // JetEmail message id, e.g. "19424fd2acd0004210"
+```
+
+<Callout type="warn" title="From requires a display name">
+  JetEmail rejects a bare email in `from` — it requires the `"Name <email>"` form. The adapter
+  fails fast with an `EmailValidationError` when `from` has no display name, so pass
+  `from: "Acme <hello@acme.com>"` or `from: { email: "hello@acme.com", name: "Acme" }`.
+</Callout>
+
+<Callout type="warn" title="No tags or metadata">
+  JetEmail's send API has no tags or metadata field, so the adapter rejects `tags` and `metadata`
+  with an `EmailValidationError` before the request. Check [field
+  support](/docs/adapters/field-support) before using JetEmail in a fallback route.
+</Callout>
+
+## Idempotent sends
+
+Pass an `idempotencyKey` and the adapter forwards it as JetEmail's `Idempotency-Key` header, so a retried send with the same key and body replays the original response instead of sending twice.
+
+```ts
+await email.send(message, { idempotencyKey: "receipt:order_123" });
+```
+
+## Verify from the CLI
+
+```bash
+JETEMAIL_API_KEY="transactional_..." npx email-sdk doctor --adapter jetemail
+```
+
+```bash
+JETEMAIL_API_KEY="transactional_..." npx email-sdk send \
+  --adapter jetemail \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "JetEmail smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real smoke send — the only check that proves the API key and sender domain are ready.

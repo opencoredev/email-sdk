@@ -4,6 +4,7 @@ import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
 import { EmailValidationError } from "./errors.js";
 import { iterable } from "./iterable.js";
+import { jetemail } from "./jetemail.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -862,6 +863,56 @@ describe("provider payloads", () => {
     ]);
   });
 
+  test("JetEmail maps normalized fields and encodes attachments", async () => {
+    const capture = jsonCapture({ id: "jet_123", response: "Message queued as jet_123" });
+
+    const response = await jetemail({ apiKey: "key", fetch: capture.fetch }).send(
+      messageWithoutTagsOrMetadata,
+      context,
+    );
+
+    expect(response.id).toBe("jet_123");
+    expect(response.messageId).toBe("jet_123");
+    expect(capture.calls[0]?.url).toBe("https://api.jetemail.com/email");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer key");
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "Acme <hello@example.com>",
+      to: ["Ada <ada@example.com>"],
+      subject: "Welcome",
+      text: "Hello",
+      html: "<p>Hello</p>",
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      reply_to: ["reply@example.com"],
+      headers: { "X-Test": "yes" },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toMatchObject({
+      filename: "hello.txt",
+      data: base64("hello"),
+    });
+  });
+
+  test("JetEmail requires a from address with a display name", async () => {
+    await expect(
+      jetemail({ apiKey: "key", fetch: jsonCapture({ id: "jet_123" }).fetch }).send(
+        { ...messageWithoutTagsOrMetadata, from: "hello@example.com" },
+        context,
+      ),
+    ).rejects.toThrow("jetemail requires a from address with a display name");
+  });
+
+  test("JetEmail rejects more than 50 recipients", async () => {
+    const recipients = Array.from({ length: 51 }, (_, index) => `user${index}@example.com`);
+
+    await expect(
+      jetemail({ apiKey: "key", fetch: jsonCapture({ id: "jet_123" }).fetch }).send(
+        { ...messageWithoutTagsOrMetadata, to: recipients },
+        context,
+      ),
+    ).rejects.toThrow("jetemail only supports 50 recipients per message");
+  });
+
   test("limited adapters reject fields they cannot send instead of dropping them", async () => {
     const limitedMessage = {
       ...message,
@@ -956,6 +1007,13 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("sequenzy does not support");
+
+    await expect(
+      jetemail({ apiKey: "key", fetch: jsonCapture({ id: "jet_123" }).fetch }).send(
+        { ...limitedMessage, metadata: { id: "nope" } },
+        context,
+      ),
+    ).rejects.toThrow("jetemail does not support");
 
     await expect(
       cloudflare({
