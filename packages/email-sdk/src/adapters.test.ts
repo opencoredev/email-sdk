@@ -971,6 +971,30 @@ describe("provider payloads", () => {
     ).rejects.toThrow("primitive only supports 1 recipient per message");
   });
 
+  test("Primitive keeps a per-send idempotency key over construction headers", async () => {
+    const capture = jsonCapture({ success: true, data: { id: "prim_123" } });
+
+    await primitive({
+      apiKey: "key",
+      headers: { "Idempotency-Key": "static-key" },
+      fetch: capture.fetch,
+    }).send(
+      {
+        ...message,
+        to: "ada@example.com",
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        metadata: undefined,
+      },
+      context,
+    );
+
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
   test("limited adapters reject fields they cannot send instead of dropping them", async () => {
     const limitedMessage = {
       ...message,

@@ -45,8 +45,10 @@ export function primitive(options: PrimitiveProviderOptions): EmailProvider<{ ba
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",
-          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
           ...options.headers,
+          // Spread after options.headers so a per-send idempotency key stays authoritative
+          // and is never shadowed by a static Idempotency-Key passed at construction time.
+          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
         },
         body: JSON.stringify(await toPrimitivePayload(message)),
       });
