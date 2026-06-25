@@ -234,6 +234,7 @@ export const providers = [
     status: "Official",
     testStatus: "Request tested",
     apiStatus: "API tested",
+    sponsorship: "Sponsor",
     currentOnly: true,
   },
   {
