@@ -80,8 +80,8 @@ Email SDK is supported by companies that help keep provider integrations practic
 
 <!-- Sequenzy sponsors outside GitHub Sponsors, so it can't appear in the auto grid above and is listed manually here. -->
 <p align="center">
-  <a href="https://www.sequenzy.com/"><img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="56" height="56" alt="Sequenzy logo"></a><br>
-  <sub>Also sponsored by <a href="https://www.sequenzy.com/"><b>Sequenzy</b></a> · <a href="https://email-sdk.dev/docs/adapters/sequenzy">adapter docs</a></sub>
+  <a href="https://www.sequenzy.com/?ref=emailsdk"><img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="56" height="56" alt="Sequenzy logo"></a><br>
+  <sub>Also sponsored by <a href="https://www.sequenzy.com/?ref=emailsdk"><b>Sequenzy</b></a> · <a href="https://email-sdk.dev/docs/adapters/sequenzy">adapter docs</a></sub>
 </p>
 
 ## Star History
