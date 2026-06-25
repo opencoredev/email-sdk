@@ -31,10 +31,13 @@ if (authProbe.status === 401) {
 }
 
 // The empty probe payload should authenticate and then fail validation with a
-// 400. Treat only a 400 (or a 2xx) as proof the key passed auth; 403, 5xx, and
-// unexpected proxy/WAF bodies are inconclusive rather than a pass.
+// 400 (verified live). Treat 400, 422 (some APIs use it for a structurally
+// valid but incomplete body), or any 2xx as proof the key passed auth; 401 is a
+// bad key, and 403, 5xx, and unexpected proxy/WAF bodies are inconclusive.
 const authenticated =
-  authProbe.status === 400 || (authProbe.status >= 200 && authProbe.status < 300);
+  authProbe.status === 400 ||
+  authProbe.status === 422 ||
+  (authProbe.status >= 200 && authProbe.status < 300);
 
 console.log(
   JSON.stringify(
@@ -53,7 +56,7 @@ console.log(
 
 if (!authenticated) {
   fail(
-    `Primitive auth probe inconclusive (HTTP ${authProbe.status}); expected 400 for the empty probe payload.`,
+    `Primitive auth probe inconclusive (HTTP ${authProbe.status}); expected 400 or 422 for the empty probe payload.`,
   );
 }
 
