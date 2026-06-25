@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/email-sdk",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "A TypeScript email SDK for unified transactional sending.",
   "keywords": [
     "bun",
