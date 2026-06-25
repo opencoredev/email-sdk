@@ -10,7 +10,7 @@
 
 One TypeScript client for transactional email. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- 🔌 Adapters for 18+ providers behind one normalized message
+- 🔌 Adapters for 19+ providers behind one normalized message
 - 🔁 Retries within an adapter, plus fallback routes across adapters
 - 🛟 Fail-fast field-support checks before a provider drops data
 - 🔭 Observability hooks for logs, metrics, and traces
@@ -45,7 +45,7 @@ await email.send({
 
 ## Adapters
 
-Resend, Postmark, SendGrid, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, SMTP, and a testing adapter — each imported from its own entry point. New here? Start with `resend` for the fastest first send.
+Resend, Postmark, SendGrid, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, SMTP, and a testing adapter — each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 
@@ -65,10 +65,24 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 
 ## Sponsors
 
-Email SDK is supported by companies that help keep provider integrations practical and maintained.
+Email SDK is supported by companies that help keep provider integrations practical and maintained. Want your logo here? **[Become a sponsor →](https://github.com/sponsors/opencoredev)**
 
-| [<img src="./apps/fumadocs/public/og/provider-logos/resend-wordmark.jpg" width="260" height="55" alt="Resend logo"><br><sub><b>Resend</b></sub>](https://go.resend.com/email-sdk)<br><sub>[Docs](https://email-sdk.dev/docs/adapters/resend)</sub> | [<img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="96" height="96" alt="Sequenzy logo"><br><sub><b>Sequenzy</b></sub>](https://www.sequenzy.com/)<br><sub>[Docs](https://email-sdk.dev/docs/adapters/sequenzy)</sub> | [<img src="./apps/fumadocs/public/og/provider-logos/preflight.png" width="96" height="96" alt="Preflight logo"><br><sub><b>Preflight</b></sub>](https://preflight.sh/)<br><sub>Launch readiness CLI</sub> |
-| :---: | :---: | :---: |
+<!-- Pulled automatically from GitHub Sponsors via shieldcn.dev — logos, names, and avatars are fetched live, and new sponsors appear on their own. Tiers follow GitHub Sponsors amounts: `special=` pins the top tier ($100+/mo) into the larger "Special Sponsors" row; everyone else renders in the "Sponsors" row below. -->
+<p align="center">
+  <a href="https://github.com/sponsors/opencoredev">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev&title=false&mode=dark&preset=surface" />
+      <source media="(prefers-color-scheme: light)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev&title=false&mode=light&preset=surface" />
+      <img alt="Email SDK sponsors" src="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev&title=false&mode=dark&preset=surface" width="820" />
+    </picture>
+  </a>
+</p>
+
+<!-- Sequenzy sponsors outside GitHub Sponsors, so it can't appear in the auto grid above and is listed manually here. -->
+<p align="center">
+  <a href="https://www.sequenzy.com/"><img src="./apps/fumadocs/public/og/provider-logos/sequenzy.jpeg" width="56" height="56" alt="Sequenzy logo"></a><br>
+  <sub>Also sponsored by <a href="https://www.sequenzy.com/"><b>Sequenzy</b></a> · <a href="https://email-sdk.dev/docs/adapters/sequenzy">adapter docs</a></sub>
+</p>
 
 ## Star History
 
