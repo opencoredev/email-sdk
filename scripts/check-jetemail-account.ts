@@ -31,20 +31,32 @@ if (authProbe.status === 401) {
   fail(`JetEmail rejected the API key (401 Unauthorized): ${truncate(authBody)}`);
 }
 
+// The empty probe payload should authenticate and then fail validation with a
+// 400. Treat only a 400 (or a 2xx) as proof the key passed auth; 403, 5xx, and
+// unexpected proxy/WAF bodies are inconclusive rather than a pass.
+const authenticated =
+  authProbe.status === 400 || (authProbe.status >= 200 && authProbe.status < 300);
+
 console.log(
   JSON.stringify(
     {
-      ok: true,
+      ok: authenticated,
       provider: "jetemail",
       check: "auth",
       status: authProbe.status,
-      authenticated: true,
+      authenticated,
       detail: truncate(authBody),
     },
     null,
     2,
   ),
 );
+
+if (!authenticated) {
+  fail(
+    `JetEmail auth probe inconclusive (HTTP ${authProbe.status}); expected 400 for the empty probe payload.`,
+  );
+}
 
 if (process.env.JETEMAIL_LIVE_SEND !== "true") {
   process.exit(0);

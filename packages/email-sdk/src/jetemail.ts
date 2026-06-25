@@ -2,6 +2,7 @@ import { EmailProviderError, EmailValidationError } from "./errors.js";
 import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
+  assertMaxItems,
   assertSupportedMessageFields,
   attachmentToBase64,
   formatAddress,
@@ -80,16 +81,24 @@ async function toJetemailPayload(message: EmailMessage) {
     );
   }
 
+  const to = formatAddresses(message.to);
   const cc = formatAddresses(message.cc);
   const bcc = formatAddresses(message.bcc);
   const replyTo = formatAddresses(message.replyTo);
+
+  // JetEmail caps each address field at 50 entries.
+  assertMaxItems("jetemail", "recipient", to, 50);
+  assertMaxItems("jetemail", "cc", cc, 50);
+  assertMaxItems("jetemail", "bcc", bcc, 50);
+  assertMaxItems("jetemail", "replyTo", replyTo, 50);
+
   const attachments = message.attachments?.length
     ? await Promise.all(message.attachments.map(toJetemailAttachment))
     : undefined;
 
   return {
     from,
-    to: formatAddresses(message.to),
+    to,
     subject: message.subject,
     html: message.html,
     text: message.text,

@@ -902,6 +902,17 @@ describe("provider payloads", () => {
     ).rejects.toThrow("jetemail requires a from address with a display name");
   });
 
+  test("JetEmail rejects more than 50 recipients", async () => {
+    const recipients = Array.from({ length: 51 }, (_, index) => `user${index}@example.com`);
+
+    await expect(
+      jetemail({ apiKey: "key", fetch: jsonCapture({ id: "jet_123" }).fetch }).send(
+        { ...messageWithoutTagsOrMetadata, to: recipients },
+        context,
+      ),
+    ).rejects.toThrow("jetemail only supports 50 recipients per message");
+  });
+
   test("limited adapters reject fields they cannot send instead of dropping them", async () => {
     const limitedMessage = {
       ...message,
