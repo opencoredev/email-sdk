@@ -6,7 +6,7 @@ import {
   docsVersionStorageKey,
   getDocsVersionByStoredValue,
   getDocsVersionFromPathname,
-  getDocsVersionSlug,
+  getDocsVersionStorageValue,
   latestDocsVersion,
 } from "./versions";
 
@@ -27,7 +27,7 @@ function readStoredDocsVersion() {
 export function rememberDocsVersion(version: DocsVersion) {
   if (typeof window === "undefined") return;
 
-  window.localStorage.setItem(docsVersionStorageKey, getDocsVersionSlug(version));
+  window.localStorage.setItem(docsVersionStorageKey, getDocsVersionStorageValue(version));
   window.dispatchEvent(new CustomEvent(docsVersionChangeEvent));
 }
 

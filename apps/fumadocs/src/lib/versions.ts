@@ -102,11 +102,21 @@ export function getDocsVersionBySlug(slug: string) {
 export function getDocsVersionByStoredValue(value: string | null | undefined) {
   if (!value) return undefined;
 
+  // "latest" tracks whichever version is current, so readers on latest move
+  // forward when a new version ships; a specific slug stays pinned.
+  if (value === "latest") return latestDocsVersion;
+
   return getDocsVersionBySlug(value.replace(/^v/, ""));
 }
 
 export function getDocsVersionSlug(version: DocsVersion) {
   return version.version.replace(/^v/, "");
+}
+
+export function getDocsVersionStorageValue(version: DocsVersion) {
+  // Persist the current version as "latest" so a reader on latest tracks future
+  // releases instead of pinning to today's version number.
+  return version.current ? "latest" : getDocsVersionSlug(version);
 }
 
 export function getDocsVersionBase(version: DocsVersion) {
