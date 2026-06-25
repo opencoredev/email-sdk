@@ -1,0 +1,212 @@
+---
+title: Client
+description: API reference for createEmailClient — client options, send and sendBatch, adapter helpers, and the normalized response.
+icon: Braces
+---
+
+Complete reference for the email client: constructor options, every client method, per-send options, and the normalized response shape. For how routing behaves at runtime, see [fallbacks and retries](/docs/concepts/fallbacks-and-retries).
+
+## `createEmailClient(options)`
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! }), smtp({ host: process.env.SMTP_HOST! })],
+  defaultAdapter: "resend",
+  fallback: ["smtp"],
+  retry: { retries: 2 },
+});
+```
+
+<TypeTable
+  type={{
+    adapters: {
+      description: "Adapters to register, keyed by their routing names.",
+      type: "EmailProvider[]",
+      default: "[]",
+    },
+    defaultAdapter: {
+      description: "Routing name used when a send sets no adapter.",
+      type: "string",
+      default: "first registered adapter",
+    },
+    fallback: {
+      description: "Routing names tried in order after the selected adapter finally fails.",
+      type: "string[]",
+      default: "[]",
+    },
+    retry: {
+      description: "Per-adapter retry budget, backoff delay, and retry predicate.",
+      type: "EmailRetryConfig",
+      default: "no retries",
+    },
+    hooks: {
+      description: "Observe-only callbacks: beforeSend, afterSend, onError, onRetry.",
+      type: "EmailHooks",
+    },
+    plugins: {
+      description: "Plugins that add adapters, hooks, middleware, or client extensions.",
+      type: "EmailPlugin[]",
+      default: "[]",
+    },
+  }}
+/>
+
+`retry` options are documented in [fallbacks and retries](/docs/concepts/fallbacks-and-retries#retries), `hooks` in [hooks](/docs/concepts/hooks), and `plugins` in the [plugin API](/docs/plugins/api). `providers` and `defaultProvider` are accepted [aliases](#aliases).
+
+Construction fails fast with an `EmailValidationError` for a duplicate adapter routing name (`Duplicate email adapter "x".`) or plugin id (`Duplicate email plugin "x".`), and for an empty client (`createEmailClient requires a default adapter.`). A `defaultAdapter` that is not registered throws `EmailProviderNotFoundError`.
+
+## `email.send(message, options?)`
+
+```ts
+send(message: EmailMessage, options?: SendOptions): Promise<EmailProviderResponse>
+```
+
+Validates the [message](/docs/reference/message), builds the route `[adapter, ...fallbackAdapters]` (duplicates removed), retries each adapter per the retry config, and resolves with the first successful [response](#response). One failed route rethrows the adapter's error as-is; multiple failed routes throw `EmailSdkError` with code `all_providers_failed` — see [errors](/docs/reference/errors).
+
+```ts
+const result = await email.send(message, {
+  adapter: "resend",
+  fallbackAdapters: ["smtp"],
+  retries: 2,
+  idempotencyKey: "receipt:order_123",
+  metadata: { route: "checkout.receipt" },
+});
+```
+
+### SendOptions
+
+<TypeTable
+  type={{
+    adapter: {
+      description: "Routing name for this send. Overrides defaultAdapter.",
+      type: "string",
+    },
+    fallbackAdapters: {
+      description: "Replaces the client-level fallback list for this send. Pass [] to disable fallback.",
+      type: "string[]",
+    },
+    retries: {
+      description: "Replaces the client-level retry count for this send.",
+      type: "number",
+    },
+    signal: {
+      description: "AbortSignal forwarded to the provider's fetch call.",
+      type: "AbortSignal",
+    },
+    idempotencyKey: {
+      description: "Stable send identity passed to the adapter on every attempt. Falls back to message.idempotencyKey.",
+      type: "string",
+    },
+    metadata: {
+      description: "Send-scope metadata visible to hooks and middleware. Never sent in the message.",
+      type: "Record<string, unknown>",
+    },
+  }}
+/>
+
+`provider` and `fallbackProviders` are accepted [aliases](#aliases). Send-options `metadata` is unrelated to `message.metadata` — the message field goes to the provider, the send option only flows to [hooks](/docs/concepts/hooks).
+
+## `email.sendBatch(messages, options?)`
+
+```ts
+sendBatch(messages: SendBatchItem[], options?: SendOptions): Promise<SendBatchResult[]>
+```
+
+Sends sequentially, one message at a time in array order, and always resolves with one result per item — a failed item never throws or stops the batch:
+
+```ts
+type SendBatchResult =
+  | { ok: true; index: number; response: EmailProviderResponse }
+  | { ok: false; index: number; error: unknown };
+```
+
+Each item is an `EmailMessage` plus optional `adapter` and `fallbackAdapters` that override the call-level options for that item:
+
+```ts
+const results = await email.sendBatch([
+  { ...welcome, adapter: "postmark" },
+  receipt, // uses call-level or client defaults
+]);
+
+for (const result of results) {
+  if (!result.ok) console.error(`message ${result.index} failed`, result.error);
+}
+```
+
+## `email.adapter(name)`
+
+```ts
+adapter<TProvider extends EmailProvider = EmailProvider>(name: string): TProvider
+```
+
+Returns the registered adapter or throws `EmailProviderNotFoundError`. Useful for adapter [escape hatches](/docs/concepts/adapter-model#escape-hatches) like `email.adapter("memory").raw.sent` in tests.
+
+## `email.withAdapter(name)`
+
+```ts
+withAdapter(name: string): Pick<EmailClient, "send" | "sendBatch">
+```
+
+Returns a client pinned to one route — `send` and `sendBatch` behave as if `{ adapter: name }` were passed every time. The name is checked immediately: an unregistered name throws `EmailProviderNotFoundError` at `withAdapter` time, not at send time.
+
+```ts
+const transactional = email.withAdapter("postmark");
+await transactional.send(message);
+```
+
+## Properties
+
+<TypeTable
+  type={{
+    adapters: {
+      description: "All registered adapters, keyed by routing name. Read-only.",
+      type: "ReadonlyMap<string, EmailProvider>",
+    },
+    defaultAdapter: {
+      description: "The resolved default routing name.",
+      type: "string",
+    },
+  }}
+/>
+
+## Response
+
+Every successful send resolves with a normalized `EmailProviderResponse`. `provider` is always set — it names the adapter that actually delivered, which matters when a fallback route handled the send.
+
+<TypeTable
+  type={{
+    provider: {
+      description: "Routing name of the adapter that delivered the message.",
+      type: "string",
+      required: true,
+    },
+    id: {
+      description: "Provider-assigned id for the send, when the API returns one.",
+      type: "string",
+    },
+    messageId: {
+      description: "Provider message id, when distinct from id.",
+      type: "string",
+    },
+    accepted: {
+      description: "Recipients the provider accepted, when reported.",
+      type: "string[]",
+    },
+    rejected: {
+      description: "Recipients the provider rejected, when reported.",
+      type: "string[]",
+    },
+    raw: {
+      description: "Untouched provider response body for debugging and provider-specific fields.",
+      type: "unknown",
+    },
+  }}
+/>
+
+## Aliases
+
+`adapter` and `provider` mean the same thing everywhere: `providers`, `defaultProvider`, `fallbackProviders`, `email.provider(name)`, `email.providers`, and `email.withProvider(name)` are compatibility aliases for their `adapter` spellings. Prefer `adapter` in new code — see [naming aliases](/docs/concepts/adapter-model#naming-aliases).
