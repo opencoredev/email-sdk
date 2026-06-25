@@ -1,4 +1,4 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailProviderError, EmailValidationError } from "./errors.js";
 import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
@@ -83,9 +83,18 @@ async function toPrimitivePayload(message: EmailMessage) {
 
   const to = formatAddresses(message.to);
 
-  // Primitive's send-mail accepts a single recipient and has no cc or bcc, so the
-  // adapter fails fast rather than silently dropping extra recipients.
+  // Primitive's send-mail accepts exactly one recipient and has no cc or bcc, so
+  // the adapter fails fast rather than silently dropping or omitting recipients.
   assertMaxItems("primitive", "recipient", to, 1);
+
+  const recipient = to[0];
+
+  if (!recipient) {
+    throw new EmailValidationError("primitive requires one recipient.", {
+      adapter: "primitive",
+      field: "to",
+    });
+  }
 
   const attachments = message.attachments?.length
     ? await Promise.all(message.attachments.map(toPrimitiveAttachment))
@@ -93,7 +102,7 @@ async function toPrimitivePayload(message: EmailMessage) {
 
   return {
     from: formatAddress(message.from),
-    to: to[0],
+    to: recipient,
     subject: message.subject,
     body_text: message.text,
     body_html: message.html,

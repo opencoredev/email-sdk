@@ -971,6 +971,27 @@ describe("provider payloads", () => {
     ).rejects.toThrow("primitive only supports 1 recipient per message");
   });
 
+  test("Primitive rejects a send with no recipient", async () => {
+    await expect(
+      primitive({
+        apiKey: "key",
+        fetch: jsonCapture({ success: true, data: { id: "prim_123" } }).fetch,
+      }).send(
+        {
+          ...message,
+          to: [],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+          metadata: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("primitive requires one recipient");
+  });
+
   test("Primitive keeps a per-send idempotency key over construction headers", async () => {
     const capture = jsonCapture({ success: true, data: { id: "prim_123" } });
 
