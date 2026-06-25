@@ -26,6 +26,7 @@ import { mailpace } from "@opencoredev/email-sdk/mailpace";
 import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
 import { plunk } from "@opencoredev/email-sdk/plunk";
 import { postmark } from "@opencoredev/email-sdk/postmark";
+import { primitive } from "@opencoredev/email-sdk/primitive";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
 import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
@@ -283,6 +284,23 @@ describe("documented adapter entry points", () => {
       jetemail({ apiKey: "test", fetch: fetchOk({ id: "jetemail_1" }).fetcher }),
       { ...richMessage, tags: undefined, metadata: undefined },
       { id: "jetemail_1" },
+    ],
+    [
+      "primitive",
+      primitive({
+        apiKey: "test",
+        fetch: fetchOk({ success: true, data: { id: "primitive_1" } }).fetcher,
+      }),
+      {
+        ...richMessage,
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        metadata: undefined,
+      },
+      { success: true, data: { id: "primitive_1" } },
     ],
     [
       "plunk",

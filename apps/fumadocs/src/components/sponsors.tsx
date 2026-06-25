@@ -15,6 +15,16 @@ const sponsors = [
     href: "https://www.sequenzy.com/",
     logo: "/og/provider-logos/sequenzy.jpeg",
   },
+  {
+    name: "JetEmail",
+    href: "https://jetemail.com",
+    logo: "/og/provider-logos/jetemail.jpeg",
+  },
+  {
+    name: "Primitive",
+    href: "https://www.primitive.dev",
+    logo: "/og/provider-logos/primitive.png",
+  },
 ] as const;
 
 const openSponsorSlots = [1] as const;

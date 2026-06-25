@@ -36,6 +36,7 @@ Useful services whose public APIs cover less of the `EmailMessage` shape. The SD
 | SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
 | Iterable  | No  | No  | No       | No      | Yes      | No     | No          |
 | Loops     | No  | No  | No       | No      | Yes      | No     | Yes         |
+| Primitive | No  | No  | No       | No      | No       | No     | Yes         |
 | Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         |
 | Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         |
 | Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         |
@@ -132,6 +133,11 @@ attachments: [{ filename: "receipt.pdf", path: "./receipt.pdf", contentType: "ap
   <Accordion title="Cloudflare — plain addresses, recipient caps">
     Cloudflare Email Sending requires plain email addresses (no display names) and caps a message
     at 50 total recipients across to/cc/bcc with a single reply-to.
+  </Accordion>
+  <Accordion title="Primitive — single recipient, no CC/BCC or headers">
+    Primitive's `send-mail` API targets exactly one recipient and has no CC, BCC, reply-to, custom
+    headers, tags, or metadata, so the adapter rejects those fields (and a second recipient) before
+    the request. Send `from` a verified outbound domain, and pass `idempotencyKey` to dedupe retries.
   </Accordion>
 </Accordions>
 

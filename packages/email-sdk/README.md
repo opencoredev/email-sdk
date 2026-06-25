@@ -89,6 +89,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/loops`      | Loops                            |
 | `@opencoredev/email-sdk/sequenzy`   | Sequenzy                         |
 | `@opencoredev/email-sdk/jetemail`   | JetEmail                         |
+| `@opencoredev/email-sdk/primitive`  | Primitive                        |
 | `@opencoredev/email-sdk/plunk`      | Plunk                            |
 | `@opencoredev/email-sdk/mailtrap`   | Mailtrap                         |
 | `@opencoredev/email-sdk/scaleway`   | Scaleway                         |

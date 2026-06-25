@@ -102,6 +102,10 @@
       "types": "./dist/jetemail.d.ts",
       "import": "./dist/jetemail.js"
     },
+    "./primitive": {
+      "types": "./dist/primitive.d.ts",
+      "import": "./dist/primitive.js"
+    },
     "./plunk": {
       "types": "./dist/plunk.d.ts",
       "import": "./dist/plunk.js"

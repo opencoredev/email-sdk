@@ -275,6 +275,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   loops: { attachments: true, metadata: true },
   sequenzy: { replyTo: true, attachments: true, metadata: true },
   jetemail: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+  primitive: { attachments: true },
   plunk: { replyTo: true, headers: true, attachments: true, metadata: true },
   mailtrap: {
     cc: true,
