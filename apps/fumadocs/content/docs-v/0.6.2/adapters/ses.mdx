@@ -1,0 +1,115 @@
+---
+title: AWS SES
+description: Send through the SES v2 SendEmail API with built-in SigV4 signing — no AWS SDK dependency.
+icon: Cloud
+---
+
+The SES adapter calls the [SES v2 SendEmail API](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html) over `fetch` and signs every request with AWS Signature V4 itself — your bundle never pulls in the AWS SDK. Pick a region, optionally a configuration set, and send.
+
+<ProviderBadge adapter="ses" />
+
+## Configure
+
+Use credentials allowed to call SES v2 `SendEmail` in your region, and verify the sender identity in that same region. New AWS accounts start in the SES sandbox, which limits recipients to verified addresses.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { ses } from "@opencoredev/email-sdk/ses";
+
+export const email = createEmailClient({
+  adapters: [
+    ses({
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      region: process.env.AWS_REGION!,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    accessKeyId: {
+      description: "AWS access key ID.",
+      type: "string",
+      required: true,
+    },
+    secretAccessKey: {
+      description: "AWS secret access key.",
+      type: "string",
+      required: true,
+    },
+    region: {
+      description: "SES region, e.g. us-east-1.",
+      type: "string",
+      required: true,
+    },
+    sessionToken: {
+      description: "Session token for temporary credentials (STS, IAM roles).",
+      type: "string",
+    },
+    configurationSetName: {
+      description: "SES configuration set applied to every send.",
+      type: "string",
+    },
+    charset: {
+      description: "Charset for subject and body content.",
+      type: "string",
+      default: '"UTF-8"',
+    },
+    baseUrl: {
+      description: "Override the API origin.",
+      type: "string",
+      default: '"https://email.{region}.amazonaws.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+SES maps `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags` (as SES `EmailTags`, which flow to configuration-set event destinations).
+
+```ts
+const result = await email.send({
+  from: "Acme <billing@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Your May invoice",
+  html: "<p>Your invoice for May is ready.</p>",
+  tags: [{ name: "type", value: "invoice" }],
+});
+
+console.log(result.id); // SES MessageId, also exposed as result.messageId
+```
+
+<Callout type="warn" title="No metadata field">
+  SES v2 `SendEmail` has no metadata concept, so `metadata` on a message throws an
+  `EmailValidationError` before any request is made. Use `tags` instead, or pick a
+  [metadata-capable adapter](/docs/adapters/field-support).
+</Callout>
+
+## Verify from the CLI
+
+```bash
+AWS_ACCESS_KEY_ID="..." AWS_SECRET_ACCESS_KEY="..." AWS_REGION="us-east-1" \
+  npx email-sdk doctor --adapter ses
+```
+
+```bash
+npx email-sdk send \
+  --adapter ses \
+  --access-key-id "$AWS_ACCESS_KEY_ID" \
+  --secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+  --region us-east-1 \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SES smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+`--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send — that is the only check that proves the identity is verified and the account is out of the sandbox.

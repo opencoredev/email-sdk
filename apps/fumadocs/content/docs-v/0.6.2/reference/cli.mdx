@@ -1,0 +1,236 @@
+---
+title: CLI
+description: The complete email-sdk command manual — adapters, doctor, send, dry runs, credential flags, and exit codes.
+icon: Terminal
+---
+
+The `email-sdk` CLI ships inside `@opencoredev/email-sdk`. Use it to list adapters, check credentials with `doctor`, validate a message with `--dry-run`, and run a real smoke send — no app code required.
+
+## Run it
+
+One-off, without installing:
+
+```bash
+bunx --bun --package @opencoredev/email-sdk email-sdk adapters
+```
+
+Or install the package and use the local binary:
+
+<PackageInstallTabs />
+
+```bash
+npx email-sdk adapters
+```
+
+Node 20+ or Bun 1.1+. The examples below use `npx email-sdk`; substitute the `bunx` form for no-install runs.
+
+## Commands
+
+| Command | Aliases | What it does |
+| --- | --- | --- |
+| [`help`](#help) | `--help`, `-h`, no command | Print usage. |
+| [`version`](#version) | `--version`, `-v` | Print the installed package name and version. |
+| [`adapters`](#adapters) | `providers` | List every adapter with its required environment. |
+| [`doctor`](#doctor) | — | Check that one adapter's credentials are present. |
+| [`send`](#send) | — | Validate and send one message. |
+
+Any other command fails with `Unknown command "x".` and exit code 1.
+
+### Flag syntax
+
+- `--flag value` and `--flag=value` are equivalent; a flag without a value is treated as `true`.
+- `--header`, `--tag`, `--metadata`, and `--attachment` (alias `--attach`) are repeatable — pass them once per value.
+- Repeating any other flag keeps the last value.
+- `--to`, `--cc`, `--bcc`, and `--reply-to` accept comma-separated address lists.
+
+## help
+
+```bash
+npx email-sdk help
+```
+
+Prints usage, all send flags, and the adapter-specific option groups. Running `email-sdk` with no command does the same.
+
+## version
+
+```bash
+npx email-sdk version
+# @opencoredev/email-sdk 0.6.1
+
+npx email-sdk version --json
+# { "name": "@opencoredev/email-sdk", "version": "0.6.1" }
+```
+
+Reads the metadata of the package actually installed on your machine — check it before comparing behavior against the docs.
+
+## adapters
+
+```bash
+npx email-sdk adapters
+```
+
+Prints one line per adapter: routing name, required environment variables, and a short note. `--json` prints the same data as a JSON array of `{ name, env, note }` objects.
+
+| Adapter | Required environment | Optional environment |
+| --- | --- | --- |
+| `resend` | `RESEND_API_KEY` | — |
+| `postmark` | `POSTMARK_SERVER_TOKEN` | `POSTMARK_MESSAGE_STREAM` |
+| `sendgrid` | `SENDGRID_API_KEY` | — |
+| `cloudflare` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `CLOUDFLARE_BASE_URL` |
+| `unosend` | `UNOSEND_API_KEY` | `UNOSEND_BASE_URL` |
+| `iterable` | `ITERABLE_API_KEY`, `ITERABLE_CAMPAIGN_ID` | `ITERABLE_BASE_URL`, `ITERABLE_SEND_AT`, `ITERABLE_ALLOW_REPEAT_MARKETING_SENDS` |
+| `ses` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `AWS_SESSION_TOKEN`, `AWS_SES_CONFIGURATION_SET`, `AWS_SES_BASE_URL` |
+| `mailgun` | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` | `MAILGUN_BASE_URL` |
+| `mailersend` | `MAILERSEND_API_KEY` | — |
+| `brevo` | `BREVO_API_KEY` | — |
+| `mailchimp` | `MAILCHIMP_API_KEY` | — |
+| `sparkpost` | `SPARKPOST_API_KEY` | — |
+| `loops` | `LOOPS_API_KEY`, `LOOPS_TRANSACTIONAL_ID` | — |
+| `sequenzy` | `SEQUENZY_API_KEY` | `SEQUENZY_BASE_URL` |
+| `plunk` | `PLUNK_API_KEY` | — |
+| `mailtrap` | `MAILTRAP_API_KEY` | — |
+| `scaleway` | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID` | `SCALEWAY_REGION` |
+| `zeptomail` | `ZEPTOMAIL_TOKEN` | — |
+| `mailpace` | `MAILPACE_API_KEY` | — |
+| `smtp` | `SMTP_HOST` | `SMTP_PORT` (default `587`), `SMTP_SECURE`, `SMTP_REQUIRE_TLS`, `SMTP_ALLOW_INSECURE_AUTH`, `SMTP_USER`, `SMTP_PASS` |
+
+### Adapter auto-detection
+
+When `doctor` or `send` runs without `--adapter`, the CLI walks the table above in order and picks the **first** adapter whose required environment variables are all set. If none qualifies:
+
+```txt
+Pass --adapter or set the required environment for one adapter.
+```
+
+Pass `--adapter` explicitly when more than one provider is configured in the same shell.
+
+## doctor
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+# resend looks configured.
+```
+
+Checks that each required variable is set — or supplied via its [credential flag](#credential-flags). On failure it prints the missing names and exits 1:
+
+```txt
+Missing environment for resend: RESEND_API_KEY
+```
+
+`doctor` never calls the provider; it proves your environment is shaped right, not that the key works. Follow up with a [dry run](#dry-run) and one real send.
+
+## send
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works"
+```
+
+On success the CLI prints the normalized [response](/docs/reference/client#response) as JSON:
+
+```json
+{
+  "provider": "resend",
+  "id": "0f8d2a3e-...",
+  "messageId": "0f8d2a3e-...",
+  "raw": { "id": "0f8d2a3e-..." }
+}
+```
+
+### Message flags
+
+| Flag | Value | Notes |
+| --- | --- | --- |
+| `--adapter <name>` | routing name | `--provider` is an alias. Omit to [auto-detect](#adapter-auto-detection). |
+| `--from <address>` | address | Sender. |
+| `--to <addresses>` | comma-separated | Recipients. |
+| `--subject <text>` | string | Subject line. |
+| `--text <body>` | string | Plain-text body. |
+| `--html <body>` | string | HTML body. |
+| `--cc <addresses>` | comma-separated | CC recipients. |
+| `--bcc <addresses>` | comma-separated | BCC recipients. |
+| `--reply-to <addresses>` | comma-separated | Reply-to addresses. |
+| `--header "Name: value"` | repeatable | Custom header. |
+| `--tag "name=value"` | repeatable | Provider tag. |
+| `--metadata "key=value"` | repeatable | Provider metadata. |
+| `--attachment <path[:mime]>` | repeatable | Attach a local file; optional content type after `:`. `--attach` is an alias. |
+| `--message <path>` | file path | Read an `EmailMessage` JSON file; flags override it. |
+| `--dry-run` | boolean | Validate and print the message without sending. |
+
+### Dry run
+
+```bash
+npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to "user@example.com" \
+  --subject "Hello" \
+  --text "It works" \
+  --dry-run
+```
+
+`--dry-run` needs no credentials when `--adapter` is set (without it, auto-detection still reads the environment). It runs [message validation](/docs/reference/message#validation), the adapter's [field support](/docs/adapters/field-support) checks, and adapter-specific limits (single recipient for Loops and Iterable, Cloudflare and Unosend address rules), then prints the send plan:
+
+```json
+{
+  "ok": true,
+  "adapter": "resend",
+  "message": {
+    "from": "Acme <hello@acme.com>",
+    "to": ["user@example.com"],
+    "subject": "Hello",
+    "text": "It works"
+  }
+}
+```
+
+Attachment content is redacted in dry-run output — only `filename`, `path`, `contentType`, `contentId`, and `disposition` are echoed.
+
+### Send from a JSON file
+
+`--message` reads a complete `EmailMessage` as JSON; any message flag you also pass overrides that field from the file:
+
+```json title="message.json"
+{
+  "from": "Acme <hello@acme.com>",
+  "to": ["user@example.com"],
+  "subject": "Welcome",
+  "html": "<p>Your account is ready.</p>",
+  "tags": [{ "name": "type", "value": "welcome" }]
+}
+```
+
+```bash
+npx email-sdk send --adapter resend --message ./message.json --to "qa@example.com" --dry-run
+```
+
+Here `--to` replaces the file's recipients; everything else comes from the file. Repeatable flags (`--header`, `--tag`, `--metadata`, `--attachment`) replace the file's whole list when passed at least once.
+
+### Credential flags
+
+Every credential environment variable has a flag override; flags win over the environment. Useful for one-off sends without exporting secrets into the shell.
+
+| Adapter | Flags |
+| --- | --- |
+| `resend`, `sendgrid`, `unosend`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `sequenzy`, `plunk`, `mailtrap`, `mailpace`, `loops` | `--api-key`, plus `--transactional-id` (Loops) and `--base-url` (Unosend, Sequenzy) |
+| `postmark` | `--server-token`, `--message-stream` |
+| `cloudflare` | `--api-token`, `--account-id`, `--base-url` |
+| `iterable` | `--api-key`, `--campaign-id`, `--base-url`, `--send-at`, `--allow-repeat-marketing-sends` |
+| `ses` | `--access-key-id`, `--secret-access-key`, `--region`, `--session-token`, `--configuration-set`, `--base-url` |
+| `mailgun` | `--api-key`, `--domain`, `--base-url` |
+| `scaleway` | `--secret-key`, `--project-id`, `--region` |
+| `zeptomail` | `--token` |
+| `smtp` | `--host`, `--port`, `--secure`, `--require-tls`, `--allow-insecure-auth`, `--user`, `--pass` |
+
+## Exit codes
+
+| Code | When |
+| --- | --- |
+| `0` | Command succeeded — including a passing `doctor` and a valid `--dry-run`. |
+| `1` | Anything else: unknown command, missing flag or environment, validation failure, missing `doctor` credentials, provider error. |
+
+Errors print their message to stderr; success output is JSON (or plain text for `help`, `doctor`, `version`, and `adapters` without `--json`) on stdout, so the CLI pipes cleanly into `jq` and scripts.

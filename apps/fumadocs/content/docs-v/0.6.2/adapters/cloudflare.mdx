@@ -1,0 +1,95 @@
+---
+title: Cloudflare Email Sending
+description: Send through Cloudflare's Email Sending REST API with plain-address recipients and a 50-recipient cap.
+icon: cloudflare
+---
+
+The Cloudflare adapter calls Cloudflare's Email Sending REST API over `fetch` — no extra dependency and no Worker binding required. It is the natural pick when your sending domain already lives in Cloudflare; the trade-off is strict recipient rules: plain addresses only, 50 recipients max.
+
+<ProviderBadge adapter="cloudflare" />
+
+## Configure
+
+Enable Email Sending for your account and domain, then create an [API token](https://dash.cloudflare.com/profile/api-tokens) with Email Sending permission. You also need your account ID.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+
+export const email = createEmailClient({
+  adapters: [
+    cloudflare({
+      apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    apiToken: {
+      description: "Cloudflare API token with Email Sending permission.",
+      type: "string",
+      required: true,
+    },
+    accountId: {
+      description: "Cloudflare account ID used in the send endpoint path.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.cloudflare.com/client/v4"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Cloudflare maps `cc`, `bcc`, one `replyTo`, `headers`, and `attachments` — no tags or metadata.
+
+```ts
+const result = await email.send({
+  from: "Acme Alerts <alerts@acme.com>",
+  to: "oncall@example.com",
+  cc: "ops@example.com",
+  subject: "Disk usage above 90% on db-1",
+  text: "db-1 crossed the 90% disk threshold at 14:02 UTC.",
+  headers: { "X-Alert-ID": "alrt_8841" },
+});
+
+console.log(result.accepted); // delivered + queued recipients
+```
+
+Cloudflare does not return a message id; instead `result.accepted` lists delivered and queued recipients and `result.rejected` lists permanent bounces. Total recipients across `to`, `cc`, and `bcc` are capped at 50.
+
+<Callout type="warn" title="Plain recipient addresses only">
+  `to`, `cc`, and `bcc` must be bare addresses like `"user@example.com"` — a display name throws an
+  `EmailValidationError` before any request is made. Only `from` and `replyTo` keep display names.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+CLOUDFLARE_API_TOKEN="..." CLOUDFLARE_ACCOUNT_ID="..." npx email-sdk doctor --adapter cloudflare
+```
+
+```bash
+npx email-sdk send \
+  --adapter cloudflare \
+  --api-token "$CLOUDFLARE_API_TOKEN" \
+  --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Cloudflare smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send — only Cloudflare can prove the domain and account are cleared to deliver.

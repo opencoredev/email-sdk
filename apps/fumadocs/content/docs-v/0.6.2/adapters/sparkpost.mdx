@@ -1,0 +1,89 @@
+---
+title: SparkPost
+description: Send through the SparkPost Transmissions API with metadata, substitution data from tags, and a provider-side sandbox mode.
+icon: sparkpost
+---
+
+The SparkPost adapter calls the [SparkPost Transmissions API](https://developers.sparkpost.com/api/transmissions/) over `fetch` — no extra dependency. Two things set it apart: a `sandbox` option that routes sends through SparkPost's shared sandbox domain for testing, and tags become SparkPost `substitution_data` as `name: value` pairs instead of a flat list.
+
+<ProviderBadge adapter="sparkpost" />
+
+## Configure
+
+Create an API key with Transmissions permission in the [SparkPost dashboard](https://app.sparkpost.com/account/api-keys). SparkPost expects the raw key in the `Authorization` header — the adapter sends it without a `Bearer` prefix.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
+
+export const email = createEmailClient({
+  adapters: [sparkpost({ apiKey: process.env.SPARKPOST_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "SparkPost API key, sent as the Authorization header (no Bearer prefix).",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for the EU region.",
+      type: "string",
+      default: '"https://api.sparkpost.com/api/v1"',
+    },
+    sandbox: {
+      description: "Send through SparkPost's shared sandbox domain (options.sandbox on the transmission).",
+      type: "boolean",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+SparkPost maps `replyTo`, `headers`, `attachments`, `metadata`, and `tags` (each tag becomes a `substitution_data` entry keyed by its name).
+
+```ts
+const result = await email.send({
+  from: { email: "alerts@acme.com", name: "Acme Alerts" },
+  to: "user@example.com",
+  replyTo: "support@acme.com",
+  subject: "Usage alert: 90% of plan limit",
+  html: "<p>Your workspace is at 90% of its monthly quota.</p>",
+  metadata: { workspaceId: "ws_123" },
+  tags: [{ name: "type", value: "usage-alert" }],
+});
+
+console.log(result.id); // SparkPost transmission id
+```
+
+The response `id` is the transmission id from `results.id` (or `results.transmission_id`) — use it to query SparkPost's events API for delivery status.
+
+<Callout type="warn" title="No cc or bcc">
+  This adapter sends one flat recipient list, so `cc` or `bcc` on a message throws an
+  `EmailValidationError` before any request is made. Add extra recipients to `to`, or pick a
+  [cc/bcc-capable adapter](/docs/adapters/field-support).
+</Callout>
+
+## Verify from the CLI
+
+```bash
+SPARKPOST_API_KEY="..." npx email-sdk doctor --adapter sparkpost
+```
+
+```bash
+SPARKPOST_API_KEY="..." npx email-sdk send \
+  --adapter sparkpost \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SparkPost smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send — that is the only check that proves the key, sending domain, and recipient policy are ready.
