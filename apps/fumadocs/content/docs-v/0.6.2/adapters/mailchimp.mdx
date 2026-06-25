@@ -1,0 +1,84 @@
+---
+title: Mailchimp Transactional
+description: Send through Mailchimp Transactional (Mandrill) with typed recipients, tags, and metadata — but no replyTo field.
+icon: mailchimp
+---
+
+The Mailchimp adapter calls the [Mailchimp Transactional API](https://mailchimp.com/developer/transactional/api/messages/send-new-message/) — the API formerly known as Mandrill — over `fetch`, no extra dependency. Unusually, the API key travels in the request body rather than a header, and recipients are a single typed list (`to`/`cc`/`bcc` entries) instead of separate arrays.
+
+<ProviderBadge adapter="mailchimp" />
+
+## Configure
+
+Create a Transactional API key in the Mandrill dashboard (Settings → SMTP & API Info) and verify your sending domain.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
+
+export const email = createEmailClient({
+  adapters: [mailchimp({ apiKey: process.env.MAILCHIMP_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Mailchimp Transactional (Mandrill) API key, sent in the request body.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://mandrillapp.com/api/1.0"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Mailchimp maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata`.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  subject: "Your order has shipped",
+  html: "<p>Order ord_123 is on its way.</p>",
+  metadata: { orderId: "ord_123" },
+  tags: [{ name: "type", value: "shipping" }],
+});
+
+console.log(result.id); // Mandrill _id of the first recipient result
+```
+
+Mandrill responds with one result per recipient; the normalized `id` and `messageId` come from the first result's `_id`. Each result also carries a per-recipient status (`sent`, `queued`, `rejected`) — check `result.raw` during smoke tests if a send succeeds but mail does not arrive.
+
+<Callout type="warn" title="No replyTo field">
+  This adapter does not support `replyTo` — setting it throws an `EmailValidationError` before
+  any request is made. Set a `Reply-To` header instead: `headers: { "Reply-To":
+  "support@acme.com" }`. See [field support](/docs/adapters/field-support) for the full matrix.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+MAILCHIMP_API_KEY="md-..." npx email-sdk doctor --adapter mailchimp
+```
+
+```bash
+MAILCHIMP_API_KEY="md-..." npx email-sdk send \
+  --adapter mailchimp \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Mailchimp smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send — that is the only check that proves the key, domain verification, and recipient policy are ready.

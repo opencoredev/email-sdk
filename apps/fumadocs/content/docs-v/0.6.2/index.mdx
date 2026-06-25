@@ -1,0 +1,92 @@
+---
+title: Email SDK
+description: One typed send() for 20 email providers — explicit routing, retries, fallbacks, and zero dependencies.
+icon: Mail
+---
+
+Email SDK is a zero-dependency TypeScript library for transactional email. You write one typed message; configured adapters decide how it reaches Resend, Postmark, SendGrid, AWS SES, Mailgun, SMTP, or any of [20 providers](/docs/adapters). Switching providers — or surviving an outage with a fallback route — never touches your application code.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+```
+
+## Why Email SDK
+
+- **One message shape, 20 providers.** Import only the adapter you use — each one is a separate entry point, and the core has zero runtime dependencies.
+- **No silent data loss.** Providers differ: Resend has no metadata, SMTP has no tags. Adapters either map a field or throw before the request — never drop it. See [field support](/docs/adapters/field-support).
+- **Retries and fallback routes, made explicit.** Exponential backoff inside an adapter, then explicit fallback adapters after it finally fails. [How routing works](/docs/concepts/fallbacks-and-retries).
+- **Observable without leaking PII.** [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) emit redacted events — counts and tag names, never bodies or recipients.
+- **Testable for free.** [Memory and failing adapters](/docs/guides/test-email-behavior) plus the [capture plugin](/docs/plugins/built-in/capture) assert send behavior without a real provider.
+- **A CLI for the boring parts.** `email-sdk doctor` checks your environment, `--dry-run` validates a message against an adapter, and `send` runs a real smoke test. [CLI reference](/docs/reference/cli).
+
+## Start here
+
+<Cards>
+  <Card
+    title="Quickstart"
+    href="/docs/getting-started/quickstart"
+    description="Install, create a client, send your first email, and add a fallback in ~5 minutes."
+  />
+  <Card
+    title="Choose an adapter"
+    href="/docs/adapters"
+    description="Browse all 20 providers and pick primary and backup routes."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Retries, fallbacks, idempotency, observability, and tests for a real app."
+  />
+  <Card
+    title="API reference"
+    href="/docs/reference/client"
+    description="Client options, the message shape, errors, and the CLI."
+  />
+</Cards>
+
+## Beyond the core
+
+<Cards>
+  <Card
+    title="Plugins"
+    href="/docs/plugins"
+    description="Shared defaults, observability, test capture, and typed client extensions."
+  />
+  <Card
+    title="Convex Email Ops"
+    href="/docs/components/convex-email"
+    description="Queued sends from Convex with status tracking, retries, webhooks, and test mode."
+  />
+  <Card
+    title="Build an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Wrap any provider API in the adapter contract and publish it for others."
+  />
+  <Card
+    title="Agent skill"
+    href="/docs/agents/skill"
+    description="Teach Claude and other coding agents to integrate Email SDK correctly."
+  />
+</Cards>
+
+## What it is not
+
+Email SDK is not a campaign tool, queue, template engine, or hosted analytics product. It is the layer apps keep rebuilding — adapter setup, one consistent send call, typed errors, compatibility checks, and fallback routes explicit enough to debug at 3 a.m.
+
+<Callout title="Local checks are not deliverability">
+  The SDK validates message shape and field support before every request, but live delivery still
+  depends on your provider account: verified sender domains, API scopes, regions, and sandbox
+  rules. Dry-run first, then run one real smoke send from your production environment.
+</Callout>
