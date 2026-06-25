@@ -1,7 +1,5 @@
 import { ExternalLink, Plus } from "lucide-react";
 
-import { DocsVersionLink } from "@/components/docs-version-link";
-
 type SponsorSpotlightProps = {
   compact?: boolean;
 };
@@ -10,20 +8,12 @@ const sponsors = [
   {
     name: "Resend",
     href: "https://go.resend.com/email-sdk",
-    docs: "/docs/adapters/resend",
     logo: "/og/provider-logos/resend-mark.svg",
   },
   {
     name: "Sequenzy",
     href: "https://www.sequenzy.com/",
-    docs: "/docs/adapters/sequenzy",
     logo: "/og/provider-logos/sequenzy.jpeg",
-    forceLatestDocs: true,
-  },
-  {
-    name: "Preflight",
-    href: "https://preflight.sh/",
-    logo: "/og/provider-logos/preflight.png",
   },
 ] as const;
 
@@ -118,15 +108,6 @@ function SponsorLink({
           {sponsor.name}
           <ExternalLink aria-hidden="true" className="size-3.5" strokeWidth={2} />
         </a>
-        {"docs" in sponsor ? (
-          <DocsVersionLink
-            className="text-xs font-medium text-fd-muted-foreground transition hover:text-fd-primary"
-            docsPath={sponsor.docs}
-            forceLatest={"forceLatestDocs" in sponsor && sponsor.forceLatestDocs}
-          >
-            Docs
-          </DocsVersionLink>
-        ) : null}
       </span>
     </div>
   );
