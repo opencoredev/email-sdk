@@ -12,7 +12,7 @@ const sponsors = [
   },
   {
     name: "Sequenzy",
-    href: "https://www.sequenzy.com/",
+    href: "https://www.sequenzy.com/?ref=emailsdk",
     logo: "/og/provider-logos/sequenzy.jpeg",
   },
   {
