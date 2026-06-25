@@ -1,0 +1,66 @@
+---
+title: Install
+description: Add @opencoredev/email-sdk to your project and run the email-sdk CLI.
+icon: Package
+---
+
+Email SDK is published on npm as `@opencoredev/email-sdk`. It runs server-side on Node 20+ and Bun 1.1+.
+
+<PackageInstallTabs />
+
+Import the client from the package root and each adapter from its own entry point:
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+```
+
+<Callout type="warn" title="Package name vs. command name">
+  The package is `@opencoredev/email-sdk`; the installed binary is `email-sdk`. The unscoped
+  `email-sdk` package on npm is an unrelated project — never `npm install email-sdk`.
+</Callout>
+
+## Run the CLI
+
+<Tabs items={["Installed project", "No install (Bun)"]}>
+  <Tab value="Installed project">
+    Once `@opencoredev/email-sdk` is in your project, the `email-sdk` binary is on your path:
+
+    ```bash
+    npx email-sdk adapters
+    ```
+
+    `bunx email-sdk`, `pnpm exec email-sdk`, and `yarn email-sdk` work the same way.
+
+  </Tab>
+  <Tab value="No install (Bun)">
+    For a one-off check without touching a project, point `bunx` at the scoped package:
+
+    ```bash
+    bunx --bun --package @opencoredev/email-sdk email-sdk adapters
+    ```
+
+    There is no safe no-install form for plain `npx` — the unscoped `email-sdk` package is
+    unrelated — so npm users should install first.
+
+  </Tab>
+</Tabs>
+
+## Verify
+
+```bash
+npx email-sdk version
+npx email-sdk adapters
+```
+
+`adapters` lists every supported provider with the environment variables it needs. To check that one provider is configured:
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+```
+
+## Keep credentials server-side
+
+Provider API keys belong in environment variables (or CLI flags for one-off commands) — never in browser bundles or client-side code. The SDK is a server library by design.
+
+Ready to send? Continue with the [quickstart](/docs/getting-started/quickstart).

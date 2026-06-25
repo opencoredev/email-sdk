@@ -8,6 +8,7 @@ import {
   docsV060,
   docsV061,
   docsV062,
+  docsV063,
 } from "collections/server";
 import { loader } from "fumadocs-core/source";
 
@@ -55,10 +56,20 @@ if (!v062DocsVersion) {
   throw new Error("Missing docs source config for v0.6.2");
 }
 
+const v063DocsVersion = docsVersions.find((version) => version.collection === "docsV063");
+if (!v063DocsVersion) {
+  throw new Error("Missing docs source config for v0.6.3");
+}
+
 const sources = {
   docs: loader({
     source: docs.toFumadocsSource(),
     baseUrl: docsRoute,
+    icon: resolveDocsIcon,
+  }),
+  docsV063: loader({
+    source: docsV063.toFumadocsSource(),
+    baseUrl: getDocsVersionBase(v063DocsVersion),
     icon: resolveDocsIcon,
   }),
   docsV062: loader({

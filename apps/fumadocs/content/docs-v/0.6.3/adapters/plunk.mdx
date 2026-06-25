@@ -1,0 +1,86 @@
+---
+title: Plunk
+description: Send through the Plunk API with reply-to, headers, attachments, and metadata mapped to Plunk data.
+icon: plunk
+---
+
+The Plunk adapter calls the [Plunk send API](https://docs.useplunk.com) over `fetch` — no extra dependency. Plunk takes a single `body` field, so the adapter sends `html` when present and falls back to `text`.
+
+<ProviderBadge adapter="plunk" />
+
+## Configure
+
+Create a secret API key in your Plunk project and verify the sender you plan to use in `from`.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { plunk } from "@opencoredev/email-sdk/plunk";
+
+export const email = createEmailClient({
+  adapters: [plunk({ apiKey: process.env.PLUNK_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Plunk secret API key.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://next-api.useplunk.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Plunk supports `headers`, `attachments`, `metadata` (sent as Plunk `data`), and a single `replyTo` (sent as `reply`, email address only — a second reply-to throws an `EmailValidationError`).
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@acme.com",
+  subject: "Your export is ready",
+  html: "<p>Download your workspace export below.</p>",
+  headers: { "X-Export-ID": "exp_123" },
+  metadata: { exportId: "exp_123" },
+  attachments: [
+    { filename: "export.csv", content: "name,total\nAda,42", contentType: "text/csv" },
+  ],
+});
+
+console.log(result.id); // Plunk email id from data.emails[0], falling back to id/emailId
+```
+
+<Callout type="warn" title="No cc, bcc, or tags">
+  Plunk has no `cc`, `bcc`, or `tags`, so any of them on a message throws an
+  `EmailValidationError` before a request is made. Check
+  [field support](/docs/adapters/field-support) before using Plunk in a fallback route.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+PLUNK_API_KEY="sk_..." npx email-sdk doctor --adapter plunk
+```
+
+```bash
+PLUNK_API_KEY="sk_..." npx email-sdk send \
+  --adapter plunk \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Plunk smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real smoke send to confirm the API key and verified sender work end to end.

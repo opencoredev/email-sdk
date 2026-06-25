@@ -1,0 +1,96 @@
+---
+title: Adapters
+description: 21 provider adapters and transports, each with explicit field support and fail-fast validation.
+icon: Cable
+---
+
+Email SDK ships 21 adapters. Each is its own entry point — import only what you send through — and each follows the same contract: map the fields the provider supports, throw a validation error for fields it cannot represent. Nothing is silently dropped.
+
+<SponsorSpotlight />
+
+<ProviderGrid />
+
+## Which adapter should I start with?
+
+| If you want…                            | Start with                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| The fastest first send                  | Resend                                                                       |
+| Mature transactional delivery controls  | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo                      |
+| A backup route for production delivery  | A primary API adapter plus Postmark or SMTP                                  |
+| Product-triggered or template emails    | Iterable, Sequenzy, Loops, or Plunk                                          |
+| A cheap or self-managed transport       | SMTP (built in — no Nodemailer)                                              |
+| Heavy attachment use                    | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
+
+Whatever you pick, choose fallback routes by [field support](/docs/adapters/field-support), not popularity — a fallback only helps if it can carry the same message.
+
+## One pattern for every provider
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      host: process.env.SMTP_HOST!,
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+    }),
+  ],
+  fallback: ["smtp"],
+});
+
+// route one send through a specific adapter
+await email.send(message, { adapter: "smtp" });
+```
+
+Before a provider goes to production, dry-run it, then run one live smoke send from the environment that will send real mail:
+
+```bash
+npx email-sdk adapters
+RESEND_API_KEY="re_..." npx email-sdk send \
+  --dry-run \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Dry run" \
+  --text "Validate only"
+```
+
+## Status labels
+
+<Accordions type="single">
+  <Accordion title="What the provider card labels mean">
+    - **Official** — the adapter ships in `@opencoredev/email-sdk`.
+    - **API tested** — a local check has successfully called the live provider API with a real key.
+      It does not prove delivery unless the adapter page says a send was performed.
+    - **Not API tested** — no live provider API check has been run yet.
+    - **Request tested** — repository tests cover request mapping, responses, and fail-fast
+      validation with injected fetch calls.
+    - **Built-in transport** — sends through Email SDK's own transport implementation instead of a
+      provider HTTP API.
+    - **No provider API** — the adapter does not call a hosted provider API.
+
+    Email SDK can catch unsupported fields before a request. It cannot make a provider account
+    ready to send from an unverified domain.
+
+  </Accordion>
+</Accordions>
+
+## Missing a provider?
+
+Don't fork the official package — wrap the provider in the [adapter contract](/docs/reference/adapter-contract) and publish it as a community package.
+
+<Cards>
+  <Card
+    title="Create an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Implement the provider mapping and wrap it as an adapter plugin."
+  />
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="Ship a third-party provider package and list it in the community registry."
+  />
+</Cards>

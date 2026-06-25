@@ -1,0 +1,156 @@
+---
+title: Writing plugins
+description: Build an EmailPlugin — choose hooks or middleware, register adapters, and add typed client extensions.
+icon: PackagePlus
+---
+
+A plugin is a plain object: a stable `id` plus any combination of `adapters`, `hooks`, `middleware`, and `extendClient`. No base class, no registration ceremony — export a factory function that returns the object.
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function auditPlugin(): EmailPlugin {
+  return {
+    id: "audit",
+    middleware: [
+      {
+        afterSend(event) {
+          console.log("sent", event.provider, event.response.id);
+        },
+      },
+    ],
+  };
+}
+```
+
+This page covers each capability and when to reach for it. For a guided build of a complete policy plugin, see [Create your first plugin](/docs/guides/authoring/create-first-plugin).
+
+## Hooks or middleware?
+
+Both watch the send pipeline; only middleware can change it. Pick by intent:
+
+| You want to…                              | Use                     | Why                                                                                  |
+| ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| Add defaults or rewrite the message       | `middleware.beforeSend` | Runs once per send, before validation; its return value replaces message/options.    |
+| Block a send (policy, guardrails)         | `middleware.beforeSend` | Thrown errors propagate and stop the send — hooks errors are swallowed.              |
+| Log, count, or trace attempts             | `hooks`                 | Per-attempt events including `onRetry`; failures never mask the send.                |
+| React to the final outcome                | `middleware.afterSend` / `onError` | Fire on success and on per-route failure; observe-only, errors swallowed. |
+
+```ts
+export function requireMetadata(key: string): EmailPlugin {
+  return {
+    id: `require-metadata:${key}`,
+    middleware: [
+      {
+        beforeSend(event) {
+          if (!event.options?.metadata?.[key]) {
+            throw new Error(`Missing email metadata: ${key}`);
+          }
+        },
+      },
+    ],
+  };
+}
+```
+
+`beforeSend` can also transform: return `{ message?, options? }` and the pipeline continues with your values. The returned `message` replaces the message wholesale; returned `options` shallow-merge over the current send options. The [defaults plugin](/docs/plugins/built-in/defaults) is exactly this pattern.
+
+Plugin `hooks` use the same shape as the client `hooks` option and run before client hooks — see [Hooks](/docs/concepts/hooks) for the event fields.
+
+## Register adapters
+
+Plugins can ship providers, which is how community adapter packages offer one-call setup:
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function acmeMail(options: { apiKey: string }): EmailPlugin {
+  return {
+    id: "acme-mail",
+    adapters: [createAcmeAdapter(options)], // an EmailProvider
+  };
+}
+```
+
+```ts
+const email = createEmailClient({
+  plugins: [acmeMail({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+For dynamic registration, `adapters` can be a function receiving an `EmailPluginContext` — inspect already-registered routes via `ctx.adapters`, read `ctx.defaultAdapter`, and call `ctx.addAdapter()`:
+
+```ts
+export function regionalMail(options: RegionOptions): EmailPlugin {
+  return {
+    id: "regional-mail",
+    adapters(ctx) {
+      ctx.addAdapter(createRegionAdapter("mail-us", options.us));
+      ctx.addAdapter(createRegionAdapter("mail-eu", options.eu));
+
+      return [];
+    },
+  };
+}
+```
+
+Two rules, both enforced with an `EmailValidationError`: adapter factories must be **synchronous** (`createEmailClient` is sync — returning a Promise throws), and duplicate adapter names throw. Building the adapter itself is its own topic: [Create an adapter](/docs/guides/authoring/create-adapter).
+
+## Extend the client
+
+`extendClient` returns properties merged onto the client. Type the plugin as `EmailPlugin<TExtension>` and the extension flows into the client type — `createEmailClient` infers the intersection of all plugin extensions, so callers get autocomplete with no casts:
+
+```ts
+export function routeNamesPlugin(): EmailPlugin<{ routeNames: string[] }> {
+  return {
+    id: "route-names",
+    extendClient(ctx) {
+      return { routeNames: [...ctx.adapters.keys()] };
+    },
+  };
+}
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [routeNamesPlugin()],
+});
+
+email.routeNames; // string[] — typed, no cast
+```
+
+Extensions run after the client is built. A key that already exists on the client — built-ins like `send` or `adapters`, or a key claimed by an earlier plugin — throws: `Email plugin "<id>" tried to extend the client with reserved key "<key>".` Keep extensions small: a store, a helper, a few readonly values. The [capture plugin](/docs/plugins/built-in/capture) shows the pattern, including a configurable typed key.
+
+## Registration rules
+
+`createEmailClient` processes plugins in array order and fails fast on conflicts:
+
+- Duplicate plugin `id` → `EmailValidationError`. Factories that can be mounted twice should accept an `id` option.
+- Duplicate adapter name (across direct `adapters` and all plugins) → `EmailValidationError`.
+- Async `adapters` factory → `EmailValidationError`.
+- `extendClient` key collision → `EmailValidationError`.
+- Plugin hooks run before client `hooks`; middleware runs in plugin order.
+
+## Next
+
+<Cards>
+  <Card
+    title="Create your first plugin"
+    href="/docs/guides/authoring/create-first-plugin"
+    description="Guided build of a policy plugin with a typed client extension."
+  />
+  <Card
+    title="Plugin API reference"
+    href="/docs/plugins/api"
+    description="Exact types for EmailPlugin, EmailPluginContext, and middleware events."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="Package, document, and list your plugin in the community registry."
+  />
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="Ship a provider package with a one-call plugin setup path."
+  />
+</Cards>
