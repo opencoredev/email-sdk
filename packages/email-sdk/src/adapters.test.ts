@@ -13,6 +13,7 @@ import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
 import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
+import { primitive } from "./primitive.js";
 import { resend } from "./resend.js";
 import { scaleway } from "./scaleway.js";
 import { sequenzy } from "./sequenzy.js";
@@ -913,6 +914,63 @@ describe("provider payloads", () => {
     ).rejects.toThrow("jetemail only supports 50 recipients per message");
   });
 
+  test("Primitive maps normalized fields and encodes attachments", async () => {
+    const capture = jsonCapture({ success: true, data: { id: "prim_123" } });
+
+    const response = await primitive({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        to: { email: "ada@example.com", name: "Ada" },
+        cc: undefined,
+        bcc: undefined,
+        replyTo: undefined,
+        headers: undefined,
+        tags: undefined,
+        metadata: undefined,
+      },
+      context,
+    );
+
+    expect(response.id).toBe("prim_123");
+    expect(response.messageId).toBe("prim_123");
+    expect(capture.calls[0]?.url).toBe("https://api.primitive.dev/v1/send-mail");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer key");
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "Acme <hello@example.com>",
+      to: "Ada <ada@example.com>",
+      subject: "Welcome",
+      body_text: "Hello",
+      body_html: "<p>Hello</p>",
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toMatchObject({
+      filename: "hello.txt",
+      content_base64: base64("hello"),
+      content_type: "text/plain",
+    });
+  });
+
+  test("Primitive rejects more than one recipient", async () => {
+    await expect(
+      primitive({
+        apiKey: "key",
+        fetch: jsonCapture({ success: true, data: { id: "prim_123" } }).fetch,
+      }).send(
+        {
+          ...message,
+          to: ["one@example.com", "two@example.com"],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+          metadata: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("primitive only supports 1 recipient per message");
+  });
+
   test("limited adapters reject fields they cannot send instead of dropping them", async () => {
     const limitedMessage = {
       ...message,
@@ -1014,6 +1072,13 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("jetemail does not support");
+
+    await expect(
+      primitive({
+        apiKey: "key",
+        fetch: jsonCapture({ success: true, data: { id: "prim_123" } }).fetch,
+      }).send(limitedMessage, context),
+    ).rejects.toThrow("primitive does not support");
 
     await expect(
       cloudflare({
