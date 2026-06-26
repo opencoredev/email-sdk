@@ -2,6 +2,9 @@
 # Default: every well-behaved crawler may index the whole site.
 User-agent: *
 Allow: /
+# Content Signals (Cloudflare spec): allow search indexing and AI answer-engine
+# input/citation; disallow use of this content for AI model training.
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 # AI assistants and answer engines that fetch on behalf of a user, drive traffic,
 # and cite sources are explicitly welcome.
@@ -52,3 +55,6 @@ User-agent: ImagesiftBot
 Disallow: /
 
 Sitemap: https://email-sdk.dev/sitemap.xml
+
+# NLWeb Schema Feeds: structured-data feeds for natural-language retrieval.
+Schemamap: https://email-sdk.dev/schemamap.xml

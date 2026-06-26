@@ -14,13 +14,17 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as LlmsDotmdRouteImport } from './routes/llms[.]md'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
+import { Route as IndexDotmdRouteImport } from './routes/index[.]md'
 import { Route as FeedDotjsonRouteImport } from './routes/feed[.]json'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BlogIndexRouteImport } from './routes/blog/index'
+import { Route as FeedsDocsDotjsonlRouteImport } from './routes/feeds/docs[.]jsonl'
 import { Route as DocsChar123Char125DotmdRouteImport } from './routes/docs/{$}[.]md'
+import { Route as DocsLlmsDottxtRouteImport } from './routes/docs/llms[.]txt'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as BlogSlugRouteImport } from './routes/blog/$slug'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
@@ -52,9 +56,19 @@ const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LlmsDotmdRoute = LlmsDotmdRouteImport.update({
+  id: '/llms.md',
+  path: '/llms.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
   id: '/llms-full.txt',
   path: '/llms-full.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexDotmdRoute = IndexDotmdRouteImport.update({
+  id: '/index.md',
+  path: '/index.md',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedDotjsonRoute = FeedDotjsonRouteImport.update({
@@ -82,9 +96,19 @@ const BlogIndexRoute = BlogIndexRouteImport.update({
   path: '/blog/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedsDocsDotjsonlRoute = FeedsDocsDotjsonlRouteImport.update({
+  id: '/feeds/docs.jsonl',
+  path: '/feeds/docs.jsonl',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsChar123Char125DotmdRoute = DocsChar123Char125DotmdRouteImport.update({
   id: '/docs/{$}.md',
   path: '/docs/{$}.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsLlmsDottxtRoute = DocsLlmsDottxtRouteImport.update({
+  id: '/docs/llms.txt',
+  path: '/docs/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
@@ -118,7 +142,9 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/feed.json': typeof FeedDotjsonRoute
+  '/index.md': typeof IndexDotmdRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.md': typeof LlmsDotmdRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -128,7 +154,9 @@ export interface FileRoutesByFullPath {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
+  '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
   '/blog/': typeof BlogIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
@@ -137,7 +165,9 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/feed.json': typeof FeedDotjsonRoute
+  '/index.md': typeof IndexDotmdRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.md': typeof LlmsDotmdRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -147,7 +177,9 @@ export interface FileRoutesByTo {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
+  '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
   '/blog': typeof BlogIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
@@ -157,7 +189,9 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/feed.json': typeof FeedDotjsonRoute
+  '/index.md': typeof IndexDotmdRoute
   '/llms-full.txt': typeof LlmsFullDottxtRoute
+  '/llms.md': typeof LlmsDotmdRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
@@ -167,7 +201,9 @@ export interface FileRoutesById {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
+  '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
   '/blog/': typeof BlogIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
@@ -178,7 +214,9 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/feed.json'
+    | '/index.md'
     | '/llms-full.txt'
+    | '/llms.md'
     | '/llms.txt'
     | '/privacy'
     | '/rss.xml'
@@ -188,7 +226,9 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/docs/$'
+    | '/docs/llms.txt'
     | '/docs/{$}.md'
+    | '/feeds/docs.jsonl'
     | '/blog/'
     | '/og/blog/$'
   fileRoutesByTo: FileRoutesByTo
@@ -197,7 +237,9 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/feed.json'
+    | '/index.md'
     | '/llms-full.txt'
+    | '/llms.md'
     | '/llms.txt'
     | '/privacy'
     | '/rss.xml'
@@ -207,7 +249,9 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/docs/$'
+    | '/docs/llms.txt'
     | '/docs/{$}.md'
+    | '/feeds/docs.jsonl'
     | '/blog'
     | '/og/blog/$'
   id:
@@ -216,7 +260,9 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/feed.json'
+    | '/index.md'
     | '/llms-full.txt'
+    | '/llms.md'
     | '/llms.txt'
     | '/privacy'
     | '/rss.xml'
@@ -226,7 +272,9 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/docs/$'
+    | '/docs/llms.txt'
     | '/docs/{$}.md'
+    | '/feeds/docs.jsonl'
     | '/blog/'
     | '/og/blog/$'
   fileRoutesById: FileRoutesById
@@ -236,7 +284,9 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
   FeedDotjsonRoute: typeof FeedDotjsonRoute
+  IndexDotmdRoute: typeof IndexDotmdRoute
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
+  LlmsDotmdRoute: typeof LlmsDotmdRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   PrivacyRoute: typeof PrivacyRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
@@ -246,7 +296,9 @@ export interface RootRouteChildren {
   ApiSearchRoute: typeof ApiSearchRoute
   BlogSlugRoute: typeof BlogSlugRoute
   DocsSplatRoute: typeof DocsSplatRoute
+  DocsLlmsDottxtRoute: typeof DocsLlmsDottxtRoute
   DocsChar123Char125DotmdRoute: typeof DocsChar123Char125DotmdRoute
+  FeedsDocsDotjsonlRoute: typeof FeedsDocsDotjsonlRoute
   BlogIndexRoute: typeof BlogIndexRoute
   OgBlogSplatRoute: typeof OgBlogSplatRoute
 }
@@ -288,11 +340,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/llms.md': {
+      id: '/llms.md'
+      path: '/llms.md'
+      fullPath: '/llms.md'
+      preLoaderRoute: typeof LlmsDotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/llms-full.txt': {
       id: '/llms-full.txt'
       path: '/llms-full.txt'
       fullPath: '/llms-full.txt'
       preLoaderRoute: typeof LlmsFullDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/index.md': {
+      id: '/index.md'
+      path: '/index.md'
+      fullPath: '/index.md'
+      preLoaderRoute: typeof IndexDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feed.json': {
@@ -330,11 +396,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BlogIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feeds/docs.jsonl': {
+      id: '/feeds/docs.jsonl'
+      path: '/feeds/docs.jsonl'
+      fullPath: '/feeds/docs.jsonl'
+      preLoaderRoute: typeof FeedsDocsDotjsonlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs/{$}.md': {
       id: '/docs/{$}.md'
       path: '/docs/{$}.md'
       fullPath: '/docs/{$}.md'
       preLoaderRoute: typeof DocsChar123Char125DotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs/llms.txt': {
+      id: '/docs/llms.txt'
+      path: '/docs/llms.txt'
+      fullPath: '/docs/llms.txt'
+      preLoaderRoute: typeof DocsLlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/$': {
@@ -380,7 +460,9 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   FeedDotjsonRoute: FeedDotjsonRoute,
+  IndexDotmdRoute: IndexDotmdRoute,
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
+  LlmsDotmdRoute: LlmsDotmdRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   PrivacyRoute: PrivacyRoute,
   RssDotxmlRoute: RssDotxmlRoute,
@@ -390,7 +472,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSearchRoute: ApiSearchRoute,
   BlogSlugRoute: BlogSlugRoute,
   DocsSplatRoute: DocsSplatRoute,
+  DocsLlmsDottxtRoute: DocsLlmsDottxtRoute,
   DocsChar123Char125DotmdRoute: DocsChar123Char125DotmdRoute,
+  FeedsDocsDotjsonlRoute: FeedsDocsDotjsonlRoute,
   BlogIndexRoute: BlogIndexRoute,
   OgBlogSplatRoute: OgBlogSplatRoute,
 }

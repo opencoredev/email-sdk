@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "getting-started",
+    "authentication",
     "concepts",
     "adapters",
     "plugins",

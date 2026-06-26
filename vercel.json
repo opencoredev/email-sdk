@@ -1,5 +1,31 @@
 {
   "outputDirectory": "apps/fumadocs/.vercel/output/static",
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "mode", "value": "agent" }],
+      "destination": "/agents.md"
+    }
+  ],
+  "redirects": [
+    { "source": "/docs/auth", "destination": "/docs/authentication", "permanent": true },
+    {
+      "source": "/docs/quickstart",
+      "destination": "/docs/getting-started/quickstart",
+      "permanent": true
+    },
+    { "source": "/docs/install", "destination": "/docs/getting-started/install", "permanent": true },
+    {
+      "source": "/docs/installation",
+      "destination": "/docs/getting-started/install",
+      "permanent": true
+    },
+    { "source": "/docs/errors", "destination": "/docs/reference/errors", "permanent": true },
+    { "source": "/docs/cli", "destination": "/docs/reference/cli", "permanent": true },
+    { "source": "/docs/api", "destination": "/docs/reference", "permanent": true },
+    { "source": "/docs/providers", "destination": "/docs/adapters", "permanent": true },
+    { "source": "/docs/provider", "destination": "/docs/adapters", "permanent": true }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -19,6 +45,86 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.simpleicons.org https://www.google.com; font-src 'self' data:; connect-src 'self' https://vitals.vercel-insights.com https://*.vercel-insights.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+        },
+        {
+          "key": "Link",
+          "value": "</sitemap.xml>; rel=\"sitemap\", </.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/agent.json>; rel=\"describedby\"; type=\"application/json\""
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "mode", "value": "agent" }],
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</index.md>; rel=\"alternate\"; type=\"text/markdown\", </llms.txt>; rel=\"alternate\"; type=\"text/plain\""
+        }
+      ]
+    },
+    {
+      "source": "/(.*).md",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        },
+        {
+          "key": "Vary",
+          "value": "Accept-Encoding"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).txt",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/feeds/docs.jsonl",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/x-ndjson; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/agent-skills",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/api-catalog",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\""
         }
       ]
     }

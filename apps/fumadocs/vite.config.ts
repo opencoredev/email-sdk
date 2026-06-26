@@ -132,6 +132,18 @@ export default defineConfig(({ mode }) => {
           {
             path: "llms.txt",
           },
+          {
+            path: "llms.md",
+          },
+          {
+            path: "index.md",
+          },
+          {
+            path: "/docs/llms.txt",
+          },
+          {
+            path: "/feeds/docs.jsonl",
+          },
         ],
       }),
       react(),

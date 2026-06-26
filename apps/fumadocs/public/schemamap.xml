@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Schema Map for Email SDK (NLWeb Schema Feeds).
+  Lists the structured-data feeds an NLWeb / natural-language indexer can ingest.
+  Referenced from robots.txt via the `Schemamap:` directive. Spec: https://nlweb.ai
+-->
+<schemamap>
+  <feed>
+    <loc>https://email-sdk.dev/feeds/docs.jsonl</loc>
+    <format>application/x-ndjson</format>
+    <vocabulary>https://schema.org</vocabulary>
+    <description>Email SDK documentation as schema.org TechArticle entities, one JSON object per line.</description>
+  </feed>
+  <feed>
+    <loc>https://email-sdk.dev/rss.xml</loc>
+    <format>application/rss+xml</format>
+    <description>Email SDK blog RSS feed.</description>
+  </feed>
+  <feed>
+    <loc>https://email-sdk.dev/feed.json</loc>
+    <format>application/feed+json</format>
+    <description>Email SDK blog JSON Feed.</description>
+  </feed>
+</schemamap>

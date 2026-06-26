@@ -1,0 +1,22 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://email-sdk.dev/",
+      "service-desc": [
+        { "href": "https://email-sdk.dev/llms.txt", "type": "text/plain" },
+        { "href": "https://email-sdk.dev/llms-full.txt", "type": "text/plain" }
+      ],
+      "service-doc": [
+        { "href": "https://email-sdk.dev/docs", "type": "text/html" },
+        { "href": "https://email-sdk.dev/docs/llms.txt", "type": "text/plain" },
+        { "href": "https://email-sdk.dev/agents.md", "type": "text/markdown" }
+      ],
+      "service-meta": [
+        { "href": "https://email-sdk.dev/.well-known/agent.json", "type": "application/json" },
+        { "href": "https://email-sdk.dev/.well-known/agent-skills", "type": "application/json" },
+        { "href": "https://email-sdk.dev/auth.md", "type": "text/markdown" },
+        { "href": "https://email-sdk.dev/feeds/docs.jsonl", "type": "application/x-ndjson" }
+      ]
+    }
+  ]
+}

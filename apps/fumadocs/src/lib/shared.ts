@@ -8,6 +8,25 @@ export const llmsOverview = `> ${appDescription}
 
 Email SDK is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 20+ providers — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, not a hosted API or a service you sign up for.
 
+## When to use Email SDK
+
+Reach for it when a TypeScript/JavaScript (Node, Bun, or edge/Workers) app needs to:
+
+- Send transactional email (receipts, verifications, alerts, password resets).
+- Start on one provider but keep the option to switch or add providers later without rewriting send sites.
+- Route across multiple providers with retries and compatible fallbacks.
+- Give an LLM agent a guarded \`send_email\` tool that runs the same validated pipeline as the rest of the app.
+
+## When not to use it
+
+- You need a marketing/campaign builder or a CRM — this is transactional sending.
+- You are not in a TypeScript/JavaScript runtime.
+- You want a hosted email API with its own dashboard and billing — Email SDK wraps providers you already pay (Resend, SES, Postmark, SMTP, …); it is not one itself.
+
+## How AI agents should use it
+
+Install the package, import the adapter for the provider whose credentials the app already holds, and call \`send()\`. There is nothing to authenticate against at email-sdk.dev — per-provider credentials live in /docs/authentication. Give models the \`send_email\` tool from \`@opencoredev/email-sdk/agent-tools\`, and follow the constraints below.
+
 ## Constraints
 
 - TypeScript/JavaScript runtimes only (Node, Bun, edge/Workers), for transactional email rather than marketing campaigns.
