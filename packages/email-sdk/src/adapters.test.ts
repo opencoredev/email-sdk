@@ -5,6 +5,7 @@ import { cloudflare } from "./cloudflare.js";
 import { EmailValidationError } from "./errors.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
+import { lettermint } from "./lettermint.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -423,6 +424,13 @@ describe("provider payloads", () => {
           fetch: jsonCapture({ request_id: "zoho_123" }).fetch,
         }),
         message: messageWithoutProviderSpecificFields,
+      },
+      {
+        name: "lettermint",
+        provider: lettermint({
+          apiToken: "token",
+          fetch: jsonCapture({ message_id: "lm_123", status: "pending" }).fetch,
+        }),
       },
     ];
 
@@ -1016,6 +1024,53 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
+  test("Lettermint maps normalized fields and encodes attachments", async () => {
+    const capture = jsonCapture({ message_id: "lm_123", status: "pending" });
+
+    const response = await lettermint({ apiToken: "lm_token", fetch: capture.fetch }).send(
+      message,
+      context,
+    );
+
+    expect(response.id).toBe("lm_123");
+    expect(response.messageId).toBe("lm_123");
+    expect(capture.calls[0]?.url).toBe("https://api.lettermint.co/v1/send");
+    expect(capture.calls[0]?.headers.get("x-lettermint-token")).toBe("lm_token");
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "Acme <hello@example.com>",
+      to: ["Ada <ada@example.com>"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      reply_to: ["reply@example.com"],
+      subject: "Welcome",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      tag: "welcome",
+      headers: { "X-Test": "yes" },
+      metadata: { userId: "user_123" },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      filename: "hello.txt",
+      content: base64("hello"),
+      content_type: "text/plain",
+    });
+  });
+
+  test("Lettermint forwards a configured route and a per-send idempotency key", async () => {
+    const capture = jsonCapture({ message_id: "lm_123", status: "pending" });
+
+    await lettermint({
+      apiToken: "lm_token",
+      route: "transactional",
+      headers: { "Idempotency-Key": "static-key" },
+      fetch: capture.fetch,
+    }).send(messageWithoutProviderSpecificFields, context);
+
+    expect(capture.calls[0]?.json.route).toBe("transactional");
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
   test("limited adapters reject fields they cannot send instead of dropping them", async () => {
     const limitedMessage = {
       ...message,
@@ -1199,6 +1254,19 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("mailtrap only supports 1 tag per message");
+
+    await expect(
+      lettermint({ apiToken: "lm", fetch: jsonCapture({ message_id: "lm_123" }).fetch }).send(
+        {
+          ...message,
+          tags: [
+            { name: "kind", value: "welcome" },
+            { name: "plan", value: "pro" },
+          ],
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettermint only supports 1 tag per message");
 
     await expect(
       brevo({ apiKey: "key", fetch: jsonCapture({ messageId: "brevo_123" }).fetch }).send(

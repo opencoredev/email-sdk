@@ -102,6 +102,10 @@
       "types": "./dist/jetemail.d.ts",
       "import": "./dist/jetemail.js"
     },
+    "./lettermint": {
+      "types": "./dist/lettermint.d.ts",
+      "import": "./dist/lettermint.js"
+    },
     "./primitive": {
       "types": "./dist/primitive.d.ts",
       "import": "./dist/primitive.js"
