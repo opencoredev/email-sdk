@@ -8,6 +8,7 @@ import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
+import { lettermint } from "./lettermint.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -81,6 +82,7 @@ const providerDocs = [
   },
   { name: "sequenzy", env: ["SEQUENZY_API_KEY"], note: "Sequenzy transactional email API" },
   { name: "jetemail", env: ["JETEMAIL_API_KEY"], note: "JetEmail transactional email API" },
+  { name: "lettermint", env: ["LETTERMINT_API_TOKEN"], note: "Lettermint sending API" },
   { name: "primitive", env: ["PRIMITIVE_API_KEY"], note: "Primitive email API for AI agents" },
   { name: "plunk", env: ["PLUNK_API_KEY"], note: "Plunk public send API" },
   { name: "mailtrap", env: ["MAILTRAP_API_KEY"], note: "Mailtrap Email Sending API" },
@@ -164,6 +166,12 @@ const factories = {
       apiKey: flagOrEnv(flags, "api-key", "JETEMAIL_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.JETEMAIL_BASE_URL,
     }),
+  lettermint: (flags) =>
+    lettermint({
+      apiToken: flagOrEnv(flags, "api-token", "LETTERMINT_API_TOKEN"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.LETTERMINT_BASE_URL,
+      route: stringFlag(flags, "route") ?? process.env.LETTERMINT_ROUTE,
+    }),
   primitive: (flags) =>
     primitive({
       apiKey: flagOrEnv(flags, "api-key", "PRIMITIVE_API_KEY"),
@@ -219,6 +227,7 @@ const envFlagNames: Record<string, string> = {
   LOOPS_TRANSACTIONAL_ID: "transactional-id",
   SEQUENZY_API_KEY: "api-key",
   JETEMAIL_API_KEY: "api-key",
+  LETTERMINT_API_TOKEN: "api-token",
   PRIMITIVE_API_KEY: "api-key",
   PLUNK_API_KEY: "api-key",
   MAILTRAP_API_KEY: "api-key",

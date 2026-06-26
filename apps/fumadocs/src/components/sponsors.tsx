@@ -25,6 +25,16 @@ const sponsors = [
     href: "https://www.primitive.dev",
     logo: "/og/provider-logos/primitive.png",
   },
+  {
+    name: "Lettermint",
+    href: "https://lettermint.co/?ref=emailsdk",
+    logo: "/og/provider-logos/lettermint.png",
+  },
+  {
+    name: "Instatus",
+    href: "https://instatus.com/?ref=emailsdk",
+    logo: "/og/provider-logos/instatus.png",
+  },
 ] as const;
 
 const openSponsorSlots = [1] as const;
