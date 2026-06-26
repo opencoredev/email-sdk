@@ -75,6 +75,15 @@
       ]
     },
     {
+      "source": "/.well-known/agent-skills",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        }
+      ]
+    },
+    {
       "source": "/.well-known/api-catalog",
       "headers": [
         {
