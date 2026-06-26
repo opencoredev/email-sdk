@@ -1,0 +1,171 @@
+---
+title: Plugin API
+description: Type reference for EmailPlugin, EmailPluginContext, EmailSendMiddleware events, and typed client extensions.
+icon: Braces
+---
+
+Reference for the plugin surface. For patterns and guidance, start with [Writing plugins](/docs/plugins/writing-plugins).
+
+## EmailPlugin
+
+```ts
+type EmailPlugin<TExtension extends object = object> = {
+  id: string;
+  adapters?: EmailProvider[] | ((ctx: EmailPluginContext) => EmailProvider[]);
+  hooks?: EmailHooks;
+  middleware?: EmailSendMiddleware[];
+  extendClient?: (ctx: EmailPluginContext) => TExtension;
+};
+```
+
+<TypeTable
+  type={{
+    id: {
+      description: "Stable plugin id. A duplicate id in the plugins array throws EmailValidationError.",
+      type: "string",
+      required: true,
+    },
+    adapters: {
+      description:
+        "Providers to register, as an array or a synchronous factory. An async factory or duplicate adapter name throws EmailValidationError.",
+      type: "EmailProvider[] | ((ctx) => EmailProvider[])",
+    },
+    hooks: {
+      description:
+        "Per-attempt observability callbacks (beforeSend, afterSend, onError, onRetry). Run before client hooks; thrown errors are swallowed.",
+      type: "EmailHooks",
+    },
+    middleware: {
+      description: "Send-pipeline middleware. Only plugins can register middleware.",
+      type: "EmailSendMiddleware[]",
+    },
+    extendClient: {
+      description:
+        "Returns properties merged onto the client. Colliding with an existing client key throws EmailValidationError.",
+      type: "(ctx: EmailPluginContext) => TExtension",
+    },
+  }}
+/>
+
+`createEmailClient` is synchronous: it registers direct `adapters` first, then processes plugins in array order, then applies `extendClient` extensions after the client object is built.
+
+## EmailPluginContext
+
+Passed to `adapters` factories and `extendClient`.
+
+```ts
+type EmailPluginContext = {
+  adapters: ReadonlyMap<string, EmailProvider>;
+  defaultAdapter: string;
+  addAdapter(adapter: EmailProvider): void;
+};
+```
+
+<TypeTable
+  type={{
+    adapters: {
+      description: "Live view of registered adapters at the time the plugin runs.",
+      type: "ReadonlyMap<string, EmailProvider>",
+    },
+    defaultAdapter: {
+      description: "The requested default adapter name.",
+      type: "string",
+    },
+    addAdapter: {
+      description: "Registers an adapter. Duplicate names throw EmailValidationError.",
+      type: "(adapter: EmailProvider) => void",
+    },
+  }}
+/>
+
+If an `adapters` factory both calls `ctx.addAdapter(adapter)` and returns the same adapter object, it registers once.
+
+## EmailSendMiddleware
+
+```ts
+type EmailSendMiddleware = {
+  beforeSend?: (event: EmailBeforeSendEvent) => MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?: (event: EmailAfterSendEvent) => MaybePromise<void>;
+  onError?: (event: EmailErrorEvent) => MaybePromise<void>;
+};
+```
+
+| Callback     | Runs                                                                | Errors        |
+| ------------ | ------------------------------------------------------------------- | ------------- |
+| `beforeSend` | Once per send, before validation and adapter routing.               | Stop the send |
+| `afterSend`  | After a provider returns a normalized response.                     | Swallowed     |
+| `onError`    | After an adapter route fails its last retry, before any fallback.   | Swallowed     |
+
+### beforeSend
+
+```ts
+type EmailBeforeSendEvent = { message: EmailMessage; options?: SendOptions };
+type EmailBeforeSendResult = { message?: EmailMessage; options?: SendOptions };
+```
+
+No `provider` field — routing has not happened yet. Returning a result transforms the send: `message` **replaces** the message wholesale, `options` **shallow-merges** over the current send options. Return nothing to observe or to throw for policy. Middleware runs in plugin order, each seeing the previous one's result.
+
+### afterSend and onError
+
+Both extend the hook event shape:
+
+```ts
+type EmailAfterSendEvent = {
+  provider: string;
+  message: EmailMessage;
+  attempt: number;
+  metadata?: Record<string, unknown>;
+  response: EmailProviderResponse;
+};
+
+type EmailErrorEvent = {
+  provider: string;
+  message: EmailMessage;
+  attempt: number;
+  metadata?: Record<string, unknown>;
+  error: unknown;
+};
+```
+
+After `onError`, [fallback adapters](/docs/concepts/fallbacks-and-retries) may still run — it signals a failed route, not necessarily a failed send.
+
+## Typed client extensions
+
+`EmailPlugin<TExtension>` carries the extension type, and `createEmailClient` infers the result from the plugins array:
+
+```ts
+// EmailClient<{ capture: EmailCaptureStore }>
+const email = createEmailClient({
+  adapters: [memoryProvider()],
+  plugins: [capturePlugin()],
+});
+```
+
+Helper types behind the inference:
+
+<TypeTable
+  type={{
+    "EmailPluginClientExtension<TPlugin>": {
+      description: "Extracts TExtension from a single EmailPlugin<TExtension>.",
+      type: "object",
+    },
+    "EmailPluginClientExtensions<TPlugins>": {
+      description:
+        "Intersection of all extensions in a readonly plugins tuple — the type argument of the returned EmailClient.",
+      type: "object",
+    },
+  }}
+/>
+
+Multiple extending plugins intersect: the client gains every extension, and a runtime key collision throws `EmailValidationError`.
+
+## Registration errors
+
+All thrown by `createEmailClient` as `EmailValidationError`:
+
+| Condition                | Message                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| Duplicate plugin id      | `Duplicate email plugin "<id>".`                                                                  |
+| Duplicate adapter name   | `Duplicate email adapter "<name>".`                                                               |
+| Async adapters factory   | `Email plugin "<id>" returned async adapters. createEmailClient requires synchronous plugin adapters.` |
+| Extension key collision  | `Email plugin "<id>" tried to extend the client with reserved key "<key>".`                       |
