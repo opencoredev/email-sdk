@@ -14,11 +14,11 @@
   <feed>
     <loc>https://email-sdk.dev/rss.xml</loc>
     <format>application/rss+xml</format>
-    <description>Email SDK blog and changelog RSS feed.</description>
+    <description>Email SDK blog RSS feed.</description>
   </feed>
   <feed>
     <loc>https://email-sdk.dev/feed.json</loc>
     <format>application/feed+json</format>
-    <description>Email SDK blog and changelog JSON Feed.</description>
+    <description>Email SDK blog JSON Feed.</description>
   </feed>
 </schemamap>
