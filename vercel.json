@@ -48,7 +48,16 @@
         },
         {
           "key": "Link",
-          "value": "</sitemap.xml>; rel=\"sitemap\", </index.md>; rel=\"alternate\"; type=\"text/markdown\", </llms.txt>; rel=\"alternate\"; type=\"text/plain\", </.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/agent.json>; rel=\"describedby\"; type=\"application/json\""
+          "value": "</sitemap.xml>; rel=\"sitemap\", </.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/agent.json>; rel=\"describedby\"; type=\"application/json\""
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</index.md>; rel=\"alternate\"; type=\"text/markdown\", </llms.txt>; rel=\"alternate\"; type=\"text/plain\""
         }
       ]
     },
