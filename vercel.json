@@ -59,10 +59,6 @@
         {
           "key": "Content-Type",
           "value": "text/markdown; charset=utf-8"
-        },
-        {
-          "key": "Vary",
-          "value": "Accept"
         }
       ]
     },
@@ -84,7 +80,7 @@
         },
         {
           "key": "Vary",
-          "value": "Accept, Accept-Encoding"
+          "value": "Accept-Encoding"
         }
       ]
     },

@@ -12,7 +12,6 @@ export const Route = createFileRoute("/llms.md")({
         return new Response(buildLlmsIndex(), {
           headers: {
             "content-type": "text/markdown; charset=utf-8",
-            vary: "Accept",
           },
         });
       },

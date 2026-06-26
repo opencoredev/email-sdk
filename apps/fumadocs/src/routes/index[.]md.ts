@@ -65,7 +65,6 @@ export const Route = createFileRoute("/index.md")({
         return new Response(body, {
           headers: {
             "content-type": "text/markdown; charset=utf-8",
-            vary: "Accept",
           },
         });
       },
