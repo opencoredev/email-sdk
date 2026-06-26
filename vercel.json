@@ -54,6 +54,20 @@
     },
     {
       "source": "/",
+      "has": [{ "type": "query", "key": "mode", "value": "agent" }],
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        },
+        {
+          "key": "Vary",
+          "value": "Accept"
+        }
+      ]
+    },
+    {
+      "source": "/",
       "headers": [
         {
           "key": "Link",
@@ -80,6 +94,10 @@
         {
           "key": "Content-Type",
           "value": "application/x-ndjson; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
         }
       ]
     },
