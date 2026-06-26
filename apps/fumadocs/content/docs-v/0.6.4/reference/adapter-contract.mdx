@@ -1,0 +1,142 @@
+---
+title: Adapter contract
+description: The EmailProvider type, context, response and error contracts every adapter must implement.
+icon: Plug
+---
+
+An adapter is a plain object implementing `EmailProvider`: one routing name, one `send` function that maps a normalized [message](/docs/reference/message) to one provider API. This page is the type contract; the walkthrough is [Create an adapter](/docs/guides/authoring/create-adapter).
+
+## `EmailProvider`
+
+```ts
+type EmailProvider<TRaw = unknown> = {
+  name: string;
+  send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  raw?: TRaw;
+};
+```
+
+<TypeTable
+  type={{
+    name: {
+      description: "Stable routing name. Used in defaultAdapter, fallback lists, per-send overrides, hooks, and errors.",
+      type: "string",
+      required: true,
+    },
+    send: {
+      description: "Maps the message to one provider request and returns a normalized response.",
+      type: "(message, context) => MaybePromise<EmailProviderResponse>",
+      required: true,
+    },
+    raw: {
+      description: "Optional escape hatch for provider-specific extras, reachable via client.adapter(name).raw.",
+      type: "TRaw",
+    },
+  }}
+/>
+
+```ts
+import { EmailProviderError } from "@opencoredev/email-sdk";
+import type { EmailProvider } from "@opencoredev/email-sdk";
+
+export const acmeMail: EmailProvider = {
+  name: "acme-mail",
+  async send(message, context) {
+    const response = await fetch("https://api.acme-mail.example/send", {
+      method: "POST",
+      signal: context.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toAcmePayload(message)),
+    });
+
+    if (!response.ok) {
+      throw new EmailProviderError(`acme-mail failed with HTTP ${response.status}.`, {
+        provider: "acme-mail",
+        status: response.status,
+        retryable: response.status === 429 || response.status >= 500,
+      });
+    }
+
+    const body = await response.json();
+    return { provider: "acme-mail", id: body.id, raw: body };
+  },
+};
+```
+
+## `EmailProviderContext`
+
+The second argument to `send`. Honor `signal` and `idempotencyKey` whenever the provider can.
+
+<TypeTable
+  type={{
+    attempt: {
+      description: "1-based attempt number for this adapter within the current send.",
+      type: "number",
+      required: true,
+    },
+    signal: {
+      description: "Abort signal from send options. Pass it into fetch.",
+      type: "AbortSignal",
+    },
+    idempotencyKey: {
+      description: "Resolved key from send options or message.idempotencyKey. Forward it when the provider deduplicates.",
+      type: "string",
+    },
+    metadata: {
+      description: "Send-scope metadata from send options. Observability data, not message content.",
+      type: "Record<string, unknown>",
+    },
+  }}
+/>
+
+## Response contract
+
+Return an [`EmailProviderResponse`](/docs/reference/client#response). Set `provider` to the adapter's routing name (the client fills it in if left empty), map the provider's message id into `id`/`messageId`, and keep the untouched body in `raw` for debugging.
+
+## Error contract
+
+Throw `EmailProviderError` for provider failures and classify retryability so the client's [retry layer](/docs/concepts/fallbacks-and-retries) works:
+
+- Set `status` to the HTTP status when there is one.
+- Set `retryable: true` for transient failures. The SDK's own adapters use `isRetryableStatus`: `408`, `409`, `425`, `429`, and any `5xx`.
+- Put the parsed error body in `details`.
+
+Anything else you throw is normalized by the client via `toProviderError`: plain `Error`s become non-retryable `EmailProviderError`s — except network-style failures (`ECONNRESET`-family codes, `fetch failed`, timeouts), which are marked retryable. `AbortError` is never retried. See the [errors reference](/docs/reference/errors) for the full taxonomy.
+
+## Fail fast on unsupported fields
+
+Adapters must reject message fields the provider cannot represent — before any request, never a silent drop. Built-in adapters throw `EmailValidationError` with this exact shape:
+
+```txt
+<adapter> does not support these EmailMessage fields: tags, metadata.
+```
+
+Do the same in custom adapters: check `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, and `metadata` against what your provider supports, and throw for the rest. This is what keeps [fallback routes](/docs/adapters/field-support#choosing-compatible-routes) honest.
+
+## Internal helpers
+
+The built-in adapters share two internal modules in the SDK repository — useful as reference, or directly if you contribute an adapter upstream (they are not public package exports):
+
+- `src/http.ts` — `jsonProvider({ name, baseUrl, endpoint, headers, buildPayload, parseResponse? })` wraps the whole JSON-API pattern: fetch with `context.signal`, error-body parsing, `EmailProviderError` with `isRetryableStatus`, and response normalization.
+- `src/payloads.ts` — address and attachment mapping helpers (`apiAddresses`, `stringAddresses`, `base64Attachments`, `commonHeadersObject`, …) used across the 20 adapters.
+
+Community packages should copy these patterns rather than import them.
+
+## Packaging as a plugin
+
+Ship a reusable adapter as an `EmailPlugin` so users mount it with `plugins: [...]`:
+
+```ts
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function acmeMailPlugin(options: AcmeMailOptions): EmailPlugin {
+  return {
+    id: "acme-mail",
+    adapters: [createAcmeMail(options)],
+  };
+}
+```
+
+`adapters` must be synchronous — an array, or a function of the plugin context that returns one. A plugin that returns a Promise throws `EmailValidationError` at client creation, as do duplicate plugin ids and duplicate adapter names.
+
+Export both the plain adapter factory and the plugin from your package root, then follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) to list it in the [community registry](/docs/reference/community-registry).
