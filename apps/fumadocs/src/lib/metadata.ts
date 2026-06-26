@@ -118,6 +118,40 @@ export const homeStructuredData = {
       },
     },
     {
+      "@type": "WebPage",
+      "@id": `${siteUrl}/#webpage`,
+      url: siteUrl,
+      name: siteTitle,
+      description: appDescription,
+      inLanguage: "en",
+      isPartOf: {
+        "@id": `${siteUrl}/#website`,
+      },
+      about: {
+        "@id": `${siteUrl}/#software`,
+      },
+      primaryImageOfPage: siteOgImageUrl,
+      // Tells assistants which sections of the homepage are suitable for
+      // text-to-speech readout (the hero heading and one-line summary).
+      speakable: {
+        "@type": "SpeakableSpecification",
+        cssSelector: ["#hero-heading", "#hero-summary"],
+      },
+    },
+    {
+      "@type": "Service",
+      "@id": `${siteUrl}/#service`,
+      name: "Email SDK transactional email integration",
+      serviceType: "Transactional email integration",
+      description:
+        "Send transactional email through 20+ providers behind one typed TypeScript client, with retries and compatible fallbacks.",
+      provider: {
+        "@id": `${siteUrl}/#organization`,
+      },
+      areaServed: "Worldwide",
+      url: `${siteUrl}/docs`,
+    },
+    {
       "@type": "SoftwareApplication",
       "@id": `${siteUrl}/#software`,
       name: appName,
@@ -161,7 +195,7 @@ export const homeStructuredData = {
           name: "Which email providers does Email SDK support?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Iterable, Loops, Sequenzy, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
+            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Iterable, Loops, Sequenzy, JetEmail, Primitive, Lettermint, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
           },
         },
         {
@@ -196,6 +230,9 @@ export const homeStructuredData = {
         "Iterable",
         "Loops",
         "Sequenzy",
+        "JetEmail",
+        "Primitive",
+        "Lettermint",
         "Plunk",
         "Mailtrap",
         "Scaleway",

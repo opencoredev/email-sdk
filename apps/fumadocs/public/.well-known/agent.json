@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0",
+  "name": "Email SDK",
+  "description": "Open-source TypeScript SDK that sends transactional email through 20+ providers (Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks. It is a library you install into an app, not a hosted API.",
+  "productType": "sdk",
+  "homepage": "https://email-sdk.dev",
+  "documentation": "https://email-sdk.dev/docs",
+  "guide": "https://email-sdk.dev/agents.md",
+  "instructions": "Email SDK is a TypeScript/JavaScript library, not a hosted service. There is no API to call and no credentials to obtain from us — install the npm package and bring the provider keys the app already has. Use it to send transactional email behind one typed client. Read /agents.md for when-to-use guidance and /auth.md for the authentication model. Gate any agent-initiated send behind explicit human approval and run `email-sdk doctor` and `send --dry-run` before live sends.",
+  "machineResources": {
+    "llmsTxt": "https://email-sdk.dev/llms.txt",
+    "llmsFullTxt": "https://email-sdk.dev/llms-full.txt",
+    "markdownHome": "https://email-sdk.dev/index.md",
+    "authModel": "https://email-sdk.dev/auth.md",
+    "apiCatalog": "https://email-sdk.dev/.well-known/api-catalog",
+    "schemaFeed": "https://email-sdk.dev/feeds/docs.jsonl"
+  },
+  "authentication": {
+    "type": "none",
+    "description": "Email SDK exposes no hosted API and issues no credentials. You provide each email provider's API key (or SMTP credentials) through environment variables in your own application."
+  },
+  "distribution": {
+    "npm": "@opencoredev/email-sdk",
+    "repository": "https://github.com/opencoredev/email-sdk",
+    "cli": "email-sdk"
+  },
+  "capabilities": [
+    "Send transactional email through one typed client across 20+ providers",
+    "Retry transient failures and fall back across compatible adapters",
+    "Expose a guarded send_email tool to LLM agents",
+    "Run local configuration checks and dry-run sends via the email-sdk CLI"
+  ],
+  "skills": [
+    {
+      "name": "email-sdk",
+      "description": "Use when adding, reviewing, or documenting Email SDK integrations in TypeScript/Bun apps. Covers adapter selection, fallbacks, CLI smoke tests, hooks, and secret-safe observability.",
+      "install": "npx skills add opencoredev/email-sdk --skill email-sdk",
+      "source": "https://github.com/opencoredev/email-sdk/blob/main/skills/email-sdk/SKILL.md"
+    }
+  ],
+  "tools": [
+    {
+      "name": "send_email",
+      "description": "Send a transactional email through the app's configured Email SDK client. Requires from, to, and subject; optional html, text, adapter, and provider. Runs the full validate/retry/fallback pipeline.",
+      "package": "@opencoredev/email-sdk/agent-tools",
+      "factory": "createEmailAgentTools",
+      "documentation": "https://email-sdk.dev/docs/agents/skill",
+      "requiresApproval": true
+    }
+  ],
+  "contact": {
+    "type": "technical support",
+    "url": "https://github.com/opencoredev/email-sdk/issues"
+  }
+}

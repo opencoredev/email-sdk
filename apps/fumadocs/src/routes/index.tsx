@@ -120,11 +120,17 @@ function Home() {
       <main className="border-b border-fd-border bg-fd-background text-fd-foreground">
         <section className="mx-auto grid min-h-[calc(100svh-64px)] max-w-[1512px] items-center gap-10 px-6 py-10 md:px-10 lg:grid-cols-[0.78fr_1.22fr] lg:px-14 xl:px-16">
           <div className="max-w-2xl py-4">
-            <h1 className="text-5xl font-medium leading-[1.04] text-fd-foreground md:text-6xl">
+            <h1
+              className="text-5xl font-medium leading-[1.04] text-fd-foreground md:text-6xl"
+              id="hero-heading"
+            >
               One email SDK for every provider.
             </h1>
 
-            <p className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg">
+            <p
+              className="mt-6 max-w-xl text-base leading-7 text-fd-muted-foreground md:text-lg"
+              id="hero-summary"
+            >
               Email SDK is a TypeScript email SDK for transactional sending through Resend,
               Postmark, SendGrid, Mailgun, Unosend, AWS SES, Brevo, SMTP, and more with one clean
               API.
@@ -159,9 +165,7 @@ function Home() {
                   <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center text-xs text-fd-muted-foreground">
                     <span>Provider</span>
                     <span className="inline-flex h-7 min-w-32 items-center justify-center rounded-full bg-fd-muted px-3 text-[11px] font-semibold text-fd-foreground shadow-inner shadow-black/10 sm:min-w-40">
-                      <span className="max-w-32 truncate sm:max-w-36">
-                        {activeProvider.label}
-                      </span>
+                      <span className="max-w-32 truncate sm:max-w-36">{activeProvider.label}</span>
                     </span>
                     <span className="hidden justify-self-end sm:block">
                       Use arrows or click a logo
@@ -338,7 +342,12 @@ function SyntaxCode({ provider }: { provider: ProviderProfile }) {
         <Token tone="keyword">from</Token> <Token tone="string">"@opencoredev/email-sdk"</Token>;
       </CodeLine>
       <CodeLine number={2}>
-        <Token tone="keyword">import</Token>{" { "}<Token tone="function">{provider.import}</Token>{" } "}<Token tone="keyword">from</Token>{" "}<Token tone="string">{`"${provider.importPath}"`}</Token>;
+        <Token tone="keyword">import</Token>
+        {" { "}
+        <Token tone="function">{provider.import}</Token>
+        {" } "}
+        <Token tone="keyword">from</Token> <Token tone="string">{`"${provider.importPath}"`}</Token>
+        ;
       </CodeLine>
       <CodeLine />
       <CodeLine number={4}>
@@ -421,8 +430,8 @@ function renderConfigLine(line: string) {
     return (
       <>
         {leadingWhitespace}
-        <Token tone="property">{envMatch[1]}</Token>:{" "}
-        <Token tone="variable">process</Token>.env.{envMatch[2]}
+        <Token tone="property">{envMatch[1]}</Token>: <Token tone="variable">process</Token>.env.
+        {envMatch[2]}
         {suffix}
       </>
     );
@@ -578,9 +587,7 @@ function ProviderLogo({ active, label, logo }: { active: boolean; label: string;
     return (
       <span
         className={`m-auto flex size-8 items-center justify-center rounded-full text-[9px] font-semibold sm:size-9 sm:text-[10px] ${
-          active
-            ? "bg-fd-background text-fd-foreground"
-            : "bg-fd-foreground text-fd-background"
+          active ? "bg-fd-background text-fd-foreground" : "bg-fd-foreground text-fd-background"
         }`}
       >
         {getProviderInitials(label)}

@@ -89,6 +89,42 @@ function getSitemapEntries() {
       priority: "0.5",
     },
     {
+      loc: `${siteUrl}/llms.md`,
+      lastmod: "2026-06-01",
+      changefreq: "weekly",
+      priority: "0.5",
+    },
+    {
+      loc: `${siteUrl}/index.md`,
+      lastmod: "2026-06-01",
+      changefreq: "weekly",
+      priority: "0.5",
+    },
+    {
+      loc: `${siteUrl}/docs/llms.txt`,
+      lastmod: "2026-06-01",
+      changefreq: "weekly",
+      priority: "0.4",
+    },
+    {
+      loc: `${siteUrl}/agents.md`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.5",
+    },
+    {
+      loc: `${siteUrl}/auth.md`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.4",
+    },
+    {
+      loc: `${siteUrl}/schemamap.xml`,
+      lastmod: "2026-06-01",
+      changefreq: "monthly",
+      priority: "0.3",
+    },
+    {
       loc: `${siteUrl}/rss.xml`,
       lastmod: "2026-06-01",
       changefreq: "weekly",

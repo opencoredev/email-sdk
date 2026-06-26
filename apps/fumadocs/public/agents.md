@@ -56,8 +56,8 @@ await email.send({
 Adapters import from their own entry point (`@opencoredev/email-sdk/resend`,
 `/smtp`, `/ses`, …). Supported providers: Resend, SMTP, Postmark, SendGrid,
 Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp
-Transactional, SparkPost, Iterable, Loops, Sequenzy, Plunk, Mailtrap, Scaleway,
-ZeptoMail, and MailPace.
+Transactional, SparkPost, Iterable, Loops, Sequenzy, JetEmail, Primitive,
+Lettermint, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.
 
 ## Give an agent a send tool
 
@@ -76,6 +76,22 @@ Install it with:
 ```bash
 npx skills add opencoredev/email-sdk --skill email-sdk
 ```
+
+## Machine-readable endpoints
+
+Predictable URLs for programmatic discovery:
+
+- Agent discovery: https://email-sdk.dev/.well-known/agent.json
+- Authentication model: https://email-sdk.dev/auth.md (there is no hosted API or platform credential to obtain)
+- Per-provider credentials: https://email-sdk.dev/docs/authentication (every adapter's config field + env var in one table)
+- Markdown homepage: https://email-sdk.dev/index.md
+- Docs-scoped index: https://email-sdk.dev/docs/llms.txt
+- API catalog (RFC 9727): https://email-sdk.dev/.well-known/api-catalog
+- Schema feed (NLWeb): https://email-sdk.dev/schemamap.xml → https://email-sdk.dev/feeds/docs.jsonl
+- Skill descriptor: https://email-sdk.dev/.well-known/agent-skills
+
+Append `.md` to any documentation URL (for example `/docs/quickstart.md`) to fetch
+its raw markdown, or pass `?mode=agent` to the homepage for this guide.
 
 ## Constraints for agents
 
