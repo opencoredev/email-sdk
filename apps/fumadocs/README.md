@@ -31,6 +31,33 @@ API key on the server, and means there are no Notra calls from the browser.
   Without the key the fetch is skipped and the last committed snapshot is kept,
   so the build never fails.
 
-New posts appear on the next deploy. The `Refresh blog posts from Notra` GitHub
-workflow triggers a weekly Vercel rebuild; you can also point a Notra publish
-webhook at the same Vercel deploy hook for instant updates.
+### How new posts go live
+
+Publishing a post in Notra does **not** update the site on its own — the snapshot
+is regenerated only when the blog is rebuilt. A new post appears once a deploy
+re-runs `fetch-notra-posts.ts` and ships a fresh `notra-posts.generated.ts`.
+
+Build caching is intentionally disabled for this app in `apps/fumadocs/turbo.json`
+(`"cache": false`). Without it, rebuilding the same commit can hit the turbo/Vercel
+build cache and skip the Notra fetch, so a newly published post never appears
+(only a forced no-cache build would pick it up). With caching off, every deploy
+re-runs the fetch.
+
+### Refresh workflow and deploy hook
+
+The `Refresh blog posts from Notra` GitHub workflow
+(`.github/workflows/blog-schedule.yml`) triggers a Vercel rebuild — which re-fetches
+the latest published posts plus the sitemap, RSS, and JSON feed. It runs on three
+triggers:
+
+- **`repository_dispatch`** with event type `notra-published` — point a Notra
+  "post published" webhook at GitHub's `repository_dispatch` API for near-instant
+  updates.
+- **`schedule`** — a daily rebuild (`30 13 * * *`) as a safety net in case a
+  webhook is missed.
+- **`workflow_dispatch`** — manual rebuild from the Actions tab.
+
+The workflow POSTs to a Vercel **Deploy Hook**. To enable it, create the hook
+(Vercel project → **Settings → Git → Deploy Hooks**, branch `main`) and store its
+URL as the `VERCEL_DEPLOY_HOOK_URL` repository secret. Until that secret is set the
+workflow no-ops cleanly (it logs a notice and exits 0) rather than failing.
