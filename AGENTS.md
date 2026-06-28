@@ -50,6 +50,18 @@ Major versions need migration notes in the PR that introduces the breaking chang
 
 Do not merge a `Version packages` PR for a major version unless the migration path is documented.
 
+## Docs and Blog
+
+The docs site is `apps/fumadocs`. The blog is powered by [Notra](https://usenotra.com): published posts are fetched at build time by `scripts/fetch-notra-posts.ts` and baked into `src/lib/notra-posts.generated.ts`. The fetch runs automatically before `vite build`, or on demand:
+
+```bash
+cd apps/fumadocs && bun run posts:fetch
+```
+
+Set `NOTRA_API_KEY` for the fetch (local: `apps/fumadocs/.env.local`; production: the Vercel project env var). Without the key the fetch is skipped and the last committed snapshot is kept. Because turbo runs in strict env mode, `NOTRA_API_KEY` must stay in `passThroughEnv` in `apps/fumadocs/turbo.json` or the Vercel build bakes an empty blog. See `apps/fumadocs/README.md` for details.
+
+New posts appear on the next deploy. The `Refresh blog posts from Notra` workflow (`.github/workflows/blog-schedule.yml`) triggers a Vercel rebuild on a schedule, on `workflow_dispatch`, or on a `notra-published` `repository_dispatch` from a Notra webhook.
+
 ## CI and Publishing
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
