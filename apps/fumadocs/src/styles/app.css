@@ -62,42 +62,156 @@ html > body[data-scroll-locked] {
   opacity: 0.82;
 }
 
-.blog-post-table th,
-.blog-post-table td {
-  border-bottom: 1px solid var(--color-fd-border);
-  padding: 0.875rem 1rem;
-  vertical-align: top;
+/* Rendered Markdown body for Notra blog posts (see scripts/notra-content.ts). */
+.blog-content {
+  color: var(--color-fd-foreground);
+  font-size: 1rem;
+  line-height: 1.75;
 }
 
-.blog-post-table th {
-  background: var(--color-fd-muted);
-  color: var(--color-fd-foreground);
+.blog-content > * + * {
+  margin-top: 1.25rem;
+}
+
+.blog-content > :first-child {
+  margin-top: 0;
+}
+
+.blog-content h2 {
+  margin-top: 2.5rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.blog-content h3 {
+  margin-top: 2rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.blog-content h4 {
+  margin-top: 1.5rem;
   font-weight: 600;
 }
 
-.blog-post-table tr:last-child td {
-  border-bottom: 0;
+.blog-content p {
+  color: color-mix(in oklab, var(--color-fd-foreground) 86%, transparent);
 }
 
-.blog-code-block {
+.blog-content a {
+  color: var(--color-fd-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.blog-content strong {
+  color: var(--color-fd-foreground);
+  font-weight: 650;
+}
+
+.blog-content ul,
+.blog-content ol {
+  padding-left: 1.4rem;
+}
+
+.blog-content ul {
+  list-style: disc;
+}
+
+.blog-content ol {
+  list-style: decimal;
+}
+
+.blog-content li {
+  margin-top: 0.5rem;
+}
+
+.blog-content li::marker {
+  color: var(--color-fd-muted-foreground);
+}
+
+.blog-content blockquote {
+  border-left: 3px solid var(--color-fd-border);
+  padding-left: 1rem;
+  color: var(--color-fd-muted-foreground);
+  font-style: italic;
+}
+
+.blog-content img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+}
+
+.blog-content hr {
+  margin: 2.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--color-fd-border);
+}
+
+.blog-content :not(pre) > code {
+  background: var(--color-fd-muted);
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.875em;
+}
+
+.blog-content pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.6rem;
   background: linear-gradient(
     180deg,
     color-mix(in oklab, var(--color-fd-card) 94%, var(--color-fd-primary)),
     var(--color-fd-card)
   );
   box-shadow: inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
-.blog-code-block pre {
-  margin: 0;
-  overflow-x: auto;
-  background: transparent;
-}
-
-.blog-code-block code {
+.blog-content pre code {
   display: block;
   min-width: max-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
   white-space: pre;
+  font-size: inherit;
+}
+
+.blog-content table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.6rem;
+  overflow: hidden;
+  font-size: 0.95rem;
+}
+
+.blog-content th,
+.blog-content td {
+  border-bottom: 1px solid var(--color-fd-border);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.blog-content th {
+  background: var(--color-fd-muted);
+  color: var(--color-fd-foreground);
+  font-weight: 600;
+}
+
+.blog-content tr:last-child td {
+  border-bottom: 0;
 }
 
 .t-text-swap {

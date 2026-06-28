@@ -97,41 +97,51 @@ function BlogIndex() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4">
-            {posts.map((post) => (
-              <Link
-                className="group grid gap-4 rounded-lg border border-fd-border bg-fd-card p-4 transition hover:bg-fd-accent/40 md:grid-cols-[220px_1fr]"
-                key={post.slug}
-                params={{ slug: post.slug }}
-                to="/blog/$slug"
-              >
-                <img
-                  alt={post.imageAlt}
-                  className="aspect-[16/10] w-full rounded-md border border-fd-border object-cover"
-                  height={138}
-                  src={post.image}
-                  width={220}
-                />
-                <article className="min-w-0">
-                  <div className="flex flex-wrap gap-2 text-xs text-fd-muted-foreground">
-                    <span>{formatBlogDate(post.publishedAt)}</span>
-                    <span aria-hidden="true">/</span>
-                    <span>{post.readTime}</span>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-medium tracking-normal text-fd-foreground">
-                    {post.title}
-                  </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-fd-muted-foreground">
-                    {post.description}
-                  </p>
-                  <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-fd-primary">
-                    Read post
-                    <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-                  </div>
-                </article>
-              </Link>
-            ))}
-          </div>
+          {posts.length > 0 ? (
+            <div className="mt-10 grid gap-4">
+              {posts.map((post) => (
+                <Link
+                  className="group grid gap-4 rounded-lg border border-fd-border bg-fd-card p-4 transition hover:bg-fd-accent/40 md:grid-cols-[220px_1fr]"
+                  key={post.slug}
+                  params={{ slug: post.slug }}
+                  to="/blog/$slug"
+                >
+                  <img
+                    alt={post.imageAlt}
+                    className="aspect-[16/10] w-full rounded-md border border-fd-border object-cover"
+                    height={138}
+                    src={post.image}
+                    width={220}
+                  />
+                  <article className="min-w-0">
+                    <div className="flex flex-wrap gap-2 text-xs text-fd-muted-foreground">
+                      <span>{formatBlogDate(post.publishedAt)}</span>
+                      <span aria-hidden="true">/</span>
+                      <span>{post.readTime}</span>
+                    </div>
+                    <h2 className="mt-2 text-2xl font-medium tracking-normal text-fd-foreground">
+                      {post.title}
+                    </h2>
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-fd-muted-foreground">
+                      {post.description}
+                    </p>
+                    <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-fd-primary">
+                      Read post
+                      <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+                    </div>
+                  </article>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-10 rounded-lg border border-dashed border-fd-border bg-fd-card/40 px-6 py-16 text-center">
+              <h2 className="text-lg font-medium text-fd-foreground">No posts yet</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-fd-muted-foreground">
+                New writing on transactional email, adapters, and reliability is on the way. Check
+                back soon.
+              </p>
+            </div>
+          )}
         </section>
       </main>
     </HomeLayout>
