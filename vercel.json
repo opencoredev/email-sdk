@@ -1,5 +1,5 @@
 {
-  "outputDirectory": "apps/fumadocs/.vercel/output/static",
+  "outputDirectory": "apps/fumadocs/.vercel/output",
   "rewrites": [
     {
       "source": "/",

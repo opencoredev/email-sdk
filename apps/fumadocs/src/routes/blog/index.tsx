@@ -2,8 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight } from "lucide-react";
 
-import { formatBlogDate, getPublishedBlogPosts, type BlogPost } from "@/lib/blog";
+import { formatBlogDate, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
+import { getBlogPostsServerFn } from "@/lib/notra-runtime";
 import { appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/blog/")({
@@ -75,7 +76,11 @@ export const Route = createFileRoute("/blog/")({
       links: [{ rel: "canonical", href: `${siteUrl}/blog` }],
     };
   },
-  loader: () => getPublishedBlogPosts(),
+  loader: () => getBlogPostsServerFn(),
+  headers: () => ({
+    // Edge-cache the SSR'd page; new Notra posts appear within s-maxage without a rebuild.
+    "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=600",
+  }),
   component: BlogIndex,
 });
 

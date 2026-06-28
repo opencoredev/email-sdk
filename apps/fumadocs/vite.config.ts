@@ -8,7 +8,6 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
-import { getAllBlogPosts, getBlogPostImageUrl, getBlogPostUrl } from "./src/lib/blog";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
 function collectContentPages(dir: string) {
@@ -80,6 +79,11 @@ export default defineConfig(({ mode }) => {
         prerender: {
           enabled: true,
           crawlLinks: true,
+          // Blog routes (/blog, /blog/$slug, /og/blog/*) render on-demand via the
+          // SSR function so new Notra posts appear without a rebuild; everything
+          // else stays prerendered to static HTML.
+          filter: ({ path }: { path: string }) =>
+            !path.startsWith("/blog") && !path.startsWith("/og/blog"),
         },
 
         pages: [
@@ -88,9 +92,6 @@ export default defineConfig(({ mode }) => {
           },
           {
             path: "/docs",
-          },
-          {
-            path: "/blog",
           },
           {
             path: "/about",
@@ -104,12 +105,6 @@ export default defineConfig(({ mode }) => {
           {
             path: "/terms",
           },
-          ...getAllBlogPosts().map((post) => ({
-            path: getBlogPostUrl(post.slug),
-          })),
-          ...getAllBlogPosts().map((post) => ({
-            path: getBlogPostImageUrl(post.slug),
-          })),
           ...versionedDocsPages,
           {
             path: "/api/search",

@@ -1,20 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getBlogPost } from "@/lib/blog";
+import type { BlogPost } from "@/lib/blog";
+import { getBlogPostServerFn } from "@/lib/notra-runtime";
 import { appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/og/blog/$")({
   server: {
     handlers: {
-      GET({ params }) {
+      async GET({ params }) {
         const slug = params._splat?.replace(/\.svg$/, "");
-        const post = slug ? getBlogPost(slug, { includeFuture: true }) : undefined;
 
-        if (!post || params._splat === slug) {
+        if (!slug || params._splat === slug) {
           return new Response("Not found", { status: 404 });
         }
 
-        return new Response(renderBlogOgImage(post), {
+        const detail = await getBlogPostServerFn({ data: slug });
+        if (!detail) {
+          return new Response("Not found", { status: 404 });
+        }
+
+        return new Response(renderBlogOgImage(detail.post), {
           headers: {
             "cache-control": "public, max-age=86400, stale-while-revalidate=604800",
             "content-type": "image/svg+xml; charset=utf-8",
@@ -25,7 +30,7 @@ export const Route = createFileRoute("/og/blog/$")({
   },
 });
 
-type OgPost = NonNullable<ReturnType<typeof getBlogPost>>;
+type OgPost = BlogPost;
 
 const palettes = [
   ["#121214", "#f2d492", "#6ee7b7", "#8aa8ff"],
