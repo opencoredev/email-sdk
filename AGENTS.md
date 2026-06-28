@@ -50,9 +50,23 @@ Major versions need migration notes in the PR that introduces the breaking chang
 
 Do not merge a `Version packages` PR for a major version unless the migration path is documented.
 
+## Docs Site
+
+The docs and blog site is the `fumadocs` app in `apps/fumadocs`. Blog posts are pulled from Notra and baked into the static build.
+
+The build re-fetches posts on every run (`apps/fumadocs/turbo.json` disables build caching for the docs app), so a redeploy of the same commit still picks up newly published posts. To fetch posts without a full build:
+
+```bash
+cd apps/fumadocs
+bun run posts:fetch
+```
+
+Production rebuilds are triggered by the `.github/workflows/blog-schedule.yml` workflow ("Refresh blog posts from Notra"), which POSTs the `VERCEL_DEPLOY_HOOK_URL` secret. It runs on a daily schedule, on manual `workflow_dispatch`, and on a `repository_dispatch` `notra-published` event (point a Notra publish webhook at it for near-instant updates). It no-ops cleanly until `VERCEL_DEPLOY_HOOK_URL` is set.
+
 ## CI and Publishing
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
 - Release publishing lives in `.github/workflows/release.yml`.
+- Blog rebuilds live in `.github/workflows/blog-schedule.yml`.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
 - Do not move npm publishing to Depot unless npm supports Depot as a trusted publisher or the project intentionally switches to token-based publishing.
