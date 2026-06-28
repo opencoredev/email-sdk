@@ -1,9 +1,10 @@
-name: Refresh scheduled blog posts
+name: Refresh blog posts from Notra
 
 on:
   workflow_dispatch:
   schedule:
-    # Rebuild every Wednesday after the scheduled post date rolls over in UTC.
+    # Weekly rebuild so newly published Notra posts get baked into the static
+    # blog. Notra can also POST the same deploy hook on publish for instant updates.
     - cron: "30 13 * * 3"
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
-            echo "::notice::Set VERCEL_DEPLOY_HOOK_URL to refresh static blog, sitemap, RSS, and JSON feed every week."
+            echo "::notice::Set VERCEL_DEPLOY_HOOK_URL to rebuild the static blog (pulls the latest published posts from Notra) plus sitemap, RSS, and JSON feed."
             exit 0
           fi
 

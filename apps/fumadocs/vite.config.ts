@@ -152,9 +152,11 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       tsconfigPaths: true,
-      alias: {
-        tslib: "tslib/tslib.es6.js",
-      },
+      // Force tslib's ESM build, but via the explicit `.mjs` file: `tslib.es6.js`
+      // is `.js` inside a CommonJS-default package, so the bundler reads it as CJS
+      // and misses named helpers like __spreadArray. Exact-match the bare specifier
+      // so the alias can't re-apply to its own output (tslib/tslib.es6.mjs/...).
+      alias: [{ find: /^tslib$/, replacement: "tslib/tslib.es6.mjs" }],
     },
   };
 });
