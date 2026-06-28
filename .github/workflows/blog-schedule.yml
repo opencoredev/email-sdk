@@ -1,11 +1,17 @@
 name: Refresh blog posts from Notra
 
+# Triggers a Vercel rebuild, which re-fetches published posts from Notra and bakes
+# them into the static blog. apps/fumadocs build caching is off (apps/fumadocs/turbo.json)
+# so each rebuild actually re-runs the fetch instead of serving a cached build.
 on:
   workflow_dispatch:
+  repository_dispatch:
+    # Point a Notra "post published" webhook at GitHub's repository_dispatch API with
+    # event_type "notra-published" for near-instant updates.
+    types: [notra-published]
   schedule:
-    # Weekly rebuild so newly published Notra posts get baked into the static
-    # blog. Notra can also POST the same deploy hook on publish for instant updates.
-    - cron: "30 13 * * 3"
+    # Daily safety net in case a webhook is missed.
+    - cron: "30 13 * * *"
 
 permissions:
   contents: read
@@ -24,7 +30,7 @@ jobs:
           VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
-            echo "::notice::Set VERCEL_DEPLOY_HOOK_URL to rebuild the static blog (pulls the latest published posts from Notra) plus sitemap, RSS, and JSON feed."
+            echo "::notice::Set the VERCEL_DEPLOY_HOOK_URL secret (Vercel -> Settings -> Git -> Deploy Hooks, branch main) to enable automatic blog rebuilds."
             exit 0
           fi
 
