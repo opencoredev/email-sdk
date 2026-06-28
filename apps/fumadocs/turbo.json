@@ -6,7 +6,8 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".output/**", ".vercel/output/**"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["NOTRA_API_KEY"]
     }
   }
 }
