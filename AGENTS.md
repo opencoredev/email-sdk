@@ -44,6 +44,24 @@ bun run build
 packages/email-sdk/dist/cli.js adapters
 ```
 
+## Local Checks
+
+Lint and format before committing. This runs `oxlint`, then `oxfmt --write` (formatting is applied in place):
+
+```bash
+bun run check
+```
+
+When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from `.env.local`:
+
+```bash
+bun run live:sequenzy
+bun run live:lettermint
+# Adapters without a script alias run directly:
+bun scripts/check-jetemail-account.ts
+bun scripts/check-primitive-account.ts
+```
+
 ## Major Versions
 
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
