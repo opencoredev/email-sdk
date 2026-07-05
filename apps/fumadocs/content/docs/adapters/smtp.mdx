@@ -81,7 +81,8 @@ export const email = createEmailClient({
       default: '"localhost"',
     },
     timeoutMs: {
-      description: "Timeout for the connection and each SMTP command.",
+      description:
+        "Timeout for the connection and each SMTP command. Large attachments on slow links may need a higher value.",
       type: "number",
       default: "15000",
     },
@@ -94,7 +95,7 @@ With `secure: true` the whole session is TLS. Otherwise the adapter connects in 
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey` (a random UUID otherwise), and an explicit `Message-ID` in `headers` overrides it — set one yourself if you need a specific domain for threading or deduplication.
+SMTP maps `cc`, `bcc`, `replyTo`, `headers`, and `attachments`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body; when a message has attachments, it wraps the body and files in `multipart/mixed`. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey` (a random UUID otherwise), and an explicit `Message-ID` in `headers` overrides it — set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
@@ -105,6 +106,7 @@ const result = await email.send({
   text: "db-1 is at 92% disk usage.",
   html: "<p><strong>db-1</strong> is at 92% disk usage.</p>",
   headers: { "X-Alert-ID": "alert_481" },
+  attachments: [{ filename: "disk-report.txt", content: "db-1: 92%", contentType: "text/plain" }],
 });
 
 console.log(result.accepted); // every recipient the server accepted
@@ -113,10 +115,9 @@ console.log(result.id); // parsed from the server's "queued as ..." reply, else 
 
 `rejected` is always empty — a refused recipient fails the SMTP conversation instead, and every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
-<Callout type="warn" title="No attachments, tags, or metadata">
-  The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
-  concept — any of these fields throws an `EmailValidationError` before connecting. See the
-  [field support matrix](/docs/adapters/field-support).
+<Callout type="warn" title="No tags or metadata">
+  SMTP has no provider-side tag or metadata concept — either field throws an `EmailValidationError`
+  before connecting. See the [field support matrix](/docs/adapters/field-support).
 </Callout>
 
 ## Multiple SMTP routes

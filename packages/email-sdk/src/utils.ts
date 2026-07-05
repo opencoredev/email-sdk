@@ -298,7 +298,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   scaleway: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
   mailpace: { cc: true, bcc: true, replyTo: true },
-  smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+  smtp: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
 } satisfies Record<string, MessageFieldSupport>;
 
 export function assertSupportedMessageFields(

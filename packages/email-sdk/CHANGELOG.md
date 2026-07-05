@@ -1,5 +1,11 @@
 # @opencoredev/email-sdk
 
+## Unreleased
+
+### Minor Changes
+
+- Add attachment MIME support to the built-in SMTP adapter. SMTP now accepts `EmailMessage.attachments`, builds `multipart/mixed` payloads, supports raw, Base64, byte, and file-backed attachments, and continues to reject tags and metadata before connecting.
+
 ## 0.6.5
 
 ### Patch Changes

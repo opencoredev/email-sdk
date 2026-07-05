@@ -3,10 +3,11 @@ import net from "node:net";
 import tls from "node:tls";
 
 import { EmailProviderError, EmailValidationError } from "./errors.js";
-import type { EmailAddress, EmailMessage, EmailProvider } from "./types.js";
+import type { EmailAddress, EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
+  attachmentToBytes,
   formatAddress,
   formatAddresses,
   headersToArray,
@@ -48,10 +49,11 @@ export function smtp(options: SmtpProviderOptions): EmailProvider<{ host: string
     async send(message) {
       assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS.smtp);
       assertSmtpMessage(message);
+      const raw = await buildMimeMessage(message, options.defaults);
       const client = new SmtpClient(options, port);
 
       try {
-        const response = await client.send(message);
+        const response = await client.send(message, raw);
 
         return {
           provider: name,
@@ -84,7 +86,7 @@ class SmtpClient {
     private readonly port: number,
   ) {}
 
-  async send(message: EmailMessage) {
+  async send(message: EmailMessage, raw: string) {
     await this.connect();
     await this.expect([220]);
     await this.command(`EHLO ${this.options.heloName ?? "localhost"}`, [250]);
@@ -129,7 +131,6 @@ class SmtpClient {
     }
 
     await this.command("DATA", [354]);
-    const raw = buildMimeMessage(message, this.options.defaults);
     const response = await this.command(`${escapeData(raw)}\r\n.`, [250]);
     await this.command("QUIT", [221]).catch(() => undefined);
 
@@ -277,7 +278,7 @@ class SmtpClient {
   }
 }
 
-function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["defaults"]) {
+async function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["defaults"]) {
   const headers: Record<string, string> = {
     From: formatAddress(message.from),
     To: formatAddresses(message.to).join(", "),
@@ -300,16 +301,50 @@ function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["
     .map(([key, value]) => `${key}: ${foldHeader(value)}`)
     .join("\r\n");
 
-  if (message.html && message.text) {
-    const boundary = `email-sdk-${randomUUID()}`;
+  const bodyPart = buildBodyPart(message);
 
-    return `${headerText}\r\nContent-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${message.text}\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${message.html}\r\n--${boundary}--`;
+  if (!message.attachments?.length) {
+    return `${headerText}\r\n${bodyPart}`;
+  }
+
+  const boundary = `email-sdk-mixed-${randomUUID()}`;
+  const attachmentParts = await Promise.all(message.attachments.map(buildAttachmentPart));
+  const parts = [bodyPart, ...attachmentParts]
+    .map((part) => `--${boundary}\r\n${part}`)
+    .join("\r\n");
+
+  return `${headerText}\r\nContent-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n${parts}\r\n--${boundary}--`;
+}
+
+function buildBodyPart(message: EmailMessage) {
+  if (message.html && message.text) {
+    const boundary = `email-sdk-alt-${randomUUID()}`;
+
+    return `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${message.text}\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${message.html}\r\n--${boundary}--`;
   }
 
   const contentType = message.html ? "text/html" : "text/plain";
   const body = message.html ?? message.text ?? "";
 
-  return `${headerText}\r\nContent-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
+  return `Content-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
+}
+
+async function buildAttachmentPart(attachment: EmailAttachment) {
+  const contentType = attachment.contentType ?? "application/octet-stream";
+  const disposition = attachment.disposition ?? "attachment";
+  const headers = [
+    `Content-Type: ${contentType}; name="${attachment.filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: ${disposition}; filename="${attachment.filename}"`,
+  ];
+
+  if (attachment.contentId) {
+    headers.push(`Content-ID: <${attachment.contentId}>`);
+  }
+
+  const encoded = (await attachmentToBytes(attachment)).toString("base64");
+
+  return `${headers.join("\r\n")}\r\n\r\n${wrapBase64(encoded)}`;
 }
 
 // Envelope addresses are interpolated into MAIL FROM/RCPT TO commands. RFC 5321
@@ -322,6 +357,10 @@ const SMTP_FORBIDDEN_ENVELOPE = /[\x00-\x20<>\x7f-\uffff]/;
 // RFC 5322 header field names: printable US-ASCII (0x21-0x7e) excluding the
 // colon (0x3a). A name containing CR/LF would terminate the header and inject more.
 const SMTP_HEADER_NAME = /^[!-9;-~]+$/;
+const SMTP_ATTACHMENT_FILENAME = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
+const SMTP_ATTACHMENT_CONTENT_ID = /^[\x21-\x7e]+$/;
+const SMTP_ATTACHMENT_CONTENT_TYPE =
+  /^[A-Za-z0-9!#$%&'*+.^_`{|}~-]+\/[A-Za-z0-9!#$%&'*+.^_`{|}~-]+$/;
 
 function assertSmtpMessage(message: EmailMessage) {
   const addresses = [
@@ -350,6 +389,56 @@ function assertSmtpMessage(message: EmailMessage) {
       );
     }
   }
+
+  for (const attachment of message.attachments ?? []) {
+    assertSmtpAttachment(attachment);
+  }
+}
+
+function assertSmtpAttachment(attachment: EmailAttachment) {
+  if (
+    typeof attachment.filename !== "string" ||
+    !SMTP_ATTACHMENT_FILENAME.test(attachment.filename)
+  ) {
+    throw new EmailValidationError(
+      `SMTP attachment filename ${JSON.stringify(attachment.filename)} contains invalid characters.`,
+      { adapter: "smtp", field: "attachments.filename", filename: attachment.filename },
+    );
+  }
+
+  if (
+    attachment.contentType !== undefined &&
+    (typeof attachment.contentType !== "string" ||
+      !SMTP_ATTACHMENT_CONTENT_TYPE.test(attachment.contentType))
+  ) {
+    throw new EmailValidationError(
+      `SMTP attachment content type ${JSON.stringify(attachment.contentType)} contains invalid characters.`,
+      { adapter: "smtp", field: "attachments.contentType", contentType: attachment.contentType },
+    );
+  }
+
+  if (
+    attachment.contentId !== undefined &&
+    (typeof attachment.contentId !== "string" ||
+      !SMTP_ATTACHMENT_CONTENT_ID.test(attachment.contentId) ||
+      /[\s<>]/.test(attachment.contentId))
+  ) {
+    throw new EmailValidationError(
+      `SMTP attachment content ID ${JSON.stringify(attachment.contentId)} contains invalid characters.`,
+      { adapter: "smtp", field: "attachments.contentId", contentId: attachment.contentId },
+    );
+  }
+
+  if (
+    attachment.disposition !== undefined &&
+    attachment.disposition !== "attachment" &&
+    attachment.disposition !== "inline"
+  ) {
+    throw new EmailValidationError(
+      `SMTP attachment disposition ${JSON.stringify(attachment.disposition)} contains invalid characters.`,
+      { adapter: "smtp", field: "attachments.disposition", disposition: attachment.disposition },
+    );
+  }
 }
 
 function envelopeAddress(address: EmailAddress) {
@@ -367,6 +456,10 @@ function escapeData(value: string) {
 
 function foldHeader(value: string) {
   return value.replace(/\r\n|[\r\n]/g, " ");
+}
+
+function wrapBase64(value: string) {
+  return value.match(/.{1,76}/g)?.join("\r\n") ?? "";
 }
 
 function extractSmtpMessageId(response: string) {

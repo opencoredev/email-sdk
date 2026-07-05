@@ -53,7 +53,7 @@ await email.send({
 
 Each adapter is exported from its own entry point so apps only import what they use.
 
-If you are choosing a first adapter, start with Resend for the shortest setup path. Use Iterable or Sequenzy for product-led transactional sends. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and only need address fields, headers, and plain message delivery.
+If you are choosing a first adapter, start with Resend for the shortest setup path. Use Iterable or Sequenzy for product-led transactional sends. Use Postmark, SendGrid, AWS SES, Mailgun, Cloudflare, Unosend, or Brevo when your app needs broader provider-specific controls. Use SMTP when you already have a trusted SMTP service and need direct MIME delivery with address fields, headers, and attachments.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -175,7 +175,7 @@ await email.send(message, {
 
 Retries happen inside the current adapter. Fallback happens after that adapter has finally failed. For one send, Email SDK validates the normalized message, tries the selected adapter, retries it when retry rules allow it, advances to each configured fallback adapter after final failure, returns the first successful response, and throws if every route fails.
 
-Use fallback routes only when the backup adapter can represent the same message fields that matter to your app. SMTP is a good backup for simple text/html sends with address fields and headers, but not for attachments, tags, or metadata.
+Use fallback routes only when the backup adapter can represent the same message fields that matter to your app. SMTP is a good backup for text/html sends with address fields, headers, and attachments, but not for tags or metadata.
 
 Override fallback for one send with `fallbackAdapters`:
 

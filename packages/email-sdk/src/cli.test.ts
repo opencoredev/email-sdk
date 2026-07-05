@@ -70,6 +70,35 @@ describe("email-sdk CLI", () => {
     expect(stderr).toContain("resend does not support these EmailMessage fields: metadata");
   });
 
+  test("accepts SMTP attachments during dry run", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "smtp",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--attachment",
+      "receipt.txt:text/plain",
+      "--dry-run",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      adapter: "smtp",
+      message: {
+        attachments: [{ filename: "receipt.txt", path: "receipt.txt", contentType: "text/plain" }],
+      },
+    });
+  });
+
   test("doctor accepts provider credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",

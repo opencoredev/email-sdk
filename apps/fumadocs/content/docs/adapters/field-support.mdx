@@ -46,11 +46,11 @@ Useful services whose public APIs cover less of the `EmailMessage` shape. The SD
 
 ## SMTP transport
 
-Built in, no Nodemailer. SMTP maps address fields and headers directly into the message but has no provider-side concepts like tags or metadata.
+Built in, no Nodemailer. SMTP maps address fields, headers, and attachments directly into the message but has no provider-side concepts like tags or metadata.
 
 | Adapter | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments |
 | ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- |
-| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          |
+| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | Yes         |
 
 ## Choosing compatible routes
 
@@ -59,7 +59,7 @@ A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the b
 | Your messages use…                    | Compatible route examples                          |
 | ------------------------------------- | -------------------------------------------------- |
 | Addresses, subject, body, headers     | Almost anything — Resend + SMTP works              |
-| Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
+| Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend, SMTP |
 | Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
 | Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
 
@@ -78,6 +78,7 @@ await email.send({
   subject: "Password reset",
   text: "Use this link to reset your password.",
   headers: { "X-Template": "password-reset" },
+  attachments: [{ filename: "security.txt", content: "Reset requested", contentType: "text/plain" }],
 });
 ```
 
