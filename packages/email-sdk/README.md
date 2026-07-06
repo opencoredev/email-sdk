@@ -1,6 +1,6 @@
 # Email SDK
 
-A lightweight TypeScript SDK for transactional email send pipelines. Use one typed client, pick the adapters your app actually sends through, validate provider compatibility before data is silently dropped, add retries and fallback routes, and use plugins for defaults, observability, capture, or community providers.
+A lightweight TypeScript SDK for transactional email send pipelines. One typed client, adapters for the providers your app actually sends through, compatibility validation before data is silently dropped, retries and fallback routes, and plugins for defaults, observability, capture, or community providers.
 
 Docs: https://email-sdk.dev/docs
 
@@ -89,6 +89,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/loops`      | Loops                            |
 | `@opencoredev/email-sdk/sequenzy`   | Sequenzy                         |
 | `@opencoredev/email-sdk/jetemail`   | JetEmail                         |
+| `@opencoredev/email-sdk/lettermint` | Lettermint                       |
 | `@opencoredev/email-sdk/primitive`  | Primitive                        |
 | `@opencoredev/email-sdk/plunk`      | Plunk                            |
 | `@opencoredev/email-sdk/mailtrap`   | Mailtrap                         |
