@@ -38,13 +38,16 @@ bun run release:ci
 That runs type checks, tests, community registry + docs version validation,
 build, and npm package dry-run.
 
-For lint and formatting across the repo:
+For linting, lint only the files you touched:
 
 ```bash
-bun run check
+bunx oxlint <path>
 ```
 
-That runs `oxlint` and `oxfmt --write`.
+Do not run `bun run check` casually: it runs `oxfmt --write` across the whole
+repo, which reformats roughly 170 files that have drifted from the formatter.
+CI does not enforce formatting or linting, so a repo-wide reformat only adds
+noise to your diff.
 
 For a quick local CLI smoke test:
 
