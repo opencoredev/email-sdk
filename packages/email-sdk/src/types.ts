@@ -29,6 +29,14 @@ export type EmailTag = {
   value: string;
 };
 
+/**
+ * Per-recipient substitution values, keyed by recipient email address. Reference
+ * a value inside `subject`, `html`, or `text` with the `%recipient.key%` token.
+ * Providers with a native batch mechanism (Mailgun, SendGrid) substitute these in
+ * a single API call; other adapters fall back to one rendered send per recipient.
+ */
+export type RecipientVariables = Record<string, Record<string, string | number | boolean>>;
+
 export type EmailMessage = {
   from: EmailAddress;
   to: OneOrMany<EmailAddress>;
@@ -42,6 +50,8 @@ export type EmailMessage = {
   attachments?: EmailAttachment[];
   tags?: EmailTag[];
   metadata?: Record<string, string | number | boolean | null>;
+  recipientVariables?: RecipientVariables;
+  sendAt?: Date | string;
   idempotencyKey?: string;
 };
 
@@ -75,6 +85,16 @@ export type EmailProviderContext = {
 export type EmailProvider<TRaw = unknown> = {
   name: string;
   send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  /**
+   * Optional native batch send for messages carrying `recipientVariables`. When
+   * present, the client routes such messages here so the provider can personalize
+   * every recipient in a single API call. Adapters without this method fall back to
+   * one client-side rendered `send` per recipient.
+   */
+  sendBulk?(
+    message: EmailMessage,
+    context: EmailProviderContext,
+  ): MaybePromise<EmailProviderResponse>;
   raw?: TRaw;
 };
 

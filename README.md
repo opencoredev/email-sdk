@@ -13,6 +13,7 @@ One TypeScript client for transactional email. Pick the providers you actually s
 - Adapters for 23 providers behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
 - Fail-fast field-support checks before a provider drops data
+- Batch personalization with per-recipient variables, plus provider-side scheduled sends
 - Observability hooks for logs, metrics, and traces
 - Test adapters that never call real providers
 - CLI for adapter discovery, doctor checks, and dry-run sends
@@ -62,6 +63,35 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 - [Production send pipeline](https://email-sdk.dev/docs/guides/production-send-pipeline)
 - [Fallbacks and retries](https://email-sdk.dev/docs/concepts/fallbacks-and-retries)
 - [Field support](https://email-sdk.dev/docs/adapters/field-support)
+
+## Telemetry
+
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+
+What gets collected:
+
+- Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
+- Success or failure, error codes, and send duration
+- Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
+- Whether a send used recipient variables or scheduling, and which delivery path ran
+- SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
+- Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+
+Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
+
+Opt out at any time with an environment variable:
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+or per client in code:
+
+```ts
+const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: false });
+```
+
+Telemetry is also disabled automatically when `NODE_ENV=test`.
 
 ## Sponsors
 

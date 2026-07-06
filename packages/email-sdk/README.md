@@ -44,6 +44,7 @@ await email.send({
 - One `EmailMessage` shape across providers.
 - Provider adapters that map supported fields and reject unsupported fields before the request.
 - Fallbacks and retries for production delivery.
+- Batch personalization via `recipientVariables` and provider-side scheduled sends via `sendAt`.
 - Built-in SMTP transport with no Nodemailer dependency.
 - Hooks for send, retry, success, and error observability.
 - Plugins for adapter registration, message defaults, middleware, and typed client extensions.
@@ -333,6 +334,35 @@ npx email-sdk send --dry-run --adapter resend --from hello@example.com --to user
 ```
 
 The CLI can read provider credentials from environment variables or matching credential flags. Run `bunx --bun --package @opencoredev/email-sdk email-sdk adapters` for a one-off adapter list, or `npx email-sdk adapters` after installing the scoped package in a project. `--dry-run` validates the message and selected adapter field support without sending email.
+
+## Telemetry
+
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+
+What gets collected:
+
+- Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
+- Success or failure, error codes, and send duration
+- Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
+- Whether a send used recipient variables or scheduling, and which delivery path ran
+- SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
+- Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+
+Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
+
+Opt out at any time with an environment variable:
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+or per client in code:
+
+```ts
+const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: false });
+```
+
+Telemetry is also disabled automatically when `NODE_ENV=test`.
 
 ## Provider Reality
 

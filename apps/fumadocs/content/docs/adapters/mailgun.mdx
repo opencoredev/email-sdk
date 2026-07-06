@@ -57,7 +57,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Mailgun maps every common field: `cc`, `bcc`, `replyTo`, `headers` (as `h:Name`), `attachments` (multipart `attachment`/`inline` parts by disposition), `tags` (values as `o:tag`), and `metadata` (as `v:key` variables, surfaced later in webhooks and logs).
+Mailgun maps every common field: `cc`, `bcc`, `replyTo`, `headers` (as `h:Name`), `attachments` (multipart `attachment`/`inline` parts by disposition), `tags` (values as `o:tag`), and `metadata` (as `v:key` variables, surfaced later in webhooks and logs). `sendAt` becomes a native scheduled send via `o:deliverytime` (RFC 2822); Mailgun accepts up to 3 days out on most plans, 7 with extended storage.
 
 ```ts
 const result = await email.send({
@@ -74,6 +74,23 @@ console.log(result.id); // Mailgun message id, also exposed as result.messageId
 ```
 
 The response `id` is Mailgun's queued message id from the response body. Match it against delivery events in webhooks or the Mailgun logs.
+
+### Batch sends with recipient variables
+
+Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and Mailgun personalizes every recipient in a single call through its native `recipient-variables` field (up to 1000 recipients). Mailgun substitutes `%recipient.key%` tokens in `subject`, `html`, and `text` on its side:
+
+```ts
+await email.send({
+  from: "Acme <hello@mg.acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
 
 ## Verify from the CLI
 

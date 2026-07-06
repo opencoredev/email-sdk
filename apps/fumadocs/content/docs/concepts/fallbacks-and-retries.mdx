@@ -155,6 +155,8 @@ The key (from `send` options, falling back to `message.idempotencyKey`) is passe
 
 Even where the provider ignores the key, set one anyway. It gives your own pipeline (queues, workers, hook-based logging) a stable identity, so application-level retries and re-enqueues stay safe to deduplicate.
 
+One interaction to know: when a send carries [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter has no native batch support, each recipient becomes its own send and the key gets a per-recipient suffix (`<key>:<address>`). Retries then dedupe per recipient instead of dropping the whole batch, and the longer key still counts toward provider key-length limits.
+
 ## Testing the route
 
 `failingProvider` and `memoryProvider` from the testing entry point make fallback behavior assertable without network calls:

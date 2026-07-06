@@ -70,6 +70,8 @@ Each event adds its own fields:
 
 So a send with `retries: 2` and one fallback adapter can fire `beforeSend` up to six times, `onRetry` up to four, `onError` up to twice, and `afterSend` at most once.
 
+One exception: a [recipient-variables batch](/docs/reference/message#recipient-variables) on an adapter without native batch support becomes one real send per recipient, so `afterSend` fires once per delivered recipient and `onError` once per failed one.
+
 ## Hooks observe, middleware transforms
 
 Hooks are deliberately powerless. When you need to *change* a send (add default headers, stamp idempotency keys, rewrite recipients), that is plugin middleware, a separate mechanism with different rules:

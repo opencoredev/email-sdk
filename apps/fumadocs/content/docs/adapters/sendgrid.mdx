@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Everything maps: `cc`, `bcc`, `headers`, `attachments`, `tags`, `metadata`, and even multiple `replyTo` addresses (sent as `reply_to_list`).
+Everything maps: `cc`, `bcc`, `headers`, `attachments`, `tags`, `metadata`, and even multiple `replyTo` addresses (sent as `reply_to_list`). `sendAt` schedules the send natively as `send_at` (a Unix timestamp in seconds); SendGrid accepts at most 72 hours in the future.
 
 ```ts
 const result = await email.send({
@@ -59,6 +59,23 @@ console.log(result.id); // SendGrid message id from the x-message-id header
 ```
 
 SendGrid's send endpoint returns `202 Accepted` with an empty body, so the adapter reads `result.id` from the `x-message-id` response header. `metadata` values arrive in SendGrid event webhooks as `custom_args`; tag values arrive as `categories`.
+
+### Batch sends with recipient variables
+
+Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter emits one `personalizations` entry per recipient with SendGrid `substitutions`, so one API call personalizes every recipient (up to 1000, SendGrid's personalizations cap). SendGrid substitutes `%recipient.key%` tokens in `subject`, `html`, and `text` on its side:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
 
 ## Verify from the CLI
 

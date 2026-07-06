@@ -6,6 +6,7 @@ import {
   commonHeadersObject,
   optionalApiAddresses,
   optionalSingleApiAddress,
+  sendAtIso,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 
@@ -39,6 +40,7 @@ export function brevo(options: BrevoProviderOptions): EmailProvider<{ baseUrl: s
         headers: commonHeadersObject(message),
         params: message.metadata,
         tags: message.tags?.map((tag) => tag.value),
+        scheduledAt: sendAtIso(message),
         attachment: attachments?.map((attachment) => ({
           name: attachment.filename,
           content: attachment.content,

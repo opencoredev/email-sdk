@@ -1,5 +1,5 @@
 import { firstString, jsonProvider } from "./http.js";
-import { base64Attachments, emailParts } from "./payloads.js";
+import { base64Attachments, emailParts, sendAtUtcDateTime } from "./payloads.js";
 import type { EmailAddress, EmailProvider, OneOrMany } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
@@ -27,6 +27,7 @@ export function mailchimp(options: MailchimpProviderOptions): EmailProvider<{ ba
 
       return {
         key: options.apiKey,
+        send_at: sendAtUtcDateTime(message),
         message: {
           from_email: from.email,
           from_name: from.name,

@@ -12,6 +12,7 @@ An adapter is a plain object implementing `EmailProvider`: one routing name, one
 type EmailProvider<TRaw = unknown> = {
   name: string;
   send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  sendBulk?(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
   raw?: TRaw;
 };
 ```
@@ -27,6 +28,11 @@ type EmailProvider<TRaw = unknown> = {
       description: "Maps the message to one provider request and returns a normalized response.",
       type: "(message, context) => MaybePromise<EmailProviderResponse>",
       required: true,
+    },
+    sendBulk: {
+      description:
+        "Optional native batch send. When present, messages carrying recipientVariables route here so the provider can personalize every recipient in one API call; without it, the client renders one send per recipient.",
+      type: "(message, context) => MaybePromise<EmailProviderResponse>",
     },
     raw: {
       description: "Optional escape hatch for provider-specific extras, reachable via client.adapter(name).raw.",

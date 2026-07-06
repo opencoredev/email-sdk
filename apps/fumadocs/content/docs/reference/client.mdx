@@ -77,6 +77,8 @@ const result = await email.send(message, {
 });
 ```
 
+One `send` can also carry a personalized batch via [`recipientVariables`](/docs/reference/message#recipient-variables): adapters with a native batch mechanism (Mailgun, SendGrid) send the whole list in one API call, and every other adapter renders one send per recipient.
+
 ### SendOptions
 
 <TypeTable

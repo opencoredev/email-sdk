@@ -52,6 +52,8 @@ console.log(result.id); // provider message id, when the API returns one
 
 `send` resolves with a normalized [response](/docs/reference/client#response). `provider` tells you which adapter actually delivered, `id` and `messageId` carry the provider's message id, and `raw` keeps the untouched provider payload.
 
+The same call handles more than one-off sends: [`recipientVariables`](/docs/reference/message#recipient-variables) turns one send into a personalized batch, and [`sendAt`](/docs/reference/message#scheduled-sends) schedules delivery on providers with a scheduling API.
+
 </Step>
 <Step>
 

@@ -56,6 +56,7 @@ All four classes carry the same fields (plus the standard `Error` `message` and 
 | `EmailProviderNotFoundError` | `provider_not_found` | A routing name is not registered: `Email provider "x" is not registered.` Never retryable. |
 | `EmailProviderError` | `provider_error` | A provider request fails: non-2xx response or network error. `status` and `details` carry the provider's answer. |
 | `EmailSdkError` | `all_providers_failed` | Two or more routes were attempted and all failed. `details` holds one error per adapter, in route order. |
+| `EmailSdkError` | `all_recipients_failed` | A client-side [recipient-variables batch](/docs/reference/message#recipient-variables) failed for every recipient on one adapter. `details` holds one error per recipient; a batch with a single failure rethrows that error as-is. |
 | `EmailSdkError` | `retry_loop_exited` | Internal guard for an impossible retry-loop exit. Treat as a bug if seen. |
 
 When only **one** route was attempted, its error is rethrown as-is; `all_providers_failed` only appears after a multi-adapter route exhausts every option. Errors adapters throw that are not already `EmailProviderError` are wrapped into one, keeping the original as `cause` (or in `details` for non-`Error` values).

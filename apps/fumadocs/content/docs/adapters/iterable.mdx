@@ -49,7 +49,8 @@ export const email = createEmailClient({
       type: "Record<string, unknown> | (message) => Record<string, unknown>",
     },
     sendAt: {
-      description: "Schedule the send. UTC timestamp in Iterable's expected format.",
+      description:
+        "Schedule the send. UTC timestamp in Iterable's expected format. This adapter option is separate from the message-level sendAt field, which Iterable rejects.",
       type: "string",
     },
     baseUrl: {

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 import {
   vAdapterConfig,
+  vDeliveryStatusValue,
   vEmailEventType,
   vEmailMessage,
   vEmailMetadata,
@@ -25,6 +26,8 @@ export default defineSchema({
     retryBaseMs: v.number(),
     nextAttemptAt: v.optional(v.number()),
     lastError: v.optional(v.string()),
+    deliveryStatus: v.optional(vDeliveryStatusValue),
+    deliveredAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     sentAt: v.optional(v.number()),
@@ -55,6 +58,7 @@ export default defineSchema({
     deliveryId: v.string(),
     emailId: v.optional(v.id("emails")),
     providerMessageId: v.optional(v.string()),
+    event: v.optional(v.string()),
     receivedAt: v.number(),
     processedAt: v.optional(v.number()),
     status: v.union(v.literal("processed"), v.literal("ignored"), v.literal("failed")),

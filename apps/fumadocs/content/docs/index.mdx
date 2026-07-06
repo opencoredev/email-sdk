@@ -30,6 +30,8 @@ Providers genuinely differ. Resend has no metadata field, SMTP has no tags, Iter
 
 Failure handling has two explicit layers: exponential backoff inside an adapter for transient errors, then fallback adapters once the current one has failed for good. [How routing works](/docs/concepts/fallbacks-and-retries) covers both, including why a fallback route only helps when it can carry the same fields.
 
+The one message shape also covers batches and scheduling. [`recipientVariables`](/docs/reference/message#recipient-variables) personalizes a batch per recipient on any adapter (natively on Mailgun and SendGrid, client-side everywhere else), and [`sendAt`](/docs/reference/message#scheduled-sends) hands delivery timing to providers with a scheduling API.
+
 The rest is operational plumbing you would otherwise write yourself. [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) emit redacted events (counts and tag names, not bodies or recipients). [Memory and failing adapters](/docs/guides/test-email-behavior) plus the [capture plugin](/docs/plugins/built-in/capture) let unit tests assert send behavior without a provider account. The CLI covers setup checks: `email-sdk doctor` inspects your environment, `send --dry-run` validates a message against an adapter, and `send` runs a real smoke test. See the [CLI reference](/docs/reference/cli).
 
 ## Start here
