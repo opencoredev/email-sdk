@@ -462,6 +462,49 @@ describe("recipientVariables", () => {
     expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
   });
 
+  test("expanded per-recipient sends inherit sendAt", async () => {
+    const sendAt = new Date("2026-07-10T12:30:00.000Z");
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({ ...batchMessage, sendAt });
+
+    expect(provider.raw.sent).toHaveLength(2);
+    for (const sent of provider.raw.sent) {
+      expect(sent.message.sendAt).toBe(sendAt);
+    }
+  });
+
+  test("sendAt with recipientVariables on an adapter without scheduling rejects every expanded send", async () => {
+    let requests = 0;
+    const adapter = postmark({
+      serverToken: "server",
+      fetch: () => {
+        requests += 1;
+        throw new Error("unreachable — postmark must reject sendAt before any request");
+      },
+    });
+    const client = createEmailClient({ adapters: [adapter] });
+
+    const error = await client
+      .send({ ...batchMessage, sendAt: new Date("2026-07-10T12:30:00.000Z") })
+      .then(() => {
+        throw new Error("send should have failed");
+      })
+      .catch((caught: unknown) => caught);
+
+    // Every expanded per-recipient send runs the adapter's field assertion, so the
+    // whole batch fails fast instead of delivering unscheduled mail.
+    expect(error).toBeInstanceOf(EmailSdkError);
+    expect((error as EmailSdkError).code).toBe("all_recipients_failed");
+    const failures = (error as EmailSdkError).details as EmailProviderError[];
+    expect(failures).toHaveLength(2);
+    for (const failure of failures) {
+      expect(failure.message).toBe("postmark does not support these EmailMessage fields: sendAt.");
+    }
+    expect(requests).toBe(0);
+  });
+
   test("rejects recipientVariables combined with cc", async () => {
     const client = createEmailClient({ adapters: [memoryProvider()] });
 

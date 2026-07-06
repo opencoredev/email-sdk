@@ -1223,6 +1223,39 @@ describe("provider payloads", () => {
     expect(mailchimpCapture.calls[0]?.json.send_at).toBe("2026-07-10 12:30:00");
   });
 
+  test("native batch sends carry sendAt in the same scheduled call", async () => {
+    const sendAt = new Date("2026-07-10T12:30:00.000Z");
+    const batch = {
+      from: "Acme <hello@acme.com>",
+      to: ["a@example.com", "b@example.com"],
+      subject: "Hi %recipient.name%",
+      html: "<p>Hi %recipient.name%</p>",
+      recipientVariables: {
+        "a@example.com": { name: "Ada" },
+        "b@example.com": { name: "Linus" },
+      },
+      sendAt,
+    } satisfies EmailMessage;
+
+    const mailgunCapture = formCapture({ id: "<mailgun_batch>" });
+    await mailgun({
+      apiKey: "mg",
+      domain: "mg.example.com",
+      fetch: mailgunCapture.fetch,
+    }).sendBulk?.(batch, context);
+    expect(mailgunCapture.calls).toHaveLength(1);
+    expect(mailgunCapture.calls[0]?.form.get("recipient-variables")).toBeTruthy();
+    expect(mailgunCapture.calls[0]?.form.get("o:deliverytime")).toBe(
+      "Fri, 10 Jul 2026 12:30:00 +0000",
+    );
+
+    const sendgridCapture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+    await sendgrid({ apiKey: "sg", fetch: sendgridCapture.fetch }).sendBulk?.(batch, context);
+    expect(sendgridCapture.calls).toHaveLength(1);
+    expect(sendgridCapture.calls[0]?.json.personalizations).toHaveLength(2);
+    expect(sendgridCapture.calls[0]?.json.send_at).toBe(Math.floor(sendAt.getTime() / 1000));
+  });
+
   test("sendAt accepts ISO strings and rejects unparseable dates", async () => {
     const stringCapture = jsonCapture({ id: "res_123" });
     await resend({ apiKey: "key", fetch: stringCapture.fetch }).send(
