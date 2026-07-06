@@ -63,6 +63,26 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 - [Fallbacks and retries](https://email-sdk.dev/docs/concepts/fallbacks-and-retries)
 - [Field support](https://email-sdk.dev/docs/adapters/field-support)
 
+## Telemetry
+
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+
+What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), whether a send used recipient variables or scheduling and which delivery path ran, SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), whether usage comes from the library or the bundled CLI, and redacted error reports — the error type, Email SDK error code, and stack traces with file paths reduced to package-relative names, with error messages scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+
+Opt out at any time with an environment variable:
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+or per client in code:
+
+```ts
+const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: false });
+```
+
+Telemetry is also disabled automatically when `NODE_ENV=test`.
+
 ## Sponsors
 
 Email SDK is supported by companies that help keep provider integrations practical and maintained. Want your logo here? **[Become a sponsor →](https://github.com/sponsors/opencoredev)**

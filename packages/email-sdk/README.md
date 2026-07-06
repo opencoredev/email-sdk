@@ -333,6 +333,26 @@ npx email-sdk send --dry-run --adapter resend --from hello@example.com --to user
 
 The CLI can read provider credentials from environment variables or matching credential flags. Run `bunx --bun --package @opencoredev/email-sdk email-sdk adapters` for a one-off adapter list, or `npx email-sdk adapters` after installing the scoped package in a project. `--dry-run` validates the message and selected adapter field support without sending email.
 
+## Telemetry
+
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+
+What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), whether a send used recipient variables or scheduling and which delivery path ran, SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), whether usage comes from the library or the bundled CLI, and redacted error reports — the error type, Email SDK error code, and stack traces with file paths reduced to package-relative names, with error messages scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+
+Opt out at any time with an environment variable:
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+or per client in code:
+
+```ts
+const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: false });
+```
+
+Telemetry is also disabled automatically when `NODE_ENV=test`.
+
 ## Provider Reality
 
 Email providers differ in domain verification, sandbox modes, rate limits, region settings, API scopes, and field support. Email SDK tests the normalized payloads and fail-fast validation locally, but the final live send still depends on provider account configuration.

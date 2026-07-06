@@ -24,6 +24,13 @@ import type {
   SendOptions,
 } from "./types.js";
 import {
+  getTelemetry,
+  getTelemetrySource,
+  isReportableSendError,
+  normalizeAdapterName,
+} from "./telemetry.js";
+import {
+  arrayify,
   assertMessage,
   assertRecipientVariables,
   hasRecipientVariables,
@@ -89,6 +96,17 @@ export function createEmailClient<
     throw new EmailProviderNotFoundError(defaultProvider);
   }
 
+  const telemetry = options.telemetry === false ? undefined : getTelemetry();
+  const telemetrySource = getTelemetrySource();
+
+  void telemetry?.capture("client created", {
+    adapters: [...adapters.keys()].map(normalizeAdapterName),
+    adapter_count: adapters.size,
+    plugin_count: options.plugins?.length ?? 0,
+    default_adapter: normalizeAdapterName(defaultProvider),
+    source: telemetrySource,
+  });
+
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
   const client: EmailClient = {
     adapters,
@@ -108,21 +126,78 @@ export function createEmailClient<
       return client.adapter<TProvider>(name);
     },
     async send(message, sendOptions) {
-      return sendWithAdapters({
-        adapters,
-        message,
-        options: {
-          hookList: hooks,
-          middleware,
-          retry: options.retry,
-          defaultProvider,
-          fallback: options.fallback,
-        },
-        sendOptions,
-      });
+      const startedAt = Date.now();
+      // Facts are read from the caller's message, before middleware runs, so the
+      // event describes what the user asked for. Only one "email sent" event fires
+      // per send() call: expanded per-recipient fallback sends run through
+      // sendWithRetry internally and are never counted individually.
+      const usedRecipientVariables = hasRecipientVariables(message);
+      const messageFacts = {
+        recipients:
+          arrayify(message.to).length + arrayify(message.cc).length + arrayify(message.bcc).length,
+        has_attachments: (message.attachments?.length ?? 0) > 0,
+        used_recipient_variables: usedRecipientVariables,
+        used_send_at: message.sendAt !== undefined,
+      };
+
+      try {
+        const response = await sendWithAdapters({
+          adapters,
+          message,
+          options: {
+            hookList: hooks,
+            middleware,
+            retry: options.retry,
+            defaultProvider,
+            fallback: options.fallback,
+          },
+          sendOptions,
+        });
+
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: normalizeAdapterName(response.provider),
+          delivery_path: deliveryPath(usedRecipientVariables, adapters.get(response.provider)),
+          success: true,
+          duration_ms: Date.now() - startedAt,
+          source: telemetrySource,
+        });
+
+        return response;
+      } catch (error) {
+        const failedAdapterName =
+          sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider;
+        const failedAdapter = normalizeAdapterName(failedAdapterName);
+
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: failedAdapter,
+          // On failure the primary adapter decides the path — the one that would
+          // have delivered had the send succeeded.
+          delivery_path: deliveryPath(usedRecipientVariables, adapters.get(failedAdapterName)),
+          success: false,
+          duration_ms: Date.now() - startedAt,
+          error_code: error instanceof EmailSdkError ? error.code : "unknown",
+          source: telemetrySource,
+        });
+
+        if (telemetry && isReportableSendError(error)) {
+          void telemetry.captureException(error, {
+            source: telemetrySource,
+            handled: true,
+            adapter: failedAdapter,
+          });
+        }
+
+        throw error;
+      }
     },
     async sendBatch(messages, sendOptions) {
+      const startedAt = Date.now();
       const results: SendBatchResult[] = [];
+      const usedAdapters = new Set<string>();
+      let failedCount = 0;
+      let firstFailureCode: string | undefined;
 
       for (const [index, item] of messages.entries()) {
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
@@ -142,11 +217,45 @@ export function createEmailClient<
             fallbackAdapters: resolvedFallbackAdapters,
             fallbackProviders: undefined,
           });
+          // Record the adapter that actually delivered (fallbacks change it), so the
+          // summary matches the per-item "email sent" events.
+          usedAdapters.add(normalizeAdapterName(response.provider));
           results.push({ ok: true, index, response });
         } catch (error) {
+          usedAdapters.add(normalizeAdapterName(resolvedAdapter ?? defaultProvider));
+          failedCount += 1;
+          firstFailureCode ??= error instanceof EmailSdkError ? error.code : "unknown";
           results.push({ ok: false, index, error });
         }
       }
+
+      // A batch may mix adapters across items; report the single one when uniform,
+      // else "mixed" (per-item adapters stay accurate on the "email sent" events).
+      const [firstAdapter, ...otherAdapters] = usedAdapters;
+      const batchAdapter =
+        usedAdapters.size === 0
+          ? normalizeAdapterName(sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider)
+          : otherAdapters.length === 0
+            ? firstAdapter
+            : "mixed";
+
+      // Per-item telemetry (including failure exceptions) fires inside client.send;
+      // this summary event only describes the batch shape.
+      void telemetry?.capture("email batch sent", {
+        message_count: messages.length,
+        succeeded: results.length - failedCount,
+        failed: failedCount,
+        recipients: messages.reduce(
+          (total, item) =>
+            total + arrayify(item.to).length + arrayify(item.cc).length + arrayify(item.bcc).length,
+          0,
+        ),
+        adapter: batchAdapter,
+        success: failedCount === 0,
+        duration_ms: Date.now() - startedAt,
+        error_code: firstFailureCode,
+        source: telemetrySource,
+      });
 
       return results;
     },
@@ -176,6 +285,27 @@ export function createEmailClient<
   }
 
   return client as EmailClient<EmailPluginClientExtensions<TPlugins>>;
+}
+
+/**
+ * Telemetry label for how a send() call was (or would have been) delivered:
+ * "single" for plain messages, "bulk_native" when the adapter batches
+ * recipientVariables in one provider call, "bulk_expanded" when the client
+ * expands to one internal send per recipient.
+ */
+function deliveryPath(
+  usedRecipientVariables: boolean,
+  provider: EmailProvider | undefined,
+): "single" | "bulk_native" | "bulk_expanded" | undefined {
+  if (!usedRecipientVariables) {
+    return "single";
+  }
+
+  if (!provider) {
+    return undefined;
+  }
+
+  return provider.sendBulk ? "bulk_native" : "bulk_expanded";
 }
 
 async function sendWithAdapters(input: {

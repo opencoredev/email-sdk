@@ -3,6 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { createEmailClient } from "./core.js";
 import { EmailProviderError, EmailSdkError, EmailValidationError } from "./errors.js";
 import { postmark } from "./postmark.js";
+import {
+  resetTelemetry,
+  setSharedTelemetry,
+  setTelemetrySource,
+  type CaptureExceptionContext,
+  type Telemetry,
+  type TelemetryEventName,
+  type TelemetryProperties,
+} from "./telemetry.js";
 import { failingProvider, memoryProvider } from "./testing.js";
 import type { EmailMessage, EmailProvider, EmailProviderContext } from "./types.js";
 
@@ -641,3 +650,237 @@ function recordingProvider(name: string, options: { bulk?: boolean } = {}) {
 
   return { provider, calls };
 }
+
+type CapturedEvent = { event: TelemetryEventName; properties?: TelemetryProperties };
+type CapturedException = { error: unknown; context: CaptureExceptionContext };
+
+function stubTelemetry() {
+  const events: CapturedEvent[] = [];
+  const exceptions: CapturedException[] = [];
+  const telemetry: Telemetry = {
+    enabled: true,
+    capture(event, properties) {
+      events.push({ event, properties });
+      return Promise.resolve();
+    },
+    captureException(error, context) {
+      exceptions.push({ error, context });
+      return Promise.resolve();
+    },
+    flush: () => Promise.resolve(),
+  };
+
+  return { events, exceptions, telemetry };
+}
+
+function withTelemetry<T>(telemetry: Telemetry, run: () => Promise<T>) {
+  setSharedTelemetry(telemetry);
+
+  return run().finally(() => resetTelemetry());
+}
+
+describe("createEmailClient telemetry", () => {
+  test("tags events with their source", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      await createEmailClient({ adapters: [memoryProvider()] }).send(message);
+      setTelemetrySource("cli");
+
+      try {
+        await createEmailClient({ adapters: [memoryProvider()] }).send(message);
+      } finally {
+        setTelemetrySource("sdk");
+      }
+    });
+
+    const created = events.filter((item) => item.event === "client created");
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(created.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
+    expect(sent.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
+    expect(sent[0]?.properties).toMatchObject({
+      success: true,
+      recipients: 1,
+      delivery_path: "single",
+      used_recipient_variables: false,
+      used_send_at: false,
+    });
+  });
+
+  test("reports failed sends as handled exceptions", async () => {
+    const { events, exceptions, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [failingProvider()] });
+      await expect(client.send(message)).rejects.toBeInstanceOf(EmailProviderError);
+    });
+
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent[0]?.properties).toMatchObject({ success: false, error_code: "provider_error" });
+    expect(exceptions).toHaveLength(1);
+    expect(exceptions[0]?.context).toMatchObject({
+      source: "sdk",
+      handled: true,
+      adapter: "custom",
+    });
+    expect(exceptions[0]?.error).toBeInstanceOf(EmailProviderError);
+  });
+
+  test("does not report usage errors as exceptions", async () => {
+    const { events, exceptions, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider()] });
+      await expect(client.send(message, { adapter: "missing" })).rejects.toThrow(
+        'Email provider "missing" is not registered.',
+      );
+    });
+
+    expect(events.filter((item) => item.event === "email sent")).toHaveLength(1);
+    expect(exceptions).toHaveLength(0);
+  });
+
+  test("marks scheduled sends", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider("resend")] });
+      await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
+    });
+
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent[0]?.properties).toMatchObject({ used_send_at: true, delivery_path: "single" });
+  });
+
+  test("counts one bulk_native send for recipientVariables on a native adapter", async () => {
+    const { events, telemetry } = stubTelemetry();
+    const { provider, calls } = recordingProvider("native", { bulk: true });
+
+    await withTelemetry(telemetry, async () => {
+      await createEmailClient({ adapters: [provider] }).send(batchMessage);
+    });
+
+    expect(calls.map((call) => call.kind)).toEqual(["sendBulk"]);
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.properties).toMatchObject({
+      success: true,
+      recipients: 2,
+      delivery_path: "bulk_native",
+      used_recipient_variables: true,
+      adapter: "custom",
+    });
+  });
+
+  test("counts one bulk_expanded send even when the client expands per recipient", async () => {
+    const { events, telemetry } = stubTelemetry();
+    const provider = memoryProvider();
+
+    await withTelemetry(telemetry, async () => {
+      await createEmailClient({ adapters: [provider] }).send(batchMessage);
+    });
+
+    // Two provider-level sends, one user-facing send() call, one event.
+    expect(provider.raw.sent).toHaveLength(2);
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.properties).toMatchObject({
+      success: true,
+      recipients: 2,
+      delivery_path: "bulk_expanded",
+      used_recipient_variables: true,
+    });
+  });
+
+  test("derives the failed delivery path from the primary adapter", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [failingProvider()] });
+      // Every expanded recipient fails, so the client aggregates the failures.
+      await expect(client.send(batchMessage)).rejects.toBeInstanceOf(EmailSdkError);
+    });
+
+    const sent = events.filter((item) => item.event === "email sent");
+    expect(sent[0]?.properties).toMatchObject({
+      success: false,
+      error_code: "all_recipients_failed",
+      delivery_path: "bulk_expanded",
+      used_recipient_variables: true,
+    });
+  });
+
+  test("summarizes sendBatch runs", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider()] });
+      await client.sendBatch([
+        { ...message, cc: "copy@example.com" },
+        { ...message, adapter: "missing" },
+      ]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    expect(batch).toHaveLength(1);
+    expect(batch[0]?.properties).toMatchObject({
+      message_count: 2,
+      succeeded: 1,
+      failed: 1,
+      recipients: 3,
+      success: false,
+      error_code: "provider_not_found",
+      source: "sdk",
+      // Both items normalize to the same adapter, so the summary is uniform.
+      adapter: "custom",
+    });
+    // Per-item events still fire through send().
+    expect(events.filter((item) => item.event === "email sent")).toHaveLength(2);
+  });
+
+  test("reports a mixed adapter when batch items differ", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({
+        adapters: [memoryProvider("resend"), memoryProvider("smtp")],
+        defaultAdapter: "resend",
+      });
+      await client.sendBatch([
+        { ...message, adapter: "resend" },
+        { ...message, adapter: "smtp" },
+      ]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    expect(batch[0]?.properties).toMatchObject({ adapter: "mixed", message_count: 2 });
+  });
+
+  test("batch adapter reflects the adapter that actually delivered", async () => {
+    const { events, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({
+        adapters: [failingProvider("resend"), memoryProvider("smtp")],
+      });
+      await client.sendBatch([{ ...message, adapter: "resend", fallbackAdapters: ["smtp"] }]);
+    });
+
+    const batch = events.filter((item) => item.event === "email batch sent");
+    // Primary "resend" failed and "smtp" delivered, so the summary names smtp.
+    expect(batch[0]?.properties).toMatchObject({ adapter: "smtp", succeeded: 1, failed: 0 });
+  });
+
+  test("createEmailClient({ telemetry: false }) disables client events", async () => {
+    const { events, exceptions, telemetry } = stubTelemetry();
+
+    await withTelemetry(telemetry, async () => {
+      const client = createEmailClient({ adapters: [memoryProvider()], telemetry: false });
+      await client.send(message);
+      await client.sendBatch([message]);
+    });
+
+    expect(events).toHaveLength(0);
+    expect(exceptions).toHaveLength(0);
+  });
+});
