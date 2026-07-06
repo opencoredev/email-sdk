@@ -238,3 +238,7 @@ Every credential environment variable has a flag override; flags win over the en
 | `1` | Anything else: unknown command, missing flag or environment, validation failure, missing `doctor` credentials, provider error. |
 
 Errors print their message to stderr; success output is JSON (or plain text for `help`, `doctor`, `version`, and `adapters` without `--json`) on stdout, so the CLI pipes cleanly into `jq` and scripts.
+
+## Telemetry
+
+The CLI emits the same anonymous usage analytics as the library: one `cli command run` event per invocation, carrying the command name, adapter, `--dry-run` flag, success, and duration. On first run it prints a one-time notice to stderr, so it never pollutes the JSON on stdout that scripts parse. Opt out with `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` (and it is off automatically when `NODE_ENV=test`). See [telemetry](/docs/telemetry) for the full event list, error-report redaction, and every opt-out.

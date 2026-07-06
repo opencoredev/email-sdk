@@ -93,6 +93,8 @@ const client = createEmailClient({ adapters: [resend({ apiKey })], telemetry: fa
 
 Telemetry is also disabled automatically when `NODE_ENV=test`.
 
+For the full event list, error-report redaction, CI detection, and every opt-out, see the [telemetry docs](https://email-sdk.dev/docs/telemetry).
+
 ## Sponsors
 
 Email SDK is supported by companies that help keep provider integrations practical and maintained. Want your logo here? **[Become a sponsor →](https://github.com/sponsors/opencoredev)**
