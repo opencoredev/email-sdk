@@ -46,11 +46,16 @@ packages/email-sdk/dist/cli.js adapters
 
 ## Local Checks
 
-Lint and format before committing. This runs `oxlint`, then `oxfmt --write` (formatting is applied in place):
+Lint the files you touched before committing:
 
 ```bash
-bun run check
+bunx oxlint <path>
 ```
+
+Do not run `bun run check` casually: it runs `oxfmt --write` across the whole
+repo, which reformats roughly 170 files that have drifted from the formatter.
+CI does not enforce formatting or linting, so a repo-wide reformat only adds
+noise to your diff.
 
 When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from `.env.local`:
 
