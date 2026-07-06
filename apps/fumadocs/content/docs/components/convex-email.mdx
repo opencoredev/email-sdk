@@ -186,7 +186,79 @@ export const emailStatus = query({
 });
 ```
 
-`status` returns the stored email: `status`, `message`, `attemptedAdapters`, `attemptCount`/`maxAttempts`, `providerMessageId`, `lastError`, `deliveryStatus`, and timestamps. `listEvents` returns the append-only history.
+`status` returns the full stored email row (typed as `ConvexEmailDoc`) or `null` if the id is unknown; `listEvents` returns the append-only history (`ConvexEmailEventDoc[]`). Both types, along with `ConvexEmailDeliveryStatus`, are exported from the package for annotating query results.
+
+<TypeTable
+  type={{
+    _id: {
+      description: "Convex document id of the email row — the value send returned.",
+      type: "string",
+      required: true,
+    },
+    status: {
+      description: "Send lifecycle status (see the table below).",
+      type: "ConvexEmailStatus",
+      required: true,
+    },
+    message: {
+      description: "The normalized message that was queued, after test-mode redirection.",
+      type: "ConvexEmailMessage",
+      required: true,
+    },
+    adapter: {
+      description: "Routing name chosen to try first, if one was resolved.",
+      type: "string",
+    },
+    attemptedAdapters: {
+      description: "Routing names tried so far, in order.",
+      type: "string[]",
+      required: true,
+    },
+    attemptCount: {
+      description: "Send attempts made so far.",
+      type: "number",
+      required: true,
+    },
+    maxAttempts: {
+      description: "Attempt ceiling before the email is marked failed.",
+      type: "number",
+      required: true,
+    },
+    providerMessageId: {
+      description: "Id returned by the accepting provider. Set once status is sent.",
+      type: "string",
+    },
+    lastError: {
+      description: "Message from the most recent failed attempt.",
+      type: "string",
+    },
+    deliveryStatus: {
+      description:
+        "Post-acceptance state from webhooks: delivered, bounced, or complained. Unset until a matching webhook arrives.",
+      type: "ConvexEmailDeliveryStatus",
+    },
+    deliveredAt: {
+      description: "Epoch ms a delivery webhook confirmed the message landed.",
+      type: "number",
+    },
+    nextAttemptAt: {
+      description: "Epoch ms of the next scheduled retry while queued.",
+      type: "number",
+    },
+    sentAt: {
+      description: "Epoch ms a provider accepted the message.",
+      type: "number",
+    },
+    terminalAt: {
+      description: "Epoch ms the row reached a terminal status (sent, failed, or canceled).",
+      type: "number",
+    },
+  }}
+/>
+
+The row also carries the routing inputs it was queued with — `fallbackAdapters`, `adapters`, `retryBaseMs`, `idempotencyKey`, `sendMetadata` — plus Convex's `_creationTime` and `createdAt`/`updatedAt` timestamps (all epoch ms).
+
+Each `ConvexEmailEventDoc` in the history has `type` (see event types below), `createdAt`, and, where relevant, `adapter`, `attempt`, `providerMessageId`, `payload` (the raw webhook body for `webhook` events), and `error`.
 
 | Status | Meaning |
 | --- | --- |

@@ -105,6 +105,8 @@ export const sendWelcomeEmail = mutation({
 
 `email.send()` returns the Convex document id for the queued email. Query `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions when you need delivery state, attempted adapters, provider message ids, or errors. Once webhooks are wired up, the stored email also carries a `deliveryStatus` (`delivered`, `bounced`, or `complained`) and a `deliveredAt` timestamp.
 
+Every method is typed: `send` returns `Promise<string>`, `sendBatch` returns `Promise<string[]>`, `status` returns `Promise<ConvexEmailDoc | null>`, `listEvents` returns `Promise<ConvexEmailEventDoc[]>`, and `cancel` returns `Promise<boolean>` (`true` only while the email is still queued). The `ConvexEmailDoc`, `ConvexEmailEventDoc`, and `ConvexEmailDeliveryStatus` types are exported from the package root for annotating your own query results.
+
 ## Provider Coverage
 
 Supported adapter configs:
