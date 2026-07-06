@@ -1,0 +1,100 @@
+---
+title: Telemetry
+description: What anonymous usage analytics Email SDK collects, how error reports are redacted, where the anonymous ID lives, and every way to opt out.
+icon: BarChart3
+---
+
+Email SDK collects anonymous usage analytics so maintainers can see which adapters and CLI commands get used and how often sends succeed. It is on by default. The first run prints a one-line notice with opt-out instructions, then never prints it again.
+
+Email content, subjects, addresses, headers, attachments, and API keys are **never** collected. Everything is tied to a random anonymous ID, and error messages are redacted before upload.
+
+<Callout type="info">
+  Prefer to send nothing at all? Set `EMAIL_SDK_TELEMETRY=0` (or `DO_NOT_TRACK=1`)
+  in the environment, or pass `telemetry: false` to `createEmailClient`. See
+  [opting out](#opting-out).
+</Callout>
+
+## What gets collected
+
+Analytics events describe *how* the SDK is used, never *what* you send.
+
+| Event | Fires when | Notable properties |
+| --- | --- | --- |
+| `client created` | `createEmailClient` runs | registered adapter names, adapter count, plugin count, default adapter |
+| `email sent` | one `send` call settles | adapter, delivery path, recipient count, `has_attachments`, `used_recipient_variables`, `used_send_at`, success, duration, error code |
+| `email batch sent` | a `sendBatch` call settles | message count, succeeded/failed counts, total recipients, adapter (or `mixed`), success, duration, first error code |
+| `cli command run` | any CLI command finishes | command name, adapter, `dry_run`, success, duration, error code |
+
+Every event also carries the environment fingerprint: `sdk_version`, `node_version`, `platform`, `arch`, whether the run is in CI (`ci`), and which provider (`ci_vendor`, e.g. `github_actions`, `gitlab`, `jenkins`). A `source` property marks whether the event came from the library (`sdk`) or the bundled CLI (`cli`).
+
+Two rules keep user-defined strings out of the pipeline:
+
+- **Adapter names are normalized.** Only [built-in adapter](/docs/adapters) names are reported verbatim; any custom adapter is reported as `custom`, and an unresolved name as `unknown`.
+- **Recipient counts, not recipients.** `recipients` is the summed length of `to` + `cc` + `bcc`. `has_attachments` is a boolean — the files themselves are never read.
+
+## Error reports
+
+When a send or CLI command fails with an unexpected error, the SDK reports a redacted stack trace so real defects surface. Expected caller mistakes are excluded: `EmailValidationError` (bad message or config) and `EmailProviderNotFoundError` (unregistered adapter name) are never reported.
+
+Before any error leaves the process it is scrubbed:
+
+- **Messages** have email addresses, URLs (any `scheme://…`, so connection strings with embedded credentials go too), quoted text, `key=value` secrets (`password=`, `api_key=`, …), long tokens (24+ characters), and home-directory paths replaced with placeholders, then truncated to 300 characters.
+- **Stack frames** collapse to package-relative paths or bare filenames, so reports never carry usernames, home directories, or project layouts.
+- **Error names** are reported verbatim only for the SDK's own error classes and JavaScript built-ins; anything else runs through the same message redaction.
+
+Reports are also rate-limited per process: at most five exceptions, deduplicated per error object and per error class, with the cause chain capped at three links and 20 stack frames.
+
+## The anonymous ID
+
+On first run the SDK generates a random UUID and stores it, together with a flag recording that the notice was shown, in:
+
+```
+~/.config/email-sdk/telemetry.json
+```
+
+The path honors `XDG_CONFIG_HOME` when set. The ID is not derived from anything on your machine — it exists only to group events from the same install. In a read-only or ephemeral environment where the file cannot be written, telemetry still runs with a fresh per-process identity.
+
+## Delivery
+
+Events are `POST`ed to PostHog (`us.i.posthog.com`) with a public **write-only** project key that can only ingest events, never read them. Capture is fire-and-forget with a 3-second timeout and can never reject or throw — a telemetry failure will never break sending email. The CLI flushes any in-flight events before exit so a failing command's summary is not dropped.
+
+## Opting out
+
+Any one of these disables telemetry completely — no events, no error reports, no config file written:
+
+<TypeTable
+  type={{
+    "EMAIL_SDK_TELEMETRY": {
+      description: "Environment variable. Set to 0, false, or off to opt out.",
+      type: "env",
+    },
+    "DO_NOT_TRACK": {
+      description: "Standard Do Not Track variable. Set to 1 or true to opt out.",
+      type: "env",
+    },
+    "telemetry": {
+      description: "createEmailClient option. Pass false to opt this client out in code.",
+      type: "boolean",
+      default: "true",
+    },
+    "NODE_ENV": {
+      description: "Telemetry is automatically disabled when this is test.",
+      type: "env",
+    },
+  }}
+/>
+
+```bash
+# Process-wide, covers both the library and the CLI
+export EMAIL_SDK_TELEMETRY=0   # or DO_NOT_TRACK=1
+```
+
+```ts
+// Per client, in code
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  telemetry: false,
+});
+```
+
+The [`telemetry` client option](/docs/reference/client#createemailclientoptions) opts out one client instance; the environment variables opt out every client and CLI run in the process. Test runs (`NODE_ENV=test`) are silent automatically, so your suite never emits analytics.
