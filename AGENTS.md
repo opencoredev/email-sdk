@@ -48,6 +48,23 @@ bun run build
 packages/email-sdk/dist/cli.js adapters
 ```
 
+## Launch Smoke Test
+
+`.launch-smoke/` is a standalone workspace (outside the root `apps/*`/`packages/*`
+globs, with its own `bun.lock`) that installs the built packages via `file:`
+dependencies and imports every published entry point and adapter subpath to catch
+export-surface regressions. It resolves the `dist/` exports, so build first:
+
+```bash
+bun run build
+cd .launch-smoke && bun install && bun test
+bun run check-types  # tsc --noEmit against the same exports
+```
+
+When adding a provider adapter or a new public subpath export, add its import to
+`.launch-smoke/launch-smoke.test.ts` (or `convex-email-smoke.test.ts`) so the
+smoke suite covers it.
+
 ## Local Checks
 
 Lint the files you touched before committing:
