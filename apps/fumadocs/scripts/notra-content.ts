@@ -9,12 +9,14 @@ import type { BlogPost } from "../src/lib/blog-types";
 
 // Minimum surface we rely on from a Notra `listPosts` post. Typed structurally
 // so we don't depend on deep SDK subpath imports.
+// 2026-07-06: @usenotra/sdk 1.3.x made `markdown` nullable — it is null for
+// image-type posts, whose `content` is a CDN image URL rather than a body.
 export type NotraPostInput = {
   id: string;
   title: string;
   slug: string | null;
   content: string;
-  markdown: string;
+  markdown: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -181,15 +183,19 @@ export function renderMarkdownToSafeHtml(markdown: string): string {
   }).trim();
 }
 
-// Maps one published Notra post into the blog shape. Returns null for drafts or
-// posts with no usable title so the caller can skip them.
+// Maps one published Notra post into the blog shape. Returns null for drafts,
+// posts with no usable title, or posts without a Markdown body so the caller
+// can skip them.
 export function mapNotraPost(input: NotraPostInput, seenSlugs: Set<string>): MappedPost | null {
   if (input.status !== "published") return null;
 
   const title = input.title?.trim();
   if (!title) return null;
 
-  const markdown = input.markdown ?? "";
+  // Image-type posts have `markdown: null` (their `content` is an image URL,
+  // not prose). The blog can only render Markdown bodies, so skip them.
+  const markdown = input.markdown;
+  if (markdown === null) return null;
   // Always slugify, even an explicit Notra slug: a value like "release/notes"
   // would otherwise break the single-segment /blog/$slug route, the OG image
   // path, and prerender enumeration.
