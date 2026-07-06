@@ -4,7 +4,7 @@ description: Send through the MailerSend Email API with cc/bcc, headers, tags, a
 icon: mailersend
 ---
 
-The MailerSend adapter calls the [MailerSend Email API](https://developers.mailersend.com/api/v1/email.html) over `fetch` — no extra dependency. Its quirk: MailerSend accepts exactly one reply-to address, and the message id comes back in the `x-message-id` response header rather than the body.
+The MailerSend adapter calls the [MailerSend Email API](https://developers.mailersend.com/api/v1/email.html) with plain `fetch`. Two quirks to know: MailerSend accepts exactly one reply-to address, and the message id comes back in the `x-message-id` response header rather than the body.
 
 <ProviderBadge adapter="mailersend" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-MailerSend maps `cc`, `bcc`, `headers`, `attachments` (an attachment's `contentId` becomes MailerSend's `id`), and `tags` (values only). `replyTo` accepts a single address — two or more throw an `EmailValidationError` before any request.
+MailerSend maps `cc`, `bcc`, `headers`, `attachments` (an attachment's `contentId` becomes MailerSend's `id`), and `tags` (values only). `replyTo` accepts a single address; two or more throw an `EmailValidationError` before any request.
 
 ```ts
 const result = await email.send({
@@ -57,7 +57,7 @@ const result = await email.send({
 console.log(result.id); // MailerSend message id from the x-message-id header
 ```
 
-The response `id` comes from the `x-message-id` response header, falling back to `message_id` or `id` in the body — use it to look the send up in MailerSend's activity log.
+The response `id` comes from the `x-message-id` response header, falling back to `message_id` or `id` in the body. Use it to look the send up in MailerSend's activity log.
 
 <Callout type="warn" title="No metadata field">
   MailerSend has no metadata concept, so `metadata` on a message throws an
@@ -82,4 +82,4 @@ MAILERSEND_API_KEY="mlsn..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — that is the only check that proves the token, domain verification, and plan limits are ready.
+Drop `--dry-run` for one real send. The token, domain verification, and plan limits only prove themselves against the live API.

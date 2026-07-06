@@ -4,13 +4,13 @@ description: "Send through the Mailgun Messages API with domain-scoped multipart
 icon: mailgun
 ---
 
-The Mailgun adapter calls the [Mailgun Messages API](https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Messages/) over `fetch` — no extra dependency. It is the one adapter that posts multipart form data instead of JSON, using Mailgun's prefixed field names: `h:` for headers, `v:` for metadata variables, `o:` for sending options. Every send is scoped to the `domain` you configure.
+The Mailgun adapter calls the [Mailgun Messages API](https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Messages/) with plain `fetch`. It is the one adapter that posts multipart form data instead of JSON, using Mailgun's prefixed field names: `h:` for headers, `v:` for metadata variables, `o:` for sending options. Every send is scoped to the `domain` you configure.
 
 <ProviderBadge adapter="mailgun" />
 
 ## Configure
 
-Grab an API key from the [Mailgun dashboard](https://app.mailgun.com/settings/api_security) and note the sending domain it belongs to — both are required.
+Grab an API key from the [Mailgun dashboard](https://app.mailgun.com/settings/api_security) and note the sending domain it belongs to. Both are required.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -73,7 +73,7 @@ const result = await email.send({
 console.log(result.id); // Mailgun message id, also exposed as result.messageId
 ```
 
-The response `id` is Mailgun's queued message id from the response body — match it against delivery events in webhooks or the Mailgun logs.
+The response `id` is Mailgun's queued message id from the response body. Match it against delivery events in webhooks or the Mailgun logs.
 
 ## Verify from the CLI
 
@@ -93,4 +93,4 @@ MAILGUN_API_KEY="key-..." npx email-sdk send \
   --dry-run
 ```
 
-Credentials also work as flags: `--api-key`, `--domain`, and `--base-url` (or `MAILGUN_BASE_URL`) override the environment. Drop `--dry-run` for one real send — that is the only check that proves the domain's DNS and the account are ready.
+Credentials also work as flags: `--api-key`, `--domain`, and `--base-url` (or `MAILGUN_BASE_URL`) override the environment. Drop `--dry-run` for one real send to prove the domain's DNS records and the account are actually ready.

@@ -1,10 +1,10 @@
 ---
 title: JetEmail
-description: Send through the JetEmail transactional API over fetch — CC, BCC, reply-to, custom headers, and base64 attachments, with idempotent retries.
+description: Send through the JetEmail transactional API with CC, BCC, reply-to, custom headers, base64 attachments, and idempotent retries.
 icon: jetemail
 ---
 
-The JetEmail adapter calls JetEmail's transactional `POST /email` endpoint over `fetch` — no extra dependency. JetEmail runs its own sending infrastructure (anycast IPs, managed reputation), and the adapter maps the normalized `EmailMessage` straight onto its REST payload.
+The JetEmail adapter calls JetEmail's transactional `POST /email` endpoint with plain `fetch`. JetEmail runs its own sending infrastructure (anycast IPs, managed reputation), and the adapter maps the normalized `EmailMessage` straight onto its REST payload.
 
 <ProviderBadge adapter="jetemail" />
 
@@ -63,7 +63,7 @@ console.log(result.id); // JetEmail message id, e.g. "19424fd2acd0004210"
 ```
 
 <Callout type="warn" title="From requires a display name">
-  JetEmail rejects a bare email in `from` — it requires the `"Name <email>"` form. The adapter
+  JetEmail rejects a bare email in `from`; it requires the `"Name <email>"` form. The adapter
   fails fast with an `EmailValidationError` when `from` has no display name, so pass
   `from: "Acme <hello@acme.com>"` or `from: { email: "hello@acme.com", name: "Acme" }`.
 </Callout>
@@ -98,4 +98,4 @@ JETEMAIL_API_KEY="transactional_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send — the only check that proves the API key and sender domain are ready.
+Drop `--dry-run` for one real smoke send to prove the API key and sender domain against the live API.

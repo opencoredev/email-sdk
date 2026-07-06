@@ -1,10 +1,10 @@
 ---
 title: Adapters
-description: 22 provider adapters and transports, each with explicit field support and fail-fast validation.
+description: 23 provider adapters and transports, each with explicit field support and fail-fast validation.
 icon: Cable
 ---
 
-Email SDK ships 22 adapters. Each is its own entry point — import only what you send through — and each follows the same contract: map the fields the provider supports, throw a validation error for fields it cannot represent. Nothing is silently dropped.
+Email SDK ships 23 adapters. Each is its own entry point, so you import only what you send through, and each follows the same contract: map the fields the provider supports, throw a validation error for fields it cannot represent. Nothing is silently dropped.
 
 <SponsorSpotlight />
 
@@ -18,10 +18,10 @@ Email SDK ships 22 adapters. Each is its own entry point — import only what yo
 | Mature transactional delivery controls  | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo                      |
 | A backup route for production delivery  | A primary API adapter plus Postmark or SMTP                                  |
 | Product-triggered or template emails    | Iterable, Sequenzy, Loops, or Plunk                                          |
-| A cheap or self-managed transport       | SMTP (built in — no Nodemailer)                                              |
+| A cheap or self-managed transport       | SMTP (built in, no Nodemailer)                                               |
 | Heavy attachment use                    | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
 
-Whatever you pick, choose fallback routes by [field support](/docs/adapters/field-support), not popularity — a fallback only helps if it can carry the same message.
+Whatever you pick, choose fallback routes by [field support](/docs/adapters/field-support), not popularity. A fallback only helps if it can carry the same message.
 
 ## One pattern for every provider
 
@@ -62,15 +62,15 @@ RESEND_API_KEY="re_..." npx email-sdk send \
 
 <Accordions type="single">
   <Accordion title="What the provider card labels mean">
-    - **Official** — the adapter ships in `@opencoredev/email-sdk`.
-    - **API tested** — a local check has successfully called the live provider API with a real key.
+    - **Official**: the adapter ships in `@opencoredev/email-sdk`.
+    - **API tested**: a local check has successfully called the live provider API with a real key.
       It does not prove delivery unless the adapter page says a send was performed.
-    - **Not API tested** — no live provider API check has been run yet.
-    - **Request tested** — repository tests cover request mapping, responses, and fail-fast
+    - **Not API tested**: no live provider API check has been run yet.
+    - **Request tested**: repository tests cover request mapping, responses, and fail-fast
       validation with injected fetch calls.
-    - **Built-in transport** — sends through Email SDK's own transport implementation instead of a
+    - **Built-in transport**: sends through Email SDK's own transport implementation instead of a
       provider HTTP API.
-    - **No provider API** — the adapter does not call a hosted provider API.
+    - **No provider API**: the adapter does not call a hosted provider API.
 
     Email SDK can catch unsupported fields before a request. It cannot make a provider account
     ready to send from an unverified domain.
@@ -80,7 +80,7 @@ RESEND_API_KEY="re_..." npx email-sdk send \
 
 ## Missing a provider?
 
-Don't fork the official package — wrap the provider in the [adapter contract](/docs/reference/adapter-contract) and publish it as a community package.
+Don't fork the official package. Wrap the provider in the [adapter contract](/docs/reference/adapter-contract) and publish it as a community package instead.
 
 <Cards>
   <Card

@@ -4,13 +4,13 @@ description: Send through the SparkPost Transmissions API with metadata, substit
 icon: sparkpost
 ---
 
-The SparkPost adapter calls the [SparkPost Transmissions API](https://developers.sparkpost.com/api/transmissions/) over `fetch` — no extra dependency. Two things set it apart: a `sandbox` option that routes sends through SparkPost's shared sandbox domain for testing, and tags become SparkPost `substitution_data` as `name: value` pairs instead of a flat list.
+The SparkPost adapter calls the [SparkPost Transmissions API](https://developers.sparkpost.com/api/transmissions/) with plain `fetch`. Two things set it apart: a `sandbox` option that routes sends through SparkPost's shared sandbox domain for testing, and tags become SparkPost `substitution_data` as `name: value` pairs instead of a flat list.
 
 <ProviderBadge adapter="sparkpost" />
 
 ## Configure
 
-Create an API key with Transmissions permission in the [SparkPost dashboard](https://app.sparkpost.com/account/api-keys). SparkPost expects the raw key in the `Authorization` header — the adapter sends it without a `Bearer` prefix.
+Create an API key with Transmissions permission in the [SparkPost dashboard](https://app.sparkpost.com/account/api-keys). SparkPost expects the raw key in the `Authorization` header, so the adapter sends it without a `Bearer` prefix.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -62,7 +62,7 @@ const result = await email.send({
 console.log(result.id); // SparkPost transmission id
 ```
 
-The response `id` is the transmission id from `results.id` (or `results.transmission_id`) — use it to query SparkPost's events API for delivery status.
+The response `id` is the transmission id from `results.id` (or `results.transmission_id`). Use it to query SparkPost's events API for delivery status.
 
 <Callout type="warn" title="No cc or bcc">
   This adapter sends one flat recipient list, so `cc` or `bcc` on a message throws an
@@ -86,4 +86,4 @@ SPARKPOST_API_KEY="..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — that is the only check that proves the key, sending domain, and recipient policy are ready.
+Drop `--dry-run` for one real send, or set `sandbox: true` in code first to exercise the API through SparkPost's shared sandbox domain before touching your own.

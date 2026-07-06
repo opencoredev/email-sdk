@@ -4,7 +4,7 @@ description: Send through Scaleway Transactional Email with region-scoped endpoi
 icon: scaleway
 ---
 
-The Scaleway adapter calls the [Scaleway Transactional Email API](https://www.scaleway.com/en/developers/api/transactional-email/) over `fetch` — no extra dependency. Sends are region-scoped: the adapter targets `/regions/{region}/emails` and defaults to `fr-par`.
+The Scaleway adapter calls the [Scaleway Transactional Email API](https://www.scaleway.com/en/developers/api/transactional-email/) with plain `fetch`. Sends are region-scoped: the adapter targets `/regions/{region}/emails` and defaults to `fr-par`.
 
 <ProviderBadge adapter="scaleway" />
 
@@ -67,14 +67,14 @@ const result = await email.send({
   subject: "Your May invoice",
   html: "<p>Invoice INV-2041 is attached.</p>",
   attachments: [
-    { filename: "invoice.txt", content: "Invoice INV-2041 — 49.00 EUR", contentType: "text/plain" },
+    { filename: "invoice.txt", content: "Invoice INV-2041: 49.00 EUR", contentType: "text/plain" },
   ],
 });
 
 console.log(result.id); // Scaleway email id (`id` or `email_id` in the response)
 ```
 
-`replyTo` travels as a `Reply-To` entry in Scaleway's `additional_headers`. Setting both `replyTo` and a manual `Reply-To` header throws an `EmailValidationError` before any request — pick one.
+`replyTo` travels as a `Reply-To` entry in Scaleway's `additional_headers`. Setting both `replyTo` and a manual `Reply-To` header throws an `EmailValidationError` before any request, so pick one.
 
 <Callout type="warn" title="No tags or metadata">
   Scaleway has no tag or metadata concept, so either field throws an `EmailValidationError` before

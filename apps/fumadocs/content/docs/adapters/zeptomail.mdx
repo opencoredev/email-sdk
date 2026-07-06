@@ -4,7 +4,7 @@ description: Send through Zoho ZeptoMail with automatic send-mail token prefixin
 icon: zeptomail
 ---
 
-The ZeptoMail adapter calls the [Zoho ZeptoMail email API](https://www.zoho.com/zeptomail/help/api/email-sending.html) over `fetch` — no extra dependency. Paste your send mail token as-is: the adapter prepends Zoho's `Zoho-enczapikey ` authorization prefix automatically when it is missing.
+The ZeptoMail adapter calls the [Zoho ZeptoMail email API](https://www.zoho.com/zeptomail/help/api/email-sending.html) with plain `fetch`. Paste your send mail token as-is: the adapter prepends Zoho's `Zoho-enczapikey ` authorization prefix automatically when it is missing.
 
 <ProviderBadge adapter="zeptomail" />
 
@@ -80,4 +80,4 @@ ZEPTOMAIL_TOKEN="..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — that is the check that proves the token, Mail Agent, and sender domain are ready.
+Drop `--dry-run` for one real send to prove the token, Mail Agent, and sender domain against the live API.

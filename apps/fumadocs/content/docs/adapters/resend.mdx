@@ -4,7 +4,7 @@ description: Send through the Resend API with attachments, tags, and native idem
 icon: resend
 ---
 
-The Resend adapter calls the [Resend Email API](https://resend.com/docs/api-reference/emails/send-email) over `fetch` — no extra dependency. It is the default first adapter in these docs: short setup, broad field support, and it is the only adapter that forwards [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) to the provider natively.
+The Resend adapter calls the [Resend Email API](https://resend.com/docs/api-reference/emails/send-email) with plain `fetch`. It is the default first adapter in these docs: setup is one API key, field support is broad, and it forwards [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) to the provider as the `Idempotency-Key` header, so Resend itself deduplicates retried sends.
 
 <ProviderBadge adapter="resend" />
 
@@ -91,4 +91,4 @@ RESEND_API_KEY="re_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` to perform one real send from the environment that will send production email — that is the only check that proves the account, sender domain, and recipient policy are ready.
+Drop `--dry-run` to perform one real send from the environment that will send production email. Local validation cannot tell you whether the account, sender domain, and recipient policy are actually ready; one live send can.

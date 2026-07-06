@@ -1,10 +1,10 @@
 ---
 title: Lettermint
-description: Send through Lettermint's European transactional email API over fetch — CC, BCC, reply-to, headers, metadata, tags, and base64 attachments, with idempotent retries and routes.
+description: Send through Lettermint's European transactional email API with CC, BCC, reply-to, headers, metadata, tags, base64 attachments, idempotent retries, and routes.
 icon: lettermint
 ---
 
-The Lettermint adapter calls Lettermint's `POST /v1/send` endpoint over `fetch` — no extra dependency. [Lettermint](https://lettermint.co/?ref=emailsdk) is a European transactional email service with a REST API, SMTP relay, routes, and built-in open/click tracking. The adapter maps the normalized `EmailMessage` straight onto its send payload and authenticates with the `x-lettermint-token` header.
+The Lettermint adapter calls Lettermint's `POST /v1/send` endpoint with plain `fetch`. [Lettermint](https://lettermint.co/?ref=emailsdk) is a European transactional email service with a REST API, SMTP relay, routes, and built-in open/click tracking. The adapter maps the normalized `EmailMessage` straight onto its send payload and authenticates with the `x-lettermint-token` header.
 
 <ProviderBadge adapter="lettermint" />
 
@@ -71,8 +71,9 @@ console.log(result.id); // Lettermint message_id
 </Callout>
 
 <Callout title="From a verified sending domain">
-  The sender domain in `from` must be verified for your Lettermint project, and a single message may
-  not exceed 50 recipients across `to`, `cc`, and `bcc` combined.
+  The sender domain in `from` must be verified for your Lettermint project. Lettermint also caps a
+  message at 50 recipients across `to`, `cc`, and `bcc` combined; the adapter does not pre-check
+  this, so an oversized send fails at the API.
 </Callout>
 
 ## Idempotent sends
@@ -109,4 +110,4 @@ LETTERMINT_API_TOKEN="lm_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send — the only check that proves the API token and sending domain are ready.
+Drop `--dry-run` for one real smoke send to prove the API token and sending domain against the live API.

@@ -4,7 +4,7 @@ description: Send through the Brevo transactional email API with full field supp
 icon: brevo
 ---
 
-The Brevo adapter calls the [Brevo transactional email API](https://developers.brevo.com/reference/sendtransacemail) over `fetch` — no extra dependency. It authenticates with Brevo's `api-key` header (not a Bearer token), supports every common field, and maps `metadata` to Brevo's `params` — the same values Brevo templates substitute.
+The Brevo adapter calls the [Brevo transactional email API](https://developers.brevo.com/reference/sendtransacemail) with plain `fetch`. It authenticates with Brevo's `api-key` header (not a Bearer token), supports every common field, and maps `metadata` to Brevo's `params`, the same values Brevo templates substitute.
 
 <ProviderBadge adapter="brevo" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Brevo maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata` (as `params`). `replyTo` accepts a single address — two or more throw an `EmailValidationError` before any request.
+Brevo maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata` (as `params`). `replyTo` accepts a single address; two or more throw an `EmailValidationError` before any request.
 
 ```ts
 const result = await email.send({
@@ -58,7 +58,7 @@ const result = await email.send({
 console.log(result.id); // Brevo messageId, also exposed as result.messageId
 ```
 
-The response `id` is Brevo's `messageId` (falling back to `id`) — match it against events in Brevo's logs and webhooks.
+The response `id` is Brevo's `messageId` (falling back to `id`). Match it against events in Brevo's logs and webhooks.
 
 <Callout type="warn" title="Metadata becomes template params">
   `metadata` is sent as Brevo `params`, the values Brevo substitutes into templates. If you use
@@ -82,4 +82,4 @@ BREVO_API_KEY="xkeysib-..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — that is the only check that proves the key, sender verification, and recipient policy are ready.
+Drop `--dry-run` for one real send to confirm the key, sender verification, and recipient policy end to end.

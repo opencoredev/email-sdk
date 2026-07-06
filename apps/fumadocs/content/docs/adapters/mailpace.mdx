@@ -1,10 +1,10 @@
 ---
 title: MailPace
-description: Send through the MailPace API — a deliberately minimal adapter for address fields and body content.
+description: Send through the MailPace API, a deliberately minimal adapter for address fields and body content.
 icon: mailpace
 ---
 
-The MailPace adapter calls the [MailPace send API](https://docs.mailpace.com/reference/send) over `fetch` — no extra dependency. It is the smallest adapter surface in the SDK: addresses, subject, and body only, with recipient lists serialized as comma-separated strings.
+The MailPace adapter calls the [MailPace send API](https://docs.mailpace.com/reference/send) with plain `fetch`. It has the smallest adapter surface in the SDK: addresses, subject, and body only, with recipient lists serialized as comma-separated strings.
 
 <ProviderBadge adapter="mailpace" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-MailPace maps `cc`, `bcc`, and `replyTo` alongside `html`/`text` (sent as `htmlbody`/`textbody`). That is the whole surface — a good fit for sign-in alerts, receipts, and other plain notifications.
+MailPace maps `cc`, `bcc`, and `replyTo` alongside `html`/`text` (sent as `htmlbody`/`textbody`). That is the whole surface, which makes it a good fit for sign-in alerts, receipts, and other plain notifications.
 
 ```ts
 const result = await email.send({

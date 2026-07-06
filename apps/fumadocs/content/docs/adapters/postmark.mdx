@@ -4,7 +4,7 @@ description: Send through the Postmark Email API with message streams, metadata,
 icon: postmark
 ---
 
-The Postmark adapter calls the [Postmark Email API](https://postmarkapp.com/developer/api/email-api) over `fetch` — no extra dependency. Its distinctive feature is message streams: set `messageStream` once and every send routes through that Postmark stream.
+The Postmark adapter calls the [Postmark Email API](https://postmarkapp.com/developer/api/email-api) with plain `fetch`. Its distinctive feature is message streams: set `messageStream` once and every send routes through that Postmark stream.
 
 <ProviderBadge adapter="postmark" />
 
@@ -96,4 +96,4 @@ POSTMARK_SERVER_TOKEN="..." npx email-sdk send \
   --dry-run
 ```
 
-The token also accepts the `--server-token` flag. Drop `--dry-run` for one real send — that is the only check that proves the server token, sender signature, and message stream are ready.
+The token also accepts the `--server-token` flag. Drop `--dry-run` for one real send to confirm the server token, sender signature, and message stream actually work together.

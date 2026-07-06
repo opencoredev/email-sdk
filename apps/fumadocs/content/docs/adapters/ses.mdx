@@ -1,10 +1,10 @@
 ---
 title: AWS SES
-description: Send through the SES v2 SendEmail API with built-in SigV4 signing — no AWS SDK dependency.
+description: Send through the SES v2 SendEmail API with built-in SigV4 signing and no AWS SDK dependency.
 icon: Cloud
 ---
 
-The SES adapter calls the [SES v2 SendEmail API](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html) over `fetch` and signs every request with AWS Signature V4 itself — your bundle never pulls in the AWS SDK. Pick a region, optionally a configuration set, and send.
+The SES adapter calls the [SES v2 SendEmail API](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html) with plain `fetch` and implements AWS Signature V4 signing itself, so your bundle does not pull in the AWS SDK. Pick a region, optionally a configuration set, and send.
 
 <ProviderBadge adapter="ses" />
 
@@ -112,4 +112,4 @@ npx email-sdk send \
   --dry-run
 ```
 
-`--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send — that is the only check that proves the identity is verified and the account is out of the sandbox.
+`--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send. It is the only way to prove the identity is verified and the account is out of the SES sandbox.

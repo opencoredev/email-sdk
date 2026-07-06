@@ -1,10 +1,10 @@
 ---
 title: Field support
-description: Which EmailMessage fields each adapter maps — and which it rejects before the request.
+description: Which EmailMessage fields each adapter maps, and which it rejects before the request.
 icon: Table
 ---
 
-Email SDK keeps one message shape, but provider APIs do not expose the same features. Every adapter either **maps** a field or **rejects** it with an `EmailValidationError` before calling the provider — never a silent drop. This page is the authoritative matrix.
+Email SDK keeps one message shape, but provider APIs do not expose the same features. Every adapter either **maps** a field or **rejects** it with an `EmailValidationError` before calling the provider. There is no silent drop. This page is the authoritative matrix.
 
 **Reading the tables:** `Yes` = mapped, `No` = rejected before the request, `Values` = each tag's value is sent, `One tag` = the provider API represents a single tag and a second one fails fast.
 
@@ -18,7 +18,7 @@ The best fit when your app needs CC, BCC, reply-to, custom headers, tags, metada
 | Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
 | SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
 | Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         |
-| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
+| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
 | AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
 | Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
 | MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
@@ -34,7 +34,7 @@ Useful services whose public APIs cover less of the `EmailMessage` shape. The SD
 
 | Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments |
 | --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- |
-| SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
+| SparkPost | No  | No  | Yes      | Yes     | Yes      | Yes    | Yes         |
 | Iterable  | No  | No  | No       | No      | Yes      | No     | No          |
 | Loops     | No  | No  | No       | No      | Yes      | No     | Yes         |
 | Primitive | No  | No  | No       | No      | No       | No     | Yes         |
@@ -58,7 +58,7 @@ A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the b
 
 | Your messages use…                    | Compatible route examples                          |
 | ------------------------------------- | -------------------------------------------------- |
-| Addresses, subject, body, headers     | Almost anything — Resend + SMTP works              |
+| Addresses, subject, body, headers     | Almost anything; Resend + SMTP works               |
 | Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
 | Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
 | Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
@@ -81,7 +81,7 @@ await email.send({
 });
 ```
 
-The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields — which is exactly the point.
+The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields. That failure is the feature: you find out about the incompatible route in development, not by discovering missing analytics data in the provider dashboard weeks later.
 
 Before adding a backup route, run through this checklist:
 
@@ -123,7 +123,7 @@ attachments: [{ filename: "receipt.pdf", path: "./receipt.pdf", contentType: "ap
   <Accordion title="Sequenzy — reserved metadata keys and one body field">
     Metadata maps to transactional `variables`, except reserved keys that map to provider fields:
     `sequenzySlug` (template slug), `sequenzyPreview`, and `subscriberExternalId` /
-    `sequenzySubscriberExternalId`. Sequenzy also has a single body field — when a message has both
+    `sequenzySubscriberExternalId`. Sequenzy also has a single body field: when a message has both
     `html` and `text`, the HTML body is sent and the text body stays available for other routes.
   </Accordion>
   <Accordion title="Iterable — template sends, one recipient">
