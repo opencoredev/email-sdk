@@ -7,6 +7,7 @@ These instructions are local to this repository. Keep repo-specific release guid
 - Published package: `@opencoredev/email-sdk`
 - CLI binary: `email-sdk`
 - Package directory: `packages/email-sdk`
+- Convex component: `@opencoredev/convex-email` (`packages/convex-email`)
 - Prefer `bun` and `bunx`.
 
 ## SDK and CLI Changes
@@ -61,6 +62,21 @@ packages/email-sdk/dist/cli.js adapters
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
 
 Do not merge a `Version packages` PR for a major version unless the migration path is documented.
+
+## Convex Component
+
+The `@opencoredev/convex-email` component lives in `packages/convex-email`. Its
+Convex `_generated/` files (under `src/component/_generated`) are committed, so
+after changing `convex.config.ts`, `schema.ts`, or component functions,
+regenerate and commit them:
+
+```bash
+cd packages/convex-email && bun run codegen
+```
+
+`bun run build`, `bun run test`, and `bun run check-types` run through turbo
+with the rest of the workspace (so `release:ci` covers them), and `pack:check`
+already includes this package's `npm pack --dry-run`.
 
 ## Docs Site
 
