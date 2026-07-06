@@ -39,6 +39,13 @@ bun run release:ci
 That runs type checks, tests, community registry + docs version validation,
 build, and npm package dry-run.
 
+To run just the validators when editing their inputs (both are repo-root scripts):
+
+- `bun run community:check` — validate the community plugin registry
+  (`apps/fumadocs/content/community/plugins.json`) after editing entries.
+- `bun run docs:versions:check` — check that `apps/fumadocs/src/lib/versions.ts`
+  matches the latest published `packages/email-sdk` version.
+
 Lint guidance lives in [Local Checks](#local-checks) below.
 
 For a quick local CLI smoke test:
