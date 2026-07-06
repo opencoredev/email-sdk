@@ -27,6 +27,16 @@ Changesets create random friendly filenames in `.changeset/`. The filename does 
 
 Normal feature PRs do not publish. Changesets accumulate on `main`; the `Version packages` PR is the release button.
 
+## Linting and Formatting
+
+Lint and format with oxlint/oxfmt before opening a PR:
+
+```bash
+bun run check
+```
+
+That runs `oxlint` then `oxfmt --write`. To lint a single package without formatting, scope oxlint directly, e.g. `bunx oxlint packages/email-sdk/src`.
+
 ## Release Checks
 
 Before merging release-sensitive SDK or CLI work, run:
@@ -35,7 +45,7 @@ Before merging release-sensitive SDK or CLI work, run:
 bun run release:ci
 ```
 
-That runs type checks, tests, build, and npm package dry-run.
+That runs type checks, tests, the community registry check (`bun run community:check`), the docs versions check (`bun run docs:versions:check`), build, and the npm package dry-run (`bun run pack:check`).
 
 For a quick local CLI smoke test:
 
