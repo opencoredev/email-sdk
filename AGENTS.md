@@ -50,6 +50,16 @@ Major versions need migration notes in the PR that introduces the breaking chang
 
 Do not merge a `Version packages` PR for a major version unless the migration path is documented.
 
+## Homebrew Formula
+
+The Homebrew formula lives at `Formula/email-sdk.rb` and tracks the latest published npm release. To regenerate its `url` and `sha256` from the published tarball:
+
+```bash
+bun run homebrew:update
+```
+
+This runs automatically after a publish: `.github/workflows/release.yml` runs `homebrew:update` and, if the formula changed, opens an `automation/homebrew-formula-<version>` PR. Merge that PR to point Homebrew at the new release.
+
 ## CI and Publishing
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
