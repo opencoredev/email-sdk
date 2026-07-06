@@ -254,6 +254,7 @@ Run `bun test` — three green tests and zero network calls.
 - Unsupported fields throw `EmailValidationError` — never dropped.
 - Provider failures throw `EmailProviderError` with `status` and an honest `retryable`.
 - Injected `fetch` accepted and documented.
+- Optional: if the provider batches natively, add [`sendBulk`](/docs/reference/adapter-contract#native-batch-sends-sendbulk) so `recipientVariables` sends in one call. Skipping it is fine — the client falls back to one send per recipient.
 
 ## Next
 

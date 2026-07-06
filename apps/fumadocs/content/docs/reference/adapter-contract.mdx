@@ -12,6 +12,7 @@ An adapter is a plain object implementing `EmailProvider`: one routing name, one
 type EmailProvider<TRaw = unknown> = {
   name: string;
   send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  sendBulk?(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
   raw?: TRaw;
 };
 ```
@@ -27,6 +28,10 @@ type EmailProvider<TRaw = unknown> = {
       description: "Maps the message to one provider request and returns a normalized response.",
       type: "(message, context) => MaybePromise<EmailProviderResponse>",
       required: true,
+    },
+    sendBulk: {
+      description: "Optional native batch send. When present, the client routes messages carrying recipientVariables here to personalize every recipient in one API call. See Native batch sends below.",
+      type: "(message, context) => MaybePromise<EmailProviderResponse>",
     },
     raw: {
       description: "Optional escape hatch for provider-specific extras, reachable via client.adapter(name).raw.",
@@ -112,6 +117,33 @@ Adapters must reject message fields the provider cannot represent — before any
 ```
 
 Do the same in custom adapters: check `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, and `metadata` against what your provider supports, and throw for the rest. This is what keeps [fallback routes](/docs/adapters/field-support#choosing-compatible-routes) honest.
+
+## Native batch sends (`sendBulk`)
+
+`sendBulk` is optional. Implement it only when your provider can personalize a whole `to` list in **one API call** — substituting the `%recipient.key%` tokens of [`recipientVariables`](/docs/reference/message#recipient-variables) server-side. Currently [Mailgun](/docs/adapters/mailgun) and [SendGrid](/docs/adapters/sendgrid) do.
+
+The client routes a message to `sendBulk` instead of `send` when — and only when — the message carries `recipientVariables` **and** the adapter defines `sendBulk`. The message reaching `sendBulk` is the original, unexpanded one: the full `to` list, `recipientVariables` still attached, and `%recipient.key%` tokens still literal in `subject`, `html`, and `text`. Your job is to hand all of that to the provider's batch endpoint. Return one [`EmailProviderResponse`](/docs/reference/client#response) for the whole batch.
+
+`sendBulk` runs through the same [retry layer](/docs/concepts/fallbacks-and-retries) as `send`, receives the same [`EmailProviderContext`](#emailprovidercontext), and is invoked as a method on the adapter — so a class-based adapter that reads `this` inside `sendBulk` keeps working. Throw `EmailProviderError` the same way; a batch that exhausts retries falls through to the next route like any other failure.
+
+**Fail fast past the provider's batch cap.** Providers bound a single batch call — Mailgun and SendGrid both at 1000 recipients. Guard it with the shared `assertMaxItems` helper (`src/utils.ts`) so an over-limit batch throws `EmailValidationError` before any request, rather than being silently truncated by the provider:
+
+```ts
+assertMaxItems("acme-mail", "recipient", arrayify(message.to), 1000);
+```
+
+The built-in adapters implement this by branching inside their existing payload builder on `hasRecipientVariables(message)` and pointing `sendBulk` at the same `send` function:
+
+```ts
+const provider = jsonProvider({
+  name: "acme-mail",
+  // ...buildPayload emits per-recipient personalizations when hasRecipientVariables(message)
+});
+
+return { ...provider, sendBulk: provider.send };
+```
+
+**If you omit `sendBulk`, `recipientVariables` still works** — the client falls back to one rendered `send` per recipient, substituting tokens client-side (an unknown token is left intact, matching native providers). Each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one, any idempotency key is suffixed `<key>:<address>`, and results aggregate into the batch response's `accepted`/`rejected`. The adapter only counts as failed — triggering the next fallback route — when every recipient fails. So implement `sendBulk` purely as a performance optimization (one request instead of N), never to *enable* the feature. Because the fallback substitutes with the same `[\w-]` token grammar the validation layer enforces, native and fallback routes personalize identically.
 
 ## Internal helpers
 
