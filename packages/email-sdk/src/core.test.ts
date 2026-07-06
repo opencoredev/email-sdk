@@ -6,6 +6,7 @@ import { postmark } from "./postmark.js";
 import {
   resetTelemetry,
   setSharedTelemetry,
+  resetTelemetrySource,
   setTelemetrySource,
   type CaptureExceptionContext,
   type Telemetry,
@@ -690,7 +691,7 @@ describe("createEmailClient telemetry", () => {
       try {
         await createEmailClient({ adapters: [memoryProvider()] }).send(message);
       } finally {
-        setTelemetrySource("sdk");
+        resetTelemetrySource();
       }
     });
 

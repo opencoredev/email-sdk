@@ -268,6 +268,11 @@ export function getTelemetrySource(): TelemetrySource {
   return telemetrySource;
 }
 
+/** @internal Test seam: restores the default "sdk" source. Pair with setTelemetrySource(). */
+export function resetTelemetrySource() {
+  telemetrySource = "sdk";
+}
+
 function isTelemetryDisabled(env: Record<string, string | undefined>) {
   const optOut = env.EMAIL_SDK_TELEMETRY?.toLowerCase();
 

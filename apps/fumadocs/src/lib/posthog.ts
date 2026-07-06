@@ -17,7 +17,12 @@ export function initPostHog() {
     // 2026-01-30 defaults capture pageviews on history changes, covering
     // TanStack Router client-side navigations without a router subscription.
     defaults: "2026-01-30",
-    capture_exceptions: true,
+    capture_exceptions: {
+      capture_unhandled_errors: true,
+      capture_unhandled_rejections: true,
+      // Explicitly off: console.error noise would drown real exceptions.
+      capture_console_errors: false,
+    },
     capture_performance: { web_vitals: true },
     // Docs traffic is anonymous (we never identify), so no person profiles are
     // created — mirroring the SDK's server-side $process_person_profile: false.

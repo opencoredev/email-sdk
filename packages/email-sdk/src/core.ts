@@ -233,7 +233,7 @@ export function createEmailClient<
       // else "mixed" (per-item adapters stay accurate on the "email sent" events).
       const [firstAdapter, ...otherAdapters] = usedAdapters;
       const batchAdapter =
-        usedAdapters.size === 0
+        firstAdapter === undefined
           ? normalizeAdapterName(sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider)
           : otherAdapters.length === 0
             ? firstAdapter
