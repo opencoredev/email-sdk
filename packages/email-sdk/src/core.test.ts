@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
-import { EmailProviderError, EmailValidationError } from "./errors.js";
+import { EmailProviderError, EmailSdkError, EmailValidationError } from "./errors.js";
+import { postmark } from "./postmark.js";
 import { failingProvider, memoryProvider } from "./testing.js";
 import type { EmailMessage, EmailProvider, EmailProviderContext } from "./types.js";
 
@@ -121,6 +122,42 @@ describe("createEmailClient", () => {
 
     const response = await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
     expect(response.provider).toBe("memory");
+  });
+
+  test("sendAt on a fallback route without scheduling support fails instead of sending unscheduled", async () => {
+    let fallbackRequests = 0;
+    const backup = postmark({
+      serverToken: "server",
+      fetch: () => {
+        fallbackRequests += 1;
+        throw new Error("unreachable — postmark must reject sendAt before any request");
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [failingProvider(), backup],
+      fallback: ["postmark"],
+    });
+
+    const error = await client
+      .send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") })
+      .then(() => {
+        throw new Error("send should have failed");
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EmailSdkError);
+    expect((error as EmailSdkError).code).toBe("all_providers_failed");
+
+    // The fallback's rejection is recorded as an EmailProviderError wrapping the
+    // adapter's EmailValidationError (toProviderError keeps the original as `cause`).
+    const failures = (error as EmailSdkError).details as EmailProviderError[];
+    const fallbackFailure = failures.find((failure) => failure.provider === "postmark");
+    expect(fallbackFailure?.message).toBe(
+      "postmark does not support these EmailMessage fields: sendAt.",
+    );
+    expect(fallbackFailure?.cause).toBeInstanceOf(EmailValidationError);
+    expect(fallbackRequests).toBe(0);
   });
 
   test("captures batch failures without throwing", async () => {

@@ -159,9 +159,9 @@ Both attach data to a send on the provider side, but they are different provider
 
 Support differs per provider — Resend has tags but no metadata, Iterable has metadata but no tags. Check the [field support matrix](/docs/adapters/field-support) before relying on either, especially for fallback routes.
 
-## Scheduled delivery
+## Scheduled sends
 
-`sendAt` asks the provider to deliver the message at a future time. It takes a `Date` or any string `new Date()` can parse — ISO 8601 is the safe choice:
+`sendAt` asks the provider to deliver the message at a future time. Pass a `Date` object or an ISO 8601 string with an explicit offset — `"2026-07-10T12:30:00Z"` or `"2026-07-10T14:30:00+02:00"`. Offset-less strings like `"2026-07-10T12:30:00"` are parsed by `new Date()` in the **server's local timezone**, so the actual send time shifts with wherever your code happens to run. Always include the offset, or build a `Date` yourself:
 
 ```ts
 await email.send({
@@ -173,7 +173,7 @@ await email.send({
 });
 ```
 
-The SDK is stateless — it never queues or delays a send itself. Each adapter translates `sendAt` into its provider's native scheduling parameter, and adapters whose provider has no scheduling API reject the field before any request. The SDK also does not enforce a scheduling window: providers cap how far out you can schedule (72 hours for SendGrid and MailerSend, for example) and most send immediately when the date is in the past. See [scheduled delivery in the field support matrix](/docs/adapters/field-support#scheduled-delivery) for the per-provider parameters and limits.
+The SDK is stateless — it never queues or delays a send itself. Each adapter translates `sendAt` into its provider's native scheduling parameter, and adapters whose provider has no scheduling API reject the field before any request. The SDK also does not enforce a scheduling window: providers cap how far out you can schedule (72 hours for SendGrid, MailerSend, and Brevo, for example) and most send immediately when the date is in the past. See [scheduled sends in the field support matrix](/docs/adapters/field-support#scheduled-sends) for the per-provider parameters and limits.
 
 ## Idempotency key
 

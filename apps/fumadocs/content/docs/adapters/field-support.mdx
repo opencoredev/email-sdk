@@ -72,7 +72,7 @@ A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the b
 | Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
 | Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
 | Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
-| Scheduled sends (`sendAt`)            | Resend, SendGrid, Mailgun, Brevo, MailerSend       |
+| Scheduled sends (`sendAt`)            | Resend, SendGrid, Mailgun, Brevo, MailerSend…      |
 
 This pair works because both routes can carry every field used:
 
@@ -102,7 +102,7 @@ Before adding a backup route, run through this checklist:
 - Does it support `replyTo` and `headers` if support workflows depend on them?
 - Has the backup provider account been live-verified (one real smoke send) in the target environment?
 
-## Scheduled delivery
+## Scheduled sends
 
 `sendAt` (a `Date` or ISO 8601 string) maps to each provider's native scheduling parameter — the SDK never queues or delays anything itself:
 
@@ -118,7 +118,7 @@ Before adding a backup route, run through this checklist:
 
 Two things to keep in mind:
 
-- The SDK validates that `sendAt` parses to a real date but does not enforce a scheduling window — providers apply their own limits (SendGrid and MailerSend cap at 72 hours out, Mailgun at 3–7 days depending on plan, SparkPost at 3 days) and most treat a past date as "send now".
+- The SDK validates that `sendAt` parses to a real date but does not enforce a scheduling window — providers apply their own limits (SendGrid, MailerSend, and Brevo cap at 72 hours out, Mailgun at 3–7 days depending on plan, SparkPost at 3 days) and most treat a past date as "send now".
 - Adapters without a `Yes` in the *Send at* column reject `sendAt` before any request, like every other unmapped field. If you need scheduling with those providers, delay the `send` call with your own queue or job scheduler.
 
 ## Attachment rules
