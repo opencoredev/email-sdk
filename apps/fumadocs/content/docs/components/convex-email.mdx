@@ -186,7 +186,7 @@ export const emailStatus = query({
 });
 ```
 
-`status` returns the stored email: `status`, `message`, `attemptedAdapters`, `attemptCount`/`maxAttempts`, `providerMessageId`, `lastError`, `deliveryStatus`, and timestamps. `listEvents` returns the append-only history.
+`status` returns the stored email: `status`, `message`, `attemptedAdapters`, `attemptCount`/`maxAttempts`, `providerMessageId`, `lastError`, `deliveryStatus`, and timestamps. `listEvents` returns the append-only history. Both are typed: `status` resolves to `ConvexEmailDoc | null` and `listEvents` to `ConvexEmailEventDoc[]`, and the package exports both types (plus `ConvexEmailDeliveryStatus`) for annotating your own query results.
 
 | Status | Meaning |
 | --- | --- |

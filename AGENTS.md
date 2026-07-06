@@ -61,7 +61,7 @@ repo, which reformats roughly 170 files that have drifted from the formatter.
 CI does not enforce formatting or linting, so a repo-wide reformat only adds
 noise to your diff.
 
-When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from the repo-root `.env.local` (or your shell):
+When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from the repo-root `.env.local`, then `.env`, then your shell environment:
 
 ```bash
 bun run live:sequenzy

@@ -52,10 +52,15 @@ const email = createEmailClient({
       type: "EmailPlugin[]",
       default: "[]",
     },
+    telemetry: {
+      description: "Set to false to disable anonymous usage analytics for this client.",
+      type: "boolean",
+      default: "true",
+    },
   }}
 />
 
-`retry` options are documented in [fallbacks and retries](/docs/concepts/fallbacks-and-retries#retries), `hooks` in [hooks](/docs/concepts/hooks), and `plugins` in the [plugin API](/docs/plugins/api). `providers` and `defaultProvider` are accepted [aliases](#aliases).
+`retry` options are documented in [fallbacks and retries](/docs/concepts/fallbacks-and-retries#retries), `hooks` in [hooks](/docs/concepts/hooks), and `plugins` in the [plugin API](/docs/plugins/api). What `telemetry` controls, plus the environment opt-outs, is covered in [telemetry](/docs/telemetry). `providers` and `defaultProvider` are accepted [aliases](#aliases).
 
 Construction fails fast with an `EmailValidationError` for a duplicate adapter routing name (`Duplicate email adapter "x".`) or plugin id (`Duplicate email plugin "x".`), and for an empty client (`createEmailClient requires a default adapter.`). A `defaultAdapter` that is not registered throws `EmailProviderNotFoundError`.
 
