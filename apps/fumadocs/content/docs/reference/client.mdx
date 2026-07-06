@@ -1,6 +1,6 @@
 ---
 title: Client
-description: API reference for createEmailClient — client options, send and sendBatch, adapter helpers, and the normalized response.
+description: API reference for createEmailClient, covering client options, send and sendBatch, adapter helpers, and the normalized response.
 icon: Braces
 ---
 
@@ -65,7 +65,7 @@ Construction fails fast with an `EmailValidationError` for a duplicate adapter r
 send(message: EmailMessage, options?: SendOptions): Promise<EmailProviderResponse>
 ```
 
-Validates the [message](/docs/reference/message), builds the route `[adapter, ...fallbackAdapters]` (duplicates removed), retries each adapter per the retry config, and resolves with the first successful [response](#response). One failed route rethrows the adapter's error as-is; multiple failed routes throw `EmailSdkError` with code `all_providers_failed` — see [errors](/docs/reference/errors).
+Validates the [message](/docs/reference/message), builds the route `[adapter, ...fallbackAdapters]` (duplicates removed), retries each adapter per the retry config, and resolves with the first successful [response](#response). One failed route rethrows the adapter's error as-is; multiple failed routes throw `EmailSdkError` with code `all_providers_failed`. See [errors](/docs/reference/errors).
 
 ```ts
 const result = await email.send(message, {
@@ -108,7 +108,7 @@ const result = await email.send(message, {
   }}
 />
 
-`provider` and `fallbackProviders` are accepted [aliases](#aliases). Send-options `metadata` is unrelated to `message.metadata` — the message field goes to the provider, the send option only flows to [hooks](/docs/concepts/hooks).
+`provider` and `fallbackProviders` are accepted [aliases](#aliases). Send-options `metadata` is unrelated to `message.metadata`: the message field goes to the provider, the send option only flows to [hooks](/docs/concepts/hooks).
 
 ## `email.sendBatch(messages, options?)`
 
@@ -116,7 +116,7 @@ const result = await email.send(message, {
 sendBatch(messages: SendBatchItem[], options?: SendOptions): Promise<SendBatchResult[]>
 ```
 
-Sends sequentially, one message at a time in array order, and always resolves with one result per item — a failed item never throws or stops the batch:
+Sends sequentially, one message at a time in array order, and always resolves with one result per item. A failed item does not throw or stop the batch:
 
 ```ts
 type SendBatchResult =
@@ -151,7 +151,7 @@ Returns the registered adapter or throws `EmailProviderNotFoundError`. Useful fo
 withAdapter(name: string): Pick<EmailClient, "send" | "sendBatch">
 ```
 
-Returns a client pinned to one route — `send` and `sendBatch` behave as if `{ adapter: name }` were passed every time. The name is checked immediately: an unregistered name throws `EmailProviderNotFoundError` at `withAdapter` time, not at send time.
+Returns a client pinned to one route: `send` and `sendBatch` behave as if `{ adapter: name }` were passed every time. The name is checked immediately, so an unregistered name throws `EmailProviderNotFoundError` at `withAdapter` time, not at send time.
 
 ```ts
 const transactional = email.withAdapter("postmark");
@@ -175,7 +175,7 @@ await transactional.send(message);
 
 ## Response
 
-Every successful send resolves with a normalized `EmailProviderResponse`. `provider` is always set — it names the adapter that actually delivered, which matters when a fallback route handled the send.
+Every successful send resolves with a normalized `EmailProviderResponse`. `provider` is always set. It names the adapter that actually delivered, which matters when a fallback route handled the send.
 
 <TypeTable
   type={{
@@ -209,4 +209,4 @@ Every successful send resolves with a normalized `EmailProviderResponse`. `provi
 
 ## Aliases
 
-`adapter` and `provider` mean the same thing everywhere: `providers`, `defaultProvider`, `fallbackProviders`, `email.provider(name)`, `email.providers`, and `email.withProvider(name)` are compatibility aliases for their `adapter` spellings. Prefer `adapter` in new code — see [naming aliases](/docs/concepts/adapter-model#naming-aliases).
+`adapter` and `provider` mean the same thing everywhere: `providers`, `defaultProvider`, `fallbackProviders`, `email.provider(name)`, `email.providers`, and `email.withProvider(name)` are compatibility aliases for their `adapter` spellings. Prefer `adapter` in new code. See [naming aliases](/docs/concepts/adapter-model#naming-aliases).

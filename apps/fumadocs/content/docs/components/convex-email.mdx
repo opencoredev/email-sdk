@@ -16,7 +16,7 @@ const emailId = await email.send(ctx, {
 });
 ```
 
-Use it when email should behave like app state: queued, retried, observable, and portable across the [20 supported providers](/docs/adapters). For a Resend-only app that wants the official integration, use `@convex-dev/resend` instead — this component earns its place when provider portability, fallback routing, status history, or test-safe multi-provider operations matter.
+Use it when email should behave like app state: queued, retried, observable, and portable across the component's [20 supported provider kinds](/docs/adapters). For a Resend-only app that wants the official integration, use `@convex-dev/resend` instead. This component earns its place when provider portability, fallback routing, status history, or test-safe multi-provider operations matter.
 
 ## Setup
 
@@ -27,7 +27,7 @@ Use it when email should behave like app state: queued, retried, observable, and
 
 <PackageInstallTabs packageName="@opencoredev/convex-email @opencoredev/email-sdk" />
 
-`@opencoredev/email-sdk` is a peer dependency — the component reuses its adapters and message shape.
+`@opencoredev/email-sdk` is a peer dependency; the component reuses its adapters and message shape.
 
 </Step>
 <Step>
@@ -154,7 +154,7 @@ Messages take the standard [EmailMessage fields](/docs/reference/message); per-s
 
 Every Email SDK adapter has a config kind, plus `memory` for tests: `resend`, `postmark`, `sendgrid`, `ses`, `smtp`, `brevo`, `cloudflare`, `iterable`, `loops`, `mailchimp`, `mailersend`, `mailgun`, `mailpace`, `mailtrap`, `plunk`, `scaleway`, `sequenzy`, `sparkpost`, `unosend`, `zeptomail`.
 
-Each kind reads its standard env vars by default (`RESEND_API_KEY`, `POSTMARK_SERVER_TOKEN`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, ... — the same names the [CLI](/docs/reference/cli) uses). Override the env-var *name* per config when you need several accounts of one provider:
+Each kind reads its standard env vars by default (`RESEND_API_KEY`, `POSTMARK_SERVER_TOKEN`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`, the same names the [CLI](/docs/reference/cli) uses). Override the env-var *name* per config when you need several accounts of one provider:
 
 ```ts
 adapters: [
@@ -163,9 +163,9 @@ adapters: [
 ]
 ```
 
-Override fields follow the credential: `apiKeyEnv`, `serverTokenEnv` (Postmark), `tokenEnv` (ZeptoMail), `domainEnv` (Mailgun), `accountIdEnv` (Cloudflare), `projectIdEnv`/`secretKeyEnv`/`regionEnv` (Scaleway), `accessKeyIdEnv`/`secretAccessKeyEnv` (SES), `hostEnv`/`portEnv`/`userEnv`/`passEnv` (SMTP). Non-serializable Email SDK options — custom `fetch`, SMTP `tls`, function-valued Iterable `dataFields` — are intentionally not part of component config.
+Override fields follow the credential: `apiKeyEnv`, `serverTokenEnv` (Postmark), `tokenEnv` (ZeptoMail), `domainEnv` (Mailgun), `accountIdEnv` (Cloudflare), `projectIdEnv`/`secretKeyEnv`/`regionEnv` (Scaleway), `accessKeyIdEnv`/`secretAccessKeyEnv` (SES), `hostEnv`/`portEnv`/`userEnv`/`passEnv` (SMTP). Non-serializable Email SDK options (custom `fetch`, SMTP `tls`, function-valued Iterable `dataFields`) are intentionally not part of component config.
 
-`name` sets the routing name used in `defaultAdapter` and `fallbackAdapters`; it defaults to the kind. Pick fallbacks that support the fields you send — [field support](/docs/adapters/field-support) applies unchanged here.
+`name` sets the routing name used in `defaultAdapter` and `fallbackAdapters`; it defaults to the kind. Pick fallbacks that support the fields you send. [Field support](/docs/adapters/field-support) applies unchanged here.
 
 ## Status and events
 
@@ -216,7 +216,7 @@ const ids = await email.sendBatch(ctx, [
 ]);
 ```
 
-Larger arrays throw before enqueueing anything — split them in your app so Convex mutation limits stay predictable.
+Larger arrays throw before enqueueing anything. Split them in your app so Convex mutation limits stay predictable.
 
 ## Configuration
 
@@ -267,7 +267,7 @@ await email.setConfig(ctx, {
 
 The fail-before-enqueue rule is deliberate: enabling `testMode` without `sandboxTo` rejects sends instead of guessing, so a misconfigured staging deploy can never email real users.
 
-`exposeApi()` publishes `send`, `sendBatch`, `status`, `listEvents`, and `cancel` as Convex functions — it omits `setConfig`/`getConfig` by default. Pass `{ includeConfigApi: true }` only from a module behind your own auth checks.
+`exposeApi()` publishes `send`, `sendBatch`, `status`, `listEvents`, and `cancel` as Convex functions. It omits `setConfig`/`getConfig` by default; pass `{ includeConfigApi: true }` only from a module behind your own auth checks.
 
 ## Webhooks
 
@@ -293,7 +293,7 @@ export default http;
 This creates `POST /email/webhooks/resend`. The `verify` callback receives `{ provider, request, body, headers }` and must return `true` to accept; anything else gets a 401.
 
 <Callout type="warn" title="Always verify in production">
-  The route is public on your Convex deployment. Omitting `verify` is for local development only —
+  The route is public on your Convex deployment. Omitting `verify` is for local development only;
   production routes must check the provider's signature or a shared secret.
 </Callout>
 
@@ -315,9 +315,9 @@ URL fetching is restricted to public HTTPS hosts: `http:`, localhost, internal h
 
 A built-in cron sweeps every 5 minutes:
 
-- **Queue recovery** — processes due emails whose scheduled run was missed.
-- **Stale `processing` recovery** — an email stuck in `processing` past its timeout is retried only if it has an `idempotencyKey`. Without one the component fails it closed, because the provider request may already have delivered.
-- **Cleanup** — when `cleanupAfterDays` is set, prunes expired terminal emails, webhook delivery records, and event history.
+- **Queue recovery** processes due emails whose scheduled run was missed.
+- **Stale `processing` recovery** retries an email stuck in `processing` past its timeout, but only if it has an `idempotencyKey`. Without one the component fails it closed, because the provider request may already have delivered.
+- **Cleanup** prunes expired terminal emails, webhook delivery records, and event history when `cleanupAfterDays` is set.
 
 This is the practical reason to set `idempotencyKey` on transactional sends: it makes recovery safe and deduplicates repeated enqueues.
 
@@ -347,7 +347,7 @@ registerConvexEmail(t); // mounts the component as "convexEmail"
 
 ## Scope
 
-Convex Email Ops is transactional email operations — queueing, retries, fallback routing, idempotency, webhook records, queryable status. It is not a campaign builder, contact database, template editor, analytics dashboard, or inbound processor. Provider accounts still decide whether a send lands: domain verification, sandbox rules, rate limits, and suppression lists live with the provider.
+Convex Email Ops is transactional email operations: queueing, retries, fallback routing, idempotency, webhook records, queryable status. It is not a campaign builder, contact database, template editor, analytics dashboard, or inbound processor. Provider accounts still decide whether a send lands: domain verification, sandbox rules, rate limits, and suppression lists live with the provider.
 
 ## Next
 
@@ -360,7 +360,7 @@ Convex Email Ops is transactional email operations — queueing, retries, fallba
   <Card
     title="Fallbacks and retries"
     href="/docs/concepts/fallbacks-and-retries"
-    description="How Email SDK classifies errors and orders routes — the same model this component queues."
+    description="How Email SDK classifies errors and orders routes, the same model this component queues."
   />
   <Card
     title="All adapters"

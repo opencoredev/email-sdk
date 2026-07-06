@@ -1,6 +1,6 @@
 ---
 title: Community plugins and adapters
-description: Browse third-party Email SDK packages — and get your own adapter or plugin listed by pull request.
+description: Browse third-party Email SDK packages, and get your own adapter or plugin listed by pull request.
 icon: Users
 ---
 
@@ -16,7 +16,7 @@ Third-party adapters and plugins are npm packages listed in a static registry ma
 | Plugin  | Reusable send behavior, policy, or helpers.      | `plugins: [requireMetadata("key")]` |
 | Hybrid  | Both a provider and behavior in one package.     | `plugins: [providerWithDefaults()]` |
 
-Adapter packages are mounted through `plugins` too — the plugin wrapper registers the provider in one call. See [Writing plugins](/docs/plugins/writing-plugins#register-adapters).
+Adapter packages are mounted through `plugins` too; the plugin wrapper registers the provider in one call. See [Writing plugins](/docs/plugins/writing-plugins#register-adapters).
 
 ## Labels
 
@@ -26,10 +26,10 @@ Adapter packages are mounted through `plugins` too — the plugin wrapper regist
 | Verified  | Passed the registry's static checks for a specific package version.       |
 | Official  | Maintained by OpenCore or in this repository.                             |
 
-Verified is not a security review — the exact checks and the entry schema are documented in the [community registry reference](/docs/reference/community-registry).
+Verified is not a security review. The exact checks and the entry schema are documented in the [community registry reference](/docs/reference/community-registry).
 
 ## List your package
 
-1. Build and publish to npm — follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) for provider packages or [Publish a community plugin](/docs/guides/authoring/publish-community-plugin) for behavior packages.
+1. Build and publish to npm. Follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) for provider packages or [Publish a community plugin](/docs/guides/authoring/publish-community-plugin) for behavior packages.
 2. Open a pull request adding an entry to `apps/fumadocs/content/community/plugins.json` (shape in the [registry reference](/docs/reference/community-registry)).
 3. Want feedback first? Open the `Community package listing` issue template with your package and source links.

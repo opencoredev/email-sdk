@@ -1,6 +1,6 @@
 ---
 title: Defaults plugin
-description: Merge org-wide headers, tags, reply-to, and idempotency key prefixes into every send — with message values winning.
+description: Merge org-wide headers, tags, reply-to, and idempotency key prefixes into every send, with message values winning.
 icon: Settings
 ---
 
@@ -23,7 +23,7 @@ export const email = createEmailClient({
   ],
 });
 
-// Every send now carries the header, the env tag, and the reply-to —
+// Every send now carries the header, the env tag, and the reply-to
 // without repeating them in application code:
 await email.send({
   from: "Acme <hello@acme.com>",
@@ -82,16 +82,16 @@ Each option has an exact, predictable rule:
 | `headers`              | Merged by name; a message header with the same name **wins** over the default.                                            |
 | `metadata`             | Merged by key; message metadata **wins**.                                                                                 |
 | `sendMetadata`         | Merged into `options.metadata`; per-send metadata **wins**.                                                                |
-| `tags`                 | Concatenated — defaults first, then message tags. Nothing is replaced.                                                    |
+| `tags`                 | Concatenated: defaults first, then message tags. Nothing is replaced.                                                     |
 | `replyTo`              | Applied only when the message has no `replyTo` at all.                                                                    |
 | `idempotencyKey`       | Applied only when neither the message nor send options carry a key.                                                       |
-| `idempotencyKeyPrefix` | Prepended to whichever key ends up applying — unless the key already starts with the prefix, so re-runs never double-prefix. |
+| `idempotencyKeyPrefix` | Prepended to whichever key ends up applying, unless the key already starts with the prefix, so re-runs never double-prefix. |
 
 So with the client above, a message that sets `headers: { "X-Entity-Ref": "checkout" }` sends `checkout` (message wins), while its `tags` gain the `env` tag in front of its own.
 
 <Callout type="warn" title="Defaults are validated like any other field">
   Defaults merge before adapter validation. If a default adds a field the selected route cannot
-  represent — tags on SMTP, for example — the send throws an `EmailValidationError` before any
+  represent (tags on SMTP, for example), the send throws an `EmailValidationError` before any
   request. Check [field support](/docs/adapters/field-support) when adding default tags or
   metadata to a client with fallback routes.
 </Callout>

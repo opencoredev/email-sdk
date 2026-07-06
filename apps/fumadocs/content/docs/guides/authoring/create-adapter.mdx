@@ -1,6 +1,6 @@
 ---
 title: Create an adapter
-description: Implement the EmailProvider contract for a new provider — payload mapping, fail-fast field validation, retryable error mapping, and tests with injected fetch.
+description: Implement the EmailProvider contract for a new provider, covering payload mapping, fail-fast field validation, retryable error mapping, and tests with injected fetch.
 icon: Cable
 ---
 
@@ -55,14 +55,14 @@ export function acmeMail(options: AcmeMailOptions): EmailProvider<{ baseUrl: str
 }
 ```
 
-The response shape is `{ provider, id?, messageId?, accepted?, rejected?, raw? }`. Always set `provider` and keep the untouched API body in `raw`. The `context` also carries `idempotencyKey` and `attempt` — forward the key when the provider supports it (Resend sends it as an `Idempotency-Key` header).
+The response shape is `{ provider, id?, messageId?, accepted?, rejected?, raw? }`. Always set `provider` and keep the untouched API body in `raw`. The `context` also carries `idempotencyKey` and `attempt`. Forward the key when the provider supports it; the Resend, JetEmail, Lettermint, and Primitive adapters all send it as an `Idempotency-Key` header.
 
 </Step>
 <Step>
 
 ### Reject unsupported fields before the request
 
-Acme Mail's API accepts addresses, subject, body, and tags — no headers, attachments, or metadata. Do not drop those fields: throw an `EmailValidationError` listing them, matching the SDK's own adapters. This is what makes the adapter safe to use as a [fallback route](/docs/adapters/field-support).
+Acme Mail's API accepts addresses, subject, body, and tags, but no headers, attachments, or metadata. Do not drop those fields: throw an `EmailValidationError` listing them, matching the SDK's own adapters. This is what makes the adapter safe to use as a [fallback route](/docs/adapters/field-support).
 
 ```ts title="acme-mail.ts"
 import { EmailValidationError } from "@opencoredev/email-sdk";
@@ -88,7 +88,7 @@ function hasEntries(value: object | unknown[] | undefined) {
 }
 ```
 
-Core validation (missing `from`, no recipient, neither `html` nor `text`) already ran before your adapter is called — only check what is specific to your provider.
+Core validation (missing `from`, no recipient, neither `html` nor `text`) already ran before your adapter is called. Only check what is specific to your provider.
 
 </Step>
 <Step>
@@ -130,7 +130,7 @@ function formatList(addresses: EmailMessage["cc"]) {
 
 ### Map errors with retryability
 
-Throw `EmailProviderError` with `status`, the parsed body in `details`, and an honest `retryable` flag. The client's retry loop and `isRetryableEmailError` are driven by that flag — the SDK's adapters treat 408, 409, 425, 429, and 5xx as retryable:
+Throw `EmailProviderError` with `status`, the parsed body in `details`, and an honest `retryable` flag. The client's retry loop and `isRetryableEmailError` are driven by that flag. The SDK's adapters treat 408, 409, 425, 429, and 5xx as retryable:
 
 ```ts title="acme-mail.ts"
 async function toAcmeError(response: Response) {
@@ -150,7 +150,7 @@ async function toAcmeError(response: Response) {
 }
 ```
 
-Network failures thrown by `fetch` need no handling — the client wraps them as retryable provider errors automatically.
+Network failures thrown by `fetch` need no handling; the client wraps them as retryable provider errors automatically.
 
 </Step>
 <Step>
@@ -241,7 +241,7 @@ test("rejects unsupported fields before any request", async () => {
 });
 ```
 
-Run `bun test` — three green tests and zero network calls.
+Run `bun test`: three green tests and zero network calls.
 
 </Step>
 </Steps>
@@ -251,7 +251,7 @@ Run `bun test` — three green tests and zero network calls.
 - One stable adapter `name`; document it as the routing name.
 - `provider`, `id` or `messageId`, and `raw` on every response.
 - `context.signal` forwarded into provider requests; `context.idempotencyKey` forwarded when supported.
-- Unsupported fields throw `EmailValidationError` — never dropped.
+- Unsupported fields throw `EmailValidationError` instead of being dropped.
 - Provider failures throw `EmailProviderError` with `status` and an honest `retryable`.
 - Injected `fetch` accepted and documented.
 

@@ -4,9 +4,9 @@ description: Package an Email SDK plugin for npm and list it in the community re
 icon: PackageCheck
 ---
 
-This guide publishes a plugin — built in [Create your first plugin](/docs/guides/authoring/create-first-plugin) — as an npm package and lists it in the [community registry](/docs/plugins/community). The registry is a static JSON file in the docs repo; there is no hosted plugin service.
+This guide publishes a plugin (built in [Create your first plugin](/docs/guides/authoring/create-first-plugin)) as an npm package and lists it in the [community registry](/docs/plugins/community). The registry is a static JSON file in the docs repo; there is no hosted plugin service.
 
-If your package adds a new email provider, follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) instead — same process, plus field-support documentation.
+If your package adds a new email provider, follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) instead. It is the same process plus field-support documentation.
 
 <Steps>
 <Step>
@@ -126,7 +126,7 @@ Publish to npm from your own repository, then add an entry to `apps/fumadocs/con
 }
 ```
 
-Every field except `pluginId` is required; `href` and `repo` must be `https` URLs, and name, package, and plugin id must be unique across the registry. Start with `status: "community"` — `verified` requires a per-version review with `verifiedVersion` and `verification` metadata in the entry.
+Every field except `pluginId` is required; `href` and `repo` must be `https` URLs, and name, package, and plugin id must be unique across the registry. Start with `status: "community"`; `verified` requires a per-version review with `verifiedVersion` and `verification` metadata in the entry.
 
 </Step>
 <Step>

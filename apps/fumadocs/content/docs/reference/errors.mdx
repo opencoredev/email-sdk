@@ -53,12 +53,12 @@ All four classes carry the same fields (plus the standard `Error` `message` and 
 | Class | Code | Thrown when |
 | --- | --- | --- |
 | `EmailValidationError` | `validation_error` | The message fails [validation](/docs/reference/message#validation), an adapter rejects [unsupported fields](/docs/adapters/field-support), or client config is invalid (duplicate adapter/plugin, no adapters). Never retryable. |
-| `EmailProviderNotFoundError` | `provider_not_found` | A routing name is not registered — `Email provider "x" is not registered.` Never retryable. |
+| `EmailProviderNotFoundError` | `provider_not_found` | A routing name is not registered: `Email provider "x" is not registered.` Never retryable. |
 | `EmailProviderError` | `provider_error` | A provider request fails: non-2xx response or network error. `status` and `details` carry the provider's answer. |
 | `EmailSdkError` | `all_providers_failed` | Two or more routes were attempted and all failed. `details` holds one error per adapter, in route order. |
 | `EmailSdkError` | `retry_loop_exited` | Internal guard for an impossible retry-loop exit. Treat as a bug if seen. |
 
-When only **one** route was attempted, its error is rethrown as-is — `all_providers_failed` only appears after a multi-adapter route exhausts every option. Errors adapters throw that are not already `EmailProviderError` are wrapped into one, keeping the original as `cause` (or in `details` for non-`Error` values).
+When only **one** route was attempted, its error is rethrown as-is; `all_providers_failed` only appears after a multi-adapter route exhausts every option. Errors adapters throw that are not already `EmailProviderError` are wrapped into one, keeping the original as `cause` (or in `details` for non-`Error` values).
 
 ## What counts as retryable
 
@@ -67,7 +67,7 @@ When only **one** route was attempted, its error is rethrown as-is — `all_prov
 - HTTP `408`, `409`, `425`, `429`, and any `5xx`
 - Network failures: `ECONNRESET`-family error codes, `fetch failed`, socket and timeout errors
 
-Everything else is non-retryable: `4xx` like `401`/`422`, validation errors, unknown routing names, and aborted requests (`AbortError`). This classification drives the default retry policy — see [fallbacks and retries](/docs/concepts/fallbacks-and-retries#what-retries-by-default).
+Everything else is non-retryable: `4xx` like `401`/`422`, validation errors, unknown routing names, and aborted requests (`AbortError`). This classification drives the default retry policy; see [fallbacks and retries](/docs/concepts/fallbacks-and-retries#what-retries-by-default).
 
 ## `isRetryableEmailError(error)`
 
@@ -92,14 +92,14 @@ try {
   await email.send(message);
 } catch (error) {
   if (error instanceof EmailValidationError) {
-    // Bad message shape or unsupported field — fix the code path, do not retry.
+    // Bad message shape or unsupported field: fix the code path, do not retry.
     throw error;
   }
 
   if (error instanceof EmailProviderError) {
     console.error(`${error.provider} failed`, error.status, error.details);
     if (error.retryable) {
-      await queue.retryLater(message); // transient — re-enqueue
+      await queue.retryLater(message); // transient: re-enqueue
       return;
     }
     throw error; // 401/422-style failure: needs a config or account fix
@@ -114,4 +114,4 @@ try {
 }
 ```
 
-Inside a send, you rarely handle retries yourself — configure the client's [`retry` and `fallback`](/docs/concepts/fallbacks-and-retries) options and let the SDK exhaust them before anything reaches your `catch`.
+Inside a send, you rarely handle retries yourself. Configure the client's [`retry` and `fallback`](/docs/concepts/fallbacks-and-retries) options and let the SDK exhaust them before anything reaches your `catch`.

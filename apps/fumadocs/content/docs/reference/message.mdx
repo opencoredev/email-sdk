@@ -1,6 +1,6 @@
 ---
 title: Message
-description: The EmailMessage shape field by field — addresses, headers, attachments, tags vs metadata, and the exact validation rules.
+description: The EmailMessage shape field by field, covering addresses, headers, attachments, tags vs metadata, and the exact validation rules.
 icon: Mail
 ---
 
@@ -88,7 +88,7 @@ type EmailMessage = {
 
 ## Addresses
 
-`EmailAddress` is a plain string — including the `Name <email>` form — or an object with a display name:
+`EmailAddress` is a plain string (including the `Name <email>` form) or an object with a display name:
 
 ```ts
 from: "Acme <hello@acme.com>",
@@ -123,7 +123,7 @@ type EmailAttachment = {
 
 Every attachment needs `content` **or** `path`:
 
-- `content` attaches in-memory data. String content is treated as raw (`contentEncoding: "raw"`) and Base64-encoded for providers that need it — set `contentEncoding: "base64"` when the string is already Base64 so it is not double-encoded.
+- `content` attaches in-memory data. String content is treated as raw (`contentEncoding: "raw"`) and Base64-encoded for providers that need it. Set `contentEncoding: "base64"` when the string is already Base64 so it is not double-encoded.
 - `path` makes the SDK read a local file at send time.
 
 For inline images, set `contentId` and reference it from the HTML body with `cid:`, plus `disposition: "inline"`:
@@ -144,14 +144,14 @@ await email.send({
 
 Both attach data to a send on the provider side, but they are different provider concepts:
 
-- **`tags`** are `{ name, value }` labels for categorizing sends — provider dashboards and analytics group by them. Some providers carry only each tag's value, and Postmark and Mailtrap accept a single tag.
+- **`tags`** are `{ name, value }` labels for categorizing sends; provider dashboards and analytics group by them. Some providers carry only each tag's value, and Postmark, Mailtrap, and Lettermint accept a single tag.
 - **`metadata`** is free-form key-value data (`string | number | boolean | null` values) the provider stores with the message and echoes in webhooks and events.
 
-Support differs per provider — Resend has tags but no metadata, Iterable has metadata but no tags. Check the [field support matrix](/docs/adapters/field-support) before relying on either, especially for fallback routes.
+Support differs per provider. Resend has tags but no metadata; Iterable has metadata but no tags. Check the [field support matrix](/docs/adapters/field-support) before relying on either, especially for fallback routes.
 
 ## Idempotency key
 
-`idempotencyKey` gives the send a stable identity across retries. The send-options key wins when both are set; the message field is the fallback. Only Resend transmits it natively — see [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) for per-adapter behavior.
+`idempotencyKey` gives the send a stable identity across retries. The send-options key wins when both are set; the message field is the fallback. Resend, JetEmail, Lettermint, and Primitive transmit it to the provider as an `Idempotency-Key` header, and SMTP uses it as the `Message-ID`. See [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) for per-adapter behavior.
 
 ## Validation
 
@@ -171,4 +171,4 @@ Adapters add a second fail-fast layer for fields their provider cannot represent
 smtp does not support these EmailMessage fields: tags, metadata.
 ```
 
-That error fires before any request — fields are rejected, never silently dropped. The per-adapter availability of `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, and `metadata` is the [field support matrix](/docs/adapters/field-support).
+That error fires before any request: fields are rejected rather than silently dropped. The per-adapter availability of `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, and `metadata` is the [field support matrix](/docs/adapters/field-support).

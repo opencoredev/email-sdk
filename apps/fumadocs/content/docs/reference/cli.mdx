@@ -1,10 +1,10 @@
 ---
 title: CLI
-description: The complete email-sdk command manual — adapters, doctor, send, dry runs, credential flags, and exit codes.
+description: The complete email-sdk command manual, covering adapters, doctor, send, dry runs, credential flags, and exit codes.
 icon: Terminal
 ---
 
-The `email-sdk` CLI ships inside `@opencoredev/email-sdk`. Use it to list adapters, check credentials with `doctor`, validate a message with `--dry-run`, and run a real smoke send — no app code required.
+The `email-sdk` CLI ships inside `@opencoredev/email-sdk`. Use it to list adapters, check credentials with `doctor`, validate a message with `--dry-run`, and run a real smoke send, all without writing app code.
 
 ## Run it
 
@@ -39,7 +39,7 @@ Any other command fails with `Unknown command "x".` and exit code 1.
 ### Flag syntax
 
 - `--flag value` and `--flag=value` are equivalent; a flag without a value is treated as `true`.
-- `--header`, `--tag`, `--metadata`, and `--attachment` (alias `--attach`) are repeatable — pass them once per value.
+- `--header`, `--tag`, `--metadata`, and `--attachment` (alias `--attach`) are repeatable; pass them once per value.
 - Repeating any other flag keeps the last value.
 - `--to`, `--cc`, `--bcc`, and `--reply-to` accept comma-separated address lists.
 
@@ -61,7 +61,7 @@ npx email-sdk version --json
 # { "name": "@opencoredev/email-sdk", "version": "0.6.1" }
 ```
 
-Reads the metadata of the package actually installed on your machine — check it before comparing behavior against the docs.
+Reads the metadata of the package actually installed on your machine. Check it before comparing behavior against the docs.
 
 ## adapters
 
@@ -111,7 +111,7 @@ RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 # resend looks configured.
 ```
 
-Checks that each required variable is set — or supplied via its [credential flag](#credential-flags). On failure it prints the missing names and exits 1:
+Checks that each required variable is set, or supplied via its [credential flag](#credential-flags). On failure it prints the missing names and exits 1:
 
 ```txt
 Missing environment for resend: RESEND_API_KEY
@@ -188,7 +188,7 @@ npx email-sdk send \
 }
 ```
 
-Attachment content is redacted in dry-run output — only `filename`, `path`, `contentType`, `contentId`, and `disposition` are echoed.
+Attachment content is redacted in dry-run output; only `filename`, `path`, `contentType`, `contentId`, and `disposition` are echoed.
 
 ### Send from a JSON file
 
@@ -230,7 +230,7 @@ Every credential environment variable has a flag override; flags win over the en
 
 | Code | When |
 | --- | --- |
-| `0` | Command succeeded — including a passing `doctor` and a valid `--dry-run`. |
+| `0` | Command succeeded, including a passing `doctor` and a valid `--dry-run`. |
 | `1` | Anything else: unknown command, missing flag or environment, validation failure, missing `doctor` credentials, provider error. |
 
 Errors print their message to stderr; success output is JSON (or plain text for `help`, `doctor`, `version`, and `adapters` without `--json`) on stdout, so the CLI pipes cleanly into `jq` and scripts.

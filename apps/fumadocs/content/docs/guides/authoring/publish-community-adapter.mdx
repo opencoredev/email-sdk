@@ -4,7 +4,7 @@ description: Ship a third-party provider adapter as its own npm package and list
 icon: BadgeCheck
 ---
 
-This guide takes an adapter you have built — see [Create an adapter](/docs/guides/authoring/create-adapter) — to a published npm package with a listing in the [community registry](/docs/plugins/community). Community adapters stay third-party: you own the package and the provider relationship; the registry makes it discoverable.
+This guide takes an adapter you have built (see [Create an adapter](/docs/guides/authoring/create-adapter)) to a published npm package with a listing in the [community registry](/docs/plugins/community). Community adapters stay third-party: you own the package and the provider relationship; the registry makes it discoverable.
 
 | Surface           | Who owns it                     | Where it lives                                 |
 | ----------------- | ------------------------------- | ---------------------------------------------- |
@@ -12,7 +12,7 @@ This guide takes an adapter you have built — see [Create an adapter](/docs/gui
 | Community adapter | You                             | Your npm package, e.g. `email-sdk-acme-mail`   |
 | Registry listing  | Email SDK docs, by pull request | `apps/fumadocs/content/community/plugins.json` |
 
-Do not add community adapters to the SDK source, CLI, or exports — that path is for providers the project has agreed to maintain as official.
+Do not add community adapters to the SDK source, CLI, or exports. That path is for providers the project has agreed to maintain as official.
 
 <Steps>
 <Step>
@@ -56,7 +56,7 @@ export { acmeMailPlugin } from "./plugin";
 export type { AcmeMailOptions } from "./acme-mail";
 ```
 
-Declare `@opencoredev/email-sdk` as a **peer dependency** — a regular dependency can give apps two copies of the core types, and the registry's CI audit rejects packages without the peer dependency:
+Declare `@opencoredev/email-sdk` as a **peer dependency**. A regular dependency can give apps two copies of the core types, and the registry's CI audit rejects packages without the peer dependency:
 
 ```json title="package.json"
 {
@@ -82,7 +82,7 @@ Keep the package boring: no `preinstall`/`install`/`postinstall` scripts, no bin
 
 ### Document field support in the README
 
-Field support determines whether your adapter is safe as a [fallback route](/docs/adapters/field-support), so the README must state how each `EmailMessage` field behaves — mapped, or rejected with an error:
+Field support determines whether your adapter is safe as a [fallback route](/docs/adapters/field-support), so the README must state how each `EmailMessage` field behaves: mapped, or rejected with an error.
 
 | Field            | Support | Notes                                     |
 | ---------------- | ------- | ----------------------------------------- |
@@ -124,7 +124,7 @@ test("registers the adapter via the plugin", () => {
 
 ### Publish to npm
 
-Publish from your own repository. Enable npm provenance or trusted publishing — it is required if you ever want the listing upgraded to `verified`.
+Publish from your own repository. Enable npm provenance or trusted publishing; it is required if you ever want the listing upgraded to `verified`.
 
 </Step>
 <Step>
@@ -170,7 +170,7 @@ CI runs the same check. For `verified` and `official` entries it additionally au
 | `verified`  | One published version passed the verification audit; requires `verifiedVersion` plus `verification` metadata in the entry. |
 | `official`  | Maintained by OpenCore or shipped in this repository. Not for third-party packages.       |
 
-Verification applies to a single version. After a new release, the entry keeps the old `verifiedVersion` until someone reviews the new one — never mark a listing `verified` ahead of an actual review.
+Verification applies to a single version. After a new release, the entry keeps the old `verifiedVersion` until someone reviews the new one. Never mark a listing `verified` ahead of an actual review.
 
 ## Next
 

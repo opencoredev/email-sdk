@@ -1,10 +1,10 @@
 ---
 title: Plugins
-description: Package reusable send behavior — adapters, hooks, middleware, and typed client extensions — into one plugins array.
+description: Package reusable send behavior (adapters, hooks, middleware, and typed client extensions) into one plugins array.
 icon: Plug
 ---
 
-A plugin bundles send-pipeline behavior into one reusable unit you mount with `plugins: [...]`. One plugin can register adapters, transform messages before validation, observe every attempt, and add typed helpers to the client — so shared policy lives in one place instead of being copied around every `createEmailClient` call.
+A plugin bundles send-pipeline behavior into one reusable unit you mount with `plugins: [...]`. One plugin can register adapters, transform messages before validation, observe every attempt, and add typed helpers to the client. Shared policy lives in one place instead of being copied around every `createEmailClient` call.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -27,9 +27,9 @@ A plugin is a plain object with an `id` and any combination of four capabilities
 
 | Capability | Field          | What it does                                                                                                                          |
 | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Add routes | `adapters`     | Registers providers into the client, same as the `adapters` option — how community provider packages ship one-call setup.              |
+| Add routes | `adapters`     | Registers providers into the client, same as the `adapters` option. This is how community provider packages ship one-call setup.       |
 | Transform  | `middleware`   | `beforeSend` runs once per send, before validation, and can replace the message or options. `afterSend` / `onError` observe outcomes.  |
-| Observe    | `hooks`        | The same [hooks](/docs/concepts/hooks) as the client option — per-attempt, observe-only, failures swallowed.                            |
+| Observe    | `hooks`        | The same [hooks](/docs/concepts/hooks) as the client option: per-attempt, observe-only, failures swallowed.                             |
 | Extend     | `extendClient` | Adds typed properties to the returned client, like `email.capture` from the capture plugin.                                            |
 
 Middleware is the capability only plugins have: client-level `hooks` can watch a send, but only plugin middleware can change it.
@@ -50,7 +50,7 @@ Plugins register in array order, and the order is deterministic:
 
 1. Direct `adapters` register first, then each plugin's adapters in plugin order.
 2. Middleware and hooks run in plugin order; plugin hooks run before client `hooks`.
-3. Duplicate plugin ids and duplicate adapter names throw an `EmailValidationError` — mount two instances of the same plugin with distinct `id`s (and distinct extension keys, e.g. `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })`).
+3. Duplicate plugin ids and duplicate adapter names throw an `EmailValidationError`. Mount two instances of the same plugin with distinct `id`s and distinct extension keys, e.g. `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })`.
 
 The full rules, event shapes, and error cases are in the [plugin API reference](/docs/plugins/api).
 
