@@ -198,6 +198,46 @@ export type ConvexEmailConfig = {
 
 export type ConvexEmailStatus = "queued" | "processing" | "sent" | "failed" | "canceled";
 
+export type ConvexEmailDeliveryStatus = "delivered" | "bounced" | "complained";
+
+export type ConvexEmailDoc = {
+  _id: string;
+  _creationTime: number;
+  status: ConvexEmailStatus;
+  message: ConvexEmailMessage;
+  adapter?: string;
+  attemptedAdapters: string[];
+  fallbackAdapters: string[];
+  adapters: ConvexEmailAdapterConfig[];
+  providerMessageId?: string;
+  idempotencyKey?: string;
+  sendMetadata?: Record<string, string | number | boolean | null>;
+  attemptCount: number;
+  maxAttempts: number;
+  retryBaseMs: number;
+  nextAttemptAt?: number;
+  lastError?: string;
+  deliveryStatus?: ConvexEmailDeliveryStatus;
+  deliveredAt?: number;
+  createdAt: number;
+  updatedAt: number;
+  sentAt?: number;
+  terminalAt?: number;
+};
+
+export type ConvexEmailEventDoc = {
+  _id: string;
+  _creationTime: number;
+  emailId: string;
+  type: ConvexEmailEventType;
+  adapter?: string;
+  attempt?: number;
+  providerMessageId?: string;
+  payload?: unknown;
+  error?: string;
+  createdAt: number;
+};
+
 export type ConvexEmailEventType =
   | "queued"
   | "processing"

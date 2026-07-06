@@ -29,6 +29,24 @@ const message = {
   text: "Your account is ready.",
 };
 
+async function sendToSent(t: TestConvex<typeof schema>) {
+  const emailId = await t.mutation(api.lib.enqueue, {
+    ...message,
+    adapters: [{ kind: "memory" }],
+    adapter: "memory",
+    maxAttempts: 1,
+  });
+
+  await flushScheduled(t);
+
+  const status = await t.query(api.lib.status, { emailId });
+  if (status?.status !== "sent" || !status.providerMessageId) {
+    throw new Error("Expected the memory adapter send to reach sent.");
+  }
+
+  return { emailId, providerMessageId: status.providerMessageId };
+}
+
 describe("convex-email component", () => {
   afterEach(() => {
     delete process.env.SMTP_HOST;
@@ -97,6 +115,43 @@ describe("convex-email component", () => {
     expect(secondId).toBe(firstId);
   });
 
+  test("enqueues a batch, applies config defaults, and returns ids in order", async () => {
+    const t = createTest();
+
+    await t.mutation(api.lib.setConfig, {
+      config: { defaultFrom: "Ops <ops@example.com>" },
+    });
+    const ids = await t.mutation(api.lib.enqueueBatch, {
+      messages: [
+        { to: "a@example.com", subject: "One", text: "1", adapters: [{ kind: "memory" }], adapter: "memory" },
+        { to: "b@example.com", subject: "Two", text: "2", adapters: [{ kind: "memory" }], adapter: "memory" },
+      ],
+    });
+
+    expect(ids).toHaveLength(2);
+    await flushScheduled(t);
+
+    const first = await t.query(api.lib.status, { emailId: ids[0] });
+    const second = await t.query(api.lib.status, { emailId: ids[1] });
+
+    expect(first?.message).toMatchObject({ from: "Ops <ops@example.com>", to: "a@example.com" });
+    expect(second?.message).toMatchObject({ from: "Ops <ops@example.com>", to: "b@example.com" });
+    expect(first?.status).toBe("sent");
+    expect(second?.status).toBe("sent");
+  });
+
+  test("deduplicates idempotency keys inside one batch", async () => {
+    const t = createTest();
+    const ids = await t.mutation(api.lib.enqueueBatch, {
+      messages: [
+        { ...message, idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
+        { ...message, subject: "Duplicate", idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
+      ],
+    });
+
+    expect(ids[1]).toBe(ids[0]);
+  });
+
   test("limits batch size to avoid mutation operation blowups", async () => {
     const t = createTest();
 
@@ -163,6 +218,86 @@ describe("convex-email component", () => {
     ).rejects.toThrow("testMode is enabled but sandboxTo is not configured");
   });
 
+  test("requires from or a configured defaultFrom", async () => {
+    const t = createTest();
+
+    await expect(
+      t.mutation(api.lib.enqueue, {
+        to: "ada@example.com",
+        subject: "No sender",
+        text: "Missing from.",
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+      }),
+    ).rejects.toThrow("Provide `from` when sending email or configure `defaultFrom`");
+  });
+
+  test("cancels queued emails and refuses everything else", async () => {
+    const t = createTest();
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    });
+
+    const canceled = await t.mutation(api.lib.cancel, { emailId });
+    const again = await t.mutation(api.lib.cancel, { emailId });
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(canceled).toBe(true);
+    expect(again).toBe(false);
+    expect(status?.status).toBe("canceled");
+    expect(events.map((event) => event.type)).toEqual(["queued", "canceled"]);
+  });
+
+  test("retries with backoff and fails once attempts are exhausted", async () => {
+    const t = createTest();
+    delete process.env.RESEND_API_KEY;
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }],
+      adapter: "resend",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+    const types = events.map((event) => event.type);
+
+    expect(status).toMatchObject({
+      status: "failed",
+      attemptCount: 2,
+      lastError: expect.stringContaining("RESEND_API_KEY"),
+    });
+    expect(types).toEqual(["queued", "processing", "retry_scheduled", "processing", "failed"]);
+  });
+
+  test("setConfig replaces the stored config instead of merging", async () => {
+    const t = createTest();
+
+    await t.mutation(api.lib.setConfig, {
+      config: { defaultFrom: "Ops <ops@example.com>", cleanupAfterDays: 30 },
+    });
+    await t.mutation(api.lib.setConfig, {
+      config: { testMode: true, sandboxTo: ["dev@example.test"] },
+    });
+
+    const config = await t.query(api.lib.getConfig, {});
+
+    expect(config).toMatchObject({ testMode: true, sandboxTo: ["dev@example.test"] });
+    expect(config?.defaultFrom).toBeUndefined();
+    expect(config?.cleanupAfterDays).toBeUndefined();
+  });
+
   test("records duplicate webhook deliveries idempotently", async () => {
     const t = createTest();
     const args = {
@@ -191,6 +326,102 @@ describe("convex-email component", () => {
 
     expect(first).toEqual({ ok: true });
     expect(second).toEqual({ ok: true, duplicate: true });
+  });
+
+  test("delivered webhooks set deliveryStatus on the matching email", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_delivered" },
+      body: JSON.stringify({ type: "email.delivered", data: { email_id: providerMessageId } }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(status).toMatchObject({
+      status: "sent",
+      deliveryStatus: "delivered",
+      deliveredAt: expect.any(Number),
+    });
+    expect(events.map((event) => event.type)).toContain("webhook");
+  });
+
+  test("bounces stick even when a late delivered webhook arrives", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_bounced" },
+      body: JSON.stringify({ type: "email.bounced", data: { email_id: providerMessageId } }),
+    });
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_late_delivered" },
+      body: JSON.stringify({ type: "email.delivered", data: { email_id: providerMessageId } }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("bounced");
+    expect(status?.deliveredAt).toBeUndefined();
+  });
+
+  test("unknown webhook events are recorded without touching deliveryStatus", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_opened" },
+      body: JSON.stringify({ type: "email.opened", data: { email_id: providerMessageId } }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(status?.deliveryStatus).toBeUndefined();
+    expect(events.map((event) => event.type)).toContain("webhook");
+  });
+
+  test("normalizes Postmark-style webhooks through MessageID", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ RecordType: "Bounce", MessageID: providerMessageId }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("bounced");
+  });
+
+  test("normalizes Mailgun-style webhooks through event-data", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "mailgun",
+      headers: {},
+      body: JSON.stringify({
+        signature: { token: "tok" },
+        "event-data": {
+          event: "delivered",
+          id: "mg_evt_1",
+          message: { headers: { "message-id": providerMessageId } },
+        },
+      }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("delivered");
   });
 
   test("SMTP adapter reads numeric port from component environment", () => {

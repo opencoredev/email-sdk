@@ -97,6 +97,7 @@ export const handleWebhook = internalAction({
       provider: args.provider,
       deliveryId: parsed.deliveryId,
       providerMessageId: parsed.providerMessageId,
+      event: parsed.event,
       payload: parsed.payload,
     })) as { ok: boolean; duplicate?: boolean };
   },
@@ -121,21 +122,82 @@ function parseProviderWebhook(provider: string, body: string, headers: Record<st
       headers["resend-signature"] ??
       deterministicDeliveryId(provider, body);
     const providerMessageId = stringValue(data.email_id) ?? stringValue(data.id);
+    const event = normalizeWebhookEvent(stringValue(record.type));
 
-    return { deliveryId, providerMessageId, payload };
+    return { deliveryId, providerMessageId, event, payload };
   }
 
   const record = payload as Record<string, unknown>;
+  const eventData =
+    typeof record["event-data"] === "object" && record["event-data"]
+      ? (record["event-data"] as Record<string, unknown>)
+      : undefined;
+  const event = normalizeWebhookEvent(
+    stringValue(record.event) ??
+      stringValue(record.type) ??
+      stringValue(record.RecordType) ??
+      stringValue(eventData?.event),
+  );
+
   return {
     deliveryId:
       stringValue(record.id) ??
       stringValue(record.eventId) ??
       stringValue(record.webhookId) ??
       stringValue(record.deliveryId) ??
+      stringValue(eventData?.id) ??
       deterministicDeliveryId(provider, body),
-    providerMessageId: stringValue(record.messageId) ?? stringValue(record.message_id),
+    providerMessageId:
+      stringValue(record.messageId) ??
+      stringValue(record.message_id) ??
+      stringValue(record.MessageID) ??
+      eventDataMessageId(eventData),
+    event,
     payload,
   };
+}
+
+// Maps provider-specific webhook event names onto the component's delivery vocabulary:
+// "delivered" | "bounced" | "complained". Unknown events pass through lowercased so they are
+// still stored on the delivery record, but only the three known values touch deliveryStatus.
+function normalizeWebhookEvent(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const event = value.toLowerCase().replace(/^email\./, "");
+
+  switch (event) {
+    case "delivered":
+    case "delivery":
+      return "delivered";
+    case "bounce":
+    case "bounced":
+    case "permanent_fail":
+      return "bounced";
+    case "complained":
+    case "complaint":
+    case "spamcomplaint":
+    case "spam_complaint":
+    case "spamreport":
+      return "complained";
+    default:
+      return event;
+  }
+}
+
+// Mailgun nests the original Message-ID under event-data.message.headers["message-id"].
+function eventDataMessageId(eventData: Record<string, unknown> | undefined) {
+  if (!eventData || typeof eventData.message !== "object" || !eventData.message) {
+    return undefined;
+  }
+
+  const message = eventData.message as Record<string, unknown>;
+  if (typeof message.headers !== "object" || !message.headers) {
+    return undefined;
+  }
+
+  return stringValue((message.headers as Record<string, unknown>)["message-id"]);
 }
 
 function parseJson(body: string) {

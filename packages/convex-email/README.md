@@ -13,7 +13,7 @@ bun add @opencoredev/convex-email @opencoredev/email-sdk
 - Route through Resend, Postmark, SendGrid, SES, SMTP, Mailgun, Brevo, and other Email SDK adapters.
 - Use fallback adapters when the primary route fails.
 - Deduplicate repeated sends with an idempotency key.
-- Capture provider webhooks as delivery events.
+- Capture provider webhooks as delivery events and track delivered/bounced/complained state per email.
 - Redirect real messages to sandbox recipients in test mode.
 
 Use the official `@convex-dev/resend` component for a Resend-only app that wants the official Resend integration. Use Convex Email Ops when provider portability, fallback routing, status history, or test-safe multi-provider operations matter.
@@ -103,7 +103,7 @@ export const sendWelcomeEmail = mutation({
 });
 ```
 
-`email.send()` returns the Convex document id for the queued email. Query `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions when you need delivery state, attempted adapters, provider message ids, or errors.
+`email.send()` returns the Convex document id for the queued email. Query `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions when you need delivery state, attempted adapters, provider message ids, or errors. Once webhooks are wired up, the stored email also carries a `deliveryStatus` (`delivered`, `bounced`, or `complained`) and a `deliveredAt` timestamp.
 
 ## Provider Coverage
 
@@ -195,6 +195,8 @@ export default http;
 This creates `POST /email/webhooks/resend` and records duplicate deliveries idempotently.
 Omitting `verify` is only suitable for local development; public routes should always verify provider signatures or a shared secret.
 
+When a webhook matches a stored email by provider message id, the component records a `webhook` event and normalizes the provider's event name onto the email's `deliveryStatus`: delivered, bounced, or complained. Bounces and complaints are sticky, so a delivery event that arrives late (or is retried out of order) never hides a recorded bounce. Other events, such as opens and clicks, are kept in the event history without changing `deliveryStatus`.
+
 ## Test Mode
 
 Use `setConfig` to redirect sends while keeping the queue and provider flow intact:
@@ -207,6 +209,8 @@ await email.setConfig(ctx, {
 ```
 
 If `testMode` is enabled without `sandboxTo`, sends fail before enqueueing so real recipients are not contacted by mistake.
+
+`setConfig` replaces the whole stored config, so pass every field you want to keep. Omitting a field clears it; there is no partial merge.
 
 For local or CI tests, use the memory adapter:
 
