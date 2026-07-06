@@ -22,7 +22,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 ## Run the CLI
 
-<Tabs items={["Installed project", "No install (Bun)"]}>
+<Tabs items={["Installed project", "No install (Bun)", "Homebrew (global)"]}>
   <Tab value="Installed project">
     Once `@opencoredev/email-sdk` is in your project, the `email-sdk` binary is on your path:
 
@@ -42,6 +42,25 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
     There is no safe no-install form for plain `npx`, because the unscoped `email-sdk` package
     is unrelated. npm users should install first.
+
+  </Tab>
+  <Tab value="Homebrew (global)">
+    To put `email-sdk` on your path system-wide, without adding it to any project, install the
+    formula that ships in the repository:
+
+    ```bash
+    brew install --formula https://raw.githubusercontent.com/opencoredev/email-sdk/main/Formula/email-sdk.rb
+    email-sdk adapters
+    ```
+
+    The formula installs the published npm tarball, uses [Bun](https://bun.sh) as its runtime,
+    and links the CLI as `email-sdk`. Each release opens an automated pull request that bumps
+    the formula's version and checksum, so the copy on `main` tracks the latest published
+    package.
+
+    Homebrew does not track formulas installed from a URL, so `brew upgrade` won't pick up new
+    versions; re-run the install command to update. A global install covers `adapters`, `doctor`,
+    and CLI sends. To `import` the SDK in application code, install the npm package as above.
 
   </Tab>
 </Tabs>
