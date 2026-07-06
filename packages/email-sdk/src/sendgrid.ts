@@ -4,9 +4,12 @@ import {
   apiAddresses,
   commonHeadersObject,
   optionalApiAddresses,
+  recipientVariableEntries,
+  sendAtUnixSeconds,
   sendgridAttachments,
 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailMessage, EmailProvider } from "./types.js";
+import { arrayify, assertMaxItems, hasRecipientVariables } from "./utils.js";
 
 export type SendGridProviderOptions = {
   apiKey: string;
@@ -15,7 +18,7 @@ export type SendGridProviderOptions = {
 };
 
 export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ baseUrl: string }> {
-  return jsonProvider({
+  const provider = jsonProvider({
     name: "sendgrid",
     baseUrl: options.baseUrl ?? "https://api.sendgrid.com",
     endpoint: "/v3/mail/send",
@@ -25,15 +28,7 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
     fetch: options.fetch,
     async buildPayload(message) {
       return {
-        personalizations: [
-          {
-            to: apiAddresses(message.to),
-            cc: optionalApiAddresses(message.cc),
-            bcc: optionalApiAddresses(message.bcc),
-            headers: commonHeadersObject(message),
-            custom_args: message.metadata,
-          },
-        ],
+        personalizations: sendgridPersonalizations(message),
         from: apiAddress(message.from),
         reply_to_list: optionalApiAddresses(message.replyTo),
         subject: message.subject,
@@ -43,6 +38,7 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
         ],
         attachments: await sendgridAttachments(message),
         categories: message.tags?.map((tag) => tag.value),
+        send_at: sendAtUnixSeconds(message),
       };
     },
     parseResponse(body, _message, response) {
@@ -56,4 +52,42 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
       };
     },
   });
+
+  return { ...provider, sendBulk: provider.send };
+}
+
+// With recipientVariables, emit one personalization per recipient so SendGrid substitutes
+// each recipient's %recipient.key% tokens in a single API call; otherwise one shared personalization.
+function sendgridPersonalizations(message: EmailMessage) {
+  if (hasRecipientVariables(message)) {
+    // SendGrid caps personalizations at 1000 per request; fail fast like Mailgun does.
+    assertMaxItems("sendgrid", "recipient", arrayify(message.to), 1000);
+
+    return recipientVariableEntries(message).map((entry) => ({
+      to: [apiAddress(entry.to)],
+      headers: commonHeadersObject(message),
+      custom_args: message.metadata,
+      substitutions: recipientSubstitutions(entry.variables),
+    }));
+  }
+
+  return [
+    {
+      to: apiAddresses(message.to),
+      cc: optionalApiAddresses(message.cc),
+      bcc: optionalApiAddresses(message.bcc),
+      headers: commonHeadersObject(message),
+      custom_args: message.metadata,
+    },
+  ];
+}
+
+function recipientSubstitutions(variables: Record<string, string | number | boolean>) {
+  const substitutions: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(variables)) {
+    substitutions[`%recipient.${key}%`] = String(value);
+  }
+
+  return substitutions;
 }

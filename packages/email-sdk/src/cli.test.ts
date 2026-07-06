@@ -176,6 +176,9 @@ async function runCli(args: string[]) {
   const proc = Bun.spawn({
     cmd: ["bun", "src/cli.ts", ...args],
     cwd: packageRoot,
+    // NODE_ENV=test already disables telemetry; the explicit opt-out keeps these
+    // tests network-free even if env propagation changes.
+    env: { ...process.env, EMAIL_SDK_TELEMETRY: "0" },
     stderr: "pipe",
     stdout: "pipe",
   });

@@ -9,6 +9,8 @@ import {
   isRetryableStatus,
   readErrorBody,
   assertMaxItems,
+  assertSupportedMessageFields,
+  SUPPORTED_MESSAGE_FIELDS,
 } from "./utils.js";
 
 export type PostmarkProviderOptions = {
@@ -67,6 +69,7 @@ export function postmark(options: PostmarkProviderOptions): EmailProvider<{ base
 }
 
 async function toPostmarkPayload(message: EmailMessage, messageStream?: string) {
+  assertSupportedMessageFields("postmark", message, SUPPORTED_MESSAGE_FIELDS.postmark);
   const tag = firstPostmarkTag(message.tags);
 
   return {

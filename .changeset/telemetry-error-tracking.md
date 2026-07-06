@@ -1,0 +1,5 @@
+---
+"@opencoredev/email-sdk": minor
+---
+
+Add anonymous usage telemetry and redacted error reporting to the SDK and CLI via PostHog. The client reports `client created` (configured adapter names), `email sent` (adapter, success/failure, error code, duration, recipient count, whether recipient variables or `sendAt` were used, and the delivery path: single, native bulk, or per-recipient expansion), an `email batch sent` summary for `sendBatch`, and the CLI reports `cli command run` (command, adapter, success). A `source` property distinguishes CLI runs from library usage, and CI providers are detected. Error reports carry only the error type, Email SDK error code, and stack frames with package-relative file names; messages are scrubbed of email addresses, URLs, quoted text, tokens, and home directories before upload. No email content, addresses, headers, or credentials are ever collected, and custom adapter names are masked as `custom`. A one-time notice with opt-out instructions is printed on first use. Opt out with `EMAIL_SDK_TELEMETRY=0`, `DO_NOT_TRACK=1`, or `createEmailClient({ telemetry: false })`; telemetry is disabled automatically when `NODE_ENV=test`.

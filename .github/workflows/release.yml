@@ -60,6 +60,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
 
+      - name: Annotate release in PostHog
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+        run: |
+          if [ -z "$POSTHOG_PERSONAL_API_KEY" ]; then
+            echo "::notice::POSTHOG_PERSONAL_API_KEY not set; skipping release annotation."
+            exit 0
+          fi
+          VERSION="$(bun -e 'const pkg = await Bun.file("packages/email-sdk/package.json").json(); console.log(pkg.version)')"
+          PAYLOAD="$(jq -n \
+            --arg content "@opencoredev/email-sdk v${VERSION} released" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{content: $content, date_marker: $date, scope: "project"}')"
+          curl --fail-with-body -sS -X POST "https://us.posthog.com/api/projects/468042/annotations/" \
+            -H "Authorization: Bearer $POSTHOG_PERSONAL_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            || echo "::warning::PostHog release annotation failed (non-blocking)."
+
       - name: Update Homebrew formula checksum
         if: steps.changesets.outputs.published == 'true'
         env:

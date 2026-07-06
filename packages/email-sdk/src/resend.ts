@@ -1,4 +1,5 @@
 import { EmailProviderError } from "./errors.js";
+import { sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
 import {
   attachmentToBase64,
@@ -76,6 +77,7 @@ async function toResendPayload(message: EmailMessage) {
     headers: headersToObject(message.headers),
     attachments: await Promise.all((message.attachments ?? []).map(toResendAttachment)),
     tags: message.tags,
+    scheduled_at: sendAtIso(message),
   };
 }
 

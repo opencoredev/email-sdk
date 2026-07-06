@@ -1,11 +1,14 @@
-import type { EmailMessage } from "./types.js";
+import type { EmailAddress, EmailMessage, RecipientVariables } from "./types.js";
 import {
+  arrayify,
   assertMaxItems,
   attachmentToBase64,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
   headersToObject,
+  toSendAtDate,
 } from "./utils.js";
 
 export function simpleAddress(address: string) {
@@ -95,6 +98,96 @@ export async function sendgridAttachments(message: EmailMessage) {
     content_id: attachment.contentId,
     disposition: attachment.disposition,
   }));
+}
+
+export type RecipientEntry = {
+  to: EmailAddress;
+  address: string;
+  variables: Record<string, string | number | boolean>;
+};
+
+/** Replace `%recipient.key%` tokens; unknown keys are left intact to match native providers. */
+export function substituteRecipientVariables(
+  text: string,
+  variables: Record<string, string | number | boolean>,
+): string {
+  return text.replace(/%recipient\.([\w-]+)%/g, (token, key) =>
+    Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key]) : token,
+  );
+}
+
+function recipientVariablesLookup(recipientVariables: RecipientVariables | undefined) {
+  const lookup = new Map<string, Record<string, string | number | boolean>>();
+
+  for (const [address, variables] of Object.entries(recipientVariables ?? {})) {
+    lookup.set(address.toLowerCase(), variables);
+  }
+
+  return lookup;
+}
+
+/** One entry per `to` recipient, each paired with its variables (empty object when none). */
+export function recipientVariableEntries(message: EmailMessage): RecipientEntry[] {
+  const lookup = recipientVariablesLookup(message.recipientVariables);
+
+  return arrayify(message.to).map((to) => {
+    const address = emailAddressOf(to);
+    return { to, address, variables: lookup.get(address.toLowerCase()) ?? {} };
+  });
+}
+
+/** Address-keyed map covering every recipient, so providers like Mailgun individualize each one. */
+export function recipientVariablesMap(message: EmailMessage): RecipientVariables {
+  const map: RecipientVariables = {};
+
+  for (const entry of recipientVariableEntries(message)) {
+    map[entry.address] = entry.variables;
+  }
+
+  return map;
+}
+
+/** Render one single-recipient message with its variables substituted into the content. */
+export function expandRecipientMessage(message: EmailMessage, entry: RecipientEntry): EmailMessage {
+  return {
+    ...message,
+    to: entry.to,
+    recipientVariables: undefined,
+    idempotencyKey: undefined,
+    subject: substituteRecipientVariables(message.subject, entry.variables),
+    html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
+    text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
+  };
+}
+
+export function sendAtDate(message: EmailMessage) {
+  return message.sendAt === undefined ? undefined : toSendAtDate(message.sendAt);
+}
+
+export function sendAtIso(message: EmailMessage) {
+  return sendAtDate(message)?.toISOString();
+}
+
+export function sendAtUnixSeconds(message: EmailMessage) {
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : Math.floor(date.getTime() / 1000);
+}
+
+export function sendAtRfc2822(message: EmailMessage) {
+  // Mailgun documents o:deliverytime as RFC 2822, e.g. "Fri, 10 Jul 2026 12:30:00 +0000".
+  return sendAtDate(message)?.toUTCString().replace(/GMT$/, "+0000");
+}
+
+export function sendAtIsoUtcSeconds(message: EmailMessage) {
+  // SparkPost's start_time grammar is YYYY-MM-DDTHH:MM:SS±HH:MM — no milliseconds, no "Z".
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : `${date.toISOString().slice(0, 19)}+00:00`;
+}
+
+export function sendAtUtcDateTime(message: EmailMessage) {
+  // Mailchimp Transactional's send_at grammar is "YYYY-MM-DD HH:MM:SS" in UTC.
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 export function commonHeadersObject(message: EmailMessage) {

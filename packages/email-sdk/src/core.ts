@@ -4,6 +4,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "./errors.js";
+import { expandRecipientMessage, recipientVariableEntries } from "./payloads.js";
 import type {
   EmailAfterSendEvent,
   EmailBeforeSendEvent,
@@ -22,7 +23,19 @@ import type {
   SendBatchResult,
   SendOptions,
 } from "./types.js";
-import { assertMessage, toProviderError } from "./utils.js";
+import {
+  getTelemetry,
+  getTelemetrySource,
+  isReportableSendError,
+  normalizeAdapterName,
+} from "./telemetry.js";
+import {
+  arrayify,
+  assertMessage,
+  assertRecipientVariables,
+  hasRecipientVariables,
+  toProviderError,
+} from "./utils.js";
 
 const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
@@ -83,6 +96,17 @@ export function createEmailClient<
     throw new EmailProviderNotFoundError(defaultProvider);
   }
 
+  const telemetry = options.telemetry === false ? undefined : getTelemetry();
+  const telemetrySource = getTelemetrySource();
+
+  void telemetry?.capture("client created", {
+    adapters: [...adapters.keys()].map(normalizeAdapterName),
+    adapter_count: adapters.size,
+    plugin_count: options.plugins?.length ?? 0,
+    default_adapter: normalizeAdapterName(defaultProvider),
+    source: telemetrySource,
+  });
+
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
   const client: EmailClient = {
     adapters,
@@ -102,21 +126,78 @@ export function createEmailClient<
       return client.adapter<TProvider>(name);
     },
     async send(message, sendOptions) {
-      return sendWithAdapters({
-        adapters,
-        message,
-        options: {
-          hookList: hooks,
-          middleware,
-          retry: options.retry,
-          defaultProvider,
-          fallback: options.fallback,
-        },
-        sendOptions,
-      });
+      const startedAt = Date.now();
+      // Facts are read from the caller's message, before middleware runs, so the
+      // event describes what the user asked for. Only one "email sent" event fires
+      // per send() call: expanded per-recipient fallback sends run through
+      // sendWithRetry internally and are never counted individually.
+      const usedRecipientVariables = hasRecipientVariables(message);
+      const messageFacts = {
+        recipients:
+          arrayify(message.to).length + arrayify(message.cc).length + arrayify(message.bcc).length,
+        has_attachments: (message.attachments?.length ?? 0) > 0,
+        used_recipient_variables: usedRecipientVariables,
+        used_send_at: message.sendAt !== undefined,
+      };
+
+      try {
+        const response = await sendWithAdapters({
+          adapters,
+          message,
+          options: {
+            hookList: hooks,
+            middleware,
+            retry: options.retry,
+            defaultProvider,
+            fallback: options.fallback,
+          },
+          sendOptions,
+        });
+
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: normalizeAdapterName(response.provider),
+          delivery_path: deliveryPath(usedRecipientVariables, adapters.get(response.provider)),
+          success: true,
+          duration_ms: Date.now() - startedAt,
+          source: telemetrySource,
+        });
+
+        return response;
+      } catch (error) {
+        const failedAdapterName =
+          sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider;
+        const failedAdapter = normalizeAdapterName(failedAdapterName);
+
+        void telemetry?.capture("email sent", {
+          ...messageFacts,
+          adapter: failedAdapter,
+          // On failure the primary adapter decides the path — the one that would
+          // have delivered had the send succeeded.
+          delivery_path: deliveryPath(usedRecipientVariables, adapters.get(failedAdapterName)),
+          success: false,
+          duration_ms: Date.now() - startedAt,
+          error_code: error instanceof EmailSdkError ? error.code : "unknown",
+          source: telemetrySource,
+        });
+
+        if (telemetry && isReportableSendError(error)) {
+          void telemetry.captureException(error, {
+            source: telemetrySource,
+            handled: true,
+            adapter: failedAdapter,
+          });
+        }
+
+        throw error;
+      }
     },
     async sendBatch(messages, sendOptions) {
+      const startedAt = Date.now();
       const results: SendBatchResult[] = [];
+      const usedAdapters = new Set<string>();
+      let failedCount = 0;
+      let firstFailureCode: string | undefined;
 
       for (const [index, item] of messages.entries()) {
         const { adapter, provider, fallbackAdapters, fallbackProviders, ...message } = item;
@@ -136,11 +217,45 @@ export function createEmailClient<
             fallbackAdapters: resolvedFallbackAdapters,
             fallbackProviders: undefined,
           });
+          // Record the adapter that actually delivered (fallbacks change it), so the
+          // summary matches the per-item "email sent" events.
+          usedAdapters.add(normalizeAdapterName(response.provider));
           results.push({ ok: true, index, response });
         } catch (error) {
+          usedAdapters.add(normalizeAdapterName(resolvedAdapter ?? defaultProvider));
+          failedCount += 1;
+          firstFailureCode ??= error instanceof EmailSdkError ? error.code : "unknown";
           results.push({ ok: false, index, error });
         }
       }
+
+      // A batch may mix adapters across items; report the single one when uniform,
+      // else "mixed" (per-item adapters stay accurate on the "email sent" events).
+      const [firstAdapter, ...otherAdapters] = usedAdapters;
+      const batchAdapter =
+        firstAdapter === undefined
+          ? normalizeAdapterName(sendOptions?.adapter ?? sendOptions?.provider ?? defaultProvider)
+          : otherAdapters.length === 0
+            ? firstAdapter
+            : "mixed";
+
+      // Per-item telemetry (including failure exceptions) fires inside client.send;
+      // this summary event only describes the batch shape.
+      void telemetry?.capture("email batch sent", {
+        message_count: messages.length,
+        succeeded: results.length - failedCount,
+        failed: failedCount,
+        recipients: messages.reduce(
+          (total, item) =>
+            total + arrayify(item.to).length + arrayify(item.cc).length + arrayify(item.bcc).length,
+          0,
+        ),
+        adapter: batchAdapter,
+        success: failedCount === 0,
+        duration_ms: Date.now() - startedAt,
+        error_code: firstFailureCode,
+        source: telemetrySource,
+      });
 
       return results;
     },
@@ -172,6 +287,27 @@ export function createEmailClient<
   return client as EmailClient<EmailPluginClientExtensions<TPlugins>>;
 }
 
+/**
+ * Telemetry label for how a send() call was (or would have been) delivered:
+ * "single" for plain messages, "bulk_native" when the adapter batches
+ * recipientVariables in one provider call, "bulk_expanded" when the client
+ * expands to one internal send per recipient.
+ */
+function deliveryPath(
+  usedRecipientVariables: boolean,
+  provider: EmailProvider | undefined,
+): "single" | "bulk_native" | "bulk_expanded" | undefined {
+  if (!usedRecipientVariables) {
+    return "single";
+  }
+
+  if (!provider) {
+    return undefined;
+  }
+
+  return provider.sendBulk ? "bulk_native" : "bulk_expanded";
+}
+
 async function sendWithAdapters(input: {
   adapters: Map<string, EmailProvider>;
   message: EmailMessage;
@@ -189,6 +325,7 @@ async function sendWithAdapters(input: {
   });
 
   assertMessage(prepared.message);
+  assertRecipientVariables(prepared.message);
 
   const adapterNames = resolveAdapterOrder({
     adapter:
@@ -209,7 +346,7 @@ async function sendWithAdapters(input: {
     }
 
     try {
-      return await sendWithRetry({
+      return await attemptProvider({
         provider,
         message: prepared.message,
         hookList: input.options.hookList,
@@ -223,15 +360,13 @@ async function sendWithAdapters(input: {
     } catch (error) {
       const failure = unwrapProviderAttemptFailure(error);
       failures.push(failure.error);
-      const event = {
+      await invokeErrorHooks(input.options.middleware, input.options.hookList, {
         provider: provider.name,
         message: prepared.message,
         attempt: failure.attempt,
         metadata: prepared.options?.metadata,
         error: failure.error,
-      };
-      await invokeErrorMiddleware(input.options.middleware, event);
-      await invokeHooks(input.options.hookList, "onError", event);
+      });
     }
   }
 
@@ -246,14 +381,106 @@ async function sendWithAdapters(input: {
   });
 }
 
-async function sendWithRetry(input: {
+type ProviderAttempt = {
   provider: EmailProvider;
   message: EmailMessage;
   hookList: NonNullable<EmailClientOptions["hooks"]>[];
   middleware: EmailSendMiddleware[];
   retry: EmailClientOptions["retry"];
   sendOptions?: SendOptions;
-}) {
+};
+
+function attemptProvider(input: ProviderAttempt): Promise<EmailProviderResponse> {
+  if (hasRecipientVariables(input.message)) {
+    const { provider } = input;
+    const sendBulk = provider.sendBulk;
+
+    if (!sendBulk) {
+      return sendBulkViaFallback(input);
+    }
+
+    // 2026-07-06: sendBulk must stay invoked on the provider (not passed detached), so
+    // class-based adapters that read `this` inside sendBulk keep working. `send` already
+    // gets this via `input.provider.send(...)` in sendWithRetry.
+    return sendWithRetry({
+      ...input,
+      perform: (message, context) => sendBulk.call(provider, message, context),
+    });
+  }
+
+  return sendWithRetry(input);
+}
+
+async function sendBulkViaFallback(input: ProviderAttempt): Promise<EmailProviderResponse> {
+  const accepted: string[] = [];
+  const rejected: string[] = [];
+  const responses: EmailProviderResponse[] = [];
+  const failures: unknown[] = [];
+
+  for (const entry of recipientVariableEntries(input.message)) {
+    const message = expandRecipientMessage(input.message, entry);
+
+    try {
+      const response = await sendWithRetry({
+        provider: input.provider,
+        message,
+        hookList: input.hookList,
+        middleware: input.middleware,
+        retry: input.retry,
+        sendOptions: withRecipientIdempotencyKey(input.sendOptions, input.message, entry.address),
+      });
+      responses.push(response);
+      accepted.push(entry.address);
+    } catch (error) {
+      const failure = unwrapProviderAttemptFailure(error);
+      rejected.push(entry.address);
+      failures.push(failure.error);
+      await invokeErrorHooks(input.middleware, input.hookList, {
+        provider: input.provider.name,
+        message,
+        attempt: failure.attempt,
+        metadata: input.sendOptions?.metadata,
+        error: failure.error,
+      });
+    }
+  }
+
+  if (accepted.length === 0) {
+    throw new ProviderAttemptFailure(
+      failures.length === 1
+        ? failures[0]
+        : new EmailSdkError("All batch recipients failed.", {
+            code: "all_recipients_failed",
+            retryable: false,
+            details: failures,
+          }),
+      1,
+    );
+  }
+
+  return {
+    provider: input.provider.name,
+    accepted,
+    rejected: rejected.length > 0 ? rejected : undefined,
+    raw: responses,
+  };
+}
+
+function withRecipientIdempotencyKey(
+  sendOptions: SendOptions | undefined,
+  message: EmailMessage,
+  address: string,
+): SendOptions | undefined {
+  const base = sendOptions?.idempotencyKey ?? message.idempotencyKey;
+
+  if (!base) {
+    return sendOptions;
+  }
+
+  return { ...sendOptions, idempotencyKey: `${base}:${address}` };
+}
+
+async function sendWithRetry(input: ProviderAttempt & { perform?: EmailProvider["send"] }) {
   const retries = input.retry?.retries ?? 0;
   const shouldRetry = input.retry?.shouldRetry ?? isRetryableEmailError;
   const delayFor = input.retry?.delay ?? defaultDelay;
@@ -267,12 +494,15 @@ async function sendWithRetry(input: {
     });
 
     try {
-      const response = await input.provider.send(input.message, {
+      const context = {
         signal: input.sendOptions?.signal,
         idempotencyKey: input.sendOptions?.idempotencyKey ?? input.message.idempotencyKey,
         attempt,
         metadata: input.sendOptions?.metadata,
-      });
+      };
+      const response = input.perform
+        ? await input.perform(input.message, context)
+        : await input.provider.send(input.message, context);
 
       const normalizedResponse = {
         ...response,
@@ -413,6 +643,15 @@ async function invokeErrorMiddleware(middleware: EmailSendMiddleware[], event: E
   for (const item of middleware) {
     await invokeHook(item.onError, event);
   }
+}
+
+async function invokeErrorHooks(
+  middleware: EmailSendMiddleware[],
+  hookList: NonNullable<EmailClientOptions["hooks"]>[],
+  event: EmailErrorEvent,
+) {
+  await invokeErrorMiddleware(middleware, event);
+  await invokeHooks(hookList, "onError", event);
 }
 
 class ProviderAttemptFailure {

@@ -4,6 +4,7 @@ import {
   base64Attachments,
   formatAddresses,
   optionalStringAddresses,
+  sendAtIsoUtcSeconds,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 import {
@@ -35,6 +36,7 @@ export function sparkpost(options: SparkPostProviderOptions): EmailProvider<{ ba
       return {
         options: {
           sandbox: options.sandbox,
+          start_time: sendAtIsoUtcSeconds(message),
         },
         recipients: formatAddresses(message.to).map((address) => ({ address })),
         content: {

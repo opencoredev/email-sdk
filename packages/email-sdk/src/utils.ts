@@ -33,6 +33,15 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
   return arrayify(addresses).map(formatAddress);
 }
 
+export function emailAddressOf(address: EmailAddress): string {
+  if (typeof address !== "string") {
+    return address.email;
+  }
+
+  const match = address.match(/<([^>]+)>/);
+  return (match?.[1] ?? address).trim();
+}
+
 export function headersToObject(
   headers: EmailMessage["headers"],
 ): Record<string, string> | undefined {
@@ -81,6 +90,81 @@ export function assertMessage(message: EmailMessage) {
       throw new EmailValidationError(
         `Attachment "${attachment.filename}" requires content or path.`,
       );
+    }
+  }
+
+  if (message.sendAt !== undefined) {
+    toSendAtDate(message.sendAt);
+  }
+}
+
+// Past sendAt values are intentionally allowed: providers either send immediately or reject
+// with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
+export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
+  const date = sendAt instanceof Date ? sendAt : new Date(sendAt);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new EmailValidationError(
+      `Email message sendAt is not a valid date: "${String(sendAt)}".`,
+      { sendAt },
+    );
+  }
+
+  return date;
+}
+
+export function hasRecipientVariables(message: EmailMessage): boolean {
+  return Boolean(message.recipientVariables && Object.keys(message.recipientVariables).length > 0);
+}
+
+export function assertRecipientVariables(message: EmailMessage) {
+  if (!hasRecipientVariables(message)) {
+    return;
+  }
+
+  if (message.cc || message.bcc) {
+    throw new EmailValidationError(
+      "recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.",
+    );
+  }
+
+  const recipients = new Set<string>();
+
+  for (const recipient of arrayify(message.to)) {
+    const address = emailAddressOf(recipient);
+    const normalized = address.toLowerCase();
+
+    if (recipients.has(normalized)) {
+      throw new EmailValidationError(
+        `recipientVariables require unique "to" addresses, but "${address}" appears more than once.`,
+      );
+    }
+
+    recipients.add(normalized);
+  }
+
+  const unknown = Object.keys(message.recipientVariables ?? {}).filter(
+    (address) => !recipients.has(address.toLowerCase()),
+  );
+
+  if (unknown.length > 0) {
+    throw new EmailValidationError(
+      `recipientVariables reference addresses that are not in "to": ${unknown.join(", ")}.`,
+      { unknown },
+    );
+  }
+
+  // 2026-07-06: variable keys must match the fallback substitution token `%recipient.<key>%`
+  // (regex [\w-]+). Keys like "user.name" would personalize on native provider routes but
+  // silently stay literal in the client-side fallback, so reject them everywhere instead.
+  for (const [address, variables] of Object.entries(message.recipientVariables ?? {})) {
+    for (const key of Object.keys(variables)) {
+      if (!/^[\w-]+$/.test(key)) {
+        throw new EmailValidationError(
+          `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "${address}" has "${key}".`,
+          { address, key },
+        );
+      }
     }
   }
 }
@@ -224,11 +308,22 @@ export async function attachmentToBytes(attachment: EmailAttachment) {
 }
 
 export type MessageFieldSupport = Partial<
-  Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
+  Record<
+    "cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata" | "sendAt",
+    boolean
+  >
 >;
 
 export const SUPPORTED_MESSAGE_FIELDS = {
-  resend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  resend: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
   postmark: {
     cc: true,
     bcc: true,
@@ -246,6 +341,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
   cloudflare: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   unosend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
@@ -258,8 +354,17 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
-  mailersend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  mailersend: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
   brevo: {
     cc: true,
     bcc: true,
@@ -268,9 +373,25 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
-  mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
-  sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
+  mailchimp: {
+    cc: true,
+    bcc: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+    sendAt: true,
+  },
+  sparkpost: {
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+    sendAt: true,
+  },
   iterable: { metadata: true },
   loops: { attachments: true, metadata: true },
   sequenzy: { replyTo: true, attachments: true, metadata: true },
@@ -315,6 +436,7 @@ export function assertSupportedMessageFields(
   if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
   if (message.tags?.length && !supported.tags) unsupported.push("tags");
   if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
+  if (message.sendAt !== undefined && !supported.sendAt) unsupported.push("sendAt");
 
   if (unsupported.length > 0) {
     throw new EmailValidationError(

@@ -32,6 +32,7 @@ import type {
   EmailProvider,
   EmailTag,
 } from "./types.js";
+import { getTelemetry, normalizeAdapterName, setTelemetrySource } from "./telemetry.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   arrayify,
@@ -238,10 +239,7 @@ const envFlagNames: Record<string, string> = {
   SMTP_HOST: "host",
 };
 
-async function main() {
-  const [command, ...args] = process.argv.slice(2);
-  const flags = parseFlags(args);
-
+async function main(command: string | undefined, flags: CliFlags) {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp();
     return;
@@ -287,6 +285,7 @@ async function main() {
 
   const provider = createProvider(providerName, flags);
   const client = createEmailClient({ adapters: [provider] });
+  // setTelemetrySource("cli") at process start already tags this client's events.
   const response = await client.send(message);
 
   console.log(JSON.stringify(response, null, 2));
@@ -694,16 +693,90 @@ SMTP options:
 `);
 }
 
+class CliFailure extends Error {}
+
 function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
+  throw new CliFailure(message);
 }
 
+function normalizeCliCommand(command: string | undefined) {
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    return "help";
+  }
+
+  if (command === "version" || command === "--version" || command === "-v") {
+    return "version";
+  }
+
+  if (command === "adapters" || command === "providers") {
+    return "adapters";
+  }
+
+  if (command === "doctor" || command === "send") {
+    return command;
+  }
+
+  return "unknown";
+}
+
+async function captureCliRun(input: {
+  command: string | undefined;
+  flags: CliFlags;
+  success: boolean;
+  startedAt: number;
+  error?: unknown;
+}) {
+  const adapter = selectedAdapter(input.flags);
+  const telemetry = getTelemetry();
+
+  await telemetry.capture("cli command run", {
+    command: normalizeCliCommand(input.command),
+    adapter: adapter ? normalizeAdapterName(adapter) : undefined,
+    dry_run: truthyFlag(input.flags, "dry-run"),
+    source: "cli",
+    success: input.success,
+    duration_ms: Date.now() - input.startedAt,
+    error_code:
+      input.error instanceof EmailSdkError
+        ? input.error.code
+        : input.success
+          ? undefined
+          : "cli_error",
+  });
+
+  // Settle the fire-and-forget captures from core.ts before process.exit(1)
+  // can tear down the event loop and silently drop them.
+  await telemetry.flush();
+}
+
+const startedAt = Date.now();
+const [cliCommand, ...cliArgs] = process.argv.slice(2);
+const cliFlags = parseFlags(cliArgs);
+
+// Tag every telemetry event from this process (client created, email sent,
+// exceptions) as CLI traffic before any client is constructed.
+setTelemetrySource("cli");
+
 try {
-  await main();
+  await main(cliCommand, cliFlags);
+  await captureCliRun({ command: cliCommand, flags: cliFlags, success: true, startedAt });
 } catch (error) {
-  if (error instanceof EmailSdkError) {
-    fail(error.message);
+  if (!(error instanceof CliFailure) && !(error instanceof EmailSdkError)) {
+    // Unexpected crash, not a usage or provider failure. Reported before the run
+    // summary so captureCliRun's flush() settles it too. Errors rethrown out of
+    // client.send were already reported there; the per-object dedupe drops this one.
+    void getTelemetry().captureException(error, {
+      source: "cli",
+      handled: false,
+      command: normalizeCliCommand(cliCommand),
+    });
+  }
+
+  await captureCliRun({ command: cliCommand, flags: cliFlags, success: false, startedAt, error });
+
+  if (error instanceof CliFailure || error instanceof EmailSdkError) {
+    console.error(error.message);
+    process.exit(1);
   }
 
   throw error;

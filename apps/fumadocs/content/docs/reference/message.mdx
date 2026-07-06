@@ -20,6 +20,8 @@ type EmailMessage = {
   attachments?: EmailAttachment[];
   tags?: EmailTag[];
   metadata?: Record<string, string | number | boolean | null>;
+  recipientVariables?: Record<string, Record<string, string | number | boolean>>;
+  sendAt?: Date | string;
   idempotencyKey?: string;
 };
 ```
@@ -78,6 +80,14 @@ type EmailMessage = {
     metadata: {
       description: "Provider-side key-value data attached to the send.",
       type: "Record<string, string | number | boolean | null>",
+    },
+    recipientVariables: {
+      description: "Per-recipient %recipient.key% substitution values, keyed by recipient address.",
+      type: "Record<string, Record<string, string | number | boolean>>",
+    },
+    sendAt: {
+      description: "Future delivery time, scheduled by the provider.",
+      type: "Date | string",
     },
     idempotencyKey: {
       description: "Stable send identity, used when send options set none.",
@@ -149,9 +159,51 @@ Both attach data to a send on the provider side, but they are different provider
 
 Support differs per provider — Resend has tags but no metadata, Iterable has metadata but no tags. Check the [field support matrix](/docs/adapters/field-support) before relying on either, especially for fallback routes.
 
+## Scheduled sends
+
+`sendAt` asks the provider to deliver the message at a future time. Pass a `Date` object or an ISO 8601 string with an explicit offset — `"2026-07-10T12:30:00Z"` or `"2026-07-10T14:30:00+02:00"`. Offset-less strings like `"2026-07-10T12:30:00"` are parsed by `new Date()` in the **server's local timezone**, so the actual send time shifts with wherever your code happens to run. Always include the offset, or build a `Date` yourself:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Glad you're here.</p>",
+  sendAt: new Date(Date.now() + 5 * 60_000), // five minutes from now
+});
+```
+
+The SDK is stateless — it never queues or delays a send itself. Each adapter translates `sendAt` into its provider's native scheduling parameter, and adapters whose provider has no scheduling API reject the field before any request. The SDK also does not enforce a scheduling window: providers cap how far out you can schedule (72 hours for SendGrid, MailerSend, and Brevo, for example) and most send immediately when the date is in the past. See [scheduled sends in the field support matrix](/docs/adapters/field-support#scheduled-sends) for the per-provider parameters and limits.
+
 ## Idempotency key
 
 `idempotencyKey` gives the send a stable identity across retries. The send-options key wins when both are set; the message field is the fallback. Only Resend transmits it natively — see [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) for per-adapter behavior.
+
+## Recipient variables
+
+`recipientVariables` turns one `send` into a personalized batch: keep a single `to` list and give each recipient its own values, keyed by email address. Reference a value anywhere in `subject`, `html`, or `text` with the `%recipient.key%` token.
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<p>Hi %recipient.name%</p><a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
+
+Adapters with a native batch mechanism send the whole list in **one API call** with provider-side substitution — currently [Mailgun](/docs/adapters/mailgun) (`recipient-variables`) and [SendGrid](/docs/adapters/sendgrid) (one personalization per recipient), each capped at 1000 recipients per call. Every other adapter falls back to **one rendered send per recipient**, substituting tokens client-side, so the same code works on any route. The send resolves with a single [response](/docs/reference/client#response): native batches return the provider's id, and the client-side fallback aggregates per-recipient results into `accepted` and `rejected`.
+
+- Each `recipientVariables` key must be an address in `to`; an unknown address fails fast.
+- Variable keys may only contain letters, numbers, underscores, and hyphens (`[\w-]`); anything else — like a dotted `user.name` — fails fast so substitution behaves identically on native and fallback routes.
+- `to` addresses must be unique; a duplicate combined with `recipientVariables` fails fast.
+- `cc` and `bcc` cannot be combined with `recipientVariables` — every recipient gets an individualized message.
+- An unknown `%recipient.key%` token is left intact, matching native provider behavior.
+- In the client-side fallback, each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one. If the send has an idempotency key (from send options or the message), it is suffixed per recipient (`<key>:<address>`) so retries dedupe per recipient instead of dropping the batch. The suffixed key counts toward provider key-length limits (Resend caps `Idempotency-Key` at 256 characters), so keep base keys short when using `recipientVariables`. Only when every recipient fails does the adapter count as failed and the next [fallback route](/docs/concepts/fallbacks-and-retries) run.
 
 ## Validation
 
@@ -164,6 +216,11 @@ Support differs per provider — Resend has tags but no metadata, Iterable has m
 | `subject` is required | `Email message requires a subject.` |
 | `html` or `text` is required | `Email message requires either html or text content.` |
 | Attachments need data | `Attachment "<filename>" requires content or path.` |
+| `recipientVariables` with `cc`/`bcc` | `recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.` |
+| `recipientVariables` address not in `to` | `recipientVariables reference addresses that are not in "to": <addresses>.` |
+| `recipientVariables` duplicate `to` | `recipientVariables require unique "to" addresses, but "<address>" appears more than once.` |
+| `recipientVariables` invalid key | `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "<address>" has "<key>".` |
+| `sendAt` must parse | `Email message sendAt is not a valid date: "<value>".` |
 
 Adapters add a second fail-fast layer for fields their provider cannot represent:
 
@@ -171,4 +228,4 @@ Adapters add a second fail-fast layer for fields their provider cannot represent
 smtp does not support these EmailMessage fields: tags, metadata.
 ```
 
-That error fires before any request — fields are rejected, never silently dropped. The per-adapter availability of `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, and `metadata` is the [field support matrix](/docs/adapters/field-support).
+That error fires before any request — fields are rejected, never silently dropped. The per-adapter availability of `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, `metadata`, and `sendAt` is the [field support matrix](/docs/adapters/field-support).

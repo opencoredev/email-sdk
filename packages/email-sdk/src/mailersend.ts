@@ -6,6 +6,7 @@ import {
   commonHeadersArray,
   optionalApiAddresses,
   optionalSingleApiAddress,
+  sendAtUnixSeconds,
 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
@@ -46,6 +47,7 @@ export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ 
           id: attachment.contentId,
         })),
         tags: message.tags?.map((tag) => tag.value),
+        send_at: sendAtUnixSeconds(message),
       };
     },
     parseResponse(body, _message, response) {
