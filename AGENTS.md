@@ -7,6 +7,7 @@ These instructions are local to this repository. Keep repo-specific release guid
 - Published package: `@opencoredev/email-sdk`
 - CLI binary: `email-sdk`
 - Package directory: `packages/email-sdk`
+- Convex component package: `@opencoredev/convex-email` in `packages/convex-email` (see Convex Component).
 - Prefer `bun` and `bunx`.
 
 ## SDK and CLI Changes
@@ -49,6 +50,24 @@ packages/email-sdk/dist/cli.js adapters
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
 
 Do not merge a `Version packages` PR for a major version unless the migration path is documented.
+
+## Convex Component
+
+The `@opencoredev/convex-email` package in `packages/convex-email` is currently `private` in its
+`package.json`. Combined with `privatePackages.version: false` in `.changeset/config.json`, this means
+changesets do not version or publish it. Do not add a changeset for convex-email-only changes.
+
+Run the package checks locally from its directory:
+
+```bash
+cd packages/convex-email
+bun run check-types
+bun test
+```
+
+After changing the component schema (`src/component/schema.ts`), regenerate Convex types with
+`bun run codegen`. The committed `_generated` stubs derive their types from the schema, so most
+schema additions do not require regeneration.
 
 ## CI and Publishing
 
