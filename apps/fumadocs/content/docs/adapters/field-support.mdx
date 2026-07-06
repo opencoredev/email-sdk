@@ -52,6 +52,16 @@ Built in, no Nodemailer. SMTP maps address fields and headers directly into the 
 | ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- |
 | SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          |
 
+## Recipient variables
+
+`recipientVariables` personalizes a batch send with `%recipient.key%` tokens — see [the message reference](/docs/reference/message#recipient-variables). Unlike the fields above, it is never rejected: it works on **every** adapter. The difference is _how_:
+
+| Native batch — one API call | Client-side fallback — one send per recipient |
+| --------------------------- | --------------------------------------------- |
+| Mailgun, SendGrid           | every other adapter                           |
+
+Native routes substitute provider-side, so `%recipient.key%` reaches the provider untouched; fallback routes substitute before the request. The same message code runs on any route, so a fallback to a non-native adapter still personalizes every recipient.
+
 ## Choosing compatible routes
 
 A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the backup adapter supports every field your messages actually use. Pick routes from your message shape, not provider popularity:

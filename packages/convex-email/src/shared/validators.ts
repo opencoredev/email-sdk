@@ -201,6 +201,12 @@ export const vEmailConfig = v.object({
   cleanupAfterDays: v.optional(v.number()),
 });
 
+export const vDeliveryStatusValue = v.union(
+  v.literal("delivered"),
+  v.literal("bounced"),
+  v.literal("complained"),
+);
+
 export const vEmailStatusValue = v.union(
   v.literal("queued"),
   v.literal("processing"),
@@ -237,6 +243,8 @@ export const vStoredEmail = v.object({
   retryBaseMs: v.number(),
   nextAttemptAt: v.optional(v.number()),
   lastError: v.optional(v.string()),
+  deliveryStatus: v.optional(vDeliveryStatusValue),
+  deliveredAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
   sentAt: v.optional(v.number()),

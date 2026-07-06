@@ -60,6 +60,23 @@ console.log(result.id); // SendGrid message id from the x-message-id header
 
 SendGrid's send endpoint returns `202 Accepted` with an empty body, so the adapter reads `result.id` from the `x-message-id` response header. `metadata` values arrive in SendGrid event webhooks as `custom_args`; tag values arrive as `categories`.
 
+### Batch sends with recipient variables
+
+Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter emits one `personalizations` entry per recipient with SendGrid `substitutions`, personalizing every recipient in a single API call (up to 1000 recipients — SendGrid's personalizations cap). `%recipient.key%` tokens in `subject`, `html`, and `text` are substituted server-side:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
+
 ## Verify from the CLI
 
 ```bash

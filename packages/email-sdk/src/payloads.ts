@@ -1,7 +1,9 @@
-import type { EmailMessage } from "./types.js";
+import type { EmailAddress, EmailMessage, RecipientVariables } from "./types.js";
 import {
+  arrayify,
   assertMaxItems,
   attachmentToBase64,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
@@ -95,6 +97,66 @@ export async function sendgridAttachments(message: EmailMessage) {
     content_id: attachment.contentId,
     disposition: attachment.disposition,
   }));
+}
+
+export type RecipientEntry = {
+  to: EmailAddress;
+  address: string;
+  variables: Record<string, string | number | boolean>;
+};
+
+/** Replace `%recipient.key%` tokens; unknown keys are left intact to match native providers. */
+export function substituteRecipientVariables(
+  text: string,
+  variables: Record<string, string | number | boolean>,
+): string {
+  return text.replace(/%recipient\.([\w-]+)%/g, (token, key) =>
+    Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key]) : token,
+  );
+}
+
+function recipientVariablesLookup(recipientVariables: RecipientVariables | undefined) {
+  const lookup = new Map<string, Record<string, string | number | boolean>>();
+
+  for (const [address, variables] of Object.entries(recipientVariables ?? {})) {
+    lookup.set(address.toLowerCase(), variables);
+  }
+
+  return lookup;
+}
+
+/** One entry per `to` recipient, each paired with its variables (empty object when none). */
+export function recipientVariableEntries(message: EmailMessage): RecipientEntry[] {
+  const lookup = recipientVariablesLookup(message.recipientVariables);
+
+  return arrayify(message.to).map((to) => {
+    const address = emailAddressOf(to);
+    return { to, address, variables: lookup.get(address.toLowerCase()) ?? {} };
+  });
+}
+
+/** Address-keyed map covering every recipient, so providers like Mailgun individualize each one. */
+export function recipientVariablesMap(message: EmailMessage): RecipientVariables {
+  const map: RecipientVariables = {};
+
+  for (const entry of recipientVariableEntries(message)) {
+    map[entry.address] = entry.variables;
+  }
+
+  return map;
+}
+
+/** Render one single-recipient message with its variables substituted into the content. */
+export function expandRecipientMessage(message: EmailMessage, entry: RecipientEntry): EmailMessage {
+  return {
+    ...message,
+    to: entry.to,
+    recipientVariables: undefined,
+    idempotencyKey: undefined,
+    subject: substituteRecipientVariables(message.subject, entry.variables),
+    html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
+    text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
+  };
 }
 
 export function commonHeadersObject(message: EmailMessage) {

@@ -11,6 +11,9 @@ import { v } from "convex/values";
 import type {
   ConvexEmailAdapterConfig,
   ConvexEmailConfig,
+  ConvexEmailDeliveryStatus,
+  ConvexEmailDoc,
+  ConvexEmailEventDoc,
   ConvexEmailMessage,
   ConvexEmailSendArgs,
 } from "../shared/types.js";
@@ -89,7 +92,10 @@ export class ConvexEmail {
   ) {}
 
   send(ctx: MutationCtx, args: ConvexEmailSendArgs) {
-    return ctx.runMutation(this.component.lib.enqueue as AnyMutationRef, this.withDefaults(args));
+    return ctx.runMutation(
+      this.component.lib.enqueue as AnyMutationRef,
+      this.withDefaults(args),
+    ) as Promise<string>;
   }
 
   sendBatch(ctx: MutationCtx, messages: ConvexEmailSendArgs[]) {
@@ -99,34 +105,47 @@ export class ConvexEmail {
 
     return ctx.runMutation(this.component.lib.enqueueBatch as AnyMutationRef, {
       messages: messages.map((message) => this.withDefaults(message)),
-    });
+    }) as Promise<string[]>;
   }
 
   status(ctx: QueryCtx, args: { emailId: string }) {
-    return ctx.runQuery(this.component.lib.status as AnyQueryRef, args);
+    return ctx.runQuery(
+      this.component.lib.status as AnyQueryRef,
+      args,
+    ) as Promise<ConvexEmailDoc | null>;
   }
 
   listEvents(ctx: QueryCtx, args: { emailId: string }) {
-    return ctx.runQuery(this.component.lib.listEvents as AnyQueryRef, args);
+    return ctx.runQuery(this.component.lib.listEvents as AnyQueryRef, args) as Promise<
+      ConvexEmailEventDoc[]
+    >;
   }
 
   cancel(ctx: MutationCtx, args: { emailId: string }) {
-    return ctx.runMutation(this.component.lib.cancel as AnyMutationRef, args);
+    return ctx.runMutation(this.component.lib.cancel as AnyMutationRef, args) as Promise<boolean>;
   }
 
   setConfig(ctx: MutationCtx, config: ConvexEmailConfig) {
-    return ctx.runMutation(this.component.lib.setConfig as AnyMutationRef, { config });
+    return ctx.runMutation(this.component.lib.setConfig as AnyMutationRef, {
+      config,
+    }) as Promise<null>;
   }
 
   getConfig(ctx: QueryCtx) {
-    return ctx.runQuery(this.component.lib.getConfig as AnyQueryRef, {});
+    return ctx.runQuery(
+      this.component.lib.getConfig as AnyQueryRef,
+      {},
+    ) as Promise<ConvexEmailConfig | null>;
   }
 
   processWebhook(
     ctx: ActionCtx,
     args: { provider: string; headers: Record<string, string>; body: string },
   ) {
-    return ctx.runAction(this.component.worker.handleWebhook as AnyActionRef, args);
+    return ctx.runAction(this.component.worker.handleWebhook as AnyActionRef, args) as Promise<{
+      ok: boolean;
+      duplicate?: boolean;
+    }>;
   }
 
   registerRoutes(
@@ -175,12 +194,12 @@ export class ConvexEmail {
       send: mutationGeneric({
         args: vSendEmailArgs,
         returns: v.string(),
-        handler: async (ctx, args) => (await this.send(ctx, args)) as string,
+        handler: async (ctx, args) => await this.send(ctx, args),
       }),
       sendBatch: mutationGeneric({
         args: vSendBatchEmailsArgs,
         returns: v.array(v.string()),
-        handler: async (ctx, args) => (await this.sendBatch(ctx, args.messages)) as string[],
+        handler: async (ctx, args) => await this.sendBatch(ctx, args.messages),
       }),
       status: queryGeneric({
         args: vStatusArgs,
@@ -195,7 +214,7 @@ export class ConvexEmail {
       cancel: mutationGeneric({
         args: vCancelEmailArgs,
         returns: v.boolean(),
-        handler: async (ctx, args) => (await this.cancel(ctx, args)) as boolean,
+        handler: async (ctx, args) => await this.cancel(ctx, args),
       }),
     };
 
@@ -236,6 +255,9 @@ export class ConvexEmail {
 export type {
   ConvexEmailAdapterConfig,
   ConvexEmailConfig,
+  ConvexEmailDeliveryStatus,
+  ConvexEmailDoc,
+  ConvexEmailEventDoc,
   ConvexEmailMessage,
   ConvexEmailSendArgs,
 };
