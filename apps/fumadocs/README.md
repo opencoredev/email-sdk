@@ -17,8 +17,13 @@ no Notra calls ever happen from the browser:
 
 | Path | Surface | Source | When it updates |
 | --- | --- | --- | --- |
-| **On-demand SSR** | `/blog`, `/blog/$slug`, and OG images `/og/blog/*` | Live fetch from Notra at request time | Within the edge-cache window (~60s), no rebuild |
+| **On-demand SSR** | `/blog`, `/blog/$slug` | Live fetch from Notra at request time | Within the edge-cache window (~60s), no rebuild |
+| **On-demand SSR (OG images)** | `/og/blog/*` | Live fetch from Notra, rendered to SVG | No rebuild, but cached up to ~1 day (`max-age=86400`) |
 | **Build-time snapshot** | `sitemap.xml`, `rss.xml`, `feed.json` | `src/lib/notra-posts.generated.ts`, written at build | On the next deploy |
+
+Both SSR paths pick up new posts without a rebuild, but the OG image SVGs cache
+far longer than the blog pages (up to a day vs. ~60s), so a changed post title or
+description can keep serving the old image for a while.
 
 Everything else on the site (docs, home, marketing pages) is prerendered to
 static HTML at build time.
@@ -42,6 +47,11 @@ static HTML at build time.
   ```bash
   bun run posts:fetch
   ```
+
+- **`src/routes/og/blog/$.ts`** — the SSR OG image route. It also loads from the
+  runtime fetch, but the SVG response sets `Cache-Control: max-age=86400,
+  stale-while-revalidate=604800`, so a regenerated image can take up to a day to
+  replace a cached one.
 
 - **`scripts/notra-content.ts`** — `mapNotraPost`, shared by both paths, maps a
   raw Notra post to the blog shape and renders its Markdown to sanitized HTML.
@@ -118,8 +128,10 @@ build never fails.
 
 ### Publishing cadence
 
-New and updated posts appear on the live blog within the edge-cache window
-(~60s) with no rebuild. A rebuild is only needed to refresh the
-sitemap/RSS/feed snapshot — the `Refresh blog posts from Notra` GitHub workflow
-triggers a weekly Vercel rebuild, and you can point a Notra publish webhook at
-the same Vercel deploy hook to refresh those feeds sooner.
+New and updated posts appear on the live blog pages within the edge-cache window
+(~60s) with no rebuild. OG images (`/og/blog/*`) also update without a rebuild
+but cache for up to a day, so a changed title or description can keep serving the
+old SVG for a while. A rebuild is only needed to refresh the sitemap/RSS/feed
+snapshot — the `Refresh blog posts from Notra` GitHub workflow triggers a weekly
+Vercel rebuild, and you can point a Notra publish webhook at the same Vercel
+deploy hook to refresh those feeds sooner.
