@@ -99,4 +99,8 @@ production: the Vercel project env). Without the key the fetch is skipped.
 - Depot CI lives in `.depot/workflows/ci.yml`.
 - Release publishing lives in `.github/workflows/release.yml`.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
+- After a successful publish, `release.yml` runs `bun run homebrew:update`
+  (`scripts/update-homebrew-formula.ts`) to point `Formula/email-sdk.rb` at the
+  published npm tarball and refresh its `sha256`, then opens an automation PR.
+  Run `bun run homebrew:update` locally to regenerate the formula by hand.
 - Do not move npm publishing to Depot unless npm supports Depot as a trusted publisher or the project intentionally switches to token-based publishing.
