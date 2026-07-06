@@ -186,7 +186,7 @@ export const emailStatus = query({
 });
 ```
 
-`status` returns the stored email: `status`, `message`, `attemptedAdapters`, `attemptCount`/`maxAttempts`, `providerMessageId`, `lastError`, and timestamps. `listEvents` returns the append-only history.
+`status` returns the stored email: `status`, `message`, `attemptedAdapters`, `attemptCount`/`maxAttempts`, `providerMessageId`, `lastError`, `deliveryStatus`, and timestamps. `listEvents` returns the append-only history.
 
 | Status | Meaning |
 | --- | --- |
@@ -195,6 +195,8 @@ export const emailStatus = query({
 | `sent` | A provider accepted the message. Terminal. |
 | `failed` | All attempts and fallbacks exhausted. Terminal. |
 | `canceled` | Canceled before processing started. Terminal. |
+
+`status` covers the send lifecycle — it ends at "a provider accepted the message". What happened after acceptance lives in `deliveryStatus`, filled in by [webhooks](#webhooks): `delivered`, `bounced`, or `complained`, plus `deliveredAt` on delivery. It stays unset until a matching webhook arrives.
 
 Event types: `queued`, `processing`, `provider_attempt`, `sent`, `retry_scheduled`, `failed`, `canceled`, `webhook`. `provider_attempt` and `retry_scheduled` carry the adapter, attempt number, and delay, so the full routing story is queryable.
 
@@ -220,7 +222,7 @@ Larger arrays throw before enqueueing anything — split them in your app so Con
 
 ## Configuration
 
-Runtime config lives in a Convex table, managed with `setConfig` / `getConfig`:
+Runtime config lives in a Convex table, managed with `setConfig` / `getConfig`. `setConfig` replaces the stored document — pass every field you want to keep, because omitted fields are cleared rather than merged:
 
 ```ts
 await email.setConfig(ctx, {
@@ -272,6 +274,12 @@ The fail-before-enqueue rule is deliberate: enabling `testMode` without `sandbox
 ## Webhooks
 
 `registerRoutes` mounts `POST <pathPrefix>/webhooks/<provider>` on your HTTP router and records deliveries as `webhook` events. Deliveries are stored by provider and delivery id, so provider retries stay idempotent.
+
+When a webhook matches a stored email by provider message id, the component also normalizes the provider's event name onto the email's `deliveryStatus`. Resend `email.delivered`, Postmark `Delivery`, Mailgun `delivered`, and the like become `delivered`; hard bounces become `bounced`; spam complaints become `complained`.
+
+Only permanent failures count as `bounced` — that's deliberate, so a retryable soft bounce never poisons the status of an email that later delivers. Mailgun `failed` events map to `bounced` only when `severity` is `"permanent"`; a `"temporary"` failure is recorded in the event history but leaves `deliveryStatus` alone. Postmark `Bounce` records map to `bounced` only when `Type` is a permanent class (`HardBounce`, `BadEmailAddress`, `ManuallyDeactivated`); `Transient`, `SoftBounce`, and other retryable types are stored without touching the status, so a later `Delivery` still lands as `delivered`.
+
+Bounces and complaints are sticky against `delivered` — a `delivered` event that arrives late or out of order never overwrites them. Between `bounced` and `complained` themselves, the most recent webhook wins; both mean "stop mailing this recipient", and the full sequence stays in the event history. Opens, clicks, and other events stay in the event history without touching `deliveryStatus`.
 
 ```ts title="convex/http.ts"
 import { httpRouter } from "convex/server";

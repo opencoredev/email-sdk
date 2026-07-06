@@ -49,10 +49,12 @@ export const enqueueBatch = mutation({
       });
     }
 
+    // Read the shared config once for the whole batch instead of once per message.
+    const config = await readConfig(ctx);
     const ids: string[] = [];
 
     for (const message of args.messages) {
-      ids.push(await enqueueEmail(ctx, message));
+      ids.push(await enqueueEmail(ctx, message, config));
     }
 
     return ids;
@@ -109,8 +111,11 @@ export const setConfig = mutation({
     const existing = await getConfigDoc(ctx);
     const now = Date.now();
 
+    // 2026-07-06: setConfig replaces the stored config document instead of merging into it.
+    // Merge semantics made it impossible to clear a field (the validator cannot carry an
+    // explicit undefined), so stale defaultFrom/cleanupAfterDays values could never be unset.
     if (existing) {
-      await ctx.db.patch(existing._id, { ...args.config, updatedAt: now });
+      await ctx.db.replace(existing._id, { key: configKey, ...args.config, updatedAt: now });
     } else {
       await ctx.db.insert("config", { key: configKey, ...args.config, updatedAt: now });
     }
@@ -311,6 +316,7 @@ export const recordWebhook = internalMutation({
     provider: v.string(),
     deliveryId: v.string(),
     providerMessageId: v.optional(v.string()),
+    event: v.optional(v.string()),
     payload: v.any(),
   },
   returns: v.object({ ok: v.boolean(), duplicate: v.optional(v.boolean()) }),
@@ -341,6 +347,7 @@ export const recordWebhook = internalMutation({
       deliveryId: args.deliveryId,
       emailId: email?._id,
       providerMessageId: args.providerMessageId,
+      event: args.event,
       receivedAt: now,
       processedAt: now,
       status: "processed",
@@ -354,13 +361,18 @@ export const recordWebhook = internalMutation({
         providerMessageId: args.providerMessageId,
         payload: args.payload,
       });
+      await applyDeliveryStatus(ctx, email, args.event, now);
     }
 
     return { ok: true };
   },
 });
 
-async function enqueueEmail(ctx: any, args: ConvexEmailSendArgs) {
+async function enqueueEmail(
+  ctx: any,
+  args: ConvexEmailSendArgs,
+  preloadedConfig?: ConvexEmailConfig,
+) {
   const idempotencyKey = args.idempotencyKey;
 
   if (idempotencyKey) {
@@ -374,7 +386,7 @@ async function enqueueEmail(ctx: any, args: ConvexEmailSendArgs) {
     }
   }
 
-  const config = await readConfig(ctx);
+  const config = preloadedConfig ?? (await readConfig(ctx));
   const now = Date.now();
   const message = applyConfigToMessage(args, config);
   const emailId = await ctx.db.insert("emails", {
@@ -527,6 +539,40 @@ async function markEmailFailedOrRetry(
     attempt: email.attemptCount,
     error,
   });
+}
+
+async function applyDeliveryStatus(
+  ctx: any,
+  email: { _id: Id<"emails">; deliveryStatus?: string },
+  event: string | undefined,
+  now: number,
+) {
+  if (event === "delivered") {
+    // 2026-07-06: bounced/complained are sticky against "delivered". Provider webhook retries
+    // can arrive out of order, so a late "delivered" event must never overwrite a recorded
+    // bounce or complaint.
+    if (email.deliveryStatus) {
+      return;
+    }
+
+    await ctx.db.patch(email._id, {
+      deliveryStatus: "delivered",
+      deliveredAt: now,
+      updatedAt: now,
+    });
+
+    return;
+  }
+
+  if (event === "bounced" || event === "complained") {
+    // Between bounced and complained the most recent event wins (both overwrite "delivered"
+    // and each other). Either value means "stop mailing this recipient", so ordering between
+    // them is not load-bearing; the full sequence stays in the event history.
+    await ctx.db.patch(email._id, {
+      deliveryStatus: event,
+      updatedAt: now,
+    });
+  }
 }
 
 async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) {
