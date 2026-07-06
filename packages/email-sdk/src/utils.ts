@@ -33,6 +33,15 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
   return arrayify(addresses).map(formatAddress);
 }
 
+export function emailAddressOf(address: EmailAddress): string {
+  if (typeof address !== "string") {
+    return address.email;
+  }
+
+  const match = address.match(/<([^>]+)>/);
+  return (match?.[1] ?? address).trim();
+}
+
 export function headersToObject(
   headers: EmailMessage["headers"],
 ): Record<string, string> | undefined {
@@ -82,6 +91,48 @@ export function assertMessage(message: EmailMessage) {
         `Attachment "${attachment.filename}" requires content or path.`,
       );
     }
+  }
+}
+
+export function hasRecipientVariables(message: EmailMessage): boolean {
+  return Boolean(message.recipientVariables && Object.keys(message.recipientVariables).length > 0);
+}
+
+export function assertRecipientVariables(message: EmailMessage) {
+  if (!hasRecipientVariables(message)) {
+    return;
+  }
+
+  if (message.cc || message.bcc) {
+    throw new EmailValidationError(
+      "recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.",
+    );
+  }
+
+  const recipients = new Set<string>();
+
+  for (const recipient of arrayify(message.to)) {
+    const address = emailAddressOf(recipient);
+    const normalized = address.toLowerCase();
+
+    if (recipients.has(normalized)) {
+      throw new EmailValidationError(
+        `recipientVariables require unique "to" addresses, but "${address}" appears more than once.`,
+      );
+    }
+
+    recipients.add(normalized);
+  }
+
+  const unknown = Object.keys(message.recipientVariables ?? {}).filter(
+    (address) => !recipients.has(address.toLowerCase()),
+  );
+
+  if (unknown.length > 0) {
+    throw new EmailValidationError(
+      `recipientVariables reference addresses that are not in "to": ${unknown.join(", ")}.`,
+      { unknown },
+    );
   }
 }
 

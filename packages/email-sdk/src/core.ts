@@ -4,6 +4,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "./errors.js";
+import { expandRecipientMessage, recipientVariableEntries } from "./payloads.js";
 import type {
   EmailAfterSendEvent,
   EmailBeforeSendEvent,
@@ -22,7 +23,12 @@ import type {
   SendBatchResult,
   SendOptions,
 } from "./types.js";
-import { assertMessage, toProviderError } from "./utils.js";
+import {
+  assertMessage,
+  assertRecipientVariables,
+  hasRecipientVariables,
+  toProviderError,
+} from "./utils.js";
 
 const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
@@ -189,6 +195,7 @@ async function sendWithAdapters(input: {
   });
 
   assertMessage(prepared.message);
+  assertRecipientVariables(prepared.message);
 
   const adapterNames = resolveAdapterOrder({
     adapter:
@@ -209,7 +216,7 @@ async function sendWithAdapters(input: {
     }
 
     try {
-      return await sendWithRetry({
+      return await attemptProvider({
         provider,
         message: prepared.message,
         hookList: input.options.hookList,
@@ -223,15 +230,13 @@ async function sendWithAdapters(input: {
     } catch (error) {
       const failure = unwrapProviderAttemptFailure(error);
       failures.push(failure.error);
-      const event = {
+      await invokeErrorHooks(input.options.middleware, input.options.hookList, {
         provider: provider.name,
         message: prepared.message,
         attempt: failure.attempt,
         metadata: prepared.options?.metadata,
         error: failure.error,
-      };
-      await invokeErrorMiddleware(input.options.middleware, event);
-      await invokeHooks(input.options.hookList, "onError", event);
+      });
     }
   }
 
@@ -246,14 +251,95 @@ async function sendWithAdapters(input: {
   });
 }
 
-async function sendWithRetry(input: {
+type ProviderAttempt = {
   provider: EmailProvider;
   message: EmailMessage;
   hookList: NonNullable<EmailClientOptions["hooks"]>[];
   middleware: EmailSendMiddleware[];
   retry: EmailClientOptions["retry"];
   sendOptions?: SendOptions;
-}) {
+};
+
+function attemptProvider(input: ProviderAttempt): Promise<EmailProviderResponse> {
+  if (hasRecipientVariables(input.message)) {
+    return input.provider.sendBulk
+      ? sendWithRetry({ ...input, perform: input.provider.sendBulk })
+      : sendBulkViaFallback(input);
+  }
+
+  return sendWithRetry(input);
+}
+
+async function sendBulkViaFallback(input: ProviderAttempt): Promise<EmailProviderResponse> {
+  const accepted: string[] = [];
+  const rejected: string[] = [];
+  const responses: EmailProviderResponse[] = [];
+  const failures: unknown[] = [];
+
+  for (const entry of recipientVariableEntries(input.message)) {
+    const message = expandRecipientMessage(input.message, entry);
+
+    try {
+      const response = await sendWithRetry({
+        provider: input.provider,
+        message,
+        hookList: input.hookList,
+        middleware: input.middleware,
+        retry: input.retry,
+        sendOptions: withRecipientIdempotencyKey(input.sendOptions, input.message, entry.address),
+      });
+      responses.push(response);
+      accepted.push(entry.address);
+    } catch (error) {
+      const failure = unwrapProviderAttemptFailure(error);
+      rejected.push(entry.address);
+      failures.push(failure.error);
+      await invokeErrorHooks(input.middleware, input.hookList, {
+        provider: input.provider.name,
+        message,
+        attempt: failure.attempt,
+        metadata: input.sendOptions?.metadata,
+        error: failure.error,
+      });
+    }
+  }
+
+  if (accepted.length === 0) {
+    throw new ProviderAttemptFailure(
+      failures.length === 1
+        ? failures[0]
+        : new EmailSdkError("All batch recipients failed.", {
+            code: "all_recipients_failed",
+            retryable: false,
+            details: failures,
+          }),
+      1,
+    );
+  }
+
+  return {
+    provider: input.provider.name,
+    accepted,
+    rejected: rejected.length > 0 ? rejected : undefined,
+    raw: responses,
+  };
+}
+
+function withRecipientIdempotencyKey(
+  sendOptions: SendOptions | undefined,
+  message: EmailMessage,
+  address: string,
+): SendOptions | undefined {
+  const base = sendOptions?.idempotencyKey ?? message.idempotencyKey;
+
+  if (!base) {
+    return sendOptions;
+  }
+
+  return { ...sendOptions, idempotencyKey: `${base}:${address}` };
+}
+
+async function sendWithRetry(input: ProviderAttempt & { perform?: EmailProvider["send"] }) {
   const retries = input.retry?.retries ?? 0;
   const shouldRetry = input.retry?.shouldRetry ?? isRetryableEmailError;
   const delayFor = input.retry?.delay ?? defaultDelay;
@@ -267,12 +353,15 @@ async function sendWithRetry(input: {
     });
 
     try {
-      const response = await input.provider.send(input.message, {
+      const context = {
         signal: input.sendOptions?.signal,
         idempotencyKey: input.sendOptions?.idempotencyKey ?? input.message.idempotencyKey,
         attempt,
         metadata: input.sendOptions?.metadata,
-      });
+      };
+      const response = input.perform
+        ? await input.perform(input.message, context)
+        : await input.provider.send(input.message, context);
 
       const normalizedResponse = {
         ...response,
@@ -413,6 +502,15 @@ async function invokeErrorMiddleware(middleware: EmailSendMiddleware[], event: E
   for (const item of middleware) {
     await invokeHook(item.onError, event);
   }
+}
+
+async function invokeErrorHooks(
+  middleware: EmailSendMiddleware[],
+  hookList: NonNullable<EmailClientOptions["hooks"]>[],
+  event: EmailErrorEvent,
+) {
+  await invokeErrorMiddleware(middleware, event);
+  await invokeHooks(hookList, "onError", event);
 }
 
 class ProviderAttemptFailure {

@@ -75,6 +75,23 @@ console.log(result.id); // Mailgun message id, also exposed as result.messageId
 
 The response `id` is Mailgun's queued message id from the response body — match it against delivery events in webhooks or the Mailgun logs.
 
+### Batch sends with recipient variables
+
+Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and Mailgun personalizes every recipient in a single call through its native `recipient-variables` field (up to 1000 recipients). `%recipient.key%` tokens in `subject`, `html`, and `text` are substituted server-side:
+
+```ts
+await email.send({
+  from: "Acme <hello@mg.acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
+
 ## Verify from the CLI
 
 ```bash

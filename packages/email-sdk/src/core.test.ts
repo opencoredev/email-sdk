@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createEmailClient } from "./core.js";
 import { EmailProviderError, EmailValidationError } from "./errors.js";
 import { failingProvider, memoryProvider } from "./testing.js";
+import type { EmailMessage, EmailProvider, EmailProviderContext } from "./types.js";
 
 const message = {
   from: "hello@example.com",
@@ -281,3 +282,212 @@ describe("createEmailClient", () => {
     });
   });
 });
+
+const batchMessage: EmailMessage = {
+  from: "Acme <hello@acme.com>",
+  to: ["a@example.com", "b@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<p>Hi %recipient.name%</p><a href="https://acme.com/u?id=%recipient.id%">Unsub</a>',
+  recipientVariables: {
+    "a@example.com": { name: "Ada", id: "u_1" },
+    "b@example.com": { name: "Linus", id: "u_2" },
+  },
+};
+
+describe("recipientVariables", () => {
+  test("routes to a native sendBulk in a single call", async () => {
+    const { provider, calls } = recordingProvider("native", { bulk: true });
+    const client = createEmailClient({ adapters: [provider] });
+
+    const response = await client.send(batchMessage);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.kind).toBe("sendBulk");
+    expect(calls[0]?.message.to).toEqual(["a@example.com", "b@example.com"]);
+    expect(calls[0]?.message.recipientVariables).toEqual(batchMessage.recipientVariables);
+    expect(response.provider).toBe("native");
+  });
+
+  test("expands per recipient when the adapter has no native batch", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    const response = await client.send(batchMessage);
+
+    expect(provider.raw.sent).toHaveLength(2);
+    const [first, second] = provider.raw.sent;
+    expect(first?.message.to).toBe("a@example.com");
+    expect(first?.message.subject).toBe("Hi Ada");
+    expect(first?.message.html).toContain("Hi Ada");
+    expect(first?.message.html).toContain("id=u_1");
+    expect(first?.message.recipientVariables).toBeUndefined();
+    expect(second?.message.subject).toBe("Hi Linus");
+    expect(second?.message.html).toContain("id=u_2");
+
+    expect(response.provider).toBe("memory");
+    expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
+  });
+
+  test("substitutes html and text and keeps regex-special values literal", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({
+      from: "hello@example.com",
+      to: ["a@example.com"],
+      subject: "Hi %recipient.name%",
+      html: "<p>%recipient.name% owes %recipient.amount%</p>",
+      text: "%recipient.name% owes %recipient.amount%",
+      recipientVariables: {
+        "a@example.com": { name: "A. $& (Ada)", amount: "$100.50" },
+      },
+    });
+
+    const sent = provider.raw.sent[0]?.message;
+    expect(sent?.subject).toBe("Hi A. $& (Ada)");
+    expect(sent?.html).toBe("<p>A. $& (Ada) owes $100.50</p>");
+    expect(sent?.text).toBe("A. $& (Ada) owes $100.50");
+  });
+
+  test("leaves unknown %recipient% tokens intact", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({
+      from: "hello@example.com",
+      to: ["a@example.com"],
+      subject: "Hi %recipient.name% %recipient.missing%",
+      text: "x",
+      recipientVariables: { "a@example.com": { name: "Ada" } },
+    });
+
+    expect(provider.raw.sent[0]?.message.subject).toBe("Hi Ada %recipient.missing%");
+  });
+
+  test("derives a per-recipient idempotency key in the fallback", async () => {
+    const { provider, calls } = recordingProvider("rec");
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({ ...batchMessage, idempotencyKey: "batch-1" });
+
+    expect(calls.map((call) => call.context.idempotencyKey)).toEqual([
+      "batch-1:a@example.com",
+      "batch-1:b@example.com",
+    ]);
+  });
+
+  test("falls back to the next adapter when every recipient fails", async () => {
+    const client = createEmailClient({
+      adapters: [failingProvider("primary"), memoryProvider("backup")],
+      fallback: ["backup"],
+    });
+
+    const response = await client.send(batchMessage);
+
+    expect(response.provider).toBe("backup");
+    expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
+  });
+
+  test("rejects recipientVariables combined with cc", async () => {
+    const client = createEmailClient({ adapters: [memoryProvider()] });
+
+    await expect(client.send({ ...batchMessage, cc: "cc@example.com" })).rejects.toBeInstanceOf(
+      EmailValidationError,
+    );
+  });
+
+  test("rejects recipientVariables for addresses not in to", async () => {
+    const client = createEmailClient({ adapters: [memoryProvider()] });
+
+    await expect(
+      client.send({
+        ...batchMessage,
+        recipientVariables: { "stranger@example.com": { name: "X" } },
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+  });
+
+  test("treats empty recipientVariables as a normal send", async () => {
+    const { provider, calls } = recordingProvider("native", { bulk: true });
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({
+      from: "hello@example.com",
+      to: ["a@example.com", "b@example.com"],
+      subject: "Hi",
+      text: "x",
+      recipientVariables: {},
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.kind).toBe("send");
+  });
+
+  test("rejects duplicate to addresses with recipientVariables", async () => {
+    const client = createEmailClient({ adapters: [memoryProvider()] });
+
+    await expect(
+      client.send({
+        from: "hello@example.com",
+        to: ["a@example.com", "a@example.com"],
+        subject: "Hi",
+        text: "x",
+        recipientVariables: { "a@example.com": { name: "Ada" } },
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+  });
+
+  test("fires onError per rejected recipient and reports partial results in the fallback", async () => {
+    const errored: string[] = [];
+    const provider: EmailProvider = {
+      name: "partial",
+      send(outgoing) {
+        if (outgoing.to === "b@example.com") {
+          throw new EmailProviderError("rejected", { provider: "partial", retryable: false });
+        }
+
+        return { provider: "partial", id: "ok" };
+      },
+    };
+    const client = createEmailClient({
+      adapters: [provider],
+      hooks: {
+        onError(event) {
+          errored.push(String(event.message.to));
+        },
+      },
+    });
+
+    const response = await client.send(batchMessage);
+
+    expect(response.accepted).toEqual(["a@example.com"]);
+    expect(response.rejected).toEqual(["b@example.com"]);
+    expect(errored).toEqual(["b@example.com"]);
+  });
+});
+
+type RecordedCall = {
+  kind: "send" | "sendBulk";
+  message: EmailMessage;
+  context: EmailProviderContext;
+};
+
+function recordingProvider(name: string, options: { bulk?: boolean } = {}) {
+  const calls: RecordedCall[] = [];
+  const provider: EmailProvider = {
+    name,
+    send(message, context) {
+      calls.push({ kind: "send", message, context });
+      return { provider: name, id: `${name}_${calls.length}` };
+    },
+  };
+
+  if (options.bulk) {
+    provider.sendBulk = (message, context) => {
+      calls.push({ kind: "sendBulk", message, context });
+      return { provider: name, id: `${name}_bulk` };
+    };
+  }
+
+  return { provider, calls };
+}
