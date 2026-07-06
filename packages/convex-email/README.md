@@ -195,7 +195,9 @@ export default http;
 This creates `POST /email/webhooks/resend` and records duplicate deliveries idempotently.
 Omitting `verify` is only suitable for local development; public routes should always verify provider signatures or a shared secret.
 
-When a webhook matches a stored email by provider message id, the component records a `webhook` event and normalizes the provider's event name onto the email's `deliveryStatus`: delivered, bounced, or complained. Bounces and complaints are sticky, so a delivery event that arrives late (or is retried out of order) never hides a recorded bounce. Other events, such as opens and clicks, are kept in the event history without changing `deliveryStatus`.
+When a webhook matches a stored email by provider message id, the component records a `webhook` event and normalizes the provider's event name onto the email's `deliveryStatus`: delivered, bounced, or complained. Only permanent failures count as `bounced`: Mailgun `failed` events map to `bounced` only when `severity` is `"permanent"`, and Postmark `Bounce` records only when `Type` is a permanent class (`HardBounce`, `BadEmailAddress`, `ManuallyDeactivated`). Soft/temporary failures stay in the event history without touching `deliveryStatus`, because the provider retries them and the message may still deliver.
+
+Bounces and complaints are sticky against `delivered`: a delivery event that arrives late (or is retried out of order) never hides a recorded bounce or complaint. Between `bounced` and `complained` themselves, the most recent webhook wins. Other events, such as opens and clicks, are kept in the event history without changing `deliveryStatus`.
 
 ## Test Mode
 

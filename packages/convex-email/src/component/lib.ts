@@ -548,8 +548,9 @@ async function applyDeliveryStatus(
   now: number,
 ) {
   if (event === "delivered") {
-    // 2026-07-06: bounced/complained are sticky. Provider webhook retries can arrive out of
-    // order, so a late "delivered" event must never overwrite a recorded bounce or complaint.
+    // 2026-07-06: bounced/complained are sticky against "delivered". Provider webhook retries
+    // can arrive out of order, so a late "delivered" event must never overwrite a recorded
+    // bounce or complaint.
     if (email.deliveryStatus) {
       return;
     }
@@ -564,6 +565,9 @@ async function applyDeliveryStatus(
   }
 
   if (event === "bounced" || event === "complained") {
+    // Between bounced and complained the most recent event wins (both overwrite "delivered"
+    // and each other). Either value means "stop mailing this recipient", so ordering between
+    // them is not load-bearing; the full sequence stays in the event history.
     await ctx.db.patch(email._id, {
       deliveryStatus: event,
       updatedAt: now,

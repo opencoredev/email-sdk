@@ -402,6 +402,81 @@ describe("convex-email component", () => {
     expect(status?.deliveryStatus).toBe("bounced");
   });
 
+  test("Postmark hard bounces stick even when a late Delivery arrives", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({
+        RecordType: "Bounce",
+        Type: "HardBounce",
+        ID: 42,
+        MessageID: providerMessageId,
+      }),
+    });
+    await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ RecordType: "Delivery", MessageID: providerMessageId }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("bounced");
+    expect(status?.deliveredAt).toBeUndefined();
+  });
+
+  test("Postmark transient bounces do not block a later Delivery", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({
+        RecordType: "Bounce",
+        Type: "Transient",
+        ID: 43,
+        MessageID: providerMessageId,
+      }),
+    });
+
+    const afterBounce = await t.query(api.lib.status, { emailId });
+    expect(afterBounce?.deliveryStatus).toBeUndefined();
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ RecordType: "Delivery", MessageID: providerMessageId }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(status?.deliveryStatus).toBe("delivered");
+    expect(events.filter((event) => event.type === "webhook")).toHaveLength(2);
+  });
+
+  test("deduplicates Postmark webhooks by numeric ID even when the retry body differs", async () => {
+    const t = createTest();
+
+    const first = await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ RecordType: "Bounce", Type: "HardBounce", ID: 4242 }),
+    });
+    const second = await t.action(api.worker.handleWebhook, {
+      provider: "postmark",
+      headers: {},
+      body: JSON.stringify({ RecordType: "Bounce", Type: "HardBounce", ID: 4242, Tag: "retry" }),
+    });
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: true, duplicate: true });
+  });
+
   test("normalizes Mailgun-style webhooks through event-data", async () => {
     const t = createTest();
     const { emailId, providerMessageId } = await sendToSent(t);
@@ -422,6 +497,74 @@ describe("convex-email component", () => {
     const status = await t.query(api.lib.status, { emailId });
 
     expect(status?.deliveryStatus).toBe("delivered");
+  });
+
+  test("Mailgun permanent failures map to bounced", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "mailgun",
+      headers: {},
+      body: JSON.stringify({
+        signature: { token: "tok" },
+        "event-data": {
+          event: "failed",
+          severity: "permanent",
+          id: "mg_evt_perm",
+          message: { headers: { "message-id": providerMessageId } },
+        },
+      }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("bounced");
+  });
+
+  test("Mailgun temporary failures are stored without touching deliveryStatus", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "mailgun",
+      headers: {},
+      body: JSON.stringify({
+        signature: { token: "tok" },
+        "event-data": {
+          event: "failed",
+          severity: "temporary",
+          id: "mg_evt_temp",
+          message: { headers: { "message-id": providerMessageId } },
+        },
+      }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(status?.deliveryStatus).toBeUndefined();
+    expect(events.map((event) => event.type)).toContain("webhook");
+  });
+
+  test("between bounced and complained the most recent webhook wins", async () => {
+    const t = createTest();
+    const { emailId, providerMessageId } = await sendToSent(t);
+
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_bounce_first" },
+      body: JSON.stringify({ type: "email.bounced", data: { email_id: providerMessageId } }),
+    });
+    await t.action(api.worker.handleWebhook, {
+      provider: "resend",
+      headers: { "svix-id": "evt_complaint_second" },
+      body: JSON.stringify({ type: "email.complained", data: { email_id: providerMessageId } }),
+    });
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(status?.deliveryStatus).toBe("complained");
   });
 
   test("SMTP adapter reads numeric port from component environment", () => {
