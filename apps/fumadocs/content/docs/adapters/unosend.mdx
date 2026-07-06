@@ -81,4 +81,4 @@ UNOSEND_API_KEY="un_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send to prove the API key and sending domain against the live API.
+Drop `--dry-run` to send for real. Unosend has no extra credentials to get wrong, so a live send that prints an `id` means the key and the verified domain were the whole story. If it fails, the CLI surfaces Unosend's own error message from the response body.

@@ -114,6 +114,7 @@ export const email = createEmailClient({
       region: process.env.AWS_REGION!,
     }),
   ],
+  fallback: ["ses"],
   retry: { retries: 1 },
 });
 ```

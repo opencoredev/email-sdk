@@ -87,6 +87,9 @@ Prints one line per adapter: routing name, required environment variables, and a
 | `sparkpost` | `SPARKPOST_API_KEY` | — |
 | `loops` | `LOOPS_API_KEY`, `LOOPS_TRANSACTIONAL_ID` | — |
 | `sequenzy` | `SEQUENZY_API_KEY` | `SEQUENZY_BASE_URL` |
+| `jetemail` | `JETEMAIL_API_KEY` | `JETEMAIL_BASE_URL` |
+| `lettermint` | `LETTERMINT_API_TOKEN` | `LETTERMINT_BASE_URL`, `LETTERMINT_ROUTE` |
+| `primitive` | `PRIMITIVE_API_KEY` | `PRIMITIVE_BASE_URL` |
 | `plunk` | `PLUNK_API_KEY` | — |
 | `mailtrap` | `MAILTRAP_API_KEY` | — |
 | `scaleway` | `SCALEWAY_SECRET_KEY`, `SCALEWAY_PROJECT_ID` | `SCALEWAY_REGION` |
@@ -216,12 +219,13 @@ Every credential environment variable has a flag override; flags win over the en
 
 | Adapter | Flags |
 | --- | --- |
-| `resend`, `sendgrid`, `unosend`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `sequenzy`, `plunk`, `mailtrap`, `mailpace`, `loops` | `--api-key`, plus `--transactional-id` (Loops) and `--base-url` (Unosend, Sequenzy) |
+| `resend`, `sendgrid`, `unosend`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `sequenzy`, `jetemail`, `primitive`, `plunk`, `mailtrap`, `mailpace`, `loops` | `--api-key`, plus `--transactional-id` (Loops) and `--base-url` (Unosend, Sequenzy, JetEmail, Primitive) |
 | `postmark` | `--server-token`, `--message-stream` |
 | `cloudflare` | `--api-token`, `--account-id`, `--base-url` |
 | `iterable` | `--api-key`, `--campaign-id`, `--base-url`, `--send-at`, `--allow-repeat-marketing-sends` |
 | `ses` | `--access-key-id`, `--secret-access-key`, `--region`, `--session-token`, `--configuration-set`, `--base-url` |
 | `mailgun` | `--api-key`, `--domain`, `--base-url` |
+| `lettermint` | `--api-token`, `--base-url`, `--route` |
 | `scaleway` | `--secret-key`, `--project-id`, `--region` |
 | `zeptomail` | `--token` |
 | `smtp` | `--host`, `--port`, `--secure`, `--require-tls`, `--allow-insecure-auth`, `--user`, `--pass` |

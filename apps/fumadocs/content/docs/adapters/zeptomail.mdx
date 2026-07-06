@@ -80,4 +80,4 @@ ZEPTOMAIL_TOKEN="..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send to prove the token, Mail Agent, and sender domain against the live API.
+Drop `--dry-run` to send for real. ZeptoMail scopes each token to one Mail Agent, so a valid token can still fail when the `from` domain is not verified under that agent. Only a live send confirms the token, the agent, and the sender domain all line up.

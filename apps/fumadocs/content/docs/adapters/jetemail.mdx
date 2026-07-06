@@ -98,4 +98,4 @@ JETEMAIL_API_KEY="transactional_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send to prove the API key and sender domain against the live API.
+Drop `--dry-run` to send for real. The dry run already enforces JetEmail's local rules (the display-name requirement on `from`, the 50-address caps), so what a live send actually tests is the `transactional_` key and whether your sending domain is verified on JetEmail's side.

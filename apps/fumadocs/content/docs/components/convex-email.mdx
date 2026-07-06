@@ -4,7 +4,7 @@ description: Queue email from Convex mutations with durable retries, fallback ad
 icon: Component
 ---
 
-`@opencoredev/convex-email` packages [Email SDK](/docs) as a Convex component. Mutations enqueue email into Convex tables; the component sends it outside the request path with retries and [fallback adapters](/docs/concepts/fallbacks-and-retries), and every send has queryable status and event history.
+`@opencoredev/convex-email` packages [Email SDK](/docs) as a Convex component. Mutations enqueue email into Convex tables, and the component sends it outside the request path with retries and [fallback adapters](/docs/concepts/fallbacks-and-retries). Every send keeps a queryable status and event history.
 
 ```ts
 // In any mutation:
@@ -27,7 +27,7 @@ Use it when email should behave like app state: queued, retried, observable, and
 
 <PackageInstallTabs packageName="@opencoredev/convex-email @opencoredev/email-sdk" />
 
-`@opencoredev/email-sdk` is a peer dependency; the component reuses its adapters and message shape.
+`@opencoredev/email-sdk` is a peer dependency because the component reuses its adapters and message shape.
 
 </Step>
 <Step>
@@ -145,7 +145,7 @@ export const sendWelcomeEmail = mutation({
 
 `send` enqueues the message and returns the email's document id. If an email with the same `idempotencyKey` already exists, the existing id is returned and nothing new is enqueued.
 
-Messages take the standard [EmailMessage fields](/docs/reference/message); per-send args can also override `adapter`, `fallbackAdapters`, `maxAttempts`, `retryBaseMs`, and add `sendMetadata`.
+Messages take the standard [EmailMessage fields](/docs/reference/message). On top of those, per-send args can override `adapter`, `fallbackAdapters`, `maxAttempts`, and `retryBaseMs`, or add `sendMetadata`.
 
 </Step>
 </Steps>
@@ -165,7 +165,7 @@ adapters: [
 
 Override fields follow the credential: `apiKeyEnv`, `serverTokenEnv` (Postmark), `tokenEnv` (ZeptoMail), `domainEnv` (Mailgun), `accountIdEnv` (Cloudflare), `projectIdEnv`/`secretKeyEnv`/`regionEnv` (Scaleway), `accessKeyIdEnv`/`secretAccessKeyEnv` (SES), `hostEnv`/`portEnv`/`userEnv`/`passEnv` (SMTP). Non-serializable Email SDK options (custom `fetch`, SMTP `tls`, function-valued Iterable `dataFields`) are intentionally not part of component config.
 
-`name` sets the routing name used in `defaultAdapter` and `fallbackAdapters`; it defaults to the kind. Pick fallbacks that support the fields you send. [Field support](/docs/adapters/field-support) applies unchanged here.
+`name` sets the routing name used in `defaultAdapter` and `fallbackAdapters`, and defaults to the kind. Pick fallbacks that support the fields you send. [Field support](/docs/adapters/field-support) applies unchanged here.
 
 ## Status and events
 
@@ -267,7 +267,7 @@ await email.setConfig(ctx, {
 
 The fail-before-enqueue rule is deliberate: enabling `testMode` without `sandboxTo` rejects sends instead of guessing, so a misconfigured staging deploy can never email real users.
 
-`exposeApi()` publishes `send`, `sendBatch`, `status`, `listEvents`, and `cancel` as Convex functions. It omits `setConfig`/`getConfig` by default; pass `{ includeConfigApi: true }` only from a module behind your own auth checks.
+`exposeApi()` publishes `send`, `sendBatch`, `status`, `listEvents`, and `cancel` as Convex functions. By default it leaves out `setConfig` and `getConfig`. If you need those, pass `{ includeConfigApi: true }`, and only from a module behind your own auth checks.
 
 ## Webhooks
 
@@ -290,7 +290,7 @@ email.registerRoutes(http, {
 export default http;
 ```
 
-This creates `POST /email/webhooks/resend`. The `verify` callback receives `{ provider, request, body, headers }` and must return `true` to accept; anything else gets a 401.
+This creates `POST /email/webhooks/resend`. The `verify` callback receives `{ provider, request, body, headers }` and must return `true` to accept the delivery. Anything else gets a 401.
 
 <Callout type="warn" title="Always verify in production">
   The route is public on your Convex deployment. Omitting `verify` is for local development only;

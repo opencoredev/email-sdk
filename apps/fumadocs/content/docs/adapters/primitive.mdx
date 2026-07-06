@@ -101,4 +101,4 @@ PRIMITIVE_API_KEY="prim_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send to prove the API key and outbound domain against the live API.
+Drop `--dry-run` to send for real. The single-recipient rule is checked locally, so the live send is really testing your `prim_` key and outbound domain. Check `accepted` and `rejected` in the response: Primitive queues delivery asynchronously, and those arrays tell you what it actually took.

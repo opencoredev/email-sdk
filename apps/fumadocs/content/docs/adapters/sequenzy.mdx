@@ -101,4 +101,4 @@ SEQUENZY_API_KEY="seq_live_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send to prove the API key and sender verification against the live API.
+Drop `--dry-run` to send for real. Sequenzy queues sends as jobs, so success comes back as a `jobId` rather than a message id. If you use template slugs, add `--metadata "sequenzySlug=..."` to the live send, since the slug lookup only happens on Sequenzy's servers.

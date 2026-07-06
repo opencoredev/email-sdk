@@ -110,4 +110,4 @@ LETTERMINT_API_TOKEN="lm_..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send to prove the API token and sending domain against the live API.
+Drop `--dry-run` to send for real. Route resolution only happens on Lettermint's end, so this doubles as your route check: a live send with `LETTERMINT_ROUTE` set proves that slug exists, and one without it proves your project's default route works.

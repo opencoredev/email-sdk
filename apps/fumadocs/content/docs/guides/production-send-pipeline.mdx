@@ -6,14 +6,14 @@ icon: Workflow
 
 This guide grows one `lib/email.ts` from a single adapter into a production send pipeline: retries on transient failures, a fallback route for outages, org-wide defaults, idempotency keys, secret-safe observability, a test that proves the routing, and CLI checks before the first live send.
 
-It assumes you have finished the [quickstart](/docs/getting-started/quickstart). Every step keeps your application code unchanged; `email.send(...)` stays the only call sites know about.
+It assumes you have finished the [quickstart](/docs/getting-started/quickstart). None of the steps touch your application code, since `email.send(...)` stays the only call sites know about.
 
 <Steps>
 <Step>
 
 ### Start with the primary adapter
 
-One shared client, one adapter. These docs use Resend; any [adapter](/docs/adapters) slots in the same way.
+One shared client, one adapter. These docs use Resend, but any [adapter](/docs/adapters) slots in the same way.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -45,7 +45,7 @@ Only [retryable errors](/docs/reference/errors) are retried: HTTP 408, 409, 425,
 
 ### Add a compatible fallback route
 
-Retries handle blips; a fallback adapter handles an outage. Pick a backup that supports every field your messages use, checking [field support](/docs/adapters/field-support) first. Postmark pairs well with Resend here: both carry CC, BCC, reply-to, headers, attachments, and tags.
+Retries cover blips. For a real outage you want a fallback adapter. Pick a backup that supports every field your messages use, checking [field support](/docs/adapters/field-support) first. Postmark pairs well with Resend here: both carry CC, BCC, reply-to, headers, attachments, and tags.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -112,7 +112,7 @@ await email.send(
 );
 ```
 
-The key reaches every adapter attempt through the provider context. Resend, JetEmail, Lettermint, and Primitive forward it as an `Idempotency-Key` header so the provider deduplicates; custom adapters can use it for their own dedupe logic. `defaultsPlugin` can add an `idempotencyKeyPrefix` to namespace keys per environment.
+The key reaches every adapter attempt through the provider context. Resend, JetEmail, Lettermint, and Primitive forward it as an `Idempotency-Key` header so the provider deduplicates. Custom adapters get the same key and can build their own dedupe logic on it. `defaultsPlugin` can add an `idempotencyKeyPrefix` to namespace keys per environment.
 
 </Step>
 <Step>
@@ -193,7 +193,7 @@ test("falls back to the backup route when the primary fails", async () => {
 });
 ```
 
-Run it with `bun test`. Use the message shape production actually sends; that is what catches a fallback route that cannot carry one of your fields.
+Run it with `bun test`. Use the message shape production actually sends, because that is what catches a fallback route that cannot carry one of your fields.
 
 </Step>
 <Step>

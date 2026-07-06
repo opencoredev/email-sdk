@@ -23,7 +23,7 @@ One TypeScript client for transactional email. Pick the providers you actually s
 npm install @opencoredev/email-sdk
 ```
 
-Server-side only (Node 20+ or Bun) — never expose provider API keys in client code.
+The SDK is server-side only and needs Node 20+ or Bun. Keep provider API keys out of client code.
 
 ## Usage
 
