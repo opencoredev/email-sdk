@@ -8,7 +8,7 @@ import {
   sendgridAttachments,
 } from "./payloads.js";
 import type { EmailMessage, EmailProvider } from "./types.js";
-import { hasRecipientVariables } from "./utils.js";
+import { arrayify, assertMaxItems, hasRecipientVariables } from "./utils.js";
 
 export type SendGridProviderOptions = {
   apiKey: string;
@@ -58,6 +58,9 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
 // each recipient's %recipient.key% tokens in a single API call; otherwise one shared personalization.
 function sendgridPersonalizations(message: EmailMessage) {
   if (hasRecipientVariables(message)) {
+    // SendGrid caps personalizations at 1000 per request; fail fast like Mailgun does.
+    assertMaxItems("sendgrid", "recipient", arrayify(message.to), 1000);
+
     return recipientVariableEntries(message).map((entry) => ({
       to: [apiAddress(entry.to)],
       headers: commonHeadersObject(message),

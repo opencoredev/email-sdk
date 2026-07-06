@@ -196,6 +196,26 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.subject).toBe("Hi %recipient.name%");
   });
 
+  test("SendGrid batch sending rejects more than 1000 recipients", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+    const provider = sendgrid({ apiKey: "sg", fetch: capture.fetch });
+    const to = Array.from({ length: 1001 }, (_, index) => `user${index}@example.com`);
+
+    await expect(
+      provider.sendBulk?.(
+        {
+          from: "Acme <hello@acme.com>",
+          to,
+          subject: "Hi %recipient.name%",
+          text: "Hi %recipient.name%",
+          recipientVariables: { "user0@example.com": { name: "Ada" } },
+        },
+        context,
+      ),
+    ).rejects.toThrow(EmailValidationError);
+    expect(capture.calls).toHaveLength(0);
+  });
+
   test("Cloudflare maps REST payloads and delivery status", async () => {
     const capture = jsonCapture({
       success: true,

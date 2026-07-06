@@ -62,7 +62,7 @@ SendGrid's send endpoint returns `202 Accepted` with an empty body, so the adapt
 
 ### Batch sends with recipient variables
 
-Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter emits one `personalizations` entry per recipient with SendGrid `substitutions`, personalizing every recipient in a single API call. `%recipient.key%` tokens in `subject`, `html`, and `text` are substituted server-side:
+Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter emits one `personalizations` entry per recipient with SendGrid `substitutions`, personalizing every recipient in a single API call (up to 1000 recipients — SendGrid's personalizations cap). `%recipient.key%` tokens in `subject`, `html`, and `text` are substituted server-side:
 
 ```ts
 await email.send({

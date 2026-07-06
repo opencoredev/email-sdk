@@ -308,6 +308,30 @@ describe("recipientVariables", () => {
     expect(response.provider).toBe("native");
   });
 
+  test("invokes sendBulk on the provider so class-based adapters keep `this`", async () => {
+    class ClassProvider implements EmailProvider {
+      name = "class";
+      apiKey = "secret_key";
+
+      send() {
+        return { provider: this.name, id: "single" };
+      }
+
+      sendBulk() {
+        // Regression: a detached `perform: provider.sendBulk` loses `this`, making
+        // fields like apiKey silently undefined for class-based adapters.
+        return { provider: this.name, id: this.apiKey };
+      }
+    }
+
+    const client = createEmailClient({ adapters: [new ClassProvider()] });
+
+    const response = await client.send(batchMessage);
+
+    expect(response.provider).toBe("class");
+    expect(response.id).toBe("secret_key");
+  });
+
   test("expands per recipient when the adapter has no native batch", async () => {
     const provider = memoryProvider();
     const client = createEmailClient({ adapters: [provider] });
@@ -405,6 +429,39 @@ describe("recipientVariables", () => {
         recipientVariables: { "stranger@example.com": { name: "X" } },
       }),
     ).rejects.toBeInstanceOf(EmailValidationError);
+  });
+
+  test("rejects variable keys outside letters, numbers, underscores, and hyphens", async () => {
+    const client = createEmailClient({ adapters: [memoryProvider()] });
+
+    // Dotted keys personalize on native provider routes but stay literal in the
+    // client-side fallback regex, so they must fail fast on every route.
+    await expect(
+      client.send({
+        from: "hello@example.com",
+        to: ["a@example.com"],
+        subject: "Hi %recipient.user.name%",
+        text: "x",
+        recipientVariables: { "a@example.com": { "user.name": "Ada" } },
+      }),
+    ).rejects.toThrow(
+      'recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "a@example.com" has "user.name".',
+    );
+  });
+
+  test("accepts variable keys with underscores and hyphens", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({
+      from: "hello@example.com",
+      to: ["a@example.com"],
+      subject: "Hi %recipient.first_name% %recipient.last-name%",
+      text: "x",
+      recipientVariables: { "a@example.com": { first_name: "Ada", "last-name": "Lovelace" } },
+    });
+
+    expect(provider.raw.sent[0]?.message.subject).toBe("Hi Ada Lovelace");
   });
 
   test("treats empty recipientVariables as a normal send", async () => {

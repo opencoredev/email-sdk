@@ -262,9 +262,20 @@ type ProviderAttempt = {
 
 function attemptProvider(input: ProviderAttempt): Promise<EmailProviderResponse> {
   if (hasRecipientVariables(input.message)) {
-    return input.provider.sendBulk
-      ? sendWithRetry({ ...input, perform: input.provider.sendBulk })
-      : sendBulkViaFallback(input);
+    const { provider } = input;
+    const sendBulk = provider.sendBulk;
+
+    if (!sendBulk) {
+      return sendBulkViaFallback(input);
+    }
+
+    // 2026-07-06: sendBulk must stay invoked on the provider (not passed detached), so
+    // class-based adapters that read `this` inside sendBulk keep working. `send` already
+    // gets this via `input.provider.send(...)` in sendWithRetry.
+    return sendWithRetry({
+      ...input,
+      perform: (message, context) => sendBulk.call(provider, message, context),
+    });
   }
 
   return sendWithRetry(input);

@@ -134,6 +134,20 @@ export function assertRecipientVariables(message: EmailMessage) {
       { unknown },
     );
   }
+
+  // 2026-07-06: variable keys must match the fallback substitution token `%recipient.<key>%`
+  // (regex [\w-]+). Keys like "user.name" would personalize on native provider routes but
+  // silently stay literal in the client-side fallback, so reject them everywhere instead.
+  for (const [address, variables] of Object.entries(message.recipientVariables ?? {})) {
+    for (const key of Object.keys(variables)) {
+      if (!/^[\w-]+$/.test(key)) {
+        throw new EmailValidationError(
+          `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "${address}" has "${key}".`,
+          { address, key },
+        );
+      }
+    }
+  }
 }
 
 export async function readErrorBody(response: Response): Promise<unknown> {

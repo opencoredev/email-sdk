@@ -175,13 +175,14 @@ await email.send({
 });
 ```
 
-Adapters with a native batch mechanism send the whole list in **one API call** with provider-side substitution — currently [Mailgun](/docs/adapters/mailgun) (`recipient-variables`, up to 1000 recipients) and [SendGrid](/docs/adapters/sendgrid) (one personalization per recipient). Every other adapter falls back to **one rendered send per recipient**, substituting tokens client-side, so the same code works on any route. The send resolves with a single [response](/docs/reference/client#response): native batches return the provider's id, and the client-side fallback aggregates per-recipient results into `accepted` and `rejected`.
+Adapters with a native batch mechanism send the whole list in **one API call** with provider-side substitution — currently [Mailgun](/docs/adapters/mailgun) (`recipient-variables`) and [SendGrid](/docs/adapters/sendgrid) (one personalization per recipient), each capped at 1000 recipients per call. Every other adapter falls back to **one rendered send per recipient**, substituting tokens client-side, so the same code works on any route. The send resolves with a single [response](/docs/reference/client#response): native batches return the provider's id, and the client-side fallback aggregates per-recipient results into `accepted` and `rejected`.
 
 - Each `recipientVariables` key must be an address in `to`; an unknown address fails fast.
+- Variable keys may only contain letters, numbers, underscores, and hyphens (`[\w-]`); anything else — like a dotted `user.name` — fails fast so substitution behaves identically on native and fallback routes.
 - `to` addresses must be unique; a duplicate combined with `recipientVariables` fails fast.
 - `cc` and `bcc` cannot be combined with `recipientVariables` — every recipient gets an individualized message.
 - An unknown `%recipient.key%` token is left intact, matching native provider behavior.
-- In the client-side fallback, each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one. If the send has an idempotency key (from send options or the message), it is suffixed per recipient (`<key>:<address>`) so retries dedupe per recipient instead of dropping the batch. Only when every recipient fails does the adapter count as failed and the next [fallback route](/docs/concepts/fallbacks-and-retries) run.
+- In the client-side fallback, each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one. If the send has an idempotency key (from send options or the message), it is suffixed per recipient (`<key>:<address>`) so retries dedupe per recipient instead of dropping the batch. The suffixed key counts toward provider key-length limits (Resend caps `Idempotency-Key` at 256 characters), so keep base keys short when using `recipientVariables`. Only when every recipient fails does the adapter count as failed and the next [fallback route](/docs/concepts/fallbacks-and-retries) run.
 
 ## Validation
 
@@ -197,6 +198,7 @@ Adapters with a native batch mechanism send the whole list in **one API call** w
 | `recipientVariables` with `cc`/`bcc` | `recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.` |
 | `recipientVariables` address not in `to` | `recipientVariables reference addresses that are not in "to": <addresses>.` |
 | `recipientVariables` duplicate `to` | `recipientVariables require unique "to" addresses, but "<address>" appears more than once.` |
+| `recipientVariables` invalid key | `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "<address>" has "<key>".` |
 
 Adapters add a second fail-fast layer for fields their provider cannot represent:
 
