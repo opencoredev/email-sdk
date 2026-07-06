@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Everything maps: `cc`, `bcc`, `headers`, `attachments`, `tags`, `metadata`, and even multiple `replyTo` addresses (sent as `reply_to_list`).
+Everything maps: `cc`, `bcc`, `headers`, `attachments`, `tags`, `metadata`, and even multiple `replyTo` addresses (sent as `reply_to_list`). `sendAt` schedules the send natively as `send_at` (a Unix timestamp in seconds) — SendGrid accepts at most 72 hours in the future.
 
 ```ts
 const result = await email.send({

@@ -110,6 +110,19 @@ describe("createEmailClient", () => {
     ).rejects.toBeInstanceOf(EmailValidationError);
   });
 
+  test("validates sendAt before any adapter runs", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await expect(client.send({ ...message, sendAt: "not-a-date" })).rejects.toThrow(
+      'Email message sendAt is not a valid date: "not-a-date".',
+    );
+    expect(provider.raw.sent).toHaveLength(0);
+
+    const response = await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
+    expect(response.provider).toBe("memory");
+  });
+
   test("captures batch failures without throwing", async () => {
     const client = createEmailClient({ adapters: [memoryProvider()] });
     const results = await client.sendBatch([

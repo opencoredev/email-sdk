@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Brevo maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata` (as `params`). `replyTo` accepts a single address — two or more throw an `EmailValidationError` before any request.
+Brevo maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata` (as `params`). `replyTo` accepts a single address — two or more throw an `EmailValidationError` before any request. `sendAt` schedules the send natively as Brevo's `scheduledAt` (ISO 8601).
 
 ```ts
 const result = await email.send({

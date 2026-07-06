@@ -46,7 +46,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Resend maps every common transactional field: `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags`.
+Resend maps every common transactional field: `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags`. `sendAt` schedules the send natively — it is sent as `scheduled_at` in ISO 8601 form.
 
 ```ts
 const result = await email.send(

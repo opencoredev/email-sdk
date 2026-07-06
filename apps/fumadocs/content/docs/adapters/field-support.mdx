@@ -12,45 +12,45 @@ Email SDK keeps one message shape, but provider APIs do not expose the same feat
 
 The best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.
 
-| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags    | Attachments |
-| ----------------------- | --- | --- | -------- | ------- | -------- | ------- | ----------- |
-| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
-| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
-| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
-| Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         |
-| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
-| AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         |
-| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
-| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         |
-| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         |
-| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values  | Yes         |
-| Mailtrap                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
-| JetEmail                | Yes | Yes | Yes      | Yes     | No       | No      | Yes         |
-| Lettermint              | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         |
+| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags    | Attachments | Send at |
+| ----------------------- | --- | --- | -------- | ------- | -------- | ------- | ----------- | ------- |
+| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | Yes     |
+| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
+| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         | No      |
+| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         | No      |
+| AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | No      |
+| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         | Yes     |
+| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values  | Yes         | Yes     |
+| Mailtrap                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
+| JetEmail                | Yes | Yes | Yes      | Yes     | No       | No      | Yes         | No      |
+| Lettermint              | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
 
 ## Narrow adapters
 
 Useful services whose public APIs cover less of the `EmailMessage` shape. The SDK keeps them safe by rejecting what they cannot represent.
 
-| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments |
-| --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- |
-| SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         |
-| Iterable  | No  | No  | No       | No      | Yes      | No     | No          |
-| Loops     | No  | No  | No       | No      | Yes      | No     | Yes         |
-| Primitive | No  | No  | No       | No      | No       | No     | Yes         |
-| Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         |
-| Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         |
-| Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         |
-| ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         |
-| MailPace  | Yes | Yes | Yes      | No      | No       | No     | No          |
+| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments | Send at |
+| --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- | ------- |
+| SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         | Yes     |
+| Iterable  | No  | No  | No       | No      | Yes      | No     | No          | No      |
+| Loops     | No  | No  | No       | No      | Yes      | No     | Yes         | No      |
+| Primitive | No  | No  | No       | No      | No       | No     | Yes         | No      |
+| Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         | No      |
+| Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         | No      |
+| Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         | No      |
+| ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         | No      |
+| MailPace  | Yes | Yes | Yes      | No      | No       | No     | No          | No      |
 
 ## SMTP transport
 
 Built in, no Nodemailer. SMTP maps address fields and headers directly into the message but has no provider-side concepts like tags or metadata.
 
-| Adapter | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments |
-| ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- |
-| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          |
+| Adapter | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments | Send at |
+| ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- | ------- |
+| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          | No      |
 
 ## Recipient variables
 
@@ -72,6 +72,7 @@ A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the b
 | Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
 | Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
 | Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
+| Scheduled sends (`sendAt`)            | Resend, SendGrid, Mailgun, Brevo, MailerSend       |
 
 This pair works because both routes can carry every field used:
 
@@ -100,6 +101,25 @@ Before adding a backup route, run through this checklist:
 - Does it preserve `metadata` or `tags` your app relies on for provider dashboards, analytics, or routing?
 - Does it support `replyTo` and `headers` if support workflows depend on them?
 - Has the backup provider account been live-verified (one real smoke send) in the target environment?
+
+## Scheduled delivery
+
+`sendAt` (a `Date` or ISO 8601 string) maps to each provider's native scheduling parameter — the SDK never queues or delays anything itself:
+
+| Adapter                 | Provider parameter    | Wire format                          |
+| ----------------------- | --------------------- | ------------------------------------ |
+| Resend                  | `scheduled_at`        | ISO 8601                             |
+| SendGrid                | `send_at`             | Unix timestamp (seconds)             |
+| Mailgun                 | `o:deliverytime`      | RFC 2822                             |
+| MailerSend              | `send_at`             | Unix timestamp (seconds)             |
+| Brevo                   | `scheduledAt`         | ISO 8601                             |
+| Mailchimp Transactional | `send_at`             | `YYYY-MM-DD HH:MM:SS` (UTC)          |
+| SparkPost               | `options.start_time`  | `YYYY-MM-DDTHH:MM:SS+00:00`          |
+
+Two things to keep in mind:
+
+- The SDK validates that `sendAt` parses to a real date but does not enforce a scheduling window — providers apply their own limits (SendGrid and MailerSend cap at 72 hours out, Mailgun at 3–7 days depending on plan, SparkPost at 3 days) and most treat a past date as "send now".
+- Adapters without a `Yes` in the *Send at* column reject `sendAt` before any request, like every other unmapped field. If you need scheduling with those providers, delay the `send` call with your own queue or job scheduler.
 
 ## Attachment rules
 
