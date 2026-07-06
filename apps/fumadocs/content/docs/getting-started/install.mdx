@@ -17,7 +17,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 <Callout type="warn" title="Package name vs. command name">
   The package is `@opencoredev/email-sdk`; the installed binary is `email-sdk`. The unscoped
-  `email-sdk` package on npm is an unrelated project — never `npm install email-sdk`.
+  `email-sdk` package on npm is an unrelated project, so don't `npm install email-sdk`.
 </Callout>
 
 ## Run the CLI
@@ -40,8 +40,8 @@ import { resend } from "@opencoredev/email-sdk/resend";
     bunx --bun --package @opencoredev/email-sdk email-sdk adapters
     ```
 
-    There is no safe no-install form for plain `npx` — the unscoped `email-sdk` package is
-    unrelated — so npm users should install first.
+    There is no safe no-install form for plain `npx`, because the unscoped `email-sdk` package
+    is unrelated. npm users should install first.
 
   </Tab>
 </Tabs>
@@ -61,6 +61,6 @@ RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
 
 ## Keep credentials server-side
 
-Provider API keys belong in environment variables (or CLI flags for one-off commands) — never in browser bundles or client-side code. The SDK is a server library by design.
+Provider API keys belong in environment variables, or CLI flags for one-off commands. They have no business in browser bundles or client-side code; the SDK is a server library by design.
 
 Ready to send? Continue with the [quickstart](/docs/getting-started/quickstart).

@@ -4,7 +4,7 @@ description: How adapters register routing names, map messages to provider APIs,
 icon: Plug
 ---
 
-An adapter is a module that knows how to send one normalized `EmailMessage` through one service or transport. The client holds a registry of adapters keyed by routing name; everything else — defaults, fallbacks, per-send overrides — is built on those names.
+An adapter is a module that knows how to send one normalized `EmailMessage` through one service or transport. The client holds a registry of adapters keyed by routing name. Everything else (defaults, fallbacks, per-send overrides) is built on those names.
 
 ```ts
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -16,7 +16,7 @@ const email = createEmailClient({
     resend({ apiKey: process.env.RESEND_API_KEY! }),
     postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
   ],
-  // defaultAdapter is optional — it falls back to the first adapter ("resend" here)
+  // defaultAdapter is optional; it falls back to the first adapter ("resend" here)
 });
 ```
 
@@ -27,14 +27,14 @@ Each adapter import is a separate entry point (`@opencoredev/email-sdk/resend`, 
 Every adapter does three things:
 
 1. **Maps** supported `EmailMessage` fields to the provider's API payload.
-2. **Rejects** unsupported fields with an `EmailValidationError` before any request — never silently drops data. See [field support](/docs/adapters/field-support).
+2. **Rejects** unsupported fields with an `EmailValidationError` before any request, instead of silently dropping data. See [field support](/docs/adapters/field-support).
 3. **Normalizes** the result into `{ provider, id?, messageId?, accepted?, rejected?, raw? }` and provider failures into typed [errors](/docs/reference/errors) with retryability info.
 
 The full interface for building your own is in the [adapter contract reference](/docs/reference/adapter-contract).
 
 ## Routing names
 
-Adapter factories register fixed routing names — `resend`, `postmark`, `sendgrid`, `cloudflare`, `unosend`, `ses`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `iterable`, `loops`, `sequenzy`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, and `smtp` (the SMTP factory accepts a `name` option for running several SMTP routes side by side).
+Adapter factories register fixed routing names: `resend`, `postmark`, `sendgrid`, `cloudflare`, `unosend`, `ses`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `iterable`, `loops`, `sequenzy`, `jetemail`, `lettermint`, `primitive`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, and `smtp`. The SMTP factory also accepts a `name` option for running several SMTP routes side by side.
 
 Those names are what you pass everywhere a route is selected:
 
@@ -50,7 +50,7 @@ const transactional = email.withAdapter("postmark");
 await transactional.send(message);
 ```
 
-Selecting a name that is not registered throws `EmailProviderNotFoundError` — routes are explicit, never guessed.
+Selecting a name that is not registered throws `EmailProviderNotFoundError`. The client never guesses a route.
 
 ## Escape hatches
 
@@ -65,7 +65,7 @@ The [memory test adapter](/docs/guides/test-email-behavior) uses the same hatch 
 
 ## Naming aliases
 
-`adapter` and `provider` mean the same thing throughout the API. `providers`, `defaultProvider`, `fallbackProviders`, `email.provider()`, and `email.withProvider()` are aliases kept for compatibility — new code should prefer the `adapter` spellings.
+`adapter` and `provider` mean the same thing throughout the API. `providers`, `defaultProvider`, `fallbackProviders`, `email.provider()`, and `email.withProvider()` are aliases kept for compatibility. New code should prefer the `adapter` spellings.
 
 ## Next
 
