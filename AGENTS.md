@@ -38,7 +38,18 @@ bun run release:ci
 That runs type checks, tests, community registry + docs version validation,
 build, and npm package dry-run.
 
-For linting, lint only the files you touched:
+Lint guidance lives in [Local Checks](#local-checks) below.
+
+For a quick local CLI smoke test:
+
+```bash
+bun run build
+packages/email-sdk/dist/cli.js adapters
+```
+
+## Local Checks
+
+Lint the files you touched before committing:
 
 ```bash
 bunx oxlint <path>
@@ -49,11 +60,14 @@ repo, which reformats roughly 170 files that have drifted from the formatter.
 CI does not enforce formatting or linting, so a repo-wide reformat only adds
 noise to your diff.
 
-For a quick local CLI smoke test:
+When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from `.env.local`:
 
 ```bash
-bun run build
-packages/email-sdk/dist/cli.js adapters
+bun run live:sequenzy
+bun run live:lettermint
+# Adapters without a script alias run directly:
+bun scripts/check-jetemail-account.ts
+bun scripts/check-primitive-account.ts
 ```
 
 ## Major Versions
