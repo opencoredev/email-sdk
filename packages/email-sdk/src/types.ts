@@ -183,6 +183,12 @@ export type EmailClientOptions<TPlugins extends readonly EmailPlugin[] = readonl
   retry?: EmailRetryConfig;
   hooks?: EmailHooks;
   plugins?: TPlugins;
+  /**
+   * Anonymous usage analytics (adapter names and success/failure counts — never
+   * email content, addresses, or credentials). Defaults to enabled; set `false`
+   * here or `EMAIL_SDK_TELEMETRY=0` / `DO_NOT_TRACK=1` in the environment to opt out.
+   */
+  telemetry?: boolean;
 };
 
 export type SendBatchItem = EmailMessage & {
