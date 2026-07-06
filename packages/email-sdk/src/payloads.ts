@@ -8,6 +8,7 @@ import {
   formatAddresses,
   headersToArray,
   headersToObject,
+  toSendAtDate,
 } from "./utils.js";
 
 export function simpleAddress(address: string) {
@@ -157,6 +158,36 @@ export function expandRecipientMessage(message: EmailMessage, entry: RecipientEn
     html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
     text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
   };
+}
+
+export function sendAtDate(message: EmailMessage) {
+  return message.sendAt === undefined ? undefined : toSendAtDate(message.sendAt);
+}
+
+export function sendAtIso(message: EmailMessage) {
+  return sendAtDate(message)?.toISOString();
+}
+
+export function sendAtUnixSeconds(message: EmailMessage) {
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : Math.floor(date.getTime() / 1000);
+}
+
+export function sendAtRfc2822(message: EmailMessage) {
+  // Mailgun documents o:deliverytime as RFC 2822, e.g. "Fri, 10 Jul 2026 12:30:00 +0000".
+  return sendAtDate(message)?.toUTCString().replace(/GMT$/, "+0000");
+}
+
+export function sendAtIsoUtcSeconds(message: EmailMessage) {
+  // SparkPost's start_time grammar is YYYY-MM-DDTHH:MM:SS±HH:MM — no milliseconds, no "Z".
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : `${date.toISOString().slice(0, 19)}+00:00`;
+}
+
+export function sendAtUtcDateTime(message: EmailMessage) {
+  // Mailchimp Transactional's send_at grammar is "YYYY-MM-DD HH:MM:SS" in UTC.
+  const date = sendAtDate(message);
+  return date === undefined ? undefined : date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 export function commonHeadersObject(message: EmailMessage) {

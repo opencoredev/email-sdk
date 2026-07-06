@@ -5,6 +5,7 @@ import {
   commonHeadersObject,
   optionalApiAddresses,
   recipientVariableEntries,
+  sendAtUnixSeconds,
   sendgridAttachments,
 } from "./payloads.js";
 import type { EmailMessage, EmailProvider } from "./types.js";
@@ -37,6 +38,7 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
         ],
         attachments: await sendgridAttachments(message),
         categories: message.tags?.map((tag) => tag.value),
+        send_at: sendAtUnixSeconds(message),
       };
     },
     parseResponse(body, _message, response) {

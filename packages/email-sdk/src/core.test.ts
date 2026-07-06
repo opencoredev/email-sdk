@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
-import { EmailProviderError, EmailValidationError } from "./errors.js";
+import { EmailProviderError, EmailSdkError, EmailValidationError } from "./errors.js";
+import { postmark } from "./postmark.js";
 import { failingProvider, memoryProvider } from "./testing.js";
 import type { EmailMessage, EmailProvider, EmailProviderContext } from "./types.js";
 
@@ -108,6 +109,55 @@ describe("createEmailClient", () => {
         subject: "No body",
       }),
     ).rejects.toBeInstanceOf(EmailValidationError);
+  });
+
+  test("validates sendAt before any adapter runs", async () => {
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await expect(client.send({ ...message, sendAt: "not-a-date" })).rejects.toThrow(
+      'Email message sendAt is not a valid date: "not-a-date".',
+    );
+    expect(provider.raw.sent).toHaveLength(0);
+
+    const response = await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
+    expect(response.provider).toBe("memory");
+  });
+
+  test("sendAt on a fallback route without scheduling support fails instead of sending unscheduled", async () => {
+    let fallbackRequests = 0;
+    const backup = postmark({
+      serverToken: "server",
+      fetch: () => {
+        fallbackRequests += 1;
+        throw new Error("unreachable — postmark must reject sendAt before any request");
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [failingProvider(), backup],
+      fallback: ["postmark"],
+    });
+
+    const error = await client
+      .send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") })
+      .then(() => {
+        throw new Error("send should have failed");
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(EmailSdkError);
+    expect((error as EmailSdkError).code).toBe("all_providers_failed");
+
+    // The fallback's rejection is recorded as an EmailProviderError wrapping the
+    // adapter's EmailValidationError (toProviderError keeps the original as `cause`).
+    const failures = (error as EmailSdkError).details as EmailProviderError[];
+    const fallbackFailure = failures.find((failure) => failure.provider === "postmark");
+    expect(fallbackFailure?.message).toBe(
+      "postmark does not support these EmailMessage fields: sendAt.",
+    );
+    expect(fallbackFailure?.cause).toBeInstanceOf(EmailValidationError);
+    expect(fallbackRequests).toBe(0);
   });
 
   test("captures batch failures without throwing", async () => {
@@ -410,6 +460,49 @@ describe("recipientVariables", () => {
 
     expect(response.provider).toBe("backup");
     expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
+  });
+
+  test("expanded per-recipient sends inherit sendAt", async () => {
+    const sendAt = new Date("2026-07-10T12:30:00.000Z");
+    const provider = memoryProvider();
+    const client = createEmailClient({ adapters: [provider] });
+
+    await client.send({ ...batchMessage, sendAt });
+
+    expect(provider.raw.sent).toHaveLength(2);
+    for (const sent of provider.raw.sent) {
+      expect(sent.message.sendAt).toBe(sendAt);
+    }
+  });
+
+  test("sendAt with recipientVariables on an adapter without scheduling rejects every expanded send", async () => {
+    let requests = 0;
+    const adapter = postmark({
+      serverToken: "server",
+      fetch: () => {
+        requests += 1;
+        throw new Error("unreachable — postmark must reject sendAt before any request");
+      },
+    });
+    const client = createEmailClient({ adapters: [adapter] });
+
+    const error = await client
+      .send({ ...batchMessage, sendAt: new Date("2026-07-10T12:30:00.000Z") })
+      .then(() => {
+        throw new Error("send should have failed");
+      })
+      .catch((caught: unknown) => caught);
+
+    // Every expanded per-recipient send runs the adapter's field assertion, so the
+    // whole batch fails fast instead of delivering unscheduled mail.
+    expect(error).toBeInstanceOf(EmailSdkError);
+    expect((error as EmailSdkError).code).toBe("all_recipients_failed");
+    const failures = (error as EmailSdkError).details as EmailProviderError[];
+    expect(failures).toHaveLength(2);
+    for (const failure of failures) {
+      expect(failure.message).toBe("postmark does not support these EmailMessage fields: sendAt.");
+    }
+    expect(requests).toBe(0);
   });
 
   test("rejects recipientVariables combined with cc", async () => {

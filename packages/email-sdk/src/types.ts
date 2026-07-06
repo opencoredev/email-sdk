@@ -51,6 +51,7 @@ export type EmailMessage = {
   tags?: EmailTag[];
   metadata?: Record<string, string | number | boolean | null>;
   recipientVariables?: RecipientVariables;
+  sendAt?: Date | string;
   idempotencyKey?: string;
 };
 

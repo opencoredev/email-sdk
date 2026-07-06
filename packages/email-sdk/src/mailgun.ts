@@ -1,5 +1,5 @@
 import { EmailProviderError } from "./errors.js";
-import { recipientVariablesMap } from "./payloads.js";
+import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailProvider } from "./types.js";
 import {
   arrayify,
@@ -64,6 +64,9 @@ export function mailgun(options: MailgunProviderOptions): EmailProvider<{ baseUr
     for (const tag of message.tags ?? []) {
       body.append("o:tag", tag.value);
     }
+
+    const deliveryTime = sendAtRfc2822(message);
+    if (deliveryTime) body.set("o:deliverytime", deliveryTime);
 
     for (const attachment of message.attachments ?? []) {
       const bytes = await attachmentToBytes(attachment);

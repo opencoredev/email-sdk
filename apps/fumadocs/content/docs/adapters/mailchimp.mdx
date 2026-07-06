@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Mailchimp maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata`.
+Mailchimp maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata`. `sendAt` schedules the send natively as `send_at` (UTC) — note Mailchimp only schedules email for accounts with a positive balance.
 
 ```ts
 const result = await email.send({

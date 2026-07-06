@@ -57,7 +57,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Mailgun maps every common field: `cc`, `bcc`, `replyTo`, `headers` (as `h:Name`), `attachments` (multipart `attachment`/`inline` parts by disposition), `tags` (values as `o:tag`), and `metadata` (as `v:key` variables, surfaced later in webhooks and logs).
+Mailgun maps every common field: `cc`, `bcc`, `replyTo`, `headers` (as `h:Name`), `attachments` (multipart `attachment`/`inline` parts by disposition), `tags` (values as `o:tag`), and `metadata` (as `v:key` variables, surfaced later in webhooks and logs). `sendAt` becomes a native scheduled send via `o:deliverytime` (RFC 2822) — Mailgun accepts up to 3 days out on most plans, 7 with extended storage.
 
 ```ts
 const result = await email.send({

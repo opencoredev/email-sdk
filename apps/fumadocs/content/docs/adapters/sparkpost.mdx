@@ -46,7 +46,7 @@ export const email = createEmailClient({
 
 ## Send
 
-SparkPost maps `replyTo`, `headers`, `attachments`, `metadata`, and `tags` (each tag becomes a `substitution_data` entry keyed by its name).
+SparkPost maps `replyTo`, `headers`, `attachments`, `metadata`, and `tags` (each tag becomes a `substitution_data` entry keyed by its name). `sendAt` schedules the transmission natively as `options.start_time` — SparkPost accepts at most 3 days in the future.
 
 ```ts
 const result = await email.send({

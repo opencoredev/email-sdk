@@ -92,6 +92,25 @@ export function assertMessage(message: EmailMessage) {
       );
     }
   }
+
+  if (message.sendAt !== undefined) {
+    toSendAtDate(message.sendAt);
+  }
+}
+
+// Past sendAt values are intentionally allowed: providers either send immediately or reject
+// with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
+export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
+  const date = sendAt instanceof Date ? sendAt : new Date(sendAt);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new EmailValidationError(
+      `Email message sendAt is not a valid date: "${String(sendAt)}".`,
+      { sendAt },
+    );
+  }
+
+  return date;
 }
 
 export function hasRecipientVariables(message: EmailMessage): boolean {
@@ -289,11 +308,22 @@ export async function attachmentToBytes(attachment: EmailAttachment) {
 }
 
 export type MessageFieldSupport = Partial<
-  Record<"cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata", boolean>
+  Record<
+    "cc" | "bcc" | "replyTo" | "headers" | "attachments" | "tags" | "metadata" | "sendAt",
+    boolean
+  >
 >;
 
 export const SUPPORTED_MESSAGE_FIELDS = {
-  resend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  resend: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
   postmark: {
     cc: true,
     bcc: true,
@@ -311,6 +341,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
   cloudflare: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   unosend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
@@ -323,8 +354,17 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
-  mailersend: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+  mailersend: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
   brevo: {
     cc: true,
     bcc: true,
@@ -333,9 +373,25 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     tags: true,
     metadata: true,
+    sendAt: true,
   },
-  mailchimp: { cc: true, bcc: true, headers: true, attachments: true, tags: true, metadata: true },
-  sparkpost: { replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
+  mailchimp: {
+    cc: true,
+    bcc: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+    sendAt: true,
+  },
+  sparkpost: {
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+    sendAt: true,
+  },
   iterable: { metadata: true },
   loops: { attachments: true, metadata: true },
   sequenzy: { replyTo: true, attachments: true, metadata: true },
@@ -380,6 +436,7 @@ export function assertSupportedMessageFields(
   if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
   if (message.tags?.length && !supported.tags) unsupported.push("tags");
   if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
+  if (message.sendAt !== undefined && !supported.sendAt) unsupported.push("sendAt");
 
   if (unsupported.length > 0) {
     throw new EmailValidationError(
