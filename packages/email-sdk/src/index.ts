@@ -28,6 +28,7 @@ export type {
   EmailRetryConfig,
   EmailSendMiddleware,
   EmailTag,
+  RecipientVariables,
   SendBatchItem,
   SendBatchResult,
   SendOptions,

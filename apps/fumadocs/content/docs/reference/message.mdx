@@ -20,6 +20,7 @@ type EmailMessage = {
   attachments?: EmailAttachment[];
   tags?: EmailTag[];
   metadata?: Record<string, string | number | boolean | null>;
+  recipientVariables?: Record<string, Record<string, string | number | boolean>>;
   idempotencyKey?: string;
 };
 ```
@@ -78,6 +79,10 @@ type EmailMessage = {
     metadata: {
       description: "Provider-side key-value data attached to the send.",
       type: "Record<string, string | number | boolean | null>",
+    },
+    recipientVariables: {
+      description: "Per-recipient %recipient.key% substitution values, keyed by recipient address.",
+      type: "Record<string, Record<string, string | number | boolean>>",
     },
     idempotencyKey: {
       description: "Stable send identity, used when send options set none.",
@@ -153,6 +158,32 @@ Support differs per provider — Resend has tags but no metadata, Iterable has m
 
 `idempotencyKey` gives the send a stable identity across retries. The send-options key wins when both are set; the message field is the fallback. Only Resend transmits it natively — see [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) for per-adapter behavior.
 
+## Recipient variables
+
+`recipientVariables` turns one `send` into a personalized batch: keep a single `to` list and give each recipient its own values, keyed by email address. Reference a value anywhere in `subject`, `html`, or `text` with the `%recipient.key%` token.
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<p>Hi %recipient.name%</p><a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
+
+Adapters with a native batch mechanism send the whole list in **one API call** with provider-side substitution — currently [Mailgun](/docs/adapters/mailgun) (`recipient-variables`) and [SendGrid](/docs/adapters/sendgrid) (one personalization per recipient), each capped at 1000 recipients per call. Every other adapter falls back to **one rendered send per recipient**, substituting tokens client-side, so the same code works on any route. The send resolves with a single [response](/docs/reference/client#response): native batches return the provider's id, and the client-side fallback aggregates per-recipient results into `accepted` and `rejected`.
+
+- Each `recipientVariables` key must be an address in `to`; an unknown address fails fast.
+- Variable keys may only contain letters, numbers, underscores, and hyphens (`[\w-]`); anything else — like a dotted `user.name` — fails fast so substitution behaves identically on native and fallback routes.
+- `to` addresses must be unique; a duplicate combined with `recipientVariables` fails fast.
+- `cc` and `bcc` cannot be combined with `recipientVariables` — every recipient gets an individualized message.
+- An unknown `%recipient.key%` token is left intact, matching native provider behavior.
+- In the client-side fallback, each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one. If the send has an idempotency key (from send options or the message), it is suffixed per recipient (`<key>:<address>`) so retries dedupe per recipient instead of dropping the batch. The suffixed key counts toward provider key-length limits (Resend caps `Idempotency-Key` at 256 characters), so keep base keys short when using `recipientVariables`. Only when every recipient fails does the adapter count as failed and the next [fallback route](/docs/concepts/fallbacks-and-retries) run.
+
 ## Validation
 
 `send` validates the message before any adapter runs and throws `EmailValidationError` (code `validation_error`) with one of these exact messages:
@@ -164,6 +195,10 @@ Support differs per provider — Resend has tags but no metadata, Iterable has m
 | `subject` is required | `Email message requires a subject.` |
 | `html` or `text` is required | `Email message requires either html or text content.` |
 | Attachments need data | `Attachment "<filename>" requires content or path.` |
+| `recipientVariables` with `cc`/`bcc` | `recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.` |
+| `recipientVariables` address not in `to` | `recipientVariables reference addresses that are not in "to": <addresses>.` |
+| `recipientVariables` duplicate `to` | `recipientVariables require unique "to" addresses, but "<address>" appears more than once.` |
+| `recipientVariables` invalid key | `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "<address>" has "<key>".` |
 
 Adapters add a second fail-fast layer for fields their provider cannot represent:
 
