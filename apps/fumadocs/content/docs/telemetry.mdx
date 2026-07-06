@@ -1,0 +1,149 @@
+---
+title: Telemetry
+description: What anonymous usage analytics Email SDK collects, how error reports are redacted before upload, where the anonymous ID is stored, and every way to opt out.
+icon: Activity
+---
+
+Email SDK collects **anonymous, aggregate usage analytics** so maintainers can see
+which adapters and CLI commands are actually used and how often sends succeed. It
+is opt-out, never tied to an identity, and it never carries the contents of your
+email. The first run prints a one-time notice to stderr with opt-out instructions.
+
+<Callout type="info">
+  Telemetry never sees your messages. Email content, subjects, addresses, headers,
+  attachments, and API keys are never read, hashed, or transmitted — only the
+  metadata described on this page, tied to a random anonymous ID.
+</Callout>
+
+## What is collected
+
+Every event carries a small set of common properties plus a few event-specific
+ones. Custom adapter names are reported as `custom`, so telemetry never contains a
+user-defined string.
+
+| Property | Description |
+| --- | --- |
+| `sdk_version` | Installed `@opencoredev/email-sdk` version. |
+| `node_version`, `platform`, `arch` | Node.js version and OS/CPU family. |
+| `ci`, `ci_vendor` | Whether the run is in CI, and which provider (see [CI detection](#ci-detection)). |
+| `source` | `sdk` for library use, `cli` for the bundled CLI. |
+
+### Events
+
+| Event | When | Event-specific properties |
+| --- | --- | --- |
+| `client created` | Once per `createEmailClient` call | `adapters[]` (normalized), `adapter_count`, `plugin_count`, `default_adapter` |
+| `email sent` | Once per `send()` call | `recipients` (to+cc+bcc count), `has_attachments`, `used_recipient_variables`, `used_send_at`, `adapter`, `delivery_path`, `success`, `duration_ms`, `error_code` (on failure) |
+| `email batch sent` | Once per `sendBatch()` call | `message_count`, `succeeded`, `failed`, `recipients`, `adapter` (or `mixed`), `success`, `duration_ms`, first `error_code` |
+| `cli command run` | Once per CLI invocation | `command` (normalized), `adapter`, `dry_run`, `success`, `duration_ms`, `error_code` |
+
+The `email sent` `delivery_path` reflects how the send was (or, on failure, would
+have been) routed:
+
+- `single` — a plain message with no [recipient variables](/docs/reference/message#recipient-variables).
+- `bulk_native` — the adapter batched every recipient in one provider call (e.g. Mailgun, SendGrid).
+- `bulk_expanded` — the client expanded the send to one internal call per recipient.
+
+<Callout type="info">
+  Only one `email sent` event fires per `send()` call. When recipient variables are
+  expanded into per-recipient sends, those internal sends are never counted
+  individually, so recipient-variable batches are not double-counted.
+</Callout>
+
+### What is never collected
+
+Email content, subjects, recipient addresses, headers, attachment bytes, API keys,
+or any other message data. Recipient counts are integers only; `has_attachments` is
+a boolean, never the files themselves.
+
+## Error reports
+
+On an unexpected send or CLI failure, Email SDK reports a **redacted** error to
+PostHog error tracking so maintainers can find real defects. Expected caller
+mistakes — `EmailValidationError` (bad message input) and
+`EmailProviderNotFoundError` (unregistered adapter) — are treated as usage errors
+and are **not** reported.
+
+A report carries the error type, the Email SDK [error code](/docs/reference/errors),
+and a stack trace. Before upload it is hardened:
+
+- **Stack frames** are reduced to package-relative paths (`node_modules/...`) or
+  bare filenames, so reports never contain usernames, home directories, or your
+  project layout.
+- **Error messages and error names** run through a redaction pipeline that strips
+  email addresses, `scheme://` URLs (including connection strings with embedded
+  credentials), single/double/backtick-quoted text, `key=value` secrets
+  (`password=`, `token=`, `api_key=`, …), long tokens, and home-directory paths.
+  Known SDK error classes and JavaScript built-in error names are allowlisted so
+  issue grouping stays stable.
+- Reports are **deduplicated per process** (once per error object, once per error
+  class) and capped at 5 per process; cause chains are followed up to 3 levels and
+  20 stack frames.
+
+<Callout type="warn">
+  Redaction is defense-in-depth, not a licence to log secrets. It cannot recover
+  data an adapter or provider library chose to place in an error message in an
+  unusual shape. If you handle regulated data, opt out.
+</Callout>
+
+## Storage and transport
+
+A random anonymous ID (UUID) is generated on first run and stored at
+`~/.config/email-sdk/telemetry.json` (honoring `XDG_CONFIG_HOME`). It is not linked
+to any account or machine identifier.
+
+Events are sent to PostHog (US cloud, `us.i.posthog.com`) with a **write-only**
+project key that can only ingest events, never read them. PostHog person profiles
+are disabled. Captures are fire-and-forget with a 3-second timeout and can never
+throw into your send path or slow it down; the CLI flushes in-flight events before
+it exits.
+
+<Callout type="info">
+  On a read-only filesystem (e.g. serverless), the anonymous ID cannot persist, so
+  each cold start gets a fresh per-process identity and re-prints the one-time
+  notice. Telemetry still functions.
+</Callout>
+
+## CI detection
+
+The `ci_vendor` property is derived from environment variables so runs in
+continuous integration can be counted separately from real production traffic:
+
+| Vendor | Detected via |
+| --- | --- |
+| GitHub Actions | `GITHUB_ACTIONS` |
+| GitLab CI | `GITLAB_CI` |
+| CircleCI | `CIRCLECI` |
+| Jenkins | `JENKINS_URL` |
+| Travis | `TRAVIS` |
+| Buildkite | `BUILDKITE` |
+| generic | `CI=true` / `CI=1` |
+
+Vercel's `VERCEL=1` is deliberately **not** treated as CI, because it is set in
+production serverless runtimes too and would mislabel live sends. Vercel *builds*
+still set `CI=1` and fall through to `generic`.
+
+## Opting out
+
+Any one of these disables telemetry completely. When disabled, no ID is created, no
+notice is printed, and no network call is made.
+
+Set an environment variable (applies to the library and the CLI):
+
+```bash
+export EMAIL_SDK_TELEMETRY=0   # also: false, off
+# or the cross-tool standard:
+export DO_NOT_TRACK=1          # also: true
+```
+
+Disable it per client in code:
+
+```ts
+const client = createEmailClient({
+  adapters: [resend({ apiKey })],
+  telemetry: false,
+});
+```
+
+Telemetry is also **disabled automatically when `NODE_ENV=test`**, so test suites
+never emit events or touch the network.
