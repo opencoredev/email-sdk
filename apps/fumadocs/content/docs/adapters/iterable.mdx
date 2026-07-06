@@ -49,7 +49,8 @@ export const email = createEmailClient({
       type: "Record<string, unknown> | (message) => Record<string, unknown>",
     },
     sendAt: {
-      description: "Schedule the send — UTC timestamp in Iterable's expected format.",
+      description:
+        "Adapter-level schedule for the campaign target — a UTC timestamp in Iterable's expected format. Distinct from the message-level EmailMessage.sendAt field, which Iterable rejects (see the note below).",
       type: "string",
     },
     baseUrl: {
@@ -85,6 +86,22 @@ console.log(result.raw); // Iterable returns no message id — inspect the raw r
   `attachments`, or `tags` — any of those throw an `EmailValidationError` before a request is made.
   Check [field support](/docs/adapters/field-support) before routing fallbacks through Iterable.
 </Callout>
+
+## Scheduling on Iterable
+
+Iterable exposes scheduling through the adapter option above, **not** through the message field. The
+two are separate contracts and easy to confuse:
+
+- **`iterable({ sendAt })`** — set once when you configure the adapter (or via the CLI's `--send-at`
+  / `ITERABLE_SEND_AT`). It is forwarded verbatim as the campaign target's `sendAt`, so it schedules
+  every send this adapter makes.
+- **`EmailMessage.sendAt`** — the [per-message scheduling field](/docs/reference/message#scheduled-sends)
+  other adapters map to a native parameter. Iterable **rejects** it (it is not in Iterable's
+  [supported fields](/docs/adapters/field-support)), so passing it throws
+  `iterable does not support these EmailMessage fields: sendAt.` before any request — a fallback
+  route through Iterable will fail rather than send unscheduled.
+
+Use the adapter option for a fixed schedule; do not expect the message field to work here.
 
 ## Verify from the CLI
 
