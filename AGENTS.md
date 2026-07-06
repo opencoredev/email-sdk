@@ -70,6 +70,21 @@ bun scripts/check-jetemail-account.ts
 bun scripts/check-primitive-account.ts
 ```
 
+## Telemetry
+
+The SDK and CLI send anonymous PostHog telemetry from
+`packages/email-sdk/src/telemetry.ts`. It is force-disabled in tests.
+
+- `bun test` never sends live telemetry: a Bun `[test] preload`
+  (`packages/email-sdk/test-preload.ts`) sets `EMAIL_SDK_TELEMETRY=0` for every
+  in-process run, regardless of `NODE_ENV`. It is wired from both the repo-root
+  `bunfig.toml` and `packages/email-sdk/bunfig.toml` — Bun only reads the cwd's
+  `bunfig.toml`, so keep the two `[test] preload` entries in sync.
+- Tests that need capture enabled construct clients with injected
+  `env`/`fetch`/`configDir` overrides rather than relying on `process.env`.
+- User-facing opt-outs: `EMAIL_SDK_TELEMETRY=0` (or `DO_NOT_TRACK=1`), or
+  `createEmailClient({ telemetry: false })`.
+
 ## Major Versions
 
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
@@ -84,6 +99,8 @@ deploys to Vercel.
 - `cd apps/fumadocs && bun run dev` — local dev server on port 4000.
 - `bun run build` — fetches Notra blog posts, then runs the Vite build.
 - `bun run posts:fetch` — refresh the build-time Notra snapshot on demand.
+- `bun run types:check` — runs `fumadocs-mdx` then `tsc --noEmit`; run this
+  and `bun run build` after docs-site changes.
 
 The blog is server-rendered on demand: `/blog`, `/blog/$slug`, and `/og/blog/*`
 are excluded from prerendering (`vite.config.ts` `prerender.filter`) and fetch
@@ -98,5 +115,8 @@ production: the Vercel project env). Without the key the fetch is skipped.
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
 - Release publishing lives in `.github/workflows/release.yml`.
+- After publishing, `release.yml` posts a non-blocking PostHog release
+  annotation; it needs the `POSTHOG_PERSONAL_API_KEY` secret and is skipped
+  (with a notice) when the secret is absent.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
 - Do not move npm publishing to Depot unless npm supports Depot as a trusted publisher or the project intentionally switches to token-based publishing.
