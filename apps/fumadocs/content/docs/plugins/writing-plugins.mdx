@@ -1,10 +1,10 @@
 ---
 title: Writing plugins
-description: Build an EmailPlugin — choose hooks or middleware, register adapters, and add typed client extensions.
+description: Build an EmailPlugin. Choose hooks or middleware, register adapters, and add typed client extensions.
 icon: PackagePlus
 ---
 
-A plugin is a plain object: a stable `id` plus any combination of `adapters`, `hooks`, `middleware`, and `extendClient`. No base class, no registration ceremony — export a factory function that returns the object.
+A plugin is a plain object: a stable `id` plus any combination of `adapters`, `hooks`, `middleware`, and `extendClient`. There is no base class and no registration ceremony. Export a factory function that returns the object.
 
 ```ts
 import type { EmailPlugin } from "@opencoredev/email-sdk";
@@ -32,7 +32,7 @@ Both watch the send pipeline; only middleware can change it. Pick by intent:
 | You want to…                              | Use                     | Why                                                                                  |
 | ----------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
 | Add defaults or rewrite the message       | `middleware.beforeSend` | Runs once per send, before validation; its return value replaces message/options.    |
-| Block a send (policy, guardrails)         | `middleware.beforeSend` | Thrown errors propagate and stop the send — hooks errors are swallowed.              |
+| Block a send (policy, guardrails)         | `middleware.beforeSend` | Thrown errors propagate and stop the send; hook errors are swallowed.                |
 | Log, count, or trace attempts             | `hooks`                 | Per-attempt events including `onRetry`; failures never mask the send.                |
 | React to the final outcome                | `middleware.afterSend` / `onError` | Fire on success and on per-route failure; observe-only, errors swallowed. |
 
@@ -55,7 +55,7 @@ export function requireMetadata(key: string): EmailPlugin {
 
 `beforeSend` can also transform: return `{ message?, options? }` and the pipeline continues with your values. The returned `message` replaces the message wholesale; returned `options` shallow-merge over the current send options. The [defaults plugin](/docs/plugins/built-in/defaults) is exactly this pattern.
 
-Plugin `hooks` use the same shape as the client `hooks` option and run before client hooks — see [Hooks](/docs/concepts/hooks) for the event fields.
+Plugin `hooks` use the same shape as the client `hooks` option and run before client hooks. See [Hooks](/docs/concepts/hooks) for the event fields.
 
 ## Register adapters
 
@@ -78,7 +78,7 @@ const email = createEmailClient({
 });
 ```
 
-For dynamic registration, `adapters` can be a function receiving an `EmailPluginContext` — inspect already-registered routes via `ctx.adapters`, read `ctx.defaultAdapter`, and call `ctx.addAdapter()`:
+For dynamic registration, `adapters` can be a function receiving an `EmailPluginContext`: inspect already-registered routes via `ctx.adapters`, read `ctx.defaultAdapter`, and call `ctx.addAdapter()`.
 
 ```ts
 export function regionalMail(options: RegionOptions): EmailPlugin {
@@ -94,11 +94,11 @@ export function regionalMail(options: RegionOptions): EmailPlugin {
 }
 ```
 
-Two rules, both enforced with an `EmailValidationError`: adapter factories must be **synchronous** (`createEmailClient` is sync — returning a Promise throws), and duplicate adapter names throw. Building the adapter itself is its own topic: [Create an adapter](/docs/guides/authoring/create-adapter).
+Two rules, both enforced with an `EmailValidationError`: adapter factories must be **synchronous** (`createEmailClient` is sync, so returning a Promise throws), and duplicate adapter names throw. Building the adapter itself is its own topic: [Create an adapter](/docs/guides/authoring/create-adapter).
 
 ## Extend the client
 
-`extendClient` returns properties merged onto the client. Type the plugin as `EmailPlugin<TExtension>` and the extension flows into the client type — `createEmailClient` infers the intersection of all plugin extensions, so callers get autocomplete with no casts:
+`extendClient` returns properties merged onto the client. Type the plugin as `EmailPlugin<TExtension>` and the extension flows into the client type. `createEmailClient` infers the intersection of all plugin extensions, so callers get autocomplete with no casts:
 
 ```ts
 export function routeNamesPlugin(): EmailPlugin<{ routeNames: string[] }> {
@@ -115,10 +115,10 @@ const email = createEmailClient({
   plugins: [routeNamesPlugin()],
 });
 
-email.routeNames; // string[] — typed, no cast
+email.routeNames; // string[], typed, no cast
 ```
 
-Extensions run after the client is built. A key that already exists on the client — built-ins like `send` or `adapters`, or a key claimed by an earlier plugin — throws: `Email plugin "<id>" tried to extend the client with reserved key "<key>".` Keep extensions small: a store, a helper, a few readonly values. The [capture plugin](/docs/plugins/built-in/capture) shows the pattern, including a configurable typed key.
+Extensions run after the client is built. A key that already exists on the client (built-ins like `send` or `adapters`, or a key claimed by an earlier plugin) throws: `Email plugin "<id>" tried to extend the client with reserved key "<key>".` Keep extensions small: a store, a helper, a few readonly values. The [capture plugin](/docs/plugins/built-in/capture) shows the pattern, including a configurable typed key.
 
 ## Registration rules
 

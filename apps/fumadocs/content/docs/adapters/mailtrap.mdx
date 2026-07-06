@@ -4,7 +4,7 @@ description: Send through the Mailtrap Email Sending API with full field support
 icon: mailtrap
 ---
 
-The Mailtrap adapter calls the [Mailtrap Email Sending API](https://api-docs.mailtrap.io/) over `fetch` — no extra dependency. It supports every common transactional field, and Mailtrap's inspection tooling makes it a natural pick for staging environments.
+The Mailtrap adapter calls the [Mailtrap Email Sending API](https://api-docs.mailtrap.io/) with plain `fetch`. It supports every common transactional field, and Mailtrap's inspection tooling makes it a natural pick for staging environments.
 
 <ProviderBadge adapter="mailtrap" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Mailtrap maps `cc`, `bcc`, `headers`, `attachments`, `metadata`, and `tags` — with two limits: at most one tag (its value becomes the Mailtrap `category`) and at most one `replyTo`. `metadata` is sent as `custom_variables` with values stringified (`null` becomes `""`).
+Mailtrap maps `cc`, `bcc`, `headers`, `attachments`, `metadata`, and `tags`, with two limits: at most one tag (its value becomes the Mailtrap `category`) and at most one `replyTo`. `metadata` is sent as `custom_variables` with values stringified (`null` becomes `""`).
 
 ```ts
 const result = await email.send({
@@ -51,7 +51,7 @@ const result = await email.send({
   cc: "billing@acme.com",
   replyTo: "support@acme.com",
   subject: "Your receipt for order ord_123",
-  html: "<p>Thanks for your order — receipt attached.</p>",
+  html: "<p>Thanks for your order. Receipt attached.</p>",
   tags: [{ name: "type", value: "receipt" }],
   metadata: { orderId: "ord_123" },
   attachments: [
@@ -84,4 +84,4 @@ MAILTRAP_API_KEY="..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real smoke send — and confirm the token targets the intended Mailtrap project before pointing production at it.
+Drop `--dry-run` for one real smoke send, and confirm the token targets the intended Mailtrap project before pointing production at it.

@@ -1,10 +1,10 @@
 ---
 title: Fallbacks and retries
-description: Retry transient provider errors with backoff, then fail over to a compatible backup adapter — two layers, one send call.
+description: Retry transient provider errors with backoff, then fail over to a compatible backup adapter. Two layers, one send call.
 icon: Repeat2
 ---
 
-A failing send gets two distinct layers of recovery. **Retries** re-attempt the *same* adapter when an error looks transient (rate limit, timeout, 5xx). **Fallback** moves to the *next* adapter only after the current one has finally failed. Both are off by default — `retries` is `0` and `fallback` is empty.
+A failing send gets two distinct layers of recovery. **Retries** re-attempt the *same* adapter when an error looks transient (rate limit, timeout, 5xx). **Fallback** moves to the *next* adapter only after the current one has finally failed. Both are off by default: `retries` is `0` and `fallback` is empty.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -33,11 +33,11 @@ resend  attempt 3 → 429               retries exhausted → onError("resend")
 smtp    attempt 1 → accepted          response.provider === "smtp"
 ```
 
-**The retry budget resets for each adapter on the route.** The fallback adapter gets its own `retries: 2`, so the worst case for this client is six provider attempts — size your retry budget with the whole route in mind.
+**The retry budget resets for each adapter on the route.** The fallback adapter gets its own `retries: 2`, so the worst case for this client is six provider attempts. Size the retry budget with the whole route in mind.
 
 <Callout type="warn" title="Fallback routes must be field-compatible">
-  A backup adapter only helps if it supports every `EmailMessage` field your messages actually use
-  — adapters reject unsupported fields instead of silently dropping them, so an incompatible
+  A backup adapter only helps if it supports every `EmailMessage` field your messages actually
+  use. Adapters reject unsupported fields instead of silently dropping them, so an incompatible
   fallback fails too. Pick routes from the [field support matrix](/docs/adapters/field-support).
 </Callout>
 
@@ -77,7 +77,7 @@ The default `shouldRetry` is `isRetryableEmailError`: it retries only errors the
 | HTTP `5xx` | Provider-side failure |
 | Network errors | `ECONNRESET`-style failures, `fetch failed`, timeouts |
 
-Everything else — `401`, `422`, validation errors, bugs in your code — fails immediately. To change the policy, supply your own `shouldRetry` or `delay`:
+Everything else (`401`, `422`, validation errors, bugs in your code) fails immediately. To change the policy, supply your own `shouldRetry` or `delay`:
 
 ```ts
 const email = createEmailClient({
@@ -99,7 +99,7 @@ For each send, the SDK builds a route from the selected adapter followed by the 
 
 The selected adapter comes from the per-send `adapter` option or the client's `defaultAdapter` (the first registered adapter unless you set it). Fallbacks come from the per-send `fallbackAdapters` option or the client-level `fallback` list. A route name that is not registered throws `EmailProviderNotFoundError` when the route reaches it.
 
-Fallback is not limited to retryable errors. Retryability decides whether the *same* adapter gets another attempt; fallback fires on *any* final adapter failure — including a non-retryable `401` on the first attempt.
+Fallback is not limited to retryable errors. Retryability decides whether the *same* adapter gets another attempt; fallback fires on *any* final adapter failure, including a non-retryable `401` on the first attempt.
 
 ## Per-send overrides
 
@@ -149,11 +149,13 @@ await email.send(message, {
 
 The key (from `send` options, falling back to `message.idempotencyKey`) is passed to the adapter on every attempt. What happens next depends on the adapter:
 
-- **Resend** is the only adapter that transmits it natively, as the `Idempotency-Key` HTTP header — the provider itself deduplicates repeated sends.
+- **Resend, JetEmail, Lettermint, and Primitive** transmit it as the `Idempotency-Key` HTTP header, so the provider itself deduplicates repeated sends.
 - **SMTP** uses `message.idempotencyKey` as the `Message-ID` header value, so downstream mail systems can recognize duplicates.
 - Every other adapter ignores it on the wire.
 
-Even where the provider ignores the key, set one anyway: it gives your own pipeline — queues, workers, hook-based logging — a stable identity, so application-level retries and re-enqueues stay safe to deduplicate.
+Even where the provider ignores the key, set one anyway. It gives your own pipeline (queues, workers, hook-based logging) a stable identity, so application-level retries and re-enqueues stay safe to deduplicate.
+
+One interaction to know: when a send carries [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter has no native batch support, each recipient becomes its own send and the key gets a per-recipient suffix (`<key>:<address>`). Retries then dedupe per recipient instead of dropping the whole batch, and the longer key still counts toward provider key-length limits.
 
 ## Testing the route
 
@@ -180,7 +182,7 @@ expect(response.provider).toBe("backup");
 expect(backup.raw.sent).toHaveLength(1);
 ```
 
-Test with the same message shape production sends — that is what proves the routes are compatible.
+Test with the same message shape production sends. That is what proves the routes are compatible.
 
 ## Next
 

@@ -4,7 +4,7 @@ description: Send through Cloudflare's Email Sending REST API with plain-address
 icon: cloudflare
 ---
 
-The Cloudflare adapter calls Cloudflare's Email Sending REST API over `fetch` — no extra dependency and no Worker binding required. It is the natural pick when your sending domain already lives in Cloudflare; the trade-off is strict recipient rules: plain addresses only, 50 recipients max.
+The Cloudflare adapter calls Cloudflare's Email Sending REST API with plain `fetch`, so no Worker binding is required. It is the natural pick when your sending domain already lives in Cloudflare. The trade-off is strict recipient rules: plain addresses only, 50 recipients max.
 
 <ProviderBadge adapter="cloudflare" />
 
@@ -52,7 +52,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Cloudflare maps `cc`, `bcc`, one `replyTo`, `headers`, and `attachments` — no tags or metadata.
+Cloudflare maps `cc`, `bcc`, one `replyTo`, `headers`, and `attachments`. There are no tags or metadata.
 
 ```ts
 const result = await email.send({
@@ -70,7 +70,7 @@ console.log(result.accepted); // delivered + queued recipients
 Cloudflare does not return a message id; instead `result.accepted` lists delivered and queued recipients and `result.rejected` lists permanent bounces. Total recipients across `to`, `cc`, and `bcc` are capped at 50.
 
 <Callout type="warn" title="Plain recipient addresses only">
-  `to`, `cc`, and `bcc` must be bare addresses like `"user@example.com"` — a display name throws an
+  `to`, `cc`, and `bcc` must be bare addresses like `"user@example.com"`; a display name throws an
   `EmailValidationError` before any request is made. Only `from` and `replyTo` keep display names.
 </Callout>
 
@@ -92,4 +92,4 @@ npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — only Cloudflare can prove the domain and account are cleared to deliver.
+Drop `--dry-run` for one real send; only Cloudflare can prove the domain and account are cleared to deliver.

@@ -1,10 +1,10 @@
 ---
 title: Test email behavior
-description: Assert sends, fallback routing, and retries in unit tests with the memory adapter, failing adapter, and capture plugin — no provider account needed.
+description: Assert sends, fallback routing, and retries in unit tests with the memory adapter, failing adapter, and capture plugin. No provider account needed.
 icon: FlaskConical
 ---
 
-This guide tests email behavior without network calls: prove a send happened with the right fields, prove the fallback route engages when the primary fails, and prove retries fire. Everything runs in plain unit tests — the examples use `bun:test`, but any runner works.
+This guide tests email behavior without network calls: prove a send happened with the right fields, prove the fallback route engages when the primary fails, and prove retries fire. Everything runs in plain unit tests. The examples use `bun:test`, but any runner works.
 
 Two tools cover it all, both free of provider credentials:
 
@@ -40,7 +40,7 @@ test("sends the welcome email", async () => {
 });
 ```
 
-This also catches plugin transforms — mount a [defaults plugin](/docs/plugins/built-in/defaults) on the test client and assert the merged headers or reply-to landed on `message`.
+This also catches plugin transforms. Mount a [defaults plugin](/docs/plugins/built-in/defaults) on the test client and assert the merged headers or reply-to landed on `message`.
 
 </Step>
 <Step>
@@ -80,7 +80,7 @@ Use the same message fields production sends. A backup adapter that cannot carry
 
 ### Assert retry events with the capture plugin
 
-The capture plugin extends the client with `email.capture.events`. To see a `retry` event, you need an adapter that fails with a retryable error and then succeeds — a five-line inline adapter does it:
+The capture plugin extends the client with `email.capture.events`. To see a `retry` event, you need an adapter that fails with a retryable error and then succeeds. A short inline adapter does it:
 
 ```ts title="retry.test.ts"
 import { expect, test } from "bun:test";
@@ -127,7 +127,7 @@ test("retries once on a transient failure", async () => {
 });
 ```
 
-`delay: () => 0` keeps the backoff out of your test runtime. `failingProvider` throws a plain `Error` (not retryable), so it tests fallback, not retries — retry tests need an error with `retryable: true`.
+`delay: () => 0` keeps the backoff out of your test runtime. `failingProvider` throws a plain `Error` (not retryable), so it tests fallback, not retries. Retry tests need an error with `retryable: true`.
 
 </Step>
 <Step>
@@ -168,7 +168,7 @@ const email = createEmailClient({
 bun test
 ```
 
-No environment variables, no network. If a test makes a real HTTP call, an adapter slipped in — test clients should only register `memoryProvider`, `failingProvider`, or inline test adapters.
+No environment variables, no network. If a test makes a real HTTP call, an adapter slipped in; test clients should only register `memoryProvider`, `failingProvider`, or inline test adapters.
 
 </Step>
 </Steps>

@@ -20,7 +20,7 @@ The SDK and CLI run server-side on Node 20+ and Bun 1.1+. See [Install](/docs/ge
 
 ### Create a client
 
-These docs use Resend first — shortest setup, broad field support. Any [adapter](/docs/adapters) works the same way; only the factory and credentials change.
+These docs use Resend first because it has the shortest setup and broad field support. Any [adapter](/docs/adapters) works the same way; only the factory and credentials change.
 
 Set `RESEND_API_KEY`, then:
 
@@ -46,11 +46,13 @@ const result = await email.send({
   text: "Your account is ready.",
 });
 
-console.log(result.provider); // "resend" — the adapter that handled the send
+console.log(result.provider); // "resend", the adapter that handled the send
 console.log(result.id); // provider message id, when the API returns one
 ```
 
-`send` resolves with a normalized [response](/docs/reference/client#response): `provider` tells you which adapter actually delivered, `id`/`messageId` carry the provider's message id, and `raw` keeps the untouched provider payload.
+`send` resolves with a normalized [response](/docs/reference/client#response). `provider` tells you which adapter actually delivered, `id` and `messageId` carry the provider's message id, and `raw` keeps the untouched provider payload.
+
+The same call handles more than one-off sends: [`recipientVariables`](/docs/reference/message#recipient-variables) turns one send into a personalized batch, and [`sendAt`](/docs/reference/message#scheduled-sends) schedules delivery on providers with a scheduling API.
 
 </Step>
 <Step>
@@ -80,7 +82,7 @@ npx email-sdk send \
 
 ### Add a fallback route
 
-A second adapter keeps simple transactional email flowing when the primary fails. SMTP is built in (no Nodemailer) and pairs well with API providers for plain text/HTML messages:
+A second adapter keeps simple transactional email flowing when the primary fails. SMTP is built into the SDK (no Nodemailer) and pairs well with API providers for plain text/HTML messages:
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -100,11 +102,11 @@ export const email = createEmailClient({
 });
 ```
 
-Your application code does not change — `email.send(...)` now tries Resend, then SMTP.
+Your application code does not change. `email.send(...)` now tries Resend, then SMTP.
 
 <Callout type="warn" title="Fallbacks must match your message shape">
   A fallback only helps if the backup adapter supports the fields you send. SMTP cannot carry
-  tags, metadata, or attachments — sends using those fields throw instead of silently dropping
+  tags, metadata, or attachments, so sends using those fields throw instead of silently dropping
   data. Check [field support](/docs/adapters/field-support) when picking backup routes.
 </Callout>
 
@@ -127,7 +129,7 @@ Your application code does not change — `email.send(...)` now tries Resend, th
   <Card
     title="All adapters"
     href="/docs/adapters"
-    description="20 providers with per-adapter setup, options, and CLI smoke tests."
+    description="23 providers with per-adapter setup, options, and CLI smoke tests."
   />
   <Card
     title="Test email behavior"

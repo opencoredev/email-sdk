@@ -12,6 +12,7 @@ An adapter is a plain object implementing `EmailProvider`: one routing name, one
 type EmailProvider<TRaw = unknown> = {
   name: string;
   send(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
+  sendBulk?(message: EmailMessage, context: EmailProviderContext): MaybePromise<EmailProviderResponse>;
   raw?: TRaw;
 };
 ```
@@ -27,6 +28,11 @@ type EmailProvider<TRaw = unknown> = {
       description: "Maps the message to one provider request and returns a normalized response.",
       type: "(message, context) => MaybePromise<EmailProviderResponse>",
       required: true,
+    },
+    sendBulk: {
+      description:
+        "Optional native batch send. When present, messages carrying recipientVariables route here so the provider can personalize every recipient in one API call; without it, the client renders one send per recipient.",
+      type: "(message, context) => MaybePromise<EmailProviderResponse>",
     },
     raw: {
       description: "Optional escape hatch for provider-specific extras, reachable via client.adapter(name).raw.",
@@ -101,11 +107,11 @@ Throw `EmailProviderError` for provider failures and classify retryability so th
 - Set `retryable: true` for transient failures. The SDK's own adapters use `isRetryableStatus`: `408`, `409`, `425`, `429`, and any `5xx`.
 - Put the parsed error body in `details`.
 
-Anything else you throw is normalized by the client via `toProviderError`: plain `Error`s become non-retryable `EmailProviderError`s — except network-style failures (`ECONNRESET`-family codes, `fetch failed`, timeouts), which are marked retryable. `AbortError` is never retried. See the [errors reference](/docs/reference/errors) for the full taxonomy.
+Anything else you throw is normalized by the client via `toProviderError`: plain `Error`s become non-retryable `EmailProviderError`s, except network-style failures (`ECONNRESET`-family codes, `fetch failed`, timeouts), which are marked retryable. `AbortError` is never retried. See the [errors reference](/docs/reference/errors) for the full taxonomy.
 
 ## Fail fast on unsupported fields
 
-Adapters must reject message fields the provider cannot represent — before any request, never a silent drop. Built-in adapters throw `EmailValidationError` with this exact shape:
+Adapters must reject message fields the provider cannot represent before any request, rather than dropping them silently. Built-in adapters throw `EmailValidationError` with this exact shape:
 
 ```txt
 <adapter> does not support these EmailMessage fields: tags, metadata.
@@ -115,10 +121,10 @@ Do the same in custom adapters: check `cc`, `bcc`, `replyTo`, `headers`, `attach
 
 ## Internal helpers
 
-The built-in adapters share two internal modules in the SDK repository — useful as reference, or directly if you contribute an adapter upstream (they are not public package exports):
+The built-in adapters share two internal modules in the SDK repository. They are useful as reference, or directly if you contribute an adapter upstream (they are not public package exports):
 
-- `src/http.ts` — `jsonProvider({ name, baseUrl, endpoint, headers, buildPayload, parseResponse? })` wraps the whole JSON-API pattern: fetch with `context.signal`, error-body parsing, `EmailProviderError` with `isRetryableStatus`, and response normalization.
-- `src/payloads.ts` — address and attachment mapping helpers (`apiAddresses`, `stringAddresses`, `base64Attachments`, `commonHeadersObject`, …) used across the 20 adapters.
+- `src/http.ts`: `jsonProvider({ name, baseUrl, endpoint, headers, buildPayload, parseResponse? })` wraps the whole JSON-API pattern: fetch with `context.signal`, error-body parsing, `EmailProviderError` with `isRetryableStatus`, and response normalization.
+- `src/payloads.ts`: address and attachment mapping helpers (`apiAddresses`, `stringAddresses`, `base64Attachments`, `commonHeadersObject`, and so on) shared across the built-in adapters.
 
 Community packages should copy these patterns rather than import them.
 
@@ -137,6 +143,6 @@ export function acmeMailPlugin(options: AcmeMailOptions): EmailPlugin {
 }
 ```
 
-`adapters` must be synchronous — an array, or a function of the plugin context that returns one. A plugin that returns a Promise throws `EmailValidationError` at client creation, as do duplicate plugin ids and duplicate adapter names.
+`adapters` must be synchronous: an array, or a function of the plugin context that returns one. A plugin that returns a Promise throws `EmailValidationError` at client creation, as do duplicate plugin ids and duplicate adapter names.
 
 Export both the plain adapter factory and the plugin from your package root, then follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) to list it in the [community registry](/docs/reference/community-registry).

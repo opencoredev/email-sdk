@@ -1,12 +1,12 @@
 ---
 title: Field support
-description: Which EmailMessage fields each adapter maps — and which it rejects before the request.
+description: Which EmailMessage fields each adapter maps, and which it rejects before the request.
 icon: Table
 ---
 
-Email SDK keeps one message shape, but provider APIs do not expose the same features. Every adapter either **maps** a field or **rejects** it with an `EmailValidationError` before calling the provider — never a silent drop. This page is the authoritative matrix.
+Email SDK keeps one message shape, but provider APIs do not expose the same features. Every adapter either **maps** a field or **rejects** it with an `EmailValidationError` before calling the provider. There is no silent drop. This page is the authoritative matrix.
 
-**Reading the tables:** `Yes` = mapped, `No` = rejected before the request, `Values` = each tag's value is sent, `One tag` = the provider API represents a single tag and a second one fails fast.
+**Reading the tables:** `Yes` = mapped, `No` = rejected before the request, `Values` = each tag's value is sent but its name is dropped, `One tag` = the provider API represents a single tag and a second one fails fast. Of the one-tag providers, Postmark keeps the name (the tag arrives as a joined `name:value` string) while Mailtrap and Lettermint forward only the value.
 
 ## API adapters
 
@@ -18,7 +18,7 @@ The best fit when your app needs CC, BCC, reply-to, custom headers, tags, metada
 | Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
 | SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
 | Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         | No      |
-| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         | No      |
+| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | No      |
 | AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | No      |
 | Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
 | MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         | Yes     |
@@ -32,17 +32,17 @@ The best fit when your app needs CC, BCC, reply-to, custom headers, tags, metada
 
 Useful services whose public APIs cover less of the `EmailMessage` shape. The SDK keeps them safe by rejecting what they cannot represent.
 
-| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags   | Attachments | Send at |
-| --------- | --- | --- | -------- | ------- | -------- | ------ | ----------- | ------- |
-| SparkPost | No  | No  | Yes      | Yes     | Yes      | Values | Yes         | Yes     |
-| Iterable  | No  | No  | No       | No      | Yes      | No     | No          | No      |
-| Loops     | No  | No  | No       | No      | Yes      | No     | Yes         | No      |
-| Primitive | No  | No  | No       | No      | No       | No     | Yes         | No      |
-| Sequenzy  | No  | No  | Yes      | No      | Yes      | No     | Yes         | No      |
-| Plunk     | No  | No  | Yes      | Yes     | Yes      | No     | Yes         | No      |
-| Scaleway  | Yes | Yes | Yes      | Yes     | No       | No     | Yes         | No      |
-| ZeptoMail | Yes | Yes | Yes      | No      | No       | No     | Yes         | No      |
-| MailPace  | Yes | Yes | Yes      | No      | No       | No     | No          | No      |
+| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments | Send at |
+| --------- | --- | --- | -------- | ------- | -------- | ---- | ----------- | ------- |
+| SparkPost | No  | No  | Yes      | Yes     | Yes      | Yes  | Yes         | Yes     |
+| Iterable  | No  | No  | No       | No      | Yes      | No   | No          | No      |
+| Loops     | No  | No  | No       | No      | Yes      | No   | Yes         | No      |
+| Primitive | No  | No  | No       | No      | No       | No   | Yes         | No      |
+| Sequenzy  | No  | No  | Yes      | No      | Yes      | No   | Yes         | No      |
+| Plunk     | No  | No  | Yes      | Yes     | Yes      | No   | Yes         | No      |
+| Scaleway  | Yes | Yes | Yes      | Yes     | No       | No   | Yes         | No      |
+| ZeptoMail | Yes | Yes | Yes      | No      | No       | No   | Yes         | No      |
+| MailPace  | Yes | Yes | Yes      | No      | No       | No   | No          | No      |
 
 ## SMTP transport
 
@@ -54,9 +54,9 @@ Built in, no Nodemailer. SMTP maps address fields and headers directly into the 
 
 ## Recipient variables
 
-`recipientVariables` personalizes a batch send with `%recipient.key%` tokens — see [the message reference](/docs/reference/message#recipient-variables). Unlike the fields above, it is never rejected: it works on **every** adapter. The difference is _how_:
+`recipientVariables` personalizes a batch send with `%recipient.key%` tokens (see [the message reference](/docs/reference/message#recipient-variables)). Unlike the fields above, it is never rejected: it works on **every** adapter. The difference is _how_:
 
-| Native batch — one API call | Client-side fallback — one send per recipient |
+| Native batch (one API call) | Client-side fallback (one send per recipient) |
 | --------------------------- | --------------------------------------------- |
 | Mailgun, SendGrid           | every other adapter                           |
 
@@ -68,7 +68,7 @@ A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the b
 
 | Your messages use…                    | Compatible route examples                          |
 | ------------------------------------- | -------------------------------------------------- |
-| Addresses, subject, body, headers     | Almost anything — Resend + SMTP works              |
+| Addresses, subject, body, headers     | Almost anything; Resend + SMTP works               |
 | Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
 | Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
 | Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
@@ -92,7 +92,7 @@ await email.send({
 });
 ```
 
-The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields — which is exactly the point.
+The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields. That failure is the feature: you find out about the incompatible route in development, not by discovering missing analytics data in the provider dashboard weeks later.
 
 Before adding a backup route, run through this checklist:
 
@@ -104,7 +104,7 @@ Before adding a backup route, run through this checklist:
 
 ## Scheduled sends
 
-`sendAt` (a `Date` or ISO 8601 string) maps to each provider's native scheduling parameter — the SDK never queues or delays anything itself:
+`sendAt` (a `Date` or ISO 8601 string) maps to each provider's native scheduling parameter. The SDK never queues or delays anything itself:
 
 | Adapter                 | Provider parameter    | Wire format                          |
 | ----------------------- | --------------------- | ------------------------------------ |
@@ -153,7 +153,7 @@ attachments: [{ filename: "receipt.pdf", path: "./receipt.pdf", contentType: "ap
   <Accordion title="Sequenzy — reserved metadata keys and one body field">
     Metadata maps to transactional `variables`, except reserved keys that map to provider fields:
     `sequenzySlug` (template slug), `sequenzyPreview`, and `subscriberExternalId` /
-    `sequenzySubscriberExternalId`. Sequenzy also has a single body field — when a message has both
+    `sequenzySubscriberExternalId`. Sequenzy also has a single body field: when a message has both
     `html` and `text`, the HTML body is sent and the text body stays available for other routes.
   </Accordion>
   <Accordion title="Iterable — template sends, one recipient">

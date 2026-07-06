@@ -1,10 +1,10 @@
 ---
 title: Hooks
-description: Observe every send attempt — retries, fallback routing, failures — without ever changing the message or the result.
+description: Observe every send attempt (retries, fallback routing, failures) without changing the message or the result.
 icon: Activity
 ---
 
-Hooks are read-only observers of the send pipeline: logs, metrics, traces. They fire for **every adapter attempt**, they cannot change the message, and a throwing hook never breaks a send. To *transform* messages, use [plugin middleware](/docs/plugins/writing-plugins) instead — that distinction is the whole design.
+Hooks are read-only observers of the send pipeline: logs, metrics, traces. They fire for **every adapter attempt**, they cannot change the message, and a throwing hook does not break a send. To *transform* messages, use [plugin middleware](/docs/plugins/writing-plugins) instead. Keeping observation and transformation separate is deliberate: you can add logging anywhere without worrying about breaking delivery.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -32,7 +32,7 @@ const email = createEmailClient({
 await email.send(message, { metadata: { route: "checkout.receipt" } });
 ```
 
-The `metadata` here is send-scope: it flows to every hook event for correlation but is never merged into the message — unlike `message.metadata`, which adapters map to the wire.
+The `metadata` here is send-scope: it flows to every hook event for correlation but is not merged into the message. That makes it different from `message.metadata`, which adapters map to the wire.
 
 ## The four events
 
@@ -66,20 +66,22 @@ Each event adds its own fields:
 | `beforeSend` | Before every attempt, on every adapter | — |
 | `afterSend` | Once, on the attempt that succeeded | `response` (normalized, `provider` always set) |
 | `onRetry` | When the same adapter will be retried, before the backoff sleep | `error`, `nextAttempt`, `delayMs` |
-| `onError` | Once per adapter, after its final failure — before [fallback](/docs/concepts/fallbacks-and-retries) continues | `error` |
+| `onError` | Once per adapter, after its final failure, before [fallback](/docs/concepts/fallbacks-and-retries) continues | `error` |
 
 So a send with `retries: 2` and one fallback adapter can fire `beforeSend` up to six times, `onRetry` up to four, `onError` up to twice, and `afterSend` at most once.
 
+One exception: a [recipient-variables batch](/docs/reference/message#recipient-variables) on an adapter without native batch support becomes one real send per recipient, so `afterSend` fires once per delivered recipient and `onError` once per failed one.
+
 ## Hooks observe, middleware transforms
 
-Hooks are deliberately powerless. When you need to *change* a send — add default headers, stamp idempotency keys, rewrite recipients — that is plugin middleware, a separate mechanism with different rules:
+Hooks are deliberately powerless. When you need to *change* a send (add default headers, stamp idempotency keys, rewrite recipients), that is plugin middleware, a separate mechanism with different rules:
 
 | | Hooks | Plugin middleware `beforeSend` |
 | --- | --- | --- |
 | Registered via | Client `hooks` option or `plugin.hooks` | Plugins only (`plugin.middleware`) |
 | Runs | Per attempt, per adapter | Once per send, before validation and routing |
-| Knows the adapter | Yes (`provider` on every event) | No — it runs before the route is resolved |
-| Can change the send | Never | Yes — returns `{ message?, options? }` |
+| Knows the adapter | Yes (`provider` on every event) | No, it runs before the route is resolved |
+| Can change the send | Never | Yes, by returning `{ message?, options? }` |
 | If it throws | Swallowed, send unaffected | Send fails |
 
 ```ts title="A transform belongs in middleware, not a hook"
@@ -99,7 +101,7 @@ const brandPlugin = {
 
 ## Guarantees
 
-- **Failures are swallowed.** A hook that throws (or rejects) is ignored — observability must never mask a send result. The flip side: never put delivery-critical logic in a hook.
+- **Failures are swallowed.** A hook that throws (or rejects) is ignored, because observability must not mask a send result. The flip side: don't put delivery-critical logic in a hook, since its errors disappear.
 - **Hooks are awaited in order.** Async hooks run sequentially: plugin hooks first, then client hooks. Slow hooks slow down sends, so keep them fast or fire-and-forget internally.
 - **Hooks see the final message.** Middleware transforms run first, so `event.message` is what the adapter actually receives.
 
@@ -107,8 +109,8 @@ const brandPlugin = {
 
 Hand-rolled `console.log` hooks leak recipients and bodies into logs sooner or later. Two built-in plugins cover the common cases:
 
-- [`observabilityPlugin`](/docs/plugins/built-in/observability) emits `email.sent` / `email.retry` / `email.error` events with a redacted message shape — counts and flags, no bodies or recipients. Use it for production logging, metrics, and tracing.
-- [`capturePlugin`](/docs/plugins/built-in/capture) records every hook event to an inspectable store — use it to assert send behavior in [tests](/docs/guides/test-email-behavior).
+- [`observabilityPlugin`](/docs/plugins/built-in/observability) emits `email.sent` / `email.retry` / `email.error` events with a redacted message shape: counts and flags, no bodies or recipients. Use it for production logging, metrics, and tracing.
+- [`capturePlugin`](/docs/plugins/built-in/capture) records every hook event to an inspectable store. Use it to assert send behavior in [tests](/docs/guides/test-email-behavior).
 
 ## Next
 

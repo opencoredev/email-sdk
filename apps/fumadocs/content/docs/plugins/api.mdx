@@ -103,7 +103,7 @@ type EmailBeforeSendEvent = { message: EmailMessage; options?: SendOptions };
 type EmailBeforeSendResult = { message?: EmailMessage; options?: SendOptions };
 ```
 
-No `provider` field — routing has not happened yet. Returning a result transforms the send: `message` **replaces** the message wholesale, `options` **shallow-merges** over the current send options. Return nothing to observe or to throw for policy. Middleware runs in plugin order, each seeing the previous one's result.
+There is no `provider` field because routing has not happened yet. Returning a result transforms the send: `message` **replaces** the message wholesale, `options` **shallow-merges** over the current send options. Return nothing to observe or to throw for policy. Middleware runs in plugin order, each seeing the previous one's result.
 
 ### afterSend and onError
 
@@ -127,7 +127,7 @@ type EmailErrorEvent = {
 };
 ```
 
-After `onError`, [fallback adapters](/docs/concepts/fallbacks-and-retries) may still run — it signals a failed route, not necessarily a failed send.
+After `onError`, [fallback adapters](/docs/concepts/fallbacks-and-retries) may still run. It signals a failed route, not necessarily a failed send.
 
 ## Typed client extensions
 
@@ -151,7 +151,7 @@ Helper types behind the inference:
     },
     "EmailPluginClientExtensions<TPlugins>": {
       description:
-        "Intersection of all extensions in a readonly plugins tuple — the type argument of the returned EmailClient.",
+        "Intersection of all extensions in a readonly plugins tuple; the type argument of the returned EmailClient.",
       type: "object",
     },
   }}

@@ -4,7 +4,7 @@ description: Trigger a published Loops transactional email for one recipient, wi
 icon: loops
 ---
 
-The Loops adapter calls the [Loops transactional API](https://loops.so/docs/api-reference/send-transactional-email) over `fetch` — no extra dependency. It triggers a published transactional email by `transactionalId` for exactly one recipient and hands your message to the template as `dataVariables`.
+The Loops adapter calls the [Loops transactional API](https://loops.so/docs/api-reference/send-transactional-email) with plain `fetch`. It triggers a published transactional email by `transactionalId` for exactly one recipient and hands your message to the template as `dataVariables`.
 
 <ProviderBadge adapter="loops" />
 
@@ -34,7 +34,7 @@ export const email = createEmailClient({
       required: true,
     },
     transactionalId: {
-      description: "Published transactional email to render. Must be non-empty — the adapter throws at construction otherwise.",
+      description: "Published transactional email to render. Must be non-empty; the adapter throws at construction otherwise.",
       type: "string",
       required: true,
     },
@@ -52,7 +52,7 @@ export const email = createEmailClient({
 
 ## Send
 
-The Loops template renders the email. The adapter merges `subject`, `html`, `text`, `from`, and every `metadata` key into `dataVariables` — your template decides which of them appear. Exactly one `to` recipient is allowed per send.
+The Loops template renders the email. The adapter merges `subject`, `html`, `text`, `from`, and every `metadata` key into `dataVariables`; your template decides which of them appear. Exactly one `to` recipient is allowed per send.
 
 ```ts
 const result = await email.send({
@@ -72,8 +72,8 @@ console.log(result.id); // Loops id (or transactionalId) from the response
 Attachments are supported and sent as `{ filename, contentType, data }` with base64-encoded content.
 
 <Callout type="warn" title="Attachments need account enablement">
-  Loops only accepts transactional attachments on accounts where the capability has been enabled —
-  without it, sends with attachments fail at the API. Also note `cc`, `bcc`, `replyTo`, `headers`,
+  Loops only accepts transactional attachments on accounts where the capability has been enabled.
+  Without it, sends with attachments fail at the API. Also note `cc`, `bcc`, `replyTo`, `headers`,
   and `tags` throw an `EmailValidationError` before any request; see
   [field support](/docs/adapters/field-support).
 </Callout>

@@ -18,11 +18,11 @@ Or copy the `skills/email-sdk/` directory into your repo's skills directory (`.c
 
 ### What it enforces
 
-- **Refresh docs first.** The skill is deliberately dynamic: before writing code, the agent reads the installed package's README, `package.json` exports, and TypeScript declarations — so it implements against the version actually installed, not stale training data.
-- **Correct imports and secrets.** Adapters come from their own entry points (`@opencoredev/email-sdk/resend`, `/smtp`, ...), credentials stay in environment variables, and no Nodemailer — the SDK includes its own SMTP transport.
+- **Refresh docs first.** The skill is deliberately dynamic: before writing code, the agent reads the installed package's README, `package.json` exports, and TypeScript declarations, so it implements against the version actually installed instead of stale training data.
+- **Correct imports and secrets.** Adapters come from their own entry points (`@opencoredev/email-sdk/resend`, `/smtp`, ...), credentials stay in environment variables, and no Nodemailer gets added, since the SDK includes its own SMTP transport.
 - **Compatible fallbacks.** Fallback routes only when the backup adapter supports the same fields, checked against [field support](/docs/adapters/field-support). Idempotency keys on externally visible sends that may retry.
 - **CLI smoke tests.** `email-sdk doctor` and `send --dry-run` before any live send, and no real external mail without your approval.
-- **Secret-safe observability.** [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) for redacted events — never API keys, message bodies, or unnecessary recipient data in logs.
+- **Secret-safe observability.** [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) for redacted events, keeping API keys, message bodies, and unnecessary recipient data out of logs.
 - **Narrow validation.** The smallest test or typecheck that covers the send path before declaring the work done.
 
 ### Prompt example
@@ -100,7 +100,7 @@ async function handleToolCall(name: string, input: unknown) {
 }
 ```
 
-`execute` goes through the full client pipeline — validation, [retries and fallbacks](/docs/concepts/fallbacks-and-retries), plugins, hooks — so an agent send behaves exactly like any other send in your app.
+`execute` goes through the full client pipeline (validation, [retries and fallbacks](/docs/concepts/fallbacks-and-retries), plugins, hooks), so an agent send behaves exactly like any other send in your app.
 
 <Callout type="warn" title="Gate agent sends">
   The tool description asks the model to confirm before sending, but the model decides whether to

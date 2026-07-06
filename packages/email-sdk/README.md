@@ -1,6 +1,6 @@
 # Email SDK
 
-A lightweight TypeScript SDK for transactional email send pipelines. Use one typed client, pick the adapters your app actually sends through, validate provider compatibility before data is silently dropped, add retries and fallback routes, and use plugins for defaults, observability, capture, or community providers.
+A lightweight TypeScript SDK for transactional email send pipelines. One typed client, adapters for the providers your app actually sends through, compatibility validation before data is silently dropped, retries and fallback routes, and plugins for defaults, observability, capture, or community providers.
 
 Docs: https://email-sdk.dev/docs
 
@@ -44,6 +44,7 @@ await email.send({
 - One `EmailMessage` shape across providers.
 - Provider adapters that map supported fields and reject unsupported fields before the request.
 - Fallbacks and retries for production delivery.
+- Batch personalization via `recipientVariables` and provider-side scheduled sends via `sendAt`.
 - Built-in SMTP transport with no Nodemailer dependency.
 - Hooks for send, retry, success, and error observability.
 - Plugins for adapter registration, message defaults, middleware, and typed client extensions.
@@ -89,6 +90,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/loops`      | Loops                            |
 | `@opencoredev/email-sdk/sequenzy`   | Sequenzy                         |
 | `@opencoredev/email-sdk/jetemail`   | JetEmail                         |
+| `@opencoredev/email-sdk/lettermint` | Lettermint                       |
 | `@opencoredev/email-sdk/primitive`  | Primitive                        |
 | `@opencoredev/email-sdk/plunk`      | Plunk                            |
 | `@opencoredev/email-sdk/mailtrap`   | Mailtrap                         |
@@ -337,7 +339,16 @@ The CLI can read provider credentials from environment variables or matching cre
 
 Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
 
-What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), whether a send used recipient variables or scheduling and which delivery path ran, SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), whether usage comes from the library or the bundled CLI, and redacted error reports — the error type, Email SDK error code, and stack traces with file paths reduced to package-relative names, with error messages scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+What gets collected:
+
+- Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
+- Success or failure, error codes, and send duration
+- Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
+- Whether a send used recipient variables or scheduling, and which delivery path ran
+- SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
+- Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+
+Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
 
 Opt out at any time with an environment variable:
 

@@ -4,7 +4,7 @@ description: Send through the Plunk API with reply-to, headers, attachments, and
 icon: plunk
 ---
 
-The Plunk adapter calls the [Plunk send API](https://docs.useplunk.com) over `fetch` — no extra dependency. Plunk takes a single `body` field, so the adapter sends `html` when present and falls back to `text`.
+The Plunk adapter calls the [Plunk send API](https://docs.useplunk.com) with plain `fetch`. Plunk takes a single `body` field, so the adapter sends `html` when present and falls back to `text`.
 
 <ProviderBadge adapter="plunk" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Plunk supports `headers`, `attachments`, `metadata` (sent as Plunk `data`), and a single `replyTo` (sent as `reply`, email address only — a second reply-to throws an `EmailValidationError`).
+Plunk supports `headers`, `attachments`, `metadata` (sent as Plunk `data`), and a single `replyTo` (sent as `reply`, email address only; a second reply-to throws an `EmailValidationError`).
 
 ```ts
 const result = await email.send({

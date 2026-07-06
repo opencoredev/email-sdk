@@ -1,10 +1,10 @@
 ---
 title: Mailchimp Transactional
-description: Send through Mailchimp Transactional (Mandrill) with typed recipients, tags, and metadata — but no replyTo field.
+description: Send through Mailchimp Transactional (Mandrill) with typed recipients, tags, and metadata, but no replyTo field.
 icon: mailchimp
 ---
 
-The Mailchimp adapter calls the [Mailchimp Transactional API](https://mailchimp.com/developer/transactional/api/messages/send-new-message/) — the API formerly known as Mandrill — over `fetch`, no extra dependency. Unusually, the API key travels in the request body rather than a header, and recipients are a single typed list (`to`/`cc`/`bcc` entries) instead of separate arrays.
+The Mailchimp adapter calls the [Mailchimp Transactional API](https://mailchimp.com/developer/transactional/api/messages/send-new-message/), the API formerly known as Mandrill, with plain `fetch`. Unusually, the API key travels in the request body rather than a header, and recipients are a single typed list (`to`/`cc`/`bcc` entries) instead of separate arrays.
 
 <ProviderBadge adapter="mailchimp" />
 
@@ -42,7 +42,7 @@ export const email = createEmailClient({
 
 ## Send
 
-Mailchimp maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata`. `sendAt` schedules the send natively as `send_at` (UTC) — note Mailchimp only schedules email for accounts with a positive balance.
+Mailchimp maps `cc`, `bcc`, `headers`, `attachments`, `tags` (values only), and `metadata`. `sendAt` maps to Mailchimp's `send_at` (a UTC timestamp), and Mailchimp only schedules email for accounts with a positive balance.
 
 ```ts
 const result = await email.send({
@@ -57,10 +57,10 @@ const result = await email.send({
 console.log(result.id); // Mandrill _id of the first recipient result
 ```
 
-Mandrill responds with one result per recipient; the normalized `id` and `messageId` come from the first result's `_id`. Each result also carries a per-recipient status (`sent`, `queued`, `rejected`) — check `result.raw` during smoke tests if a send succeeds but mail does not arrive.
+Mandrill responds with one result per recipient; the normalized `id` and `messageId` come from the first result's `_id`. Each result also carries a per-recipient status (`sent`, `queued`, `rejected`). If a send succeeds but mail does not arrive, check `result.raw` during smoke tests, because a `rejected` status still counts as a successful API call.
 
 <Callout type="warn" title="No replyTo field">
-  This adapter does not support `replyTo` — setting it throws an `EmailValidationError` before
+  This adapter does not support `replyTo`; setting it throws an `EmailValidationError` before
   any request is made. Set a `Reply-To` header instead: `headers: { "Reply-To":
   "support@acme.com" }`. See [field support](/docs/adapters/field-support) for the full matrix.
 </Callout>
@@ -81,4 +81,4 @@ MAILCHIMP_API_KEY="md-..." npx email-sdk send \
   --dry-run
 ```
 
-Drop `--dry-run` for one real send — that is the only check that proves the key, domain verification, and recipient policy are ready.
+Drop `--dry-run` for one real send and check the per-recipient status in the output; Mandrill can accept the request and still reject the recipient.

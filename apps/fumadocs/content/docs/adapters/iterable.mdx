@@ -4,7 +4,7 @@ description: Trigger an Iterable campaign template for one recipient, with messa
 icon: iterable
 ---
 
-The Iterable adapter calls [Iterable's target email API](https://api.iterable.com/api/docs) over `fetch` — no extra dependency. Instead of sending raw content, it triggers an existing campaign template for exactly one recipient and hands your message to the template as `dataFields`.
+The Iterable adapter calls [Iterable's target email API](https://api.iterable.com/api/docs) with plain `fetch`. It works differently from most adapters: instead of sending raw content, it triggers an existing campaign template for exactly one recipient and hands your message to the template as `dataFields`.
 
 <ProviderBadge adapter="iterable" />
 
@@ -45,11 +45,12 @@ export const email = createEmailClient({
     },
     dataFields: {
       description:
-        "Extra template fields — a static object or a function of the message. Merged in before the normalized fields, so subject/html/text/from win on conflicts.",
+        "Extra template fields, as a static object or a function of the message. Merged in before the normalized fields, so subject/html/text/from win on conflicts.",
       type: "Record<string, unknown> | (message) => Record<string, unknown>",
     },
     sendAt: {
-      description: "Schedule the send — UTC timestamp in Iterable's expected format.",
+      description:
+        "Schedule the send. UTC timestamp in Iterable's expected format. This adapter option is separate from the message-level sendAt field, which Iterable rejects.",
       type: "string",
     },
     baseUrl: {
@@ -77,12 +78,12 @@ const result = await email.send({
   metadata: { userId: "user_123" },
 });
 
-console.log(result.raw); // Iterable returns no message id — inspect the raw response
+console.log(result.raw); // Iterable returns no message id; inspect the raw response
 ```
 
 <Callout type="warn" title="One recipient, template-only fields">
   Iterable target sends accept exactly one `to` recipient and no `cc`, `bcc`, `replyTo`, `headers`,
-  `attachments`, or `tags` — any of those throw an `EmailValidationError` before a request is made.
+  `attachments`, or `tags`. Any of those throw an `EmailValidationError` before a request is made.
   Check [field support](/docs/adapters/field-support) before routing fallbacks through Iterable.
 </Callout>
 

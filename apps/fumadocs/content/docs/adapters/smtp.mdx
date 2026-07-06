@@ -1,10 +1,10 @@
 ---
 title: SMTP
-description: Send over raw SMTP with the built-in TCP/TLS transport — no Nodemailer, no HTTP API.
+description: Send over raw SMTP with the built-in TCP/TLS transport. No Nodemailer, no HTTP API.
 icon: smtp
 ---
 
-The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets — no Nodemailer, no HTTP, no dependency. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
+The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets. There is no Nodemailer and no HTTP API in the path. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
 
 <ProviderBadge adapter="smtp" />
 
@@ -71,7 +71,7 @@ export const email = createEmailClient({
       type: "{ replyTo?: string }",
     },
     name: {
-      description: "Adapter name override — register several SMTP servers side by side.",
+      description: "Adapter name override, for registering several SMTP servers side by side.",
       type: "string",
       default: '"smtp"',
     },
@@ -90,11 +90,11 @@ export const email = createEmailClient({
 
 ### TLS and auth semantics
 
-With `secure: true` the whole session is TLS. Otherwise the adapter connects in plaintext and upgrades with `STARTTLS` before authenticating whenever `requireTLS` is set or `auth` is present — credentials never travel unencrypted. Authenticating against a server that cannot do TLS requires an explicit `allowInsecureAuth: true`; without it the adapter throws instead of sending the password in the clear.
+With `secure: true` the whole session is TLS. Otherwise the adapter connects in plaintext and upgrades with `STARTTLS` before authenticating whenever `requireTLS` is set or `auth` is present, so credentials do not travel unencrypted. Authenticating against a server that cannot do TLS requires an explicit `allowInsecureAuth: true`; without it the adapter throws instead of sending the password in the clear.
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey` (a random UUID otherwise), and an explicit `Message-ID` in `headers` overrides it — set one yourself if you need a specific domain for threading or deduplication.
+SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
@@ -111,11 +111,11 @@ console.log(result.accepted); // every recipient the server accepted
 console.log(result.id); // parsed from the server's "queued as ..." reply, else the idempotency key
 ```
 
-`rejected` is always empty — a refused recipient fails the SMTP conversation instead, and every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
+`rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
 <Callout type="warn" title="No attachments, tags, or metadata">
   The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
-  concept — any of these fields throws an `EmailValidationError` before connecting. See the
+  concept. Any of these fields throws an `EmailValidationError` before connecting. See the
   [field support matrix](/docs/adapters/field-support).
 </Callout>
 
@@ -165,4 +165,4 @@ npx email-sdk send \
   --dry-run
 ```
 
-Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send — the only check that proves the host, TLS mode, and credentials actually deliver.
+Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send to prove the host, TLS mode, and credentials actually deliver.

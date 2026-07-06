@@ -10,12 +10,13 @@
 
 One TypeScript client for transactional email. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- 🔌 Adapters for 20+ providers behind one normalized message
-- 🔁 Retries within an adapter, plus fallback routes across adapters
-- 🛟 Fail-fast field-support checks before a provider drops data
-- 🔭 Observability hooks for logs, metrics, and traces
-- 🧪 Test adapters that never call real providers
-- ⌨️ CLI for adapter discovery, doctor checks, and dry-run sends
+- Adapters for 23 providers behind one normalized message
+- Retries within an adapter, plus fallback routes across adapters
+- Fail-fast field-support checks before a provider drops data
+- Batch personalization with per-recipient variables, plus provider-side scheduled sends
+- Observability hooks for logs, metrics, and traces
+- Test adapters that never call real providers
+- CLI for adapter discovery, doctor checks, and dry-run sends
 
 ## Install
 
@@ -23,7 +24,7 @@ One TypeScript client for transactional email. Pick the providers you actually s
 npm install @opencoredev/email-sdk
 ```
 
-Server-side only (Node 20+ or Bun) — never expose provider API keys in client code.
+The SDK is server-side only and needs Node 20+ or Bun. Keep provider API keys out of client code.
 
 ## Usage
 
@@ -45,7 +46,7 @@ await email.send({
 
 ## Adapters
 
-Resend, Postmark, SendGrid, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Primitive, SMTP, and a testing adapter — each imported from its own entry point. New here? Start with `resend` for the fastest first send.
+Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Primitive, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 
@@ -67,7 +68,16 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 
 Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
 
-What is collected: built-in adapter names (custom adapters are reported as `custom`), CLI command names, success/failure and error codes, send duration, total recipient counts (`to` + `cc` + `bcc`), whether a message includes attachments (a boolean only, never the files themselves), whether a send used recipient variables or scheduling and which delivery path ran, SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), whether usage comes from the library or the bundled CLI, and redacted error reports — the error type, Email SDK error code, and stack traces with file paths reduced to package-relative names, with error messages scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload — tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. What is never collected: email content, subjects, addresses, headers, attachments, API keys, or any other message data.
+What gets collected:
+
+- Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
+- Success or failure, error codes, and send duration
+- Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
+- Whether a send used recipient variables or scheduling, and which delivery path ran
+- SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
+- Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+
+Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
 
 Opt out at any time with an environment variable:
 

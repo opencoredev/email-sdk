@@ -1,6 +1,6 @@
 ---
 title: Authentication
-description: How Email SDK authenticates to every provider — there is no platform account, you supply each provider's own credential from an environment variable.
+description: How Email SDK authenticates to every provider. There is no platform account; you supply each provider's own credential from an environment variable.
 icon: KeyRound
 ---
 
@@ -66,7 +66,7 @@ is issued and lists every configuration field.
 ## SMTP
 
 SMTP is the one adapter that does not take an API key. It connects to a mail server
-with a host, port, and username/password — the SDK ships its own SMTP transport, so
+with a host, port, and username/password. The SDK ships its own SMTP transport, so
 you do **not** add Nodemailer.
 
 ```ts title="lib/email.ts"
@@ -87,16 +87,17 @@ export const email = createEmailClient({
 
 ## Optional configuration
 
-Beyond credentials, every adapter accepts the same optional fields:
+Beyond credentials, the HTTP-based adapters accept two shared optional fields:
 
-- `baseUrl` — override the provider's API origin (for a proxy or region endpoint).
-- `headers` — extra HTTP headers sent with every request.
-- `fetch` — a custom `fetch` implementation for tests or special runtimes.
+- `baseUrl` overrides the provider's API origin, for a proxy or region endpoint.
+- `fetch` injects a custom `fetch` implementation for tests or special runtimes.
+
+A few adapters (Resend, Postmark, JetEmail, Lettermint, Primitive) also take a `headers` option for extra HTTP request headers. SMTP is socket-based and has its own options (`host`, `port`, `secure`, `tls`, and so on) instead of these. Each adapter page lists its exact option set.
 
 ## Multiple providers and fallbacks
 
 Pass several configured adapters to route across them. Only configure a fallback
-between adapters that support the same fields — see
+between adapters that support the same fields; see
 [Field support](/docs/adapters/field-support).
 
 ```ts title="lib/email.ts"
@@ -113,6 +114,7 @@ export const email = createEmailClient({
       region: process.env.AWS_REGION!,
     }),
   ],
+  fallback: ["ses"],
   retry: { retries: 1 },
 });
 ```
@@ -128,7 +130,7 @@ export const email = createEmailClient({
 
 - Scope each provider key to sending only, where the provider supports it.
 - Rotate or revoke credentials in the provider's own dashboard, then update the
-  environment variable — Email SDK holds no session or token state of its own.
+  environment variable. Email SDK holds no session or token state of its own.
 - Use [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys)
   for externally visible sends that may be retried.
 

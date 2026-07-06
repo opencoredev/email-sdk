@@ -4,7 +4,7 @@ description: The plugins.json entry schema, status labels, and the validation th
 icon: ShieldCheck
 ---
 
-The community registry is one static JSON file — `apps/fumadocs/content/community/plugins.json` in the [SDK repository](https://github.com/opencoredev/email-sdk) — listing third-party adapters, plugins, and hybrid packages. The docs site renders it on the [community page](/docs/plugins/community); changes land by pull request and are validated by a script in CI.
+The community registry is one static JSON file, `apps/fumadocs/content/community/plugins.json` in the [SDK repository](https://github.com/opencoredev/email-sdk), listing third-party adapters, plugins, and hybrid packages. The docs site renders it on the [community page](/docs/plugins/community); changes land by pull request and are validated by a script in CI.
 
 To list a package, build it first: [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) or [Publish a community plugin](/docs/guides/authoring/publish-community-plugin).
 
@@ -117,7 +117,7 @@ That runs `scripts/validate-community-registry.ts`, which enforces the schema ab
 
 ### The npm audit in CI
 
-With `--network` (or automatically when `CI=true` — the same script runs in CI via `bun run release:ci`), verified and official entries get a deeper audit. The script downloads the published npm tarball for `verifiedVersion` and fails the build if the package:
+With `--network` (or automatically when `CI=true`; the same script runs in CI via `bun run release:ci`), verified and official entries get a deeper audit. The script downloads the published npm tarball for `verifiedVersion` and fails the build if the package:
 
 1. Has a `repository` that does not match the entry's `repo`.
 2. Defines `preinstall`, `install`, or `postinstall` scripts.
