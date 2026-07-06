@@ -317,7 +317,7 @@ function buildExceptionList(error: unknown, handled: boolean): ExceptionListItem
 
     const currentError = current instanceof Error ? current : undefined;
     const item: ExceptionListItem = {
-      type: currentError ? currentError.name || "Error" : "Error",
+      type: currentError ? sanitizeErrorName(currentError.name) : "Error",
       value: redactErrorMessage(currentError ? currentError.message : String(current)),
       mechanism: { handled, type: "generic", synthetic: !currentError },
     };
@@ -396,6 +396,38 @@ function sanitizeFrameFilename(raw: string): string {
   return filename.split("/").at(-1) || filename;
 }
 
+// Error names that are safe to report verbatim: the SDK's own error classes plus
+// JavaScript built-ins. Error.prototype.name is writable, so anything else runs
+// through redactErrorMessage before it reaches error_name, the class dedupe key,
+// or $exception_fingerprint (all of which derive from the exception list's type).
+const SAFE_ERROR_NAMES = new Set([
+  "EmailSdkError",
+  "EmailProviderError",
+  "EmailValidationError",
+  "EmailProviderNotFoundError",
+  "Error",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "ReferenceError",
+  "EvalError",
+  "URIError",
+  "AggregateError",
+  "AbortError",
+  "TimeoutError",
+  "DOMException",
+]);
+
+function sanitizeErrorName(name: unknown): string {
+  // Error.prototype.name is writable and untyped at runtime; subclasses can
+  // assign anything, including non-strings.
+  if (typeof name !== "string" || !name) {
+    return "Error";
+  }
+
+  return SAFE_ERROR_NAMES.has(name) ? name : redactErrorMessage(name);
+}
+
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 // Any scheme://… so SMTP/AMQP/DB connection strings with embedded credentials are
 // scrubbed too, not just http(s).
@@ -407,6 +439,13 @@ const TOKEN_PATTERN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{24,}(?![A-Za-z0-9+/
 // (\Users\name) as well as macOS/Linux (/Users|/home). The current user's exact
 // home is already collapsed by the homedir() split above.
 const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
+// After a home dir collapses to "~", the remaining segments still name real files
+// ("~/Documents/payroll.xlsx"), so they are consumed too — both separators.
+const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
+// Key=value credentials ("password=hunter2", "api_key=sk_live_…"), value up to
+// whitespace or a quote. Quoted values are already covered by the quote passes.
+const KEY_VALUE_SECRET_PATTERN =
+  /\b(password|passwd|pwd|pass|secret|token|api[_-]?key)=[^\s"'`]+/gi;
 
 /**
  * Strips the values most likely to carry personal or secret data from error
@@ -424,6 +463,7 @@ function redactErrorMessage(message: string): string {
 
   redacted = redacted
     .replace(HOME_DIR_PATTERN, "~")
+    .replace(HOME_TAIL_PATTERN, "~<path-redacted>")
     // URLs before emails so a "scheme://user:pass@host" is redacted whole rather
     // than the email pass catching only the "pass@host" portion.
     .replace(URL_PATTERN, "<url>")
@@ -431,6 +471,9 @@ function redactErrorMessage(message: string): string {
     .replace(/"[^"]*"/g, '"<redacted>"')
     .replace(/'[^']*'/g, "'<redacted>'")
     .replace(/`[^`]*`/g, "`<redacted>`")
+    // Key=value secrets before TOKEN_PATTERN, so short values ("password=hunter2")
+    // are caught even when they are too short to look like tokens.
+    .replace(KEY_VALUE_SECRET_PATTERN, "$1=<redacted>")
     .replace(TOKEN_PATTERN, "<token>");
 
   return redacted.length > MAX_MESSAGE_LENGTH

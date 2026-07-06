@@ -295,12 +295,23 @@ describe("telemetry exceptions", () => {
     // Base64 secrets ending in "=" padding must redact whole, not leak the tail.
     ["auth dXNlcjpzdXBlcnNlY3JldA== bad", "auth <token> bad"],
     ["basic YWxhZGRpbjpvcGVuc2VzYW1l== denied", "basic <token> denied"],
-    ["read /home/leo/app/.env first", "read ~/app/.env first"],
+    // Path tails after the home-dir collapse still name real files, so the
+    // remaining segments are consumed too (POSIX and Windows separators).
+    ["read /home/leo/app/.env first", "read ~<path-redacted> first"],
+    ["open /Users/jsmith/Documents/payroll.xlsx failed", "open ~<path-redacted> failed"],
     // Another user's Windows home path (backslashes) must redact too.
-    ["open C:\\Users\\bob\\secret.txt failed", "open C:~\\secret.txt failed"],
+    ["open C:\\Users\\jsmith\\Documents\\payroll.xlsx failed", "open C:~<path-redacted> failed"],
     // A long alphanumeric username must collapse to "~" before TOKEN_PATTERN runs,
     // never leak as "/home/<token>".
-    ["spawn /home/abcdefghijklmnopqrstuvwx/bin", "spawn ~/bin"],
+    ["spawn /home/abcdefghijklmnopqrstuvwx/bin", "spawn ~<path-redacted>"],
+    // Key=value secrets redact before TOKEN_PATTERN so short values are caught,
+    // preserving the key (and its casing) but never the value.
+    ["login failed: password=hunter2", "login failed: password=<redacted>"],
+    ["PWD=abc12 rejected", "PWD=<redacted> rejected"],
+    ["api_key=sk_live_ab denied", "api_key=<redacted> denied"],
+    ["pass=x secret=y token=z", "pass=<redacted> secret=<redacted> token=<redacted>"],
+    // Quoted secret values fall through to the quote passes instead.
+    ['password="hunter two" rejected', 'password="<redacted>" rejected'],
   ])("redacts %j", async (input, expected) => {
     const { calls, telemetry } = exceptionTelemetry();
     const error = new Error(input);
@@ -349,8 +360,9 @@ describe("telemetry exceptions", () => {
     await telemetry.captureException(error, { source: "sdk", handled: true });
 
     const value = exceptionList(calls[0])[0]?.value ?? "";
-    expect(value).toContain("ENOENT ~/mail.json");
+    expect(value).toContain("ENOENT ~<path-redacted>");
     expect(value).not.toContain(homedir());
+    expect(value).not.toContain("mail.json");
     expect(value).toHaveLength(301);
     expect(value.endsWith("…")).toBe(true);
   });
@@ -374,6 +386,45 @@ describe("telemetry exceptions", () => {
     const synthetic = exceptionList(calls[1]);
     expect(synthetic[0]?.mechanism.synthetic).toBe(true);
     expect(synthetic[0]?.type).toBe("Error");
+  });
+
+  test("redacts hostile error names in type, error_name, and fingerprint", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+    // Error.prototype.name is writable, so a hostile name must be redacted
+    // everywhere it surfaces: $exception_list type, error_name, fingerprint.
+    const error = new EmailProviderError("request failed", { provider: "resend" });
+    error.name = "Error for jsmith@corp.com in /Users/jsmith/app";
+    error.stack = undefined;
+
+    await telemetry.captureException(error, { source: "sdk", handled: true });
+
+    expect(calls).toHaveLength(1);
+    const payload = JSON.stringify(calls[0]?.body);
+    expect(payload).not.toContain("jsmith");
+    expect(payload).not.toContain("corp.com");
+    expect(payload).not.toContain("/Users");
+
+    const expectedName = "Error for <email> in ~<path-redacted>";
+    expect(exceptionList(calls[0])[0]?.type).toBe(expectedName);
+    expect(calls[0]?.body.properties.error_name).toBe(expectedName);
+    expect(calls[0]?.body.properties.$exception_fingerprint).toBe(
+      `${expectedName}:provider_error`,
+    );
+  });
+
+  test("keeps allowlisted error names verbatim and normalizes non-string names", async () => {
+    const { calls, telemetry } = exceptionTelemetry();
+
+    const builtin = new TypeError("boom");
+    builtin.stack = undefined;
+    await telemetry.captureException(builtin, { source: "sdk", handled: true });
+    expect(exceptionList(calls[0])[0]?.type).toBe("TypeError");
+
+    const hostile = new Error("boom two");
+    Object.defineProperty(hostile, "name", { value: 42 });
+    hostile.stack = undefined;
+    await telemetry.captureException(hostile, { source: "sdk", handled: true });
+    expect(exceptionList(calls[1])[0]?.type).toBe("Error");
   });
 
   test("dedupes by error object, error class, and process budget", async () => {
