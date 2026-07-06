@@ -56,6 +56,40 @@ bun run build
 packages/email-sdk/dist/cli.js adapters
 ```
 
+## Live Provider Account Checks
+
+`scripts/check-<provider>-account.ts` verify that provider credentials
+authenticate against the real API, useful before shipping an adapter change.
+They load `.env.local` then `.env`, and by default only probe the auth path (no
+email is sent). Set `<PROVIDER>_LIVE_SEND=true` (plus the provider's from/to env
+vars) to actually send a live test message.
+
+Two have `bun run` aliases:
+
+```bash
+bun run live:sequenzy
+bun run live:lettermint
+```
+
+Run the others directly:
+
+```bash
+bun scripts/check-jetemail-account.ts
+bun scripts/check-primitive-account.ts
+```
+
+## Homebrew Formula
+
+`Formula/email-sdk.rb` is refreshed after a release with:
+
+```bash
+bun run homebrew:update
+```
+
+It reads the current `packages/email-sdk` version, resolves the published npm
+tarball's `sha256`, and rewrites the formula's `url` and `sha256`. Run it once
+the version is live on npm.
+
 ## Major Versions
 
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
