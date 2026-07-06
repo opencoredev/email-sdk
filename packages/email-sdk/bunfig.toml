@@ -1,0 +1,5 @@
+# Bun reads bunfig.toml from the cwd only, so this mirrors the root [test]
+# preload for `bun test` runs started inside this package. Install settings
+# live in the repo-root bunfig.toml.
+[test]
+preload = ["./test-preload.ts"]

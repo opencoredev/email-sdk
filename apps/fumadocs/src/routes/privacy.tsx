@@ -42,9 +42,18 @@ function Privacy() {
           <div className="mt-10 space-y-9 text-sm leading-7 text-fd-muted-foreground md:text-base">
             <PolicySection title="What We Collect">
               We may receive basic website analytics, such as page views, referrers, browser
-              information, and coarse region data. If you contact the project, open an issue, or
-              contribute to the repository, we receive the information you choose to provide in that
-              message or contribution.
+              information, and coarse region data, along with client-side error reports that help us
+              fix broken docs pages. The npm package collects its own anonymous, opt-out usage
+              telemetry described in the{" "}
+              <a
+                className="underline"
+                href="https://github.com/opencoredev/email-sdk#telemetry"
+                rel="noreferrer"
+              >
+                project README
+              </a>
+              . If you contact the project, open an issue, or contribute to the repository, we
+              receive the information you choose to provide in that message or contribution.
             </PolicySection>
 
             <PolicySection title="What We Do Not Collect">
@@ -60,9 +69,9 @@ function Privacy() {
             </PolicySection>
 
             <PolicySection title="Third-Party Services">
-              The site is hosted on Vercel and may use Vercel Web Analytics. Package downloads,
-              issues, pull requests, and repository activity are handled by npm and GitHub under
-              their own policies.
+              The site is hosted on Vercel and may use Vercel Web Analytics and PostHog (US cloud)
+              for analytics and error monitoring. Package downloads, issues, pull requests, and
+              repository activity are handled by npm and GitHub under their own policies.
             </PolicySection>
 
             <PolicySection title="Contact">
