@@ -56,6 +56,20 @@ bun run build
 packages/email-sdk/dist/cli.js adapters
 ```
 
+## Live Adapter Checks
+
+Some adapters have a live smoke check that calls the real provider account API.
+Use these when adding or verifying a provider adapter; they need the provider's
+API key in your shell or the repo-root `.env.local`:
+
+```bash
+bun run live:sequenzy
+bun run live:lettermint
+```
+
+Other providers have equivalent scripts without a `package.json` alias (for
+example `bun scripts/check-jetemail-account.ts`, `bun scripts/check-primitive-account.ts`).
+
 ## Major Versions
 
 Major versions need migration notes in the PR that introduces the breaking change. Include before/after examples for changed imports, options, CLI flags, adapter behavior, or public types.
@@ -80,9 +94,15 @@ HTML, and the build-time snapshot still feeds sitemap/rss/feed.
 Set `NOTRA_API_KEY` for the blog fetch (local: `apps/fumadocs/.env.local`;
 production: the Vercel project env). Without the key the fetch is skipped.
 
+`.github/workflows/blog-schedule.yml` refreshes the build-time snapshot
+(sitemap/rss/feed) by hitting a Vercel deploy hook: on the `notra-published`
+`repository_dispatch` event, a daily cron, or manual `workflow_dispatch`. It
+needs the `VERCEL_DEPLOY_HOOK_URL` secret; without it the job no-ops.
+
 ## CI and Publishing
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
 - Release publishing lives in `.github/workflows/release.yml`.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
 - Do not move npm publishing to Depot unless npm supports Depot as a trusted publisher or the project intentionally switches to token-based publishing.
+- After a publish, `release.yml` runs `bun run homebrew:update` and opens an "Update Homebrew formula" PR that repoints `Formula/email-sdk.rb` at the new npm tarball URL + sha256. Run it manually only to regenerate the formula locally.
