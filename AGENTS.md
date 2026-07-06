@@ -156,6 +156,14 @@ point Homebrew at the new release.
 ## CI and Publishing
 
 - Depot CI lives in `.depot/workflows/ci.yml`.
+- 2026-07-06: Turbo >=2.9.17 ignores `peerDependencies` when building the
+  package graph (vercel/turborepo#13025), so convex-email's
+  `@opencoredev/email-sdk` peer range no longer creates the
+  `convex-email#test -> email-sdk#build` edge on its own. convex-email
+  therefore also lists `@opencoredev/email-sdk` as a `workspace:*` dev
+  dependency; keep that entry, or `turbo test` runs the convex-email tests
+  against an unbuilt email-sdk and CI fails with "Cannot find module".
+  Verify edges with `bunx turbo run test --dry=json`.
 - Release publishing lives in `.github/workflows/release.yml`.
 - npm publishing uses GitHub-hosted Actions for Trusted Publishing/OIDC.
 - After a publish, `release.yml` posts a non-blocking PostHog release

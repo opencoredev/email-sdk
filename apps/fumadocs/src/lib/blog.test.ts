@@ -131,6 +131,16 @@ describe("mapNotraPost", () => {
   test("skips drafts", () => {
     expect(mapNotraPost(notraPost({ status: "draft" }), new Set())).toBeNull();
   });
+
+  test("skips posts without a Markdown body (image-type posts)", () => {
+    // @usenotra/sdk 1.3.x: image posts carry `markdown: null` and put an image
+    // URL in `content` — there is no prose body for the blog to render.
+    const mapped = mapNotraPost(
+      notraPost({ markdown: null, content: "https://cdn.usenotra.com/posts/post_1.png" }),
+      new Set(),
+    );
+    expect(mapped).toBeNull();
+  });
 });
 
 describe("getBlogPostMetaTitle", () => {
