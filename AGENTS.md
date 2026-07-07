@@ -120,7 +120,13 @@ The docs/marketing site lives in `apps/fumadocs` (Tanstack Start + Fumadocs) and
 deploys to Vercel.
 
 - `cd apps/fumadocs && bun run dev` — local dev server on port 4000.
-- `bun run build` — fetches Notra blog posts, then runs the Vite build.
+- `bun run build` — fetches Notra blog posts and regenerates the OG image,
+  then runs the Vite build.
+- `bun run og:generate` — regenerate the site-wide OG image
+  (`public/og/email-sdk.png`) on demand. The whole image is drawn in code; the
+  adapter count comes from the SDK package's export map and the sponsor row
+  from `src/lib/sponsors.ts` (the single source of truth shared with the
+  website spotlight), so it can never go stale.
 - `bun run posts:fetch` — refresh the build-time Notra snapshot on demand.
 - `bun run types:check` — runs `fumadocs-mdx` then `tsc --noEmit`; run this and
   `bun run build` to validate docs-site changes.
