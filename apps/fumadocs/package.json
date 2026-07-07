@@ -5,7 +5,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite dev --port=4000",
-    "build": "bun scripts/fetch-notra-posts.ts && vite build && bun scripts/ensure-root-index.ts",
+    "build": "bun scripts/check-module-identity.ts && bun scripts/fetch-notra-posts.ts && vite build && bun scripts/check-client-bundle.ts && bun scripts/ensure-root-index.ts",
     "posts:fetch": "bun scripts/fetch-notra-posts.ts",
     "start": "serve .output/public --config ../../serve.json",
     "preview": "vite preview",
@@ -24,7 +24,7 @@
     "fumadocs-core": "16.9.1",
     "fumadocs-mdx": "15.0.9",
     "fumadocs-ui": "16.9.1",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.16.0",
     "marked": "^18.0.5",
     "posthog-js": "^1.386.6",
     "react": "^19.2.7",

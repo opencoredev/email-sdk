@@ -134,6 +134,20 @@ HTML, and the build-time snapshot still feeds sitemap/rss/feed.
 Set `NOTRA_API_KEY` for the blog fetch (local: `apps/fumadocs/.env.local`;
 production: the Vercel project env). Without the key the fetch is skipped.
 
+2026-07-07: The app's `lucide-react` version must resolve to the same install
+fumadocs-ui uses. lucide-react is a peer dependency of fumadocs-core, so a
+version split makes bun materialize fumadocs-core once per peer set; two
+fumadocs-core instances mean two React contexts and every page crashes at
+hydration with "You need to wrap your application inside `FrameworkProvider`"
+while the build stays green (this took production down when a deps refresh
+bumped only the app's copy to 1.23.0). `bun run build` now runs
+`scripts/check-module-identity.ts` (pre-build, fails on any singleton split:
+fumadocs-core, react, react-dom, @tanstack/react-router, lucide-react) and
+`scripts/check-client-bundle.ts` (post-build backstop against the bundler
+duplicating the framework-context chunk). When bumping lucide-react or
+fumadocs packages, bump them together and let the identity check confirm a
+single resolution.
+
 `.github/workflows/blog-schedule.yml` refreshes the build-time snapshot
 (sitemap/rss/feed) by hitting a Vercel deploy hook on the `notra-published`
 `repository_dispatch` event, a daily cron, or manual `workflow_dispatch`. It
