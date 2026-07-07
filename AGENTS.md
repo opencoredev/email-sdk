@@ -120,7 +120,9 @@ The docs/marketing site lives in `apps/fumadocs` (Tanstack Start + Fumadocs) and
 deploys to Vercel.
 
 - `cd apps/fumadocs && bun run dev` — local dev server on port 4000.
-- `bun run build` — fetches Notra blog posts, then runs the Vite build.
+- `bun run build` — runs the module-identity check, fetches Notra blog posts,
+  runs the Vite build, then the client-bundle backstop and root-index step (see
+  the singleton note below).
 - `bun run posts:fetch` — refresh the build-time Notra snapshot on demand.
 - `bun run types:check` — runs `fumadocs-mdx` then `tsc --noEmit`; run this and
   `bun run build` to validate docs-site changes.
