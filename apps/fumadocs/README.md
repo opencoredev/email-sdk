@@ -9,6 +9,63 @@ Run development server:
 bun run dev
 ```
 
+## Build pipeline
+
+`bun run build` is not a bare `vite build` — it wraps the build in two dependency
+guards plus the Notra snapshot fetch and a static-index fixup. The steps run in
+order and any non-zero step fails the build:
+
+| Step | Script | Purpose |
+| --- | --- | --- |
+| 1. Identity guard (pre-build) | `scripts/check-module-identity.ts` | Fails if singleton-critical packages resolve to two different installs (see below). |
+| 2. Blog snapshot | `scripts/fetch-notra-posts.ts` | Writes `src/lib/notra-posts.generated.ts` for the sitemap/RSS/feed (see [Blog content](#blog-content-notra)). |
+| 3. Vite build | `vite build` | Prerenders the site and builds the client bundle + Nitro SSR function. |
+| 4. Bundle backstop (post-build) | `scripts/check-client-bundle.ts` | Fails if the fumadocs framework-context module lands in more than one client chunk. |
+| 5. Static index | `scripts/ensure-root-index.ts` | Copies `_shell.html` to `index.html` in each output root when the build didn't emit one. |
+
+To validate docs-site changes locally, run `bun run types:check` and `bun run
+build`. In CI the same build runs through `release:ci` (`turbo build`) against
+the **frozen lockfile**, so a dependency split that only reproduces on a clean
+install is caught there.
+
+### Why the dependency guards exist
+
+Fumadocs holds React contexts (most visibly the one behind `RootProvider`) at
+module scope. If the app and `fumadocs-ui` resolve **two physical copies** of
+`fumadocs-core`, there are two context instances: `RootProvider` writes to one
+while page components read the other, and every page crashes at hydration with
+**"You need to wrap your application inside `FrameworkProvider`"**. Crucially the
+build stays green — this is a runtime-only failure — so without an explicit
+check the crash ships. This took production down on 2026-07-07 when a deps
+refresh bumped only the app's `lucide-react` to `1.23.0`: `lucide-react` is a
+peer dependency of `fumadocs-core`, so the version split made bun's isolated
+linker materialize `fumadocs-core` once per peer set.
+
+**`scripts/check-module-identity.ts`** (pre-build) resolves each
+singleton-critical package from both the app and from `fumadocs-ui` and fails if
+they differ. The guarded packages are `fumadocs-core`, `react`, `react-dom`,
+`@tanstack/react-router`, and `lucide-react` (checked explicitly because it is
+the usual trigger for a `fumadocs-core` split). On a split it prints both
+resolved paths; fix it by aligning the versions in `apps/fumadocs/package.json`
+with what `fumadocs-ui` resolves — **when bumping `lucide-react` or any fumadocs
+package, bump them together** — or re-resolve so bun unifies them, then re-run
+the build to confirm.
+
+**`scripts/check-client-bundle.ts`** (post-build) is a backstop for the case the
+identity check can't see: the bundler duplicating the module graph even from a
+single install. It scans the built client chunks and fails if the framework
+context (identified by the `FrameworkProvider` marker string) appears in more
+than one `.js` chunk. It reads whichever of `.vercel/output/static/assets` or
+`.output/public/assets` was written most recently, or an explicit directory:
+
+```bash
+bun scripts/check-client-bundle.ts <assetsDir>
+```
+
+Byte-identical *leaf* chunks (e.g. archived docs versions or the lazy search
+graph) are normal and ignored — only duplication of the context module fails the
+check.
+
 ## Blog content (Notra)
 
 The blog is powered by [Notra](https://usenotra.com). The site uses **two
