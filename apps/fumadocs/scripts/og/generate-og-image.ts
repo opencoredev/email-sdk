@@ -285,6 +285,15 @@ function sponsorRowSvg(): string {
   const startX = 72 + r;
   const cy = 554;
 
+  // Single row bounded by the left column (~448px wide). Fail the build
+  // instead of letting sponsor chips run under the code card.
+  const maxSlots = Math.floor((448 - r * 2) / step) + 1;
+  if (sponsors.length + 1 > maxSlots) {
+    throw new Error(
+      `Sponsor row overflow: ${sponsors.length} sponsors + open slot exceed ${maxSlots} slots — rework the row layout in generate-og-image.ts`,
+    );
+  }
+
   const chips = sponsors.map((sponsor, index) =>
     logoCircle(toDataUri(join(publicDir, sponsor.logo)), startX + index * step, cy, r, `sponsor-${index}`),
   );
