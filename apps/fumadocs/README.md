@@ -135,3 +135,68 @@ old SVG for a while. A rebuild is only needed to refresh the sitemap/RSS/feed
 snapshot — the `Refresh blog posts from Notra` GitHub workflow triggers a weekly
 Vercel rebuild, and you can point a Notra publish webhook at the same Vercel
 deploy hook to refresh those feeds sooner.
+
+## Site OG image
+
+`public/og/email-sdk.png` (1200×630) is the site-wide social card — the default
+`og:image`/`twitter:image` for every page (`siteOgImageUrl` in
+`src/lib/shared.ts`, wired up in `src/lib/metadata.ts`) and the fallback image
+on the blog post route when no post is resolved (`src/routes/blog/$slug.tsx`).
+It is distinct from the per-post blog OG images
+served at `/og/blog/*`, which are rendered live at request time (see the Blog
+section above); the site card is a committed PNG regenerated at build time.
+
+The whole image is **drawn in code** by `scripts/og/generate-og-image.ts`, which
+builds an SVG — headline, a syntax-highlighted `send.ts` snippet, the provider
+logo grid, the sponsor row, and the `npm install` line — and rasterizes it to
+PNG with [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js). There is no
+hand-edited base art, so the card can't drift from reality.
+
+### What keeps it current
+
+Two values are derived at build time rather than hardcoded, so the image tracks
+the codebase:
+
+| Element | Source of truth | How it's derived |
+| --- | --- | --- |
+| Adapter count (`N PROVIDERS, ONE CLIENT`) | `packages/email-sdk/package.json` `exports` | Counts every export entry except `.`, `./testing`, `./agent-tools`, and `./plugins*`. Providers without a stored logo fold into a trailing `+N` chip. |
+| Sponsor row | `src/lib/sponsors.ts` | The same `sponsors` array feeds the website's `SponsorSpotlight` component, so both placements stay in sync. There is no monthly-amount tiering — every listed sponsor appears in both. |
+
+### Regenerating
+
+The generator runs automatically before `vite build` (see the `build` script in
+`package.json`). Regenerate on demand after changing the snippet, a logo, the
+sponsor list, or the adapter export map:
+
+```bash
+bun run og:generate
+```
+
+Commit the regenerated `public/og/email-sdk.png` alongside the change. Bump
+`VITE_OG_IMAGE_VERSION` (used as the `?v=` cache-buster on `siteOgImageUrl`) when
+you want crawlers to re-fetch the card immediately instead of serving a cached
+copy.
+
+### Deterministic rendering
+
+Renders are byte-identical between local and CI: logos are inlined as data URIs,
+text is set in the bundled Liberation Sans / Liberation Mono fonts under
+`scripts/og/fonts/` (metric-compatible with Arial/Courier), and
+`loadSystemFonts` is disabled so no machine-specific font can leak in.
+
+### Layout guardrails
+
+The provider grid and the sponsor row have fixed slot counts. If you add enough
+entries to overflow either one, the build **throws** rather than drawing chips
+off-layout (e.g. at `cy=0` or under the code card). Extend `rowYs` for the
+provider grid, or rework the sponsor-row layout, as the error message directs.
+
+### Common changes
+
+- **Add a sponsor:** add an entry to `sponsors` in `src/lib/sponsors.ts` and drop
+  its logo under `public/og/provider-logos/`. This updates both the OG image and
+  the website spotlight.
+- **Add a provider logo to the grid:** add a `{ file }` entry to `providerLogos`
+  in `generate-og-image.ts` (set `dark: true` for white/light marks so they get
+  a dark chip) and place the file under `public/og/provider-logos/`. Providers
+  left out of the array still count toward the `+N` chip via the export map.
