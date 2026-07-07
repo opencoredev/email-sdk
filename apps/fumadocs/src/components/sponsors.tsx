@@ -1,44 +1,10 @@
 import { ExternalLink, Plus } from "lucide-react";
 
+import { openSponsorSlots, sponsorHref, sponsors } from "@/lib/sponsors";
+
 type SponsorSpotlightProps = {
   compact?: boolean;
 };
-
-const sponsors = [
-  {
-    name: "Resend",
-    href: "https://go.resend.com/email-sdk",
-    logo: "/og/provider-logos/resend-mark.svg",
-  },
-  {
-    name: "Sequenzy",
-    href: "https://www.sequenzy.com/?ref=emailsdk",
-    logo: "/og/provider-logos/sequenzy.jpeg",
-  },
-  {
-    name: "JetEmail",
-    href: "https://jetemail.com",
-    logo: "/og/provider-logos/jetemail.jpeg",
-  },
-  {
-    name: "Primitive",
-    href: "https://www.primitive.dev",
-    logo: "/og/provider-logos/primitive.png",
-  },
-  {
-    name: "Lettermint",
-    href: "https://lettermint.co/?ref=emailsdk",
-    logo: "/og/provider-logos/lettermint.png",
-  },
-  {
-    name: "Instatus",
-    href: "https://instatus.com/?ref=emailsdk",
-    logo: "/og/provider-logos/instatus.png",
-  },
-] as const;
-
-const openSponsorSlots = [1] as const;
-const sponsorHref = "https://github.com/sponsors/opencoredev";
 
 export function SponsorSpotlight({ compact = false }: SponsorSpotlightProps) {
   return (
