@@ -243,6 +243,14 @@ function providerGridSvg(): string {
   const startX = 72 + r;
   const rowYs = [394, 438];
 
+  // The grid fits perRow * rowYs.length chips (logos + the "+N" chip). Fail
+  // the build instead of silently drawing overflow chips at cy=0.
+  if (providerLogos.length + 1 > perRow * rowYs.length) {
+    throw new Error(
+      `Provider grid overflow: ${providerLogos.length} logos + "+N" chip exceed ${perRow * rowYs.length} slots — extend rowYs in generate-og-image.ts`,
+    );
+  }
+
   const chips = providerLogos.map(({ file, dark }, index) => {
     const cx = startX + (index % perRow) * step;
     const cy = rowYs[Math.floor(index / perRow)] ?? 0;
