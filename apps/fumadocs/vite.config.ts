@@ -80,10 +80,11 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           crawlLinks: true,
           // Blog routes (/blog, /blog/$slug, /og/blog/*) render on-demand via the
-          // SSR function so new Notra posts appear without a rebuild; everything
+          // SSR function so new Notra posts appear without a rebuild, and /stats
+          // renders on-demand so its npm/GitHub numbers stay fresh; everything
           // else stays prerendered to static HTML.
           filter: ({ path }: { path: string }) =>
-            !path.startsWith("/blog") && !path.startsWith("/og/blog"),
+            !path.startsWith("/blog") && !path.startsWith("/og/blog") && path !== "/stats",
         },
 
         pages: [

@@ -2,6 +2,17 @@
 @import "fumadocs-ui/css/solar.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* The vendored dither-kit charts (src/components/dither-kit) use shadcn-style
+ * color utilities (bg-popover, text-muted-foreground, …). Map those token names
+ * onto the fumadocs theme so the charts follow light/dark automatically. */
+@theme inline {
+  --color-background: var(--color-fd-background);
+  --color-foreground: var(--color-fd-foreground);
+  --color-popover: var(--color-fd-popover);
+  --color-popover-foreground: var(--color-fd-popover-foreground);
+  --color-muted-foreground: var(--color-fd-muted-foreground);
+}
+
 :root {
   --text-swap-dur: 200ms;
   --text-swap-translate-y: 8px;
