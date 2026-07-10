@@ -237,10 +237,13 @@ export function useChartController({
     });
   }, []);
 
-  const selectDataKey = (key: string | null) => {
-    setSelectedDataKey(key);
-    onSelectionChange?.(key);
-  };
+  const selectDataKey = useCallback(
+    (key: string | null) => {
+      setSelectedDataKey(key);
+      onSelectionChange?.(key);
+    },
+    [onSelectionChange],
+  );
 
   const plotWidth = Math.max(0, dimensions.width - margins.left - margins.right);
   const plotHeight = Math.max(0, dimensions.height - margins.top - margins.bottom);

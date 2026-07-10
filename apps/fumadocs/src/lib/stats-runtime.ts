@@ -19,7 +19,10 @@ export type StatsSnapshot = {
 
 async function fetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
   try {
-    const response = await fetch(url, init);
+    const response = await fetch(url, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(5_000),
+    });
     if (!response.ok) return null;
     return await response.json();
   } catch {
@@ -30,7 +33,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<unknown | nul
 async function fetchDailyDownloads(): Promise<DailyDownloads[] | null> {
   const today = new Date().toISOString().slice(0, 10);
   const data = (await fetchJson(
-    `https://api.npmjs.org/downloads/range/${FIRST_PUBLISH_DAY}:${today}/${statsPackageName}`,
+    `https://api.npmjs.org/downloads/range/${FIRST_PUBLISH_DAY}:${today}/${encodeURIComponent(statsPackageName)}`,
   )) as { downloads?: { day: string; downloads: number }[] } | null;
   if (!Array.isArray(data?.downloads) || data.downloads.length === 0) return null;
   // npm reports zeros for the most recent day(s) it hasn't aggregated yet —

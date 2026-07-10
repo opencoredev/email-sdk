@@ -132,10 +132,10 @@ export function usePolarController({
   const [cursorX, setCursorX] = useState(0);
   const [cursorY, setCursorY] = useState(0);
   const [isMouseInChart, setMouseInChart] = useState(false);
-  const setCursor = (px: number, py: number) => {
+  const setCursor = useCallback((px: number, py: number) => {
     setCursorX(px);
     setCursorY(py);
-  };
+  }, []);
   const [variants, setVariants] = useState<Record<string, AreaVariant>>({});
 
   // Local patch: upstream relies on React Compiler auto-memoization, which this
@@ -154,10 +154,13 @@ export function usePolarController({
     });
   }, []);
 
-  const selectDataKey = (key: string | null) => {
-    setSelectedDataKey(key);
-    onSelectionChange?.(key);
-  };
+  const selectDataKey = useCallback(
+    (key: string | null) => {
+      setSelectedDataKey(key);
+      onSelectionChange?.(key);
+    },
+    [onSelectionChange],
+  );
 
   const plotWidth = Math.max(0, dimensions.width - margins.left - margins.right);
   const plotHeight = Math.max(0, dimensions.height - margins.top - margins.bottom);
