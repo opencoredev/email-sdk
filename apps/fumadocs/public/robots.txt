@@ -1,5 +1,8 @@
 # Email SDK — crawler policy
 # Default: every well-behaved crawler may index the whole site.
+# Note: /docs/v/ (old doc versions) is intentionally NOT disallowed — those
+# pages carry a noindex meta tag, and crawlers must be able to fetch them to
+# see it. Blocking them here would leave stale URLs stuck in search indexes.
 User-agent: *
 Allow: /
 # Content Signals (Cloudflare spec): allow search indexing and AI answer-engine

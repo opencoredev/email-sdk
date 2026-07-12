@@ -5,15 +5,15 @@ icon: KeyRound
 ---
 
 Email SDK is a library, not a hosted service. **There is no Email SDK account, API
-key, or OAuth flow.** You authenticate to each email provider with *that provider's*
+key, or OAuth flow.** You authenticate to each email provider with _that provider's_
 own credential, which you read from an environment variable and pass to the
 adapter. The adapter sets the provider's required auth header (or signs the request)
 for you.
 
 <Callout type="info">
-  One typed client, many providers: the only thing that changes between providers
-  is the factory you import and the credential you give it. For an agent-facing
-  summary of this model see [/auth.md](https://email-sdk.dev/auth.md).
+  One typed client, many providers: the only thing that changes between providers is the factory you
+  import and the credential you give it. For an agent-facing summary of this model see
+  [/auth.md](https://email-sdk.dev/auth.md).
 </Callout>
 
 ## How credentials flow
@@ -34,31 +34,31 @@ few add a routing id, use a key pair, or sign requests.
 
 ## Credential by provider
 
-| Provider | Import | Credential model | Required config → environment variable |
-| --- | --- | --- | --- |
-| Resend | `@opencoredev/email-sdk/resend` | API key | `apiKey` → `RESEND_API_KEY` |
-| Postmark | `@opencoredev/email-sdk/postmark` | Server token | `serverToken` → `POSTMARK_SERVER_TOKEN` |
-| SendGrid | `@opencoredev/email-sdk/sendgrid` | API key | `apiKey` → `SENDGRID_API_KEY` |
-| Cloudflare | `@opencoredev/email-sdk/cloudflare` | API token + account | `apiToken` → `CLOUDFLARE_API_TOKEN`, `accountId` → `CLOUDFLARE_ACCOUNT_ID` |
-| Unosend | `@opencoredev/email-sdk/unosend` | API key | `apiKey` → `UNOSEND_API_KEY` |
-| AWS SES | `@opencoredev/email-sdk/ses` | Access key pair (SigV4) | `accessKeyId` → `AWS_ACCESS_KEY_ID`, `secretAccessKey` → `AWS_SECRET_ACCESS_KEY`, `region` → `AWS_REGION` (optional `sessionToken` → `AWS_SESSION_TOKEN`) |
-| Mailgun | `@opencoredev/email-sdk/mailgun` | API key + domain | `apiKey` → `MAILGUN_API_KEY`, `domain` → `MAILGUN_DOMAIN` |
-| MailerSend | `@opencoredev/email-sdk/mailersend` | API key | `apiKey` → `MAILERSEND_API_KEY` |
-| Brevo | `@opencoredev/email-sdk/brevo` | API key | `apiKey` → `BREVO_API_KEY` |
-| Mailchimp Transactional | `@opencoredev/email-sdk/mailchimp` | API key | `apiKey` → `MAILCHIMP_API_KEY` |
-| SparkPost | `@opencoredev/email-sdk/sparkpost` | API key | `apiKey` → `SPARKPOST_API_KEY` |
-| Iterable | `@opencoredev/email-sdk/iterable` | API key + campaign | `apiKey` → `ITERABLE_API_KEY`, `campaignId` → `ITERABLE_CAMPAIGN_ID` |
-| Loops | `@opencoredev/email-sdk/loops` | API key + transactional id | `apiKey` → `LOOPS_API_KEY`, `transactionalId` → `LOOPS_TRANSACTIONAL_ID` |
-| Sequenzy | `@opencoredev/email-sdk/sequenzy` | API key | `apiKey` → `SEQUENZY_API_KEY` |
-| JetEmail | `@opencoredev/email-sdk/jetemail` | API key | `apiKey` → `JETEMAIL_API_KEY` |
-| Lettermint | `@opencoredev/email-sdk/lettermint` | API token | `apiToken` → `LETTERMINT_API_TOKEN` |
-| Primitive | `@opencoredev/email-sdk/primitive` | API key | `apiKey` → `PRIMITIVE_API_KEY` |
-| Plunk | `@opencoredev/email-sdk/plunk` | API key | `apiKey` → `PLUNK_API_KEY` |
-| Mailtrap | `@opencoredev/email-sdk/mailtrap` | API key | `apiKey` → `MAILTRAP_API_KEY` |
-| Scaleway | `@opencoredev/email-sdk/scaleway` | Project id + secret key | `projectId` → `SCALEWAY_PROJECT_ID`, `secretKey` → `SCALEWAY_SECRET_KEY` (optional `region`, defaults to `fr-par`) |
-| ZeptoMail | `@opencoredev/email-sdk/zeptomail` | Send-mail token | `token` → `ZEPTOMAIL_TOKEN` |
-| MailPace | `@opencoredev/email-sdk/mailpace` | API key | `apiKey` → `MAILPACE_API_KEY` |
-| SMTP | `@opencoredev/email-sdk/smtp` | SMTP username + password | `host`, `port`, `secure`, `auth: { user, pass }` → `SMTP_USER`, `SMTP_PASS` |
+| Provider                | Import                              | Credential model           | Required config → environment variable                                                                                                                    |
+| ----------------------- | ----------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resend                  | `@opencoredev/email-sdk/resend`     | API key                    | `apiKey` → `RESEND_API_KEY`                                                                                                                               |
+| Postmark                | `@opencoredev/email-sdk/postmark`   | Server token               | `serverToken` → `POSTMARK_SERVER_TOKEN`                                                                                                                   |
+| SendGrid                | `@opencoredev/email-sdk/sendgrid`   | API key                    | `apiKey` → `SENDGRID_API_KEY`                                                                                                                             |
+| Cloudflare              | `@opencoredev/email-sdk/cloudflare` | API token + account        | `apiToken` → `CLOUDFLARE_API_TOKEN`, `accountId` → `CLOUDFLARE_ACCOUNT_ID`                                                                                |
+| Unosend                 | `@opencoredev/email-sdk/unosend`    | API key                    | `apiKey` → `UNOSEND_API_KEY`                                                                                                                              |
+| AWS SES                 | `@opencoredev/email-sdk/ses`        | Access key pair (SigV4)    | `accessKeyId` → `AWS_ACCESS_KEY_ID`, `secretAccessKey` → `AWS_SECRET_ACCESS_KEY`, `region` → `AWS_REGION` (optional `sessionToken` → `AWS_SESSION_TOKEN`) |
+| Mailgun                 | `@opencoredev/email-sdk/mailgun`    | API key + domain           | `apiKey` → `MAILGUN_API_KEY`, `domain` → `MAILGUN_DOMAIN`                                                                                                 |
+| MailerSend              | `@opencoredev/email-sdk/mailersend` | API key                    | `apiKey` → `MAILERSEND_API_KEY`                                                                                                                           |
+| Brevo                   | `@opencoredev/email-sdk/brevo`      | API key                    | `apiKey` → `BREVO_API_KEY`                                                                                                                                |
+| Mailchimp Transactional | `@opencoredev/email-sdk/mailchimp`  | API key                    | `apiKey` → `MAILCHIMP_API_KEY`                                                                                                                            |
+| SparkPost               | `@opencoredev/email-sdk/sparkpost`  | API key                    | `apiKey` → `SPARKPOST_API_KEY`                                                                                                                            |
+| Iterable                | `@opencoredev/email-sdk/iterable`   | API key + campaign         | `apiKey` → `ITERABLE_API_KEY`, `campaignId` → `ITERABLE_CAMPAIGN_ID`                                                                                      |
+| Loops                   | `@opencoredev/email-sdk/loops`      | API key + transactional id | `apiKey` → `LOOPS_API_KEY`, `transactionalId` → `LOOPS_TRANSACTIONAL_ID`                                                                                  |
+| Sequenzy                | `@opencoredev/email-sdk/sequenzy`   | API key                    | `apiKey` → `SEQUENZY_API_KEY`                                                                                                                             |
+| JetEmail                | `@opencoredev/email-sdk/jetemail`   | API key                    | `apiKey` → `JETEMAIL_API_KEY`                                                                                                                             |
+| Lettermint              | `@opencoredev/email-sdk/lettermint` | API token                  | `apiToken` → `LETTERMINT_API_TOKEN`                                                                                                                       |
+| Primitive               | `@opencoredev/email-sdk/primitive`  | API key                    | `apiKey` → `PRIMITIVE_API_KEY`                                                                                                                            |
+| Plunk                   | `@opencoredev/email-sdk/plunk`      | API key                    | `apiKey` → `PLUNK_API_KEY`                                                                                                                                |
+| Mailtrap                | `@opencoredev/email-sdk/mailtrap`   | API key                    | `apiKey` → `MAILTRAP_API_KEY`                                                                                                                             |
+| Scaleway                | `@opencoredev/email-sdk/scaleway`   | Project id + secret key    | `projectId` → `SCALEWAY_PROJECT_ID`, `secretKey` → `SCALEWAY_SECRET_KEY` (optional `region`, defaults to `fr-par`)                                        |
+| ZeptoMail               | `@opencoredev/email-sdk/zeptomail`  | Send-mail token            | `token` → `ZEPTOMAIL_TOKEN`                                                                                                                               |
+| MailPace                | `@opencoredev/email-sdk/mailpace`   | API key                    | `apiKey` → `MAILPACE_API_KEY`                                                                                                                             |
+| SMTP                    | `@opencoredev/email-sdk/smtp`       | SMTP username + password   | `host`, `port`, `secure`, `auth: { user, pass }` → `SMTP_USER`, `SMTP_PASS`                                                                               |
 
 Each provider page under [Adapters](/docs/adapters) links to where that credential
 is issued and lists every configuration field.
@@ -122,10 +122,10 @@ export const email = createEmailClient({
 ## Keeping credentials safe
 
 <Callout type="warn">
-  Keep every credential in environment variables or a secret manager. Never
-  hardcode or log API keys, SMTP passwords, raw tokens, full message bodies, or
-  recipient lists. When an agent drives sends, gate them behind explicit human
-  approval and run `email-sdk doctor` and `send --dry-run` first.
+  Keep every credential in environment variables or a secret manager. Never hardcode or log API
+  keys, SMTP passwords, raw tokens, full message bodies, or recipient lists. When an agent drives
+  sends, gate them behind explicit human approval and run `email-sdk doctor` and `send --dry-run`
+  first.
 </Callout>
 
 - Scope each provider key to sending only, where the provider supports it.
@@ -137,3 +137,11 @@ export const email = createEmailClient({
 ## Per-provider setup
 
 <ProviderGrid />
+
+## Verify your sending domain's DNS
+
+API credentials get the request accepted; SPF, DKIM, and DMARC records get the
+mail delivered. After verifying a domain with your provider, confirm the records
+actually resolve with the free [email DNS checker](/tools/email-dns-checker) —
+it validates SPF syntax and lookup limits, probes common DKIM selectors, and
+checks your DMARC policy.

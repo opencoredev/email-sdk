@@ -8,6 +8,8 @@
     "build": "bun scripts/check-module-identity.ts && bun scripts/fetch-notra-posts.ts && bun scripts/og/generate-og-image.ts && vite build && bun scripts/check-client-bundle.ts && bun scripts/ensure-root-index.ts",
     "posts:fetch": "bun scripts/fetch-notra-posts.ts",
     "og:generate": "bun scripts/og/generate-og-image.ts",
+    "lastmod:generate": "bun scripts/generate-docs-lastmod.ts",
+    "field-support:generate": "bun scripts/generate-field-support.ts",
     "start": "serve .output/public --config ../../serve.json",
     "preview": "vite preview",
     "test": "bun test",

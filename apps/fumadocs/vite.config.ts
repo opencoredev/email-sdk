@@ -8,6 +8,7 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
+import { comparePairs } from "./src/lib/compare";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
 function collectContentPages(dir: string) {
@@ -106,6 +107,16 @@ export default defineConfig(({ mode }) => {
             path: "/terms",
           },
           ...versionedDocsPages,
+          {
+            path: "/compare",
+          },
+          ...comparePairs.map((pair) => ({ path: `/compare/${pair.slug}` })),
+          {
+            path: "/tools",
+          },
+          {
+            path: "/tools/email-dns-checker",
+          },
           {
             path: "/api/search",
           },

@@ -41,6 +41,18 @@ export function baseOptions({
               url: "/blog",
               active: "nested-url" as const,
             },
+            {
+              type: "main" as const,
+              text: "Compare",
+              url: "/compare",
+              active: "nested-url" as const,
+            },
+            {
+              type: "main" as const,
+              text: "Tools",
+              url: "/tools",
+              active: "nested-url" as const,
+            },
           ]
         : []),
       ...(versionPicker

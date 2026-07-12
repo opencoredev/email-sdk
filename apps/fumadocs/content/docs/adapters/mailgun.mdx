@@ -51,8 +51,8 @@ export const email = createEmailClient({
 />
 
 <Callout type="warn" title="EU domains need the EU base URL">
-  Domains created in Mailgun's EU region only respond on
-  `baseUrl: "https://api.eu.mailgun.net"`. Against the default US origin they fail with a 404.
+  Domains created in Mailgun's EU region only respond on `baseUrl: "https://api.eu.mailgun.net"`.
+  Against the default US origin they fail with a 404.
 </Callout>
 
 ## Send
@@ -111,3 +111,12 @@ MAILGUN_API_KEY="key-..." npx email-sdk send \
 ```
 
 Credentials also work as flags: `--api-key`, `--domain`, and `--base-url` (or `MAILGUN_BASE_URL`) override the environment. Drop `--dry-run` for one real send to prove the domain's DNS records and the account are actually ready.
+
+## Compare Mailgun with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs Mailgun](/compare/resend-vs-mailgun)
+- [Postmark vs Mailgun](/compare/postmark-vs-mailgun)
+- [SendGrid vs Mailgun](/compare/sendgrid-vs-mailgun)
+- [Mailgun vs AWS SES](/compare/mailgun-vs-ses)

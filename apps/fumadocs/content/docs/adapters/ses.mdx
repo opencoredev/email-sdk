@@ -88,8 +88,8 @@ console.log(result.id); // SES MessageId, also exposed as result.messageId
 
 <Callout type="warn" title="No metadata field">
   SES v2 `SendEmail` has no metadata concept, so `metadata` on a message throws an
-  `EmailValidationError` before any request is made. Use `tags` instead, or pick a
-  [metadata-capable adapter](/docs/adapters/field-support).
+  `EmailValidationError` before any request is made. Use `tags` instead, or pick a [metadata-capable
+  adapter](/docs/adapters/field-support).
 </Callout>
 
 ## Verify from the CLI
@@ -113,3 +113,12 @@ npx email-sdk send \
 ```
 
 `--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send. It is the only way to prove the identity is verified and the account is out of the SES sandbox.
+
+## Compare AWS SES with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs AWS SES](/compare/resend-vs-ses)
+- [Postmark vs AWS SES](/compare/postmark-vs-ses)
+- [SendGrid vs AWS SES](/compare/sendgrid-vs-ses)
+- [Mailgun vs AWS SES](/compare/mailgun-vs-ses)

@@ -70,8 +70,8 @@ console.log(result.id); // Resend email id, also exposed as result.messageId
 The `idempotencyKey` is sent as Resend's `Idempotency-Key` header, so retried requests cannot double-send.
 
 <Callout type="warn" title="No metadata field">
-  Resend has no metadata concept, so `metadata` on a message throws an `EmailValidationError`
-  before any request is made. Use `tags` instead, or pick a [metadata-capable
+  Resend has no metadata concept, so `metadata` on a message throws an `EmailValidationError` before
+  any request is made. Use `tags` instead, or pick a [metadata-capable
   adapter](/docs/adapters/field-support).
 </Callout>
 
@@ -92,3 +92,14 @@ RESEND_API_KEY="re_..." npx email-sdk send \
 ```
 
 Drop `--dry-run` to perform one real send from the environment that will send production email. Local validation cannot tell you whether the account, sender domain, and recipient policy are actually ready; one live send can.
+
+## Compare Resend with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs Postmark](/compare/resend-vs-postmark)
+- [Resend vs SendGrid](/compare/resend-vs-sendgrid)
+- [Resend vs AWS SES](/compare/resend-vs-ses)
+- [Resend vs Mailgun](/compare/resend-vs-mailgun)
+- [Resend vs Loops](/compare/resend-vs-loops)
+- [Resend vs MailerSend](/compare/resend-vs-mailersend)
