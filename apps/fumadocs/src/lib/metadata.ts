@@ -3,7 +3,8 @@ import type { MetaDescriptor } from "@tanstack/react-router";
 import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const siteTitle = `${appName} - TypeScript email SDK for every provider`;
-export const siteImageAlt = "Email SDK unified email sending preview";
+export const siteImageAlt =
+  "Email SDK: One route, every provider, with a TypeScript code-to-inbox preview";
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 

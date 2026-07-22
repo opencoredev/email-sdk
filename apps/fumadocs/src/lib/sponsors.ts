@@ -1,5 +1,5 @@
-// Single source of truth for sponsors. Consumed by the SponsorSpotlight
-// component AND by scripts/generate-og-image.ts, which bakes this list into
+// Single source of truth for sponsors. Consumed by the landing page
+// and by scripts/og/generate-og-image.ts, which bakes this list into
 // the site-wide OG image on every build — edit here and both stay in sync.
 export type Sponsor = {
   name: string;
