@@ -4,6 +4,14 @@ description: Send through Scaleway Transactional Email with region-scoped endpoi
 icon: scaleway
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Scaleway adapter calls the [Scaleway Transactional Email API](https://www.scaleway.com/en/developers/api/transactional-email/) with plain `fetch`. Sends are region-scoped: the adapter targets `/regions/{region}/emails` and defaults to `fr-par`.
 
 <ProviderBadge adapter="scaleway" />

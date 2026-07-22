@@ -1,4 +1,4 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import {
   base64Attachments,
   commonHeadersArray,
@@ -6,8 +6,9 @@ import {
   optionalStringAddresses,
   stringAddresses,
 } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
 import {
+  builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   httpErrorMessage,
@@ -15,7 +16,7 @@ import {
   readErrorBody,
 } from "./utils.js";
 
-export type SesProviderOptions = {
+export type SesAdapterOptions = {
   accessKeyId: string;
   secretAccessKey: string;
   region: string;
@@ -27,12 +28,13 @@ export type SesProviderOptions = {
 };
 
 export function ses(
-  options: SesProviderOptions,
-): EmailProvider<{ baseUrl: string; region: string }> {
+  options: SesAdapterOptions,
+): EmailAdapter<"ses", { baseUrl: string; region: string }> {
   const baseUrl = options.baseUrl ?? `https://email.${options.region}.amazonaws.com`;
 
   return {
     name: "ses",
+    ...builtInAdapterDefinition("ses"),
     raw: { baseUrl, region: options.region },
     async send(message, context) {
       const fetcher = options.fetch ?? fetch;
@@ -62,11 +64,10 @@ export function ses(
       const responseBody = await readErrorBody(response);
 
       if (!response.ok) {
-        throw new EmailProviderError(httpErrorMessage("ses", response.status, responseBody), {
-          provider: "ses",
+        throw new EmailAdapterError(httpErrorMessage("ses", response.status, responseBody), {
+          adapter: "ses",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: responseBody,
         });
       }
 
@@ -74,16 +75,15 @@ export function ses(
       const messageId = typeof record.MessageId === "string" ? record.MessageId : undefined;
 
       return {
-        provider: "ses",
+        adapter: "ses",
         id: messageId,
-        messageId,
         raw: responseBody,
       };
     },
   };
 }
 
-async function toSesPayload(message: EmailMessage, options: SesProviderOptions) {
+async function toSesPayload(message: EmailMessage, options: SesAdapterOptions) {
   assertSupportedMessageFields("ses", message, SUPPORTED_MESSAGE_FIELDS.ses);
 
   const charset = options.charset ?? "UTF-8";

@@ -10,7 +10,7 @@ import {
   Search,
   ShieldCheck,
   TriangleAlert,
-} from "lucide-react";
+} from "@/components/icon";
 import type { ReactNode } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";

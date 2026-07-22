@@ -1,0 +1,193 @@
+---
+title: Publish a community adapter
+description: Ship a third-party provider adapter as its own npm package and list it in the Email SDK community registry.
+icon: BadgeCheck
+---
+
+This guide takes an adapter you have built (see [Create an adapter](/docs/guides/authoring/create-adapter)) to a published npm package with a listing in the [community registry](/docs/plugins/community). Community adapters stay third-party: you own the package and the provider relationship; the registry makes it discoverable.
+
+| Surface           | Who owns it                     | Where it lives                                 |
+| ----------------- | ------------------------------- | ---------------------------------------------- |
+| Official adapter  | Email SDK maintainers           | `@opencoredev/email-sdk/<adapter>`             |
+| Community adapter | You                             | Your npm package, e.g. `email-sdk-acme-mail`   |
+| Registry listing  | Email SDK docs, by pull request | `apps/fumadocs/content/community/plugins.json` |
+
+Do not add community adapters to the SDK source, CLI, or exports. That path is for providers the project has agreed to maintain as official.
+
+<Steps>
+<Step>
+
+### Name and scaffold the package
+
+Follow the naming conventions so users can predict every identifier from the provider name:
+
+| Thing      | Convention                          | Example                    |
+| ---------- | ----------------------------------- | -------------------------- |
+| Package    | `email-sdk-{provider}`              | `email-sdk-acme-mail`      |
+| Adapter    | provider slug                       | `acme-mail`                |
+| Plugin id  | same slug                           | `acme-mail`                |
+| Env var    | uppercase slug + key                | `ACME_MAIL_API_KEY`        |
+| Exports    | `{provider}` and `{provider}Plugin` | `acmeMail`, `acmeMailPlugin` |
+
+```txt
+email-sdk-acme-mail/
+  src/
+    index.ts
+    acme-mail.ts
+    plugin.ts
+    acme-mail.test.ts
+  package.json
+  tsconfig.json
+  README.md
+```
+
+Never publish under the `@opencoredev` scope, and never tell users to import from `@opencoredev/email-sdk/{your-provider}`.
+
+</Step>
+<Step>
+
+### Export both the adapter and its plugin
+
+Export the plain adapter factory for users who want direct control, and the plugin wrapper for the one-line setup most apps use:
+
+```ts title="src/index.ts"
+export { acmeMail } from "./acme-mail";
+export { acmeMailPlugin } from "./plugin";
+export type { AcmeMailOptions } from "./acme-mail";
+```
+
+Declare `@opencoredev/email-sdk` as a **peer dependency**. A regular dependency can give apps two copies of the core types, and the registry's CI audit rejects packages without the peer dependency:
+
+```json title="package.json"
+{
+  "name": "email-sdk-acme-mail",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^0.6.0"
+  }
+}
+```
+
+Keep the package boring: no `preinstall`/`install`/`postinstall` scripts, no binaries, minimal runtime dependencies. Verified listings are audited for all three.
+
+</Step>
+<Step>
+
+### Document field support in the README
+
+Field support determines whether your adapter is safe as a [fallback route](/docs/adapters/field-support), so the README must state how each `EmailMessage` field behaves: mapped, or rejected with an error.
+
+| Field            | Support | Notes                                     |
+| ---------------- | ------- | ----------------------------------------- |
+| `html`, `text`   | Yes     | Sent as provider body fields.             |
+| `cc`, `bcc`      | Yes     | Mapped to provider recipient fields.      |
+| `replyTo`        | Yes     | Mapped to `reply_to`.                     |
+| `headers`        | No      | Throws `EmailValidationError`.            |
+| `attachments`    | No      | Throws `EmailValidationError`.            |
+| `tags`           | Yes     | Mapped to provider tags.                  |
+| `metadata`       | No      | Throws `EmailValidationError`.            |
+| `idempotencyKey` | No      | Provider has no idempotency support.      |
+
+Round out the README with: install command, a minimal `createEmailClient` example, required env vars, the test command, and links to the [adapter contract](/docs/reference/adapter-contract) and the provider's API docs.
+
+</Step>
+<Step>
+
+### Cover the package with tests
+
+Beyond the adapter unit tests from [Create an adapter](/docs/guides/authoring/create-adapter) (payload mapping, error retryability, unsupported-field rejection, `AbortSignal` forwarding), add one test proving the plugin registers through `createEmailClient`:
+
+```ts title="src/acme-mail.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmeMailPlugin } from "./index";
+
+test("registers the adapter via the plugin", () => {
+  const email = createEmailClient({
+    plugins: [acmeMailPlugin({ apiKey: "test" })],
+  });
+
+  expect(email.adapters.has("acme-mail")).toBe(true);
+  expect(email.defaultAdapter).toBe("acme-mail");
+});
+```
+
+</Step>
+<Step>
+
+### Publish to npm
+
+Publish from your own repository. Enable npm provenance or trusted publishing; it is required if you ever want the listing upgraded to `verified`.
+
+</Step>
+<Step>
+
+### Open the registry PR
+
+Add an entry to `apps/fumadocs/content/community/plugins.json` in the Email SDK repo:
+
+```json
+{
+  "name": "Acme Mail",
+  "package": "email-sdk-acme-mail",
+  "kind": "adapter",
+  "status": "community",
+  "description": "Adds an Acme Mail provider adapter for Email SDK.",
+  "href": "https://www.npmjs.com/package/email-sdk-acme-mail",
+  "repo": "https://github.com/acme/email-sdk-acme-mail",
+  "maintainer": "acme",
+  "pluginId": "acme-mail",
+  "adapter": "acme-mail",
+  "importName": "acmeMailPlugin"
+}
+```
+
+All listed fields except `pluginId` and `importName` are required; `adapter` is required for `adapter` and `hybrid` entries, and `href`/`repo` must be `https` URLs. Names, packages, and plugin ids must be unique across the registry.
+
+Validate before pushing:
+
+```bash
+bun run community:check
+```
+
+CI runs the same check. For `verified` and `official` entries it additionally audits the published npm tarball: repository match, the peer dependency, no install scripts, no binaries, and an unchanged runtime dependency count.
+
+</Step>
+</Steps>
+
+## Listing statuses
+
+| Status      | Meaning                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `community` | Listed and discoverable, clearly third-party. The default for new packages.               |
+| `verified`  | One published version passed the verification audit; requires `verifiedVersion` plus `verification` metadata in the entry. |
+| `official`  | Maintained by OpenCore or shipped in this repository. Not for third-party packages.       |
+
+Verification applies to a single version. After a new release, the entry keeps the old `verifiedVersion` until someone reviews the new one. Never mark a listing `verified` ahead of an actual review.
+
+## Next
+
+<Cards>
+  <Card
+    title="Community registry reference"
+    href="/docs/reference/community-registry"
+    description="Every registry field, including the verification block."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="The same process for plugins that don't add a provider."
+  />
+  <Card
+    title="Adapter contract"
+    href="/docs/reference/adapter-contract"
+    description="The types your package implements."
+  />
+</Cards>

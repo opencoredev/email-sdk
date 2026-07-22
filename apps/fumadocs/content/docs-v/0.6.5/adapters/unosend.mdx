@@ -1,0 +1,84 @@
+---
+title: Unosend
+description: Send through the Unosend REST API, a single Bearer-authenticated endpoint with CC, BCC, tags, and attachments.
+icon: unosend
+---
+
+The Unosend adapter calls the Unosend REST API with plain `fetch`. It is one of the simplest providers to wire up: one Bearer-authenticated `/emails` endpoint, one API key, no other configuration.
+
+<ProviderBadge adapter="unosend" />
+
+## Configure
+
+Create a server-side API key in your Unosend account and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { unosend } from "@opencoredev/email-sdk/unosend";
+
+export const email = createEmailClient({
+  adapters: [unosend({ apiKey: process.env.UNOSEND_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Unosend API key.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.unosend.co"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Unosend maps `cc`, `bcc`, `headers`, `tags`, `attachments`, and a single `replyTo` address.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  replyTo: "support@example.com",
+  subject: "You're invited to the Acme workspace",
+  html: "<p>Grace invited you to join the Acme workspace.</p>",
+  tags: [{ name: "type", value: "invite" }],
+});
+
+console.log(result.id); // Unosend email id, also exposed as result.messageId
+```
+
+The adapter checks `success` in the response body and throws an `EmailProviderError` when Unosend reports a failure, even on an HTTP 200.
+
+<Callout type="warn" title="No metadata, one reply-to">
+  Unosend has no metadata field and accepts only one `replyTo` address. A message with `metadata`
+  or multiple reply-to addresses throws an `EmailValidationError` before any request is made. Use
+  `tags`, or pick a [metadata-capable adapter](/docs/adapters/field-support).
+</Callout>
+
+## Verify from the CLI
+
+```bash
+UNOSEND_API_KEY="un_..." npx email-sdk doctor --adapter unosend
+```
+
+```bash
+UNOSEND_API_KEY="un_..." npx email-sdk send \
+  --adapter unosend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Unosend smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. Unosend has no extra credentials to get wrong, so a live send that prints an `id` means the key and the verified domain were the whole story. If it fails, the CLI surfaces Unosend's own error message from the response body.

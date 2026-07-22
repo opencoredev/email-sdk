@@ -1,7 +1,7 @@
 import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { apiAddress, apiAddresses, base64Attachments, optionalApiAddresses } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -9,7 +9,7 @@ import {
   headersToArray,
 } from "./utils.js";
 
-export type ScalewayProviderOptions = {
+export type ScalewayAdapterOptions = {
   secretKey: string;
   projectId: string;
   region?: string;
@@ -17,7 +17,9 @@ export type ScalewayProviderOptions = {
   fetch?: typeof fetch;
 };
 
-export function scaleway(options: ScalewayProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function scaleway(
+  options: ScalewayAdapterOptions,
+): EmailAdapter<"scaleway", { baseUrl: string }> {
   const region = options.region ?? "fr-par";
 
   return jsonProvider({
@@ -51,7 +53,7 @@ export function scaleway(options: ScalewayProviderOptions): EmailProvider<{ base
     fetch: options.fetch,
     parseResponse(body) {
       return {
-        provider: "scaleway",
+        adapter: "scaleway",
         id: firstString(body as Record<string, unknown>, ["id", "email_id"]),
         raw: body,
       };

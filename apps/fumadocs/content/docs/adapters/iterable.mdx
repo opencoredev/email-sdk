@@ -4,6 +4,14 @@ description: Trigger an Iterable campaign template for one recipient, with messa
 icon: iterable
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Iterable adapter calls [Iterable's target email API](https://api.iterable.com/api/docs) with plain `fetch`. It works differently from most adapters: instead of sending raw content, it triggers an existing campaign template for exactly one recipient and hands your message to the template as `dataFields`.
 
 <ProviderBadge adapter="iterable" />
@@ -104,4 +112,4 @@ ITERABLE_API_KEY="..." npx email-sdk send \
   --dry-run
 ```
 
-`--campaign-id` and `--send-at` override `ITERABLE_CAMPAIGN_ID` and `ITERABLE_SEND_AT`. Drop `--dry-run` to trigger one real campaign send and confirm the API key and campaign are live.
+`--campaign-id` and `--iterable-send-at` override `ITERABLE_CAMPAIGN_ID` and `ITERABLE_SEND_AT`. Iterable's adapter option is separate from the message-level `--send-at` flag because this adapter does not support Email SDK scheduled messages. Drop `--dry-run` to trigger one real campaign send and confirm the API key and campaign are live.

@@ -1,0 +1,203 @@
+---
+title: Create your first plugin
+description: Build an audit-log plugin end to end, with middleware that records every send and a typed client extension that exposes the log.
+icon: PackagePlus
+---
+
+This guide builds a real plugin from scratch: an audit log that records the outcome of every send and exposes the entries through a typed `email.auditLog` property. Along the way you use the two plugin capabilities that matter most, `middleware` for the send pipeline and `extendClient` for typed client extensions.
+
+A plugin is a plain object: `{ id, adapters?, hooks?, middleware?, extendClient? }`. The full lifecycle is in [writing plugins](/docs/plugins/writing-plugins); exact types in the [plugin API](/docs/plugins/api).
+
+<Steps>
+<Step>
+
+### Define the entry shape and factory
+
+Type the extension first. `EmailPlugin<TExtension>` is generic over what `extendClient` returns, which is what makes `email.auditLog` fully typed later.
+
+```ts title="audit-log-plugin.ts"
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export type AuditLogEntry = {
+  at: Date;
+  status: "sent" | "failed";
+  provider: string;
+  attempt: number;
+  messageId?: string;
+};
+
+export type AuditLog = {
+  readonly entries: AuditLogEntry[];
+  clear(): void;
+};
+
+export function auditLogPlugin(): EmailPlugin<{ auditLog: AuditLog }> {
+  const entries: AuditLogEntry[] = [];
+
+  return {
+    id: "audit-log",
+    // middleware and extendClient added in the next steps
+  };
+}
+```
+
+Keep recipients and bodies out of the entry shape. An audit log should answer "did the receipt for order 42 go out, through which route?" without becoming a PII store. Put correlation data in send-scope `metadata` instead.
+
+</Step>
+<Step>
+
+### Record outcomes with middleware
+
+Middleware runs on the send pipeline. `afterSend` fires once per successful delivery; `onError` fires when a route has exhausted its retries. Add both to the returned object:
+
+```ts title="audit-log-plugin.ts"
+    middleware: [
+      {
+        afterSend(event) {
+          entries.push({
+            at: new Date(),
+            status: "sent",
+            provider: event.provider,
+            attempt: event.attempt,
+            messageId: event.response.messageId ?? event.response.id,
+          });
+        },
+        onError(event) {
+          entries.push({
+            at: new Date(),
+            status: "failed",
+            provider: event.provider,
+            attempt: event.attempt,
+          });
+        },
+      },
+    ],
+```
+
+Exceptions thrown from `afterSend` and `onError` are swallowed, so observers cannot break a send. If you want a plugin that *blocks* sends (policy checks, allow-lists), throw from middleware `beforeSend`, which runs before validation and may also transform the message.
+
+</Step>
+<Step>
+
+### Expose the log with extendClient
+
+`extendClient` returns properties merged onto the client. The keys must not collide with built-in client members (`send`, `adapters`, ...) or another plugin's extension; collisions throw an `EmailValidationError` at `createEmailClient` time.
+
+```ts title="audit-log-plugin.ts"
+    extendClient() {
+      return {
+        auditLog: {
+          entries,
+          clear() {
+            entries.length = 0;
+          },
+        },
+      };
+    },
+```
+
+The complete plugin is the factory from step 1 with the `middleware` and `extendClient` blocks inside the returned object.
+
+</Step>
+<Step>
+
+### Mount it and use the typed extension
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { auditLogPlugin } from "./audit-log-plugin";
+
+export const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [auditLogPlugin()],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+
+console.log(email.auditLog.entries);
+// [{ at: ..., status: "sent", provider: "resend", attempt: 1, messageId: "..." }]
+```
+
+`email.auditLog` is typed. TypeScript infers the intersection of all plugin extensions from the `plugins` array, so `email.auditLog.entries[0]?.status` autocompletes.
+
+</Step>
+<Step>
+
+### Test it
+
+Pair the plugin with the [testing adapters](/docs/guides/test-email-behavior) to verify both paths:
+
+```ts title="audit-log-plugin.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
+import { auditLogPlugin } from "./audit-log-plugin";
+
+const message = {
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Hello",
+};
+
+test("records successful sends", async () => {
+  const email = createEmailClient({
+    adapters: [memoryProvider()],
+    plugins: [auditLogPlugin()],
+  });
+
+  await email.send(message);
+
+  expect(email.auditLog.entries).toHaveLength(1);
+  expect(email.auditLog.entries[0]).toMatchObject({ status: "sent", provider: "memory" });
+});
+
+test("records failures", async () => {
+  const email = createEmailClient({
+    adapters: [failingProvider()],
+    plugins: [auditLogPlugin()],
+  });
+
+  await expect(email.send(message)).rejects.toThrow("Provider failed");
+
+  expect(email.auditLog.entries[0]).toMatchObject({ status: "failed", provider: "failing" });
+});
+```
+
+`bun test` passes with no network and no credentials.
+
+</Step>
+</Steps>
+
+## Rules of thumb
+
+- One stable `id` per plugin; make it configurable if users may mount two instances.
+- `middleware.beforeSend` for anything that blocks or transforms; `afterSend`, `onError`, and [hooks](/docs/concepts/hooks) for observation only.
+- Keep `extendClient` surfaces small, and never reuse built-in client member names.
+- Each factory call should own its state: two clients with two `auditLogPlugin()` instances must not share entries.
+
+## Next
+
+<Cards>
+  <Card
+    title="Writing plugins"
+    href="/docs/plugins/writing-plugins"
+    description="The full lifecycle: plugin adapters, hooks vs middleware, ordering."
+  />
+  <Card
+    title="Plugin API"
+    href="/docs/plugins/api"
+    description="EmailPlugin, middleware events, and extension typing in detail."
+  />
+  <Card
+    title="Publish a community plugin"
+    href="/docs/guides/authoring/publish-community-plugin"
+    description="Turn the plugin into an npm package and list it in the registry."
+  />
+</Cards>

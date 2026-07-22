@@ -1,15 +1,17 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, emailParts } from "./payloads.js";
-import type { EmailAddress, EmailProvider, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type ZeptoMailProviderOptions = {
+export type ZeptoMailAdapterOptions = {
   token: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function zeptomail(options: ZeptoMailProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function zeptomail(
+  options: ZeptoMailAdapterOptions,
+): EmailAdapter<"zeptomail", { baseUrl: string }> {
   return jsonProvider({
     name: "zeptomail",
     baseUrl: options.baseUrl ?? "https://api.zeptomail.com",
@@ -42,7 +44,7 @@ export function zeptomail(options: ZeptoMailProviderOptions): EmailProvider<{ ba
     },
     parseResponse(body) {
       return {
-        provider: "zeptomail",
+        adapter: "zeptomail",
         id: firstString(body as Record<string, unknown>, ["request_id", "messageId", "id"]),
         raw: body,
       };

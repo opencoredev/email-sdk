@@ -1,0 +1,64 @@
+---
+title: Troubleshoot failed sends
+description: Diagnose failures by the exported error class, stable code, adapter, and delivery classification.
+---
+
+Start with the error code. Provider messages alone do not tell you whether the failure happened before or after possible dispatch.
+
+## Validation fails before network work
+
+`EmailValidationError` means the common message, route, capability, schedule, or adapter-specific check failed.
+
+Check:
+
+1. `from`, at least one `to`, `subject`, and `text` or `html` are present.
+2. Every attachment has exactly one of `content` or `path`.
+3. `sendAt` has `Z` or a numeric offset.
+4. Every fallback adapter supports all non-empty fields.
+5. Adapter-specific recipient and tag limits match the message.
+
+Run the same path without sending:
+
+```bash
+EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
+  --adapter resend \
+  --from hello@example.com \
+  --to user@example.com \
+  --subject "Validation smoke test" \
+  --text "Dry run only." \
+  --dry-run
+```
+
+## Adapter name is missing
+
+`EmailAdapterNotFoundError` includes the unregistered `adapter`. Construction catches unknown defaults and client fallbacks; runtime strings can still reach this error.
+
+```bash
+npx email-sdk adapters
+```
+
+## One adapter failed
+
+`EmailAdapterError` includes `adapter`, optional HTTP `status` and `requestId`, `retryable`, and `delivery`.
+
+- `not_sent` may advance to fallback.
+- `unknown` stops fallback unless you explicitly configured continuation.
+
+## Every route failed
+
+`EmailRouteError.failures` contains ordered `EmailAdapterError` values. Inspect each adapter and delivery value, then keep the full chain in server-side diagnostics without exposing provider bodies to users.
+
+## Personalized recipients all failed
+
+`EmailAllRecipientsFailedError.failures` means `sendPersonalized` accepted no recipients. Partial success resolves instead, with both `accepted` and `rejected` arrays.
+
+## Middleware or abort stopped the route
+
+`EmailMiddlewareError.phase` identifies `before_send`, `after_send`, or `on_error`. `EmailAbortError` means the signal stopped active work or backoff and prevented later retry/fallback.
+
+## Configuration is present but delivery still fails
+
+`doctor` checks required values, not provider account state. A live test can still fail because of sender verification, sandbox restrictions, API scope, region, account review, or rate limits.
+
+<Card title="Error reference" href="/docs/reference/errors" description="Open the exact class and field contract for each code." />
+<Card title="Adapter docs" href="/docs/adapters" description="Check provider-specific options and account requirements." />

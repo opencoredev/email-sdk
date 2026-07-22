@@ -1,0 +1,101 @@
+---
+title: Scaleway
+description: Send through Scaleway Transactional Email with region-scoped endpoints and header-based reply-to.
+icon: scaleway
+---
+
+The Scaleway adapter calls the [Scaleway Transactional Email API](https://www.scaleway.com/en/developers/api/transactional-email/) with plain `fetch`. Sends are region-scoped: the adapter targets `/regions/{region}/emails` and defaults to `fr-par`.
+
+<ProviderBadge adapter="scaleway" />
+
+## Configure
+
+Create an IAM secret key in the Scaleway console, note your project ID, and verify the sending domain in Transactional Email.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { scaleway } from "@opencoredev/email-sdk/scaleway";
+
+export const email = createEmailClient({
+  adapters: [
+    scaleway({
+      secretKey: process.env.SCALEWAY_SECRET_KEY!,
+      projectId: process.env.SCALEWAY_PROJECT_ID!,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    secretKey: {
+      description: "Scaleway IAM secret key, sent as the X-Auth-Token header.",
+      type: "string",
+      required: true,
+    },
+    projectId: {
+      description: "Scaleway project ID the emails belong to.",
+      type: "string",
+      required: true,
+    },
+    region: {
+      description: "Transactional Email region used in the endpoint path.",
+      type: "string",
+      default: '"fr-par"',
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.scaleway.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Scaleway maps `cc`, `bcc`, `replyTo`, `headers`, and `attachments`.
+
+```ts
+const result = await email.send({
+  from: "Acme <billing@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@acme.com",
+  subject: "Your May invoice",
+  html: "<p>Invoice INV-2041 is attached.</p>",
+  attachments: [
+    { filename: "invoice.txt", content: "Invoice INV-2041: 49.00 EUR", contentType: "text/plain" },
+  ],
+});
+
+console.log(result.id); // Scaleway email id (`id` or `email_id` in the response)
+```
+
+`replyTo` travels as a `Reply-To` entry in Scaleway's `additional_headers`. Setting both `replyTo` and a manual `Reply-To` header throws an `EmailValidationError` before any request, so pick one.
+
+<Callout type="warn" title="No tags or metadata">
+  Scaleway has no tag or metadata concept, so either field throws an `EmailValidationError` before
+  any request is made. Pick a [tag-capable adapter](/docs/adapters/field-support) if you need them.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npx email-sdk doctor --adapter scaleway
+```
+
+```bash
+SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npx email-sdk send \
+  --adapter scaleway \
+  --region fr-par \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Scaleway smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+`--region` falls back to the `SCALEWAY_REGION` env var, then `fr-par`. Drop `--dry-run` for one real send to prove the key, project, region, and sender domain line up.

@@ -1,0 +1,49 @@
+---
+title: Schedule an email
+description: Use sendAt for a simple future send, and use an app-owned scheduler when you need more control.
+---
+
+For a simple send later today or this week, put `sendAt` on the message:
+
+```ts title="src/send-later.ts"
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Your trial ends tomorrow",
+  text: "Open your account to keep your work.",
+  sendAt: new Date(Date.now() + 60 * 60_000),
+});
+```
+
+The provider holds the email until that time. Email SDK does not keep a timer, run a cron job, or stay alive in the background.
+
+## Supported adapters
+
+`sendAt` works with Resend, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional, and SparkPost. Other adapters reject the message before sending.
+
+Provider limits still apply. Several providers only accept schedules a few days ahead, so check the adapter page before using a long delay.
+
+If your client has a fallback that cannot schedule, disable that route for this send:
+
+```ts
+await email.send(message, {
+  fallback: { adapters: [] },
+});
+```
+
+Email SDK checks the whole route before sending, so it will not silently hand a scheduled message to an adapter that would send it immediately.
+
+## When to use your own scheduler
+
+Keep the schedule in your database and let a queue, workflow, or cron worker call `email.send` when you need:
+
+- cancellation or rescheduling
+- delays longer than the provider allows
+- a record of pending and completed work
+- retries that survive a server restart
+- the freedom to switch providers before the send happens
+
+A cron job is fine when it polls a durable outbox table. Do not rely on an in-memory timer because a deploy or crash will lose it.
+
+<Card title="Production send pipeline" href="/docs/guides/production-send-pipeline" description="Store delivery state and retries outside the core SDK." />
+<Card title="Delivery capabilities" href="/docs/adapters/capability-groups" description="Compare scheduling, idempotency, and personalized delivery support." />

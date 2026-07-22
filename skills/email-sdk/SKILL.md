@@ -7,7 +7,7 @@ description: Use when adding, reviewing, or documenting Email SDK integrations i
 
 Use this skill when an agent works with this repository or wires `@opencoredev/email-sdk` into another TypeScript app.
 
-This skill is intentionally dynamic: do not treat the examples below as the full current API. First refresh the local package docs/source for the installed version, then implement against what the repo or dependency actually exposes.
+This skill is intentionally dynamic: do not treat the examples below as the full current API or template catalog. First refresh the local package docs/source for the installed version, then implement against what the repo, dependency, and current machine-readable documentation actually expose.
 
 ## Refresh Current Docs
 
@@ -29,8 +29,19 @@ Before changing code, inspect the most relevant current sources:
 3. If local docs are missing or the task depends on version-sensitive behavior, fetch the current published package metadata/docs before implementing:
    - `bun pm view @opencoredev/email-sdk`
    - `bun email-sdk version` when the CLI is installed in the target app
-   - `bunx --yes jsr info email-sdk` only if the project is using JSR
+   - `https://email-sdk.dev/docs/llms.txt` to discover the current documentation tree
+   - the exact raw Markdown page at `https://email-sdk.dev/docs/<path>.md`
    - the repository docs or package README for the exact version in use.
+
+Prefer the raw `.md` endpoints over scraping rendered HTML. They return `Content-Type: text/markdown`, preserve current internal links, and include the page title and canonical route.
+
+For React Email UI or template work:
+
+1. Fetch `https://email-sdk.dev/docs/ui.md` first.
+2. Follow its current category and template links instead of relying on a hard-coded template list.
+3. Fetch the chosen template page as raw Markdown, for example `https://email-sdk.dev/docs/ui/account/verification-code.md`.
+4. Use the documented `shadcn@latest add` registry URL when installation is requested, or copy the Manual source from the same page.
+5. Keep templates on the actual `@opencoredev/email-sdk/react` primitives and verify both light and dark email themes when changing presentation.
 
 When local source and external docs disagree, prefer the code/types for the exact installed version and mention the mismatch.
 
@@ -69,8 +80,8 @@ export const email = createEmailClient({
       },
     }),
   ],
-  fallback: ["smtp"],
-  retry: { retries: 1 },
+  fallback: { adapters: ["smtp"] },
+  retry: { maxAttempts: 2 },
 });
 ```
 
@@ -81,8 +92,9 @@ export const email = createEmailClient({
 - Do not treat SMTP as a universal backup; it is best for simple text/html sends with address fields and headers.
 - Use idempotency keys for externally visible transactional sends that may be retried or sent through fallback routes.
 - Use hooks or `observabilityPlugin()` for redacted route, attempt, retry, success, and error events.
-- Add tests with `memoryProvider()`, `failingProvider()`, and `capturePlugin()` when fallback or retry behavior matters.
-- Use the CLI `doctor` and `--dry-run` before live provider smoke tests.
+- Add tests with `memoryAdapter()`, `failingAdapter()`, and `capturePlugin()` when fallback or retry behavior matters.
+- Use the CLI `doctor` and `send --dry-run` before live provider authentication checks.
+- Use the separate `email-sdk-migrate` skill for v0-to-v1 application migrations instead of applying static find-and-replace rules.
 
 Inside this repo, the main public docs for this pattern are:
 
@@ -95,7 +107,7 @@ Inside this repo, the main public docs for this pattern are:
 - For SDK changes, run `bun test` in `packages/email-sdk`.
 - For docs changes, run `bun run check-types` and `bun run build` from the repo root when practical.
 - For app integrations, run the narrowest test/typecheck that covers the send path.
-- For real provider smoke tests, use the CLI with explicit test recipients and do not send external mail without the user's approval.
+- For real provider authentication checks, use the repository's non-sending `live:*` scripts when available. Do not send external mail without the user's separate approval.
 
 ## Review Checklist
 

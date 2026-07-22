@@ -3,14 +3,13 @@
   "pages": [
     "index",
     "getting-started",
-    "authentication",
-    "telemetry",
-    "concepts",
     "adapters",
+    "concepts",
     "plugins",
-    "components",
+    "ui",
+    "integrations",
+    "agents",
     "guides",
-    "reference",
-    "agents"
+    "reference"
   ]
 }

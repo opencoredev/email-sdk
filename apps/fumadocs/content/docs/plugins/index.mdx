@@ -1,90 +1,50 @@
 ---
-title: Plugins
-description: Package reusable send behavior (adapters, hooks, middleware, and typed client extensions) into one plugins array.
-icon: Plug
+title: Plugin system
+description: Transform send options, select routes, observe lifecycle events, enforce time bounds, and extend the typed client.
 ---
 
-A plugin bundles send-pipeline behavior into one reusable unit you mount with `plugins: [...]`. One plugin can register adapters, transform messages before validation, observe every attempt, and add typed helpers to the client. Shared policy lives in one place instead of being copied around every `createEmailClient` call.
+Plugins compose around `createEmailClient` without changing adapter implementations. Choose a built-in by the job it owns; do not stack plugins that solve the same problem.
 
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
-import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
-import { resend } from "@opencoredev/email-sdk/resend";
+## Built-in plugins
 
-export const email = createEmailClient({
-  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+| Plugin | Use it for | Surface | Import |
+| --- | --- | --- | --- |
+| [Defaults](/docs/plugins/built-in/defaults) | Shared reply-to, headers, tags, metadata, and idempotency prefixes | `beforeSend` | `@opencoredev/email-sdk/plugins/defaults` |
+| [Routing](/docs/plugins/built-in/routing) | Select a registered adapter from the prepared message or send metadata | `beforeSend` | `@opencoredev/email-sdk/plugins/routing` |
+| [Timeout](/docs/plugins/built-in/timeout) | Bound one logical send, including retries and fallback, with caller cancellation preserved | `beforeSend` | `@opencoredev/email-sdk/plugins/timeout` |
+| [Observability](/docs/plugins/built-in/observability) | Emit redacted logs, metrics, and traces | hooks + middleware | `@opencoredev/email-sdk/plugins/observability` |
+| [Capture](/docs/plugins/built-in/capture) | Record lifecycle events for tests and local inspection | hooks + middleware + client extension | `@opencoredev/email-sdk/plugins/capture` |
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [primary, transactional],
   plugins: [
-    defaultsPlugin({ headers: { "X-App": "acme" }, replyTo: "support@acme.com" }),
-    observabilityPlugin({ log: (event) => console.log(event.type, event.provider) }),
+    defaultsPlugin({ replyTo: "support@example.com" }),
+    routingPlugin({
+      select: ({ message }) =>
+        message.tags?.some((tag) => tag.name === "transactional")
+          ? "transactional"
+          : undefined,
+    }),
+    timeoutPlugin({ timeoutMs: 10_000 }),
   ],
 });
 ```
 
-## What a plugin can do
+## Plugin surfaces
 
-A plugin is a plain object with an `id` and any combination of four capabilities:
+| Surface | Purpose | Failure behavior |
+| --- | --- | --- |
+| `adapters` | Register additional routes synchronously. | Duplicate names fail client construction. |
+| `hooks` | Observe attempts, retries, success, and terminal errors. | Exceptions are swallowed. |
+| `middleware` | Transform messages/options and react after success or failure. | Exceptions become `EmailMiddlewareError`. |
+| `extendClient` | Add a typed application-facing property or method. | Reserved-key collisions fail client construction. |
 
-| Capability | Field          | What it does                                                                                                                          |
-| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Add routes | `adapters`     | Registers providers into the client, same as the `adapters` option. This is how community provider packages ship one-call setup.       |
-| Transform  | `middleware`   | `beforeSend` runs once per send, before validation, and can replace the message or options. `afterSend` / `onError` observe outcomes.  |
-| Observe    | `hooks`        | The same [hooks](/docs/concepts/hooks) as the client option: per-attempt, observe-only, failures swallowed.                             |
-| Extend     | `extendClient` | Adds typed properties to the returned client, like `email.capture` from the capture plugin.                                            |
+Plugin ids must be unique. Adapter registration and client construction stay synchronous. Order matters for `beforeSend`: each middleware receives the output of the previous one.
 
-Middleware is the capability only plugins have: client-level `hooks` can watch a send, but only plugin middleware can change it.
+## Build or install a plugin
 
-## Built-in plugins
+Community packages remain outside the core support boundary. Review source, dependency versions, field validation, secret handling, and maintenance status before use.
 
-Three plugins ship with the SDK, each from its own entry point:
-
-| Plugin                                                | Import                                         | Use it when                                                               |
-| ----------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
-| [Defaults](/docs/plugins/built-in/defaults)           | `@opencoredev/email-sdk/plugins/defaults`      | Every send needs the same headers, tags, reply-to, or idempotency prefix.  |
-| [Observability](/docs/plugins/built-in/observability) | `@opencoredev/email-sdk/plugins/observability` | You want logs, metrics, or traces without leaking recipients or bodies.    |
-| [Capture](/docs/plugins/built-in/capture)             | `@opencoredev/email-sdk/plugins/capture`       | Tests need to assert attempted sends, retries, responses, and errors.      |
-
-## Registration rules
-
-Plugins register in array order, and the order is deterministic:
-
-1. Direct `adapters` register first, then each plugin's adapters in plugin order.
-2. Middleware and hooks run in plugin order; plugin hooks run before client `hooks`.
-3. Duplicate plugin ids and duplicate adapter names throw an `EmailValidationError`. Mount two instances of the same plugin with distinct `id`s and distinct extension keys, e.g. `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })`.
-
-The full rules, event shapes, and error cases are in the [plugin API reference](/docs/plugins/api).
-
-## Explore
-
-<Cards>
-  <Card
-    title="Defaults plugin"
-    href="/docs/plugins/built-in/defaults"
-    description="Merge org-wide headers, tags, reply-to, and idempotency prefixes into every send."
-  />
-  <Card
-    title="Observability plugin"
-    href="/docs/plugins/built-in/observability"
-    description="Redacted sent/retry/error events for logs, metrics, and traces."
-  />
-  <Card
-    title="Capture plugin"
-    href="/docs/plugins/built-in/capture"
-    description="Record send lifecycle events in tests via a typed client.capture store."
-  />
-  <Card
-    title="Writing plugins"
-    href="/docs/plugins/writing-plugins"
-    description="Anatomy of EmailPlugin: hooks vs middleware, plugin adapters, typed extensions."
-  />
-  <Card
-    title="Plugin API reference"
-    href="/docs/plugins/api"
-    description="EmailPlugin, EmailPluginContext, middleware events, and extension typing."
-  />
-  <Card
-    title="Community plugins"
-    href="/docs/plugins/community"
-    description="Third-party adapters and plugins, plus how to list your own."
-  />
-</Cards>
+<Card title="Write a plugin" href="/docs/guides/authoring/create-first-plugin" description="Build a typed plugin with middleware and a client extension." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="Look up every plugin field and event type." />

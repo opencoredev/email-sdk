@@ -1,0 +1,31 @@
+{
+  "title": "Adapters",
+  "icon": "Cable",
+  "pages": [
+    "index",
+    "field-support",
+    "resend",
+    "postmark",
+    "sendgrid",
+    "cloudflare",
+    "unosend",
+    "ses",
+    "mailgun",
+    "mailersend",
+    "brevo",
+    "mailchimp",
+    "sparkpost",
+    "iterable",
+    "loops",
+    "sequenzy",
+    "jetemail",
+    "lettermint",
+    "primitive",
+    "plunk",
+    "mailtrap",
+    "scaleway",
+    "zeptomail",
+    "mailpace",
+    "smtp"
+  ]
+}

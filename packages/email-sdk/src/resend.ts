@@ -1,7 +1,8 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import { sendAtIso } from "./payloads.js";
-import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
+  builtInAdapterDefinition,
   attachmentToBase64,
   formatAddress,
   formatAddresses,
@@ -13,19 +14,22 @@ import {
   SUPPORTED_MESSAGE_FIELDS,
 } from "./utils.js";
 
-export type ResendProviderOptions = {
+export type ResendAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
 };
 
-export function resend(options: ResendProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function resend(
+  options: ResendAdapterOptions,
+): EmailAdapter<"resend", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.resend.com";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "resend",
+    ...builtInAdapterDefinition("resend"),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/emails`, {
@@ -42,20 +46,18 @@ export function resend(options: ResendProviderOptions): EmailProvider<{ baseUrl:
 
       if (!response.ok) {
         const body = await readErrorBody(response);
-        throw new EmailProviderError(httpErrorMessage("Resend", response.status, body), {
-          provider: "resend",
+        throw new EmailAdapterError(httpErrorMessage("Resend", response.status, body), {
+          adapter: "resend",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: body,
         });
       }
 
       const body = (await response.json()) as { id?: string };
 
       return {
-        provider: "resend",
+        adapter: "resend",
         id: body.id,
-        messageId: body.id,
         raw: body,
       };
     },

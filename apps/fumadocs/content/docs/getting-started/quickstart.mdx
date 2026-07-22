@@ -1,139 +1,63 @@
 ---
 title: Quickstart
-description: Send your first transactional email, verify it from the CLI, and add a fallback route.
-icon: Rocket
+description: Create a Resend client and send your first email.
 ---
 
-This page takes you from zero to a verified production-ready send path: one adapter, one `send()` call, a CLI check, and a fallback route.
+Set a server-only Resend key:
 
-<Steps>
-<Step>
+```bash title=".env.local"
+RESEND_API_KEY=re_xxx
+```
 
-### Install the package
+Then create the client and send:
 
-<PackageInstallTabs />
-
-The SDK and CLI run server-side on Node 20+ and Bun 1.1+. See [Install](/docs/getting-started/install) for CLI-only usage.
-
-</Step>
-<Step>
-
-### Create a client
-
-These docs use Resend first because it has the shortest setup and broad field support. Any [adapter](/docs/adapters) works the same way; only the factory and credentials change.
-
-Set `RESEND_API_KEY`, then:
-
-```ts title="lib/email.ts"
+```ts title="src/send-welcome.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 
-export const email = createEmailClient({
+const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
 });
-```
 
-</Step>
-<Step>
-
-### Send an email
-
-```ts
 const result = await email.send({
   from: "Acme <hello@acme.com>",
   to: "user@example.com",
-  subject: "Welcome to Acme",
+  subject: "Welcome",
   text: "Your account is ready.",
 });
 
-console.log(result.provider); // "resend", the adapter that handled the send
-console.log(result.id); // provider message id, when the API returns one
+console.log(result.adapter, result.id);
 ```
 
-`send` resolves with a normalized [response](/docs/reference/client#response). `provider` tells you which adapter actually delivered, `id` and `messageId` carry the provider's message id, and `raw` keeps the untouched provider payload.
+That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.
 
-The same call handles more than one-off sends: [`recipientVariables`](/docs/reference/message#recipient-variables) turns one send into a personalized batch, and [`sendAt`](/docs/reference/message#scheduled-sends) schedules delivery on providers with a scheduling API.
+## Check a message without sending
 
-</Step>
-<Step>
+Use `validate` when you want the same message and routing checks without a provider send request:
 
-### Verify from the CLI
-
-Check the environment, then validate a full message without sending:
-
-```bash
-RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
-```
-
-```bash
-npx email-sdk send \
-  --adapter resend \
-  --from "Acme <hello@acme.com>" \
-  --to "user@example.com" \
-  --subject "Hello" \
-  --text "It works" \
-  --dry-run
-```
-
-`--dry-run` validates the message shape and the adapter's [field support](/docs/adapters/field-support) and prints the message it would send. Drop the flag for one real smoke send.
-
-</Step>
-<Step>
-
-### Add a fallback route
-
-A second adapter keeps simple transactional email flowing when the primary fails. SMTP is built into the SDK (no Nodemailer) and pairs well with API providers for plain text/HTML messages:
-
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { smtp } from "@opencoredev/email-sdk/smtp";
-
-export const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    smtp({
-      host: process.env.SMTP_HOST!,
-      port: 587,
-      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
-    }),
-  ],
-  fallback: ["smtp"],
+```ts
+await email.validate({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
 });
 ```
 
-Your application code does not change. `email.send(...)` now tries Resend, then SMTP.
+## Check from the CLI
 
-<Callout type="warn" title="Fallbacks must match your message shape">
-  A fallback only helps if the backup adapter supports the fields you send. SMTP cannot carry
-  tags, metadata, or attachments, so sends using those fields throw instead of silently dropping
-  data. Check [field support](/docs/adapters/field-support) when picking backup routes.
-</Callout>
+`--dry-run` runs the same validation without sending email.
 
-</Step>
-</Steps>
+```bash
+EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Welcome" \
+  --text "Your account is ready." \
+  --dry-run
+```
 
-## Next
-
-<Cards>
-  <Card
-    title="Production send pipeline"
-    href="/docs/guides/production-send-pipeline"
-    description="Retries, idempotency keys, observability, and tests around this exact setup."
-  />
-  <Card
-    title="Fallbacks and retries"
-    href="/docs/concepts/fallbacks-and-retries"
-    description="How route order, retry backoff, and error classification actually work."
-  />
-  <Card
-    title="All adapters"
-    href="/docs/adapters"
-    description="23 providers with per-adapter setup, options, and CLI smoke tests."
-  />
-  <Card
-    title="Test email behavior"
-    href="/docs/guides/test-email-behavior"
-    description="Assert sends in unit tests with memory adapters and the capture plugin."
-  />
-</Cards>
+<Card title="Add retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="Choose retry counts and unknown-delivery policy deliberately." />
+<Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use provider scheduling now, or an app-owned queue when you need more control." />
+<Card title="Test without a provider" href="/docs/guides/test-email-behavior" description="Capture sends with the memory adapter and capture plugin." />

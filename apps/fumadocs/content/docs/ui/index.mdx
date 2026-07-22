@@ -1,0 +1,32 @@
+---
+title: Email UI
+description: Browse complete, email-safe templates by the job they need to do.
+icon: Blocks
+---
+
+Start with a real email, see the rendered result, then copy the TSX into `src/ui/email`. Every example uses the same small set of Email SDK React components and works with any adapter after rendering.
+
+<EmailExampleGallery />
+
+## Install once
+
+```bash
+bun add react react-dom @react-email/render
+```
+
+Render any example with `renderEmail`, then pass the returned `html` and `text` through your normal Email SDK client.
+
+```tsx
+import { renderEmail } from "@opencoredev/email-sdk/react";
+
+const content = await renderEmail(<WelcomeEmail name="Ada" />);
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "ada@example.com",
+  subject: "Welcome to Acme",
+  ...content,
+});
+```
+
+Routing, retries, fallback, scheduling, hooks, and telemetry still use the normal send pipeline.

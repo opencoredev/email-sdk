@@ -1,0 +1,18 @@
+---
+title: aborted
+description: An AbortSignal stopped active adapter work or retry backoff and cancelled the remaining route.
+---
+
+`EmailAbortError` has code `aborted`, is not retryable, and may retain the signal reason as its cause.
+
+Abort stops the complete route immediately. No later retry or fallback adapter runs.
+
+```ts title="src/send.ts"
+const controller = new AbortController();
+const pending = email.send(message, { signal: controller.signal });
+
+controller.abort("request closed");
+await pending; // throws EmailAbortError
+```
+
+Adapters should forward the signal to fetch, sockets, and other cancellable work. The core retry delay is also abortable.

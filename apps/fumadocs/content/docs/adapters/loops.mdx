@@ -4,6 +4,14 @@ description: Trigger a published Loops transactional email for one recipient, wi
 icon: loops
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Loops adapter calls the [Loops transactional API](https://loops.so/docs/api-reference/send-transactional-email) with plain `fetch`. It triggers a published transactional email by `transactionalId` for exactly one recipient and hands your message to the template as `dataVariables`.
 
 <ProviderBadge adapter="loops" />

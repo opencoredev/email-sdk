@@ -106,6 +106,11 @@ export type RecipientEntry = {
   variables: Record<string, string | number | boolean>;
 };
 
+type LegacyRecipientMessage = EmailMessage & {
+  recipientVariables?: RecipientVariables;
+  idempotencyKey?: string;
+};
+
 /** Replace `%recipient.key%` tokens; unknown keys are left intact to match native providers. */
 export function substituteRecipientVariables(
   text: string,
@@ -127,7 +132,7 @@ function recipientVariablesLookup(recipientVariables: RecipientVariables | undef
 }
 
 /** One entry per `to` recipient, each paired with its variables (empty object when none). */
-export function recipientVariableEntries(message: EmailMessage): RecipientEntry[] {
+export function recipientVariableEntries(message: LegacyRecipientMessage): RecipientEntry[] {
   const lookup = recipientVariablesLookup(message.recipientVariables);
 
   return arrayify(message.to).map((to) => {
@@ -137,7 +142,7 @@ export function recipientVariableEntries(message: EmailMessage): RecipientEntry[
 }
 
 /** Address-keyed map covering every recipient, so providers like Mailgun individualize each one. */
-export function recipientVariablesMap(message: EmailMessage): RecipientVariables {
+export function recipientVariablesMap(message: LegacyRecipientMessage): RecipientVariables {
   const map: RecipientVariables = {};
 
   for (const entry of recipientVariableEntries(message)) {
@@ -148,16 +153,22 @@ export function recipientVariablesMap(message: EmailMessage): RecipientVariables
 }
 
 /** Render one single-recipient message with its variables substituted into the content. */
-export function expandRecipientMessage(message: EmailMessage, entry: RecipientEntry): EmailMessage {
+export function expandRecipientMessage(
+  message: LegacyRecipientMessage,
+  entry: RecipientEntry,
+): EmailMessage {
+  const {
+    recipientVariables: _recipientVariables,
+    idempotencyKey: _idempotencyKey,
+    ...base
+  } = message;
   return {
-    ...message,
+    ...base,
     to: entry.to,
-    recipientVariables: undefined,
-    idempotencyKey: undefined,
     subject: substituteRecipientVariables(message.subject, entry.variables),
     html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
     text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
-  };
+  } as EmailMessage;
 }
 
 export function sendAtDate(message: EmailMessage) {

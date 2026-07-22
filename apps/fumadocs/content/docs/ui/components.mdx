@@ -1,0 +1,52 @@
+---
+title: Components
+description: The small set of email-safe primitives used by every template.
+---
+
+Use these server-rendered components instead of your app’s browser UI components. They output portable inline HTML without CSS variables, client JavaScript, or Radix dependencies.
+
+## ShadcnEmail
+
+The root document supplies preview text, background, font, width, and theme.
+
+```tsx
+<ShadcnEmail preview="Your receipt is ready" theme="dark">
+  {/* email content */}
+</ShadcnEmail>
+```
+
+`theme` accepts `"light"`, `"dark"`, or resolved token overrides from `createShadcnEmailTheme()`.
+
+## Content primitives
+
+```tsx
+<EmailCard>
+  <EmailHeading>Welcome to Acme</EmailHeading>
+  <EmailText>Your workspace is ready.</EmailText>
+  <EmailButton href="https://acme.com/dashboard">Open dashboard</EmailButton>
+  <EmailSeparator />
+</EmailCard>
+```
+
+- `EmailCard` provides a centered, bordered content surface.
+- `EmailHeading` sets the primary email heading.
+- `EmailText` handles readable body copy and muted text.
+- `EmailButton` renders an inbox-safe link in default or outline style.
+- `EmailSeparator` adds a portable horizontal rule.
+
+## Theme tokens
+
+```tsx
+import { createShadcnEmailTheme } from "@opencoredev/email-sdk/react";
+
+const theme = createShadcnEmailTheme({
+  background: "#fafafa",
+  primary: "#7c3aed",
+  primaryForeground: "#ffffff",
+  radius: 12,
+});
+
+<ShadcnEmail theme={theme}>{/* email content */}</ShadcnEmail>;
+```
+
+Pass resolved colors rather than CSS variable expressions because email clients cannot reliably read your application stylesheet.

@@ -4,6 +4,14 @@ description: Send through the Postmark Email API with message streams, metadata,
 icon: postmark
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Postmark adapter calls the [Postmark Email API](https://postmarkapp.com/developer/api/email-api) with plain `fetch`. Its distinctive feature is message streams: set `messageStream` once and every send routes through that Postmark stream.
 
 <ProviderBadge adapter="postmark" />
@@ -68,7 +76,7 @@ const result = await email.send({
   tags: [{ name: "type", value: "receipt" }],
 });
 
-console.log(result.id); // Postmark MessageID, also exposed as result.messageId
+console.log(result.id); // Postmark MessageID
 ```
 
 `metadata` becomes Postmark `Metadata`, and `result.accepted` echoes Postmark's `To` line.

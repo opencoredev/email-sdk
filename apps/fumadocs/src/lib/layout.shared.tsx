@@ -23,8 +23,8 @@ export function baseOptions({
         </span>
       ),
     },
-    themeSwitch: {
-      component: <ThemeToggle />,
+    slots: {
+      themeSwitch: ThemeToggle,
     },
     links: [
       ...(mainLinks

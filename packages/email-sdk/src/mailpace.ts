@@ -1,15 +1,17 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses, optionalStringAddresses } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type MailPaceProviderOptions = {
+export type MailPaceAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function mailpace(options: MailPaceProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function mailpace(
+  options: MailPaceAdapterOptions,
+): EmailAdapter<"mailpace", { baseUrl: string }> {
   return jsonProvider({
     name: "mailpace",
     baseUrl: options.baseUrl ?? "https://app.mailpace.com/api/v1",
@@ -34,7 +36,7 @@ export function mailpace(options: MailPaceProviderOptions): EmailProvider<{ base
     fetch: options.fetch,
     parseResponse(body) {
       return {
-        provider: "mailpace",
+        adapter: "mailpace",
         id: firstString(body as Record<string, unknown>, ["id", "message_id"]),
         raw: body,
       };

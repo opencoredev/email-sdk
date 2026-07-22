@@ -4,6 +4,14 @@ description: Send through Cloudflare's Email Sending REST API with plain-address
 icon: cloudflare
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Cloudflare adapter calls Cloudflare's Email Sending REST API with plain `fetch`, so no Worker binding is required. It is the natural pick when your sending domain already lives in Cloudflare. The trade-off is strict recipient rules: plain addresses only, 50 recipients max.
 
 <ProviderBadge adapter="cloudflare" />
@@ -61,7 +69,7 @@ const result = await email.send({
   cc: "ops@example.com",
   subject: "Disk usage above 90% on db-1",
   text: "db-1 crossed the 90% disk threshold at 14:02 UTC.",
-  headers: { "X-Alert-ID": "alrt_8841" },
+  headers: [{ name: "X-Alert-ID", value: "alrt_8841" }],
 });
 
 console.log(result.accepted); // delivered + queued recipients

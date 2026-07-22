@@ -60,6 +60,8 @@ export type ConvexEmailAdapterConfig =
       kind: "loops";
       name?: string;
       apiKeyEnv?: string;
+      transactionalIdEnv?: string;
+      transactionalId?: string;
       baseUrl?: string;
     }
   | {

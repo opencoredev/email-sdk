@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "trial-ending",
+  "type": "registry:component",
+  "title": "Trial ending",
+  "description": "An honest reminder before a trial expires.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/trial-ending.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailSeparator,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function TrialEndingEmail({ endsOn }: { endsOn: string }) {\n  return (\n    <ShadcnEmail preview=\"Your Acme trial ends in 3 days\">\n      <EmailCard>\n        <EmailHeading>Your trial ends in 3 days</EmailHeading>\n        <EmailText>\n          Your Acme trial ends {endsOn}. Your workspace and data will stay available.\n        </EmailText>\n        <EmailSeparator />\n        <EmailText muted>Current plan</EmailText>\n        <EmailText style={{ fontWeight: 700 }}>Pro trial</EmailText>\n        <EmailText muted>Trial ends</EmailText>\n        <EmailText style={{ fontWeight: 700 }}>{endsOn}</EmailText>\n        <EmailButton href=\"https://acme.com/plans\">Choose a plan</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/trial-ending.tsx"
+    }
+  ]
+}

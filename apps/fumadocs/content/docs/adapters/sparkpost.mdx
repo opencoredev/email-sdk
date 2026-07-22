@@ -4,6 +4,14 @@ description: Send through the SparkPost Transmissions API with metadata, substit
 icon: sparkpost
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The SparkPost adapter calls the [SparkPost Transmissions API](https://developers.sparkpost.com/api/transmissions/) with plain `fetch`. Two things set it apart: a `sandbox` option that routes sends through SparkPost's shared sandbox domain for testing, and tags become SparkPost `substitution_data` as `name: value` pairs instead of a flat list.
 
 <ProviderBadge adapter="sparkpost" />

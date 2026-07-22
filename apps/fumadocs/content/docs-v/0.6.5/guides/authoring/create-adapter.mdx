@@ -1,0 +1,276 @@
+---
+title: Create an adapter
+description: Implement the EmailProvider contract for a new provider, covering payload mapping, fail-fast field validation, retryable error mapping, and tests with injected fetch.
+icon: Cable
+---
+
+This guide builds a complete adapter for a fictional provider, Acme Mail, the same way the SDK's own adapters are built: a factory that returns an `EmailProvider`, fail-fast validation of unsupported fields, error mapping with retryability, a plugin wrapper for distribution, and tests that never touch the network.
+
+The contract is one object: a `name` used for [routing](/docs/concepts/adapter-model) and a `send(message, context)` that returns a normalized response or throws a typed error. Exact types are in the [adapter contract reference](/docs/reference/adapter-contract).
+
+<Steps>
+<Step>
+
+### Scaffold the factory
+
+Accept credentials plus two options every adapter should have: `baseUrl` for proxies and `fetch` for tests. Pass `context.signal` into the request so callers can abort sends.
+
+```ts title="acme-mail.ts"
+import { EmailProviderError } from "@opencoredev/email-sdk";
+import type { EmailMessage, EmailProvider } from "@opencoredev/email-sdk";
+
+export type AcmeMailOptions = {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+};
+
+export function acmeMail(options: AcmeMailOptions): EmailProvider<{ baseUrl: string }> {
+  const baseUrl = options.baseUrl ?? "https://api.acme-mail.example";
+  const fetcher = options.fetch ?? fetch;
+
+  return {
+    name: "acme-mail",
+    raw: { baseUrl },
+    async send(message, context) {
+      const response = await fetcher(`${baseUrl}/v1/send`, {
+        method: "POST",
+        signal: context.signal,
+        headers: {
+          Authorization: `Bearer ${options.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(toAcmePayload(message)),
+      });
+
+      if (!response.ok) {
+        throw await toAcmeError(response);
+      }
+
+      const body = (await response.json()) as { id?: string };
+
+      return { provider: "acme-mail", id: body.id, messageId: body.id, raw: body };
+    },
+  };
+}
+```
+
+The response shape is `{ provider, id?, messageId?, accepted?, rejected?, raw? }`. Always set `provider` and keep the untouched API body in `raw`. The `context` also carries `idempotencyKey` and `attempt`. Forward the key when the provider supports it; the Resend, JetEmail, Lettermint, and Primitive adapters all send it as an `Idempotency-Key` header.
+
+</Step>
+<Step>
+
+### Reject unsupported fields before the request
+
+Acme Mail's API accepts addresses, subject, body, and tags, but no headers, attachments, or metadata. Do not drop those fields: throw an `EmailValidationError` listing them, matching the SDK's own adapters. This is what makes the adapter safe to use as a [fallback route](/docs/adapters/field-support).
+
+```ts title="acme-mail.ts"
+import { EmailValidationError } from "@opencoredev/email-sdk";
+
+function assertAcmeFields(message: EmailMessage) {
+  const unsupported: string[] = [];
+
+  if (hasEntries(message.headers)) unsupported.push("headers");
+  if (message.attachments?.length) unsupported.push("attachments");
+  if (hasEntries(message.metadata)) unsupported.push("metadata");
+
+  if (unsupported.length > 0) {
+    throw new EmailValidationError(
+      `acme-mail does not support these EmailMessage fields: ${unsupported.join(", ")}.`,
+      { adapter: "acme-mail", unsupported },
+    );
+  }
+}
+
+function hasEntries(value: object | unknown[] | undefined) {
+  if (!value) return false;
+  return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0;
+}
+```
+
+Core validation (missing `from`, no recipient, neither `html` nor `text`) already ran before your adapter is called. Only check what is specific to your provider.
+
+</Step>
+<Step>
+
+### Map the payload
+
+Keep the mapping in one pure function so it is trivially testable. `EmailAddress` is `string | { email, name? }` and recipient fields accept one value or an array, so normalize both:
+
+```ts title="acme-mail.ts"
+function toAcmePayload(message: EmailMessage) {
+  assertAcmeFields(message);
+
+  return {
+    from: formatAddress(message.from),
+    to: formatList(message.to),
+    cc: formatList(message.cc),
+    bcc: formatList(message.bcc),
+    reply_to: formatList(message.replyTo),
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    tags: message.tags,
+  };
+}
+
+function formatAddress(address: EmailMessage["from"]) {
+  if (typeof address === "string") return address;
+  return address.name ? `${address.name} <${address.email}>` : address.email;
+}
+
+function formatList(addresses: EmailMessage["cc"]) {
+  if (!addresses) return undefined;
+  return (Array.isArray(addresses) ? addresses : [addresses]).map(formatAddress);
+}
+```
+
+</Step>
+<Step>
+
+### Map errors with retryability
+
+Throw `EmailProviderError` with `status`, the parsed body in `details`, and an honest `retryable` flag. The client's retry loop and `isRetryableEmailError` are driven by that flag. The SDK's adapters treat 408, 409, 425, 429, and 5xx as retryable:
+
+```ts title="acme-mail.ts"
+async function toAcmeError(response: Response) {
+  const body = (await response.json().catch(() => undefined)) as { message?: string } | undefined;
+
+  return new EmailProviderError(
+    body?.message
+      ? `acme-mail failed with ${response.status}: ${body.message}`
+      : `acme-mail failed with HTTP ${response.status}.`,
+    {
+      provider: "acme-mail",
+      status: response.status,
+      retryable: [408, 409, 425, 429].includes(response.status) || response.status >= 500,
+      details: body,
+    },
+  );
+}
+```
+
+Network failures thrown by `fetch` need no handling; the client wraps them as retryable provider errors automatically.
+
+</Step>
+<Step>
+
+### Wrap it as a plugin
+
+Apps can mount the adapter directly via `adapters: [acmeMail(...)]`. For a shareable package, also export a plugin wrapper so consumers get a one-line install in `plugins`:
+
+```ts title="plugin.ts"
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+import { acmeMail, type AcmeMailOptions } from "./acme-mail";
+
+export function acmeMailPlugin(options: AcmeMailOptions): EmailPlugin {
+  return {
+    id: "acme-mail",
+    adapters: [acmeMail(options)],
+  };
+}
+```
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmeMailPlugin } from "email-sdk-acme-mail";
+
+const email = createEmailClient({
+  plugins: [acmeMailPlugin({ apiKey: process.env.ACME_MAIL_API_KEY! })],
+});
+```
+
+</Step>
+<Step>
+
+### Test with injected fetch
+
+The injected `fetch` makes the adapter fully testable without mocks or network. Cover the three behaviors that matter: payload mapping, error retryability, and unsupported-field rejection.
+
+```ts title="acme-mail.test.ts"
+import { expect, test } from "bun:test";
+import { EmailProviderError, EmailValidationError } from "@opencoredev/email-sdk";
+import { acmeMail } from "./acme-mail";
+
+const message = {
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Hello",
+  text: "Hi",
+};
+
+test("maps the message to the provider payload", async () => {
+  const calls: unknown[] = [];
+  const adapter = acmeMail({
+    apiKey: "test",
+    fetch: async (_url, init) => {
+      calls.push(JSON.parse(String(init?.body)));
+      return Response.json({ id: "msg_123" });
+    },
+  });
+
+  const response = await adapter.send(message, { attempt: 1 });
+
+  expect(response.messageId).toBe("msg_123");
+  expect(calls[0]).toMatchObject({ from: "Acme <hello@acme.com>", to: ["user@example.com"] });
+});
+
+test("marks rate limits as retryable", async () => {
+  const adapter = acmeMail({
+    apiKey: "test",
+    fetch: async () => Response.json({ message: "slow down" }, { status: 429 }),
+  });
+
+  const error = await adapter.send(message, { attempt: 1 }).catch((cause) => cause);
+
+  expect(error).toBeInstanceOf(EmailProviderError);
+  expect(error.retryable).toBe(true);
+});
+
+test("rejects unsupported fields before any request", async () => {
+  const adapter = acmeMail({
+    apiKey: "test",
+    fetch: async () => {
+      throw new Error("must not be called");
+    },
+  });
+
+  await expect(
+    adapter.send({ ...message, attachments: [{ filename: "a.txt", content: "x" }] }, { attempt: 1 }),
+  ).rejects.toBeInstanceOf(EmailValidationError);
+});
+```
+
+Run `bun test`: three green tests and zero network calls.
+
+</Step>
+</Steps>
+
+## Checklist
+
+- One stable adapter `name`; document it as the routing name.
+- `provider`, `id` or `messageId`, and `raw` on every response.
+- `context.signal` forwarded into provider requests; `context.idempotencyKey` forwarded when supported.
+- Unsupported fields throw `EmailValidationError` instead of being dropped.
+- Provider failures throw `EmailProviderError` with `status` and an honest `retryable`.
+- Injected `fetch` accepted and documented.
+
+## Next
+
+<Cards>
+  <Card
+    title="Publish a community adapter"
+    href="/docs/guides/authoring/publish-community-adapter"
+    description="Package it for npm and list it in the community registry."
+  />
+  <Card
+    title="Adapter contract"
+    href="/docs/reference/adapter-contract"
+    description="EmailProvider, EmailProviderContext, and response types in full."
+  />
+  <Card
+    title="Errors"
+    href="/docs/reference/errors"
+    description="Error classes, codes, and what the retry loop treats as retryable."
+  />
+</Cards>

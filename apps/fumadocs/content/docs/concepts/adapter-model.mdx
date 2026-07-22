@@ -1,83 +1,73 @@
 ---
-title: Adapter model
-description: How adapters register routing names, map messages to provider APIs, and expose escape hatches.
-icon: Plug
+title: Adapters
+sidebarTitle: Adapters
+description: How adapters turn one Email SDK message into a provider request.
 ---
 
-An adapter is a module that knows how to send one normalized `EmailMessage` through one service or transport. The client holds a registry of adapters keyed by routing name. Everything else (defaults, fallbacks, per-send overrides) is built on those names.
+An adapter turns the Email SDK message into the request one provider expects.
 
-```ts
+## Registered routes
+
+Adapter factories return literal names. `createEmailClient` derives the accepted route-name union from the adapters you pass, including custom SMTP names.
+
+```ts title="src/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
-import { postmark } from "@opencoredev/email-sdk/postmark";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 const email = createEmailClient({
   adapters: [
     resend({ apiKey: process.env.RESEND_API_KEY! }),
-    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+    smtp({ name: "backup", host: process.env.SMTP_HOST! }),
   ],
-  // defaultAdapter is optional; it falls back to the first adapter ("resend" here)
+  defaultAdapter: "resend",
 });
+
+await email.send(message, { adapter: "backup" });
 ```
 
-Each adapter import is a separate entry point (`@opencoredev/email-sdk/resend`, `/postmark`, ...), so your bundle only contains the providers you actually send through.
+Unknown literal names fail type checking. Unknown runtime strings throw `EmailAdapterNotFoundError`.
 
-## The adapter contract
+## Adapter responsibilities
 
-Every adapter does three things:
+Every adapter declares four capabilities and provides `send`. It may add adapter-specific validation and native personalized sending.
 
-1. **Maps** supported `EmailMessage` fields to the provider's API payload.
-2. **Rejects** unsupported fields with an `EmailValidationError` before any request, instead of silently dropping data. See [field support](/docs/adapters/field-support).
-3. **Normalizes** the result into `{ provider, id?, messageId?, accepted?, rejected?, raw? }` and provider failures into typed [errors](/docs/reference/errors) with retryability info.
-
-The full interface for building your own is in the [adapter contract reference](/docs/reference/adapter-contract).
-
-## Routing names
-
-Adapter factories register fixed routing names: `resend`, `postmark`, `sendgrid`, `cloudflare`, `unosend`, `ses`, `mailgun`, `mailersend`, `brevo`, `mailchimp`, `sparkpost`, `iterable`, `loops`, `sequenzy`, `jetemail`, `lettermint`, `primitive`, `plunk`, `mailtrap`, `scaleway`, `zeptomail`, `mailpace`, and `smtp`. The SMTP factory also accepts a `name` option for running several SMTP routes side by side.
-
-Those names are what you pass everywhere a route is selected:
-
-```ts
-// per-send override
-await email.send(message, { adapter: "postmark" });
-
-// client-level default and fallback order
-createEmailClient({ adapters, defaultAdapter: "resend", fallback: ["postmark"] });
-
-// a client pinned to one route
-const transactional = email.withAdapter("postmark");
-await transactional.send(message);
+```ts title="adapter-contract.ts"
+type EmailAdapterCapabilities = {
+  repeatedHeaders: boolean;
+  idempotency: "native" | "message_id" | "none";
+  scheduling: boolean;
+  personalized: "native" | "expanded" | "unsupported";
+};
 ```
 
-Selecting a name that is not registered throws `EmailProviderNotFoundError`. The client never guesses a route.
+The client validates every candidate route before the first provider call. Unsupported fields, repeated headers on an incapable route, invalid schedules, and adapter-specific limits fail with `EmailValidationError`.
 
-## Escape hatches
+## Normalized results
 
-Adapters can expose provider-specific extras through `raw`. Use it to keep provider-coupled code next to the adapter while application code stays on the shared `send` path:
+Every successful route returns the same top-level shape.
 
-```ts
-const adapter = email.adapter("resend");
-console.log(adapter.raw); // { baseUrl: "https://api.resend.com" }
+```ts title="result.ts"
+type EmailSendResult<Name extends string = string, Raw = unknown> = {
+  adapter: Name;
+  id?: string;
+  accepted?: readonly string[];
+  rejected?: readonly string[];
+  raw?: Raw;
+};
 ```
 
-The [memory test adapter](/docs/guides/test-email-behavior) uses the same hatch to expose its `sent` array.
+The v1 root has no `provider` or `messageId` aliases. The [`/compat` subpath](/docs/reference/compatibility) keeps temporary v0 source compatibility.
 
-## Naming aliases
+## Direct adapter access
 
-`adapter` and `provider` mean the same thing throughout the API. `providers`, `defaultProvider`, `fallbackProviders`, `email.provider()`, and `email.withProvider()` are aliases kept for compatibility. New code should prefer the `adapter` spellings.
+Use `adapter(name)` to access the exact adapter or `withAdapter(name)` to bind all client operations to one route.
 
-## Next
+```ts title="src/email.ts"
+const backup = email.withAdapter("backup");
+await backup.validate(message);
+await backup.send(message);
+```
 
-<Cards>
-  <Card
-    title="Fallbacks and retries"
-    href="/docs/concepts/fallbacks-and-retries"
-    description="What happens when a route fails: backoff, error classification, fallback order."
-  />
-  <Card
-    title="Build an adapter"
-    href="/docs/guides/authoring/create-adapter"
-    description="Implement the contract for a provider the SDK doesn't ship yet."
-  />
-</Cards>
+<Card title="Adapter contract" href="/docs/reference/adapter-contract" description="Implement validation, capabilities, send, and optional personalized delivery." />
+<Card title="Capability groups" href="/docs/adapters/capability-groups" description="Choose routes by scheduling, idempotency, headers, and personalization." />

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "receipt",
+  "type": "registry:component",
+  "title": "Receipt",
+  "description": "A compact payment confirmation and receipt link.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/receipt.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailSeparator,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function ReceiptEmail({ amount, receiptUrl }: {\n  amount: string;\n  receiptUrl: string;\n}) {\n  return (\n    <ShadcnEmail preview=\"Payment received for order #1842\">\n      <EmailCard>\n        <EmailHeading>Payment received</EmailHeading>\n        <EmailText>Thanks for your payment. Here’s a summary for order #1842.</EmailText>\n        <EmailSeparator />\n        <EmailText>Acme Pro · July <strong>{amount}</strong></EmailText>\n        <EmailText>Tax <strong>$0.00</strong></EmailText>\n        <EmailSeparator />\n        <EmailText style={{ fontSize: 18, fontWeight: 700 }}>Total {amount}</EmailText>\n        <EmailButton href={receiptUrl}>View receipt</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/receipt.tsx"
+    }
+  ]
+}

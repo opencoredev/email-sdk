@@ -2,7 +2,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { docsVersions, latestPublishedVersion } from "../apps/fumadocs/src/lib/versions";
+import {
+  currentDocsMajorVersion,
+  docsVersions,
+  getCurrentDocsPublishedVersion,
+  latestPublishedVersion as packageJsonVersion,
+} from "../apps/fumadocs/src/lib/versions";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const fumadocsRoot = join(repoRoot, "apps/fumadocs");
@@ -20,14 +25,46 @@ const sourceConfig = readRepoFile("apps/fumadocs/source.config.ts");
 const sourceLoader = readRepoFile("apps/fumadocs/src/lib/source.ts");
 const docsRoute = readRepoFile("apps/fumadocs/src/routes/docs/$.tsx");
 const changelog = readRepoFile("packages/email-sdk/CHANGELOG.md");
+const latestPublishedVersion =
+  process.env.EMAIL_SDK_VALIDATE_DOCS_PACKAGE_VERSION ?? packageJsonVersion;
+const currentDocsVersion = `v${currentDocsMajorVersion}`;
+
+if (!/^\d+\.\d+\.\d+$/.test(latestPublishedVersion)) {
+  fail(
+    `Package version must be an exact SemVer release, got ${latestPublishedVersion}.` +
+      " Set EMAIL_SDK_VALIDATE_DOCS_PACKAGE_VERSION only to simulate a future package.json version.",
+  );
+}
 
 const latest = docsVersions.find((version) => version.current);
 if (!latest) {
   fail("docsVersions must include a current version.");
-} else if (latest.version !== `v${latestPublishedVersion}`) {
-  fail(
-    `latest docs version is ${latest.version}, but packages/email-sdk/package.json is ${latestPublishedVersion}.`,
-  );
+} else {
+  if (latest.version !== currentDocsVersion) {
+    fail(
+      `Current docs version must be ${currentDocsVersion}, got ${latest.version}. ` +
+        "Active docs track the v1 docs line while patch releases live in content/docs-v archives.",
+    );
+  }
+
+  const publishedMajor = Number(latestPublishedVersion.split(".", 1)[0]);
+  const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
+
+  if (publishedMajor > currentDocsMajorVersion) {
+    fail(
+      `packages/email-sdk/package.json is ${latestPublishedVersion}, but current docs still track ${currentDocsVersion}.`,
+    );
+  }
+  if (publishedMajor === currentDocsMajorVersion && currentDocsPublishedVersion !== latestPublishedVersion) {
+    fail(
+      `${latestPublishedVersion} should publish the ${currentDocsVersion} docs line, but the docs config does not expose it as the current published docs version.`,
+    );
+  }
+  if (publishedMajor < currentDocsMajorVersion && currentDocsPublishedVersion !== undefined) {
+    fail(
+      `${latestPublishedVersion} must not be treated as a published package for the unreleased ${currentDocsVersion} docs line.`,
+    );
+  }
 }
 
 const versionsBySlug = new Map<string, (typeof docsVersions)[number]>();

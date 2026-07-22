@@ -104,7 +104,7 @@ declare module "@opencoredev/email-sdk" {
 declare module "@opencoredev/email-sdk/testing" {
   import type { EmailProvider } from "@opencoredev/email-sdk";
 
-  export function memoryProvider(name?: string): EmailProvider;
+  export function memoryAdapter(name?: string): EmailProvider;
 }
 
 declare module "@opencoredev/email-sdk/plugins/defaults" {

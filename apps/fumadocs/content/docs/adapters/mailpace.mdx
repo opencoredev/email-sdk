@@ -4,6 +4,14 @@ description: Send through the MailPace API, a deliberately minimal adapter for a
 icon: mailpace
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The MailPace adapter calls the [MailPace send API](https://docs.mailpace.com/reference/send) with plain `fetch`. It has the smallest adapter surface in the SDK: addresses, subject, and body only, with recipient lists serialized as comma-separated strings.
 
 <ProviderBadge adapter="mailpace" />

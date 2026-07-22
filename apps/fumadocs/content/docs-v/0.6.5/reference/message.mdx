@@ -1,0 +1,231 @@
+---
+title: Message
+description: The EmailMessage shape field by field, covering addresses, headers, attachments, tags vs metadata, and the exact validation rules.
+icon: Mail
+---
+
+`EmailMessage` is the one message shape every adapter accepts. This page documents each field and the validation that runs before any request; which adapter maps which field is the [field support matrix](/docs/adapters/field-support).
+
+```ts
+type EmailMessage = {
+  from: EmailAddress;
+  to: EmailAddress | EmailAddress[];
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: EmailAddress | EmailAddress[];
+  bcc?: EmailAddress | EmailAddress[];
+  replyTo?: EmailAddress | EmailAddress[];
+  headers?: Record<string, string> | EmailHeader[];
+  attachments?: EmailAttachment[];
+  tags?: EmailTag[];
+  metadata?: Record<string, string | number | boolean | null>;
+  recipientVariables?: Record<string, Record<string, string | number | boolean>>;
+  sendAt?: Date | string;
+  idempotencyKey?: string;
+};
+```
+
+## Fields
+
+<TypeTable
+  type={{
+    from: {
+      description: "Sender address.",
+      type: "EmailAddress",
+      required: true,
+    },
+    to: {
+      description: "One or more recipients.",
+      type: "EmailAddress | EmailAddress[]",
+      required: true,
+    },
+    subject: {
+      description: "Message subject.",
+      type: "string",
+      required: true,
+    },
+    html: {
+      description: "HTML body. At least one of html or text is required.",
+      type: "string",
+    },
+    text: {
+      description: "Plain-text body. At least one of html or text is required.",
+      type: "string",
+    },
+    cc: {
+      description: "Carbon-copy recipients.",
+      type: "EmailAddress | EmailAddress[]",
+    },
+    bcc: {
+      description: "Blind-carbon-copy recipients.",
+      type: "EmailAddress | EmailAddress[]",
+    },
+    replyTo: {
+      description: "Reply-to addresses.",
+      type: "EmailAddress | EmailAddress[]",
+    },
+    headers: {
+      description: "Custom message headers, as an object or a list.",
+      type: "Record<string, string> | EmailHeader[]",
+    },
+    attachments: {
+      description: "Files to attach, from memory or disk.",
+      type: "EmailAttachment[]",
+    },
+    tags: {
+      description: "Provider-side categorical labels.",
+      type: "EmailTag[]",
+    },
+    metadata: {
+      description: "Provider-side key-value data attached to the send.",
+      type: "Record<string, string | number | boolean | null>",
+    },
+    recipientVariables: {
+      description: "Per-recipient %recipient.key% substitution values, keyed by recipient address.",
+      type: "Record<string, Record<string, string | number | boolean>>",
+    },
+    sendAt: {
+      description: "Future delivery time, scheduled by the provider.",
+      type: "Date | string",
+    },
+    idempotencyKey: {
+      description: "Stable send identity, used when send options set none.",
+      type: "string",
+    },
+  }}
+/>
+
+## Addresses
+
+`EmailAddress` is a plain string (including the `Name <email>` form) or an object with a display name:
+
+```ts
+from: "Acme <hello@acme.com>",
+to: [{ email: "user@example.com", name: "Ada Lovelace" }, "ops@example.com"],
+```
+
+Adapters convert between the forms as their APIs require, so mix them freely.
+
+## Headers
+
+Headers take two equivalent shapes; use whichever your data already has:
+
+```ts
+headers: { "X-Order-ID": "ord_123" }
+// or
+headers: [{ name: "X-Order-ID", value: "ord_123" }]
+```
+
+## Attachments
+
+```ts
+type EmailAttachment = {
+  filename: string;
+  content?: string | Uint8Array | ArrayBuffer | Blob;
+  contentEncoding?: "raw" | "base64";
+  path?: string;
+  contentType?: string;
+  contentId?: string;
+  disposition?: "attachment" | "inline";
+};
+```
+
+Every attachment needs `content` **or** `path`:
+
+- `content` attaches in-memory data. String content is treated as raw (`contentEncoding: "raw"`) and Base64-encoded for providers that need it. Set `contentEncoding: "base64"` when the string is already Base64 so it is not double-encoded.
+- `path` makes the SDK read a local file at send time.
+
+For inline images, set `contentId` and reference it from the HTML body with `cid:`, plus `disposition: "inline"`:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: '<img src="cid:logo" alt="Acme" />',
+  attachments: [
+    { filename: "logo.png", path: "./logo.png", contentType: "image/png", contentId: "logo", disposition: "inline" },
+  ],
+});
+```
+
+## Tags vs metadata
+
+Both attach data to a send on the provider side, but they are different provider concepts:
+
+- **`tags`** are `{ name, value }` labels for categorizing sends; provider dashboards and analytics group by them. Some providers carry only each tag's value. Postmark, Mailtrap, and Lettermint accept a single tag, and they differ in what survives: Postmark keeps both parts as a joined `name:value` string, while Mailtrap and Lettermint forward only the value and drop the name.
+- **`metadata`** is free-form key-value data (`string | number | boolean | null` values) the provider stores with the message and echoes in webhooks and events.
+
+Support differs per provider. Resend has tags but no metadata; Iterable has metadata but no tags. Check the [field support matrix](/docs/adapters/field-support) before relying on either, especially for fallback routes.
+
+## Scheduled sends
+
+`sendAt` asks the provider to deliver the message at a future time. Pass a `Date` object or an ISO 8601 string with an explicit offset, like `"2026-07-10T12:30:00Z"` or `"2026-07-10T14:30:00+02:00"`. Offset-less strings like `"2026-07-10T12:30:00"` are parsed by `new Date()` in the **server's local timezone**, so the actual send time shifts with wherever your code happens to run. Always include the offset, or build a `Date` yourself:
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  html: "<p>Glad you're here.</p>",
+  sendAt: new Date(Date.now() + 5 * 60_000), // five minutes from now
+});
+```
+
+The SDK is stateless here: it never queues or delays a send itself. Each adapter translates `sendAt` into its provider's native scheduling parameter, and adapters whose provider has no scheduling API reject the field before any request. The SDK also does not enforce a scheduling window: providers cap how far out you can schedule (72 hours for SendGrid, MailerSend, and Brevo, for example) and most send immediately when the date is in the past. See [scheduled sends in the field support matrix](/docs/adapters/field-support#scheduled-sends) for the per-provider parameters and limits.
+
+## Idempotency key
+
+`idempotencyKey` gives the send a stable identity across retries. The send-options key wins when both are set; the message field is the fallback. Resend, JetEmail, Lettermint, and Primitive transmit it to the provider as an `Idempotency-Key` header, and SMTP uses it as the `Message-ID`. See [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) for per-adapter behavior.
+
+## Recipient variables
+
+`recipientVariables` turns one `send` into a personalized batch: keep a single `to` list and give each recipient its own values, keyed by email address. Reference a value anywhere in `subject`, `html`, or `text` with the `%recipient.key%` token.
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  html: '<p>Hi %recipient.name%</p><a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
+  recipientVariables: {
+    "ada@example.com": { name: "Ada", id: "u_1" },
+    "linus@example.com": { name: "Linus", id: "u_2" },
+  },
+});
+```
+
+Adapters with a native batch mechanism send the whole list in **one API call** with provider-side substitution: currently [Mailgun](/docs/adapters/mailgun) (`recipient-variables`) and [SendGrid](/docs/adapters/sendgrid) (one personalization per recipient), each capped at 1000 recipients per call. Every other adapter falls back to **one rendered send per recipient**, substituting tokens client-side, so the same code works on any route. The send resolves with a single [response](/docs/reference/client#response): native batches return the provider's id, and the client-side fallback aggregates per-recipient results into `accepted` and `rejected`.
+
+- Each `recipientVariables` key must be an address in `to`; an unknown address fails fast.
+- Variable keys may only contain letters, numbers, underscores, and hyphens (`[\w-]`); anything else (a dotted `user.name`, say) fails fast so substitution behaves identically on native and fallback routes.
+- `to` addresses must be unique; a duplicate combined with `recipientVariables` fails fast.
+- `cc` and `bcc` cannot be combined with `recipientVariables`, since every recipient gets an individualized message.
+- An unknown `%recipient.key%` token is left intact, matching native provider behavior.
+- In the client-side fallback, each recipient is a real send: `afterSend` fires per delivered recipient and `onError` per failed one. If the send has an idempotency key (from send options or the message), it is suffixed per recipient (`<key>:<address>`) so retries dedupe per recipient instead of dropping the batch. The suffixed key counts toward provider key-length limits (Resend caps `Idempotency-Key` at 256 characters), so keep base keys short when using `recipientVariables`. Only when every recipient fails does the adapter count as failed and the next [fallback route](/docs/concepts/fallbacks-and-retries) run.
+
+## Validation
+
+`send` validates the message before any adapter runs and throws `EmailValidationError` (code `validation_error`) with one of these exact messages:
+
+| Rule | Error message |
+| --- | --- |
+| `from` is required | `Email message requires a from address.` |
+| At least one `to` recipient | `Email message requires at least one recipient.` |
+| `subject` is required | `Email message requires a subject.` |
+| `html` or `text` is required | `Email message requires either html or text content.` |
+| Attachments need data | `Attachment "<filename>" requires content or path.` |
+| `recipientVariables` with `cc`/`bcc` | `recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.` |
+| `recipientVariables` address not in `to` | `recipientVariables reference addresses that are not in "to": <addresses>.` |
+| `recipientVariables` duplicate `to` | `recipientVariables require unique "to" addresses, but "<address>" appears more than once.` |
+| `recipientVariables` invalid key | `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "<address>" has "<key>".` |
+| `sendAt` must parse | `Email message sendAt is not a valid date: "<value>".` |
+
+Adapters add a second fail-fast layer for fields their provider cannot represent:
+
+```txt
+smtp does not support these EmailMessage fields: tags, metadata.
+```
+
+That error fires before any request: fields are rejected rather than silently dropped. The per-adapter availability of `cc`, `bcc`, `replyTo`, `headers`, `attachments`, `tags`, `metadata`, and `sendAt` is the [field support matrix](/docs/adapters/field-support).

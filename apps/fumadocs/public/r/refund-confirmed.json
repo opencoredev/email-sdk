@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "refund-confirmed",
+  "type": "registry:component",
+  "title": "Refund confirmed",
+  "description": "A reassuring refund status with timing details.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/refund-confirmed.tsx",
+      "content": "import {\n  EmailCard,\n  EmailHeading,\n  EmailSeparator,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function RefundConfirmedEmail({ amount }: { amount: string }) {\n  return (\n    <ShadcnEmail preview={`Your ${amount} refund is on its way`}>\n      <EmailCard>\n        <EmailHeading>Your refund is on its way</EmailHeading>\n        <EmailText>We issued a {amount} refund to your Visa ending in 4242.</EmailText>\n        <EmailSeparator />\n        <EmailText muted>Refund amount</EmailText>\n        <EmailText style={{ fontSize: 24, fontWeight: 700 }}>{amount}</EmailText>\n        <EmailText muted>Expected in 3–5 business days</EmailText>\n        <EmailText muted>Your bank may take additional time to post the credit.</EmailText>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/refund-confirmed.tsx"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+---
+title: Resend
+description: Send through the Resend API with attachments, tags, and native idempotency keys.
+icon: resend
+---
+
+The Resend adapter calls the [Resend Email API](https://resend.com/docs/api-reference/emails/send-email) with plain `fetch`. It is the default first adapter in these docs: setup is one API key, field support is broad, and it forwards [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) to the provider as the `Idempotency-Key` header, so Resend itself deduplicates retried sends.
+
+<ProviderBadge adapter="resend" />
+
+## Configure
+
+Grab an API key from the [Resend dashboard](https://resend.com/api-keys) and verify the domain you plan to send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+export const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Resend API key.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.resend.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+    headers: {
+      description: "Extra HTTP headers sent with every request.",
+      type: "Record<string, string>",
+    },
+  }}
+/>
+
+## Send
+
+Resend maps every common transactional field: `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags`. `sendAt` schedules the send on Resend's side, transmitted as `scheduled_at` in ISO 8601 form.
+
+```ts
+const result = await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: [{ email: "user@example.com", name: "Ada" }],
+    replyTo: "support@example.com",
+    subject: "Welcome to Acme",
+    html: "<p>Your workspace is ready.</p>",
+    tags: [{ name: "type", value: "welcome" }],
+    attachments: [
+      { filename: "welcome.txt", content: "Welcome to Acme.", contentType: "text/plain" },
+    ],
+  },
+  { idempotencyKey: "welcome:user_123" },
+);
+
+console.log(result.id); // Resend email id, also exposed as result.messageId
+```
+
+The `idempotencyKey` is sent as Resend's `Idempotency-Key` header, so retried requests cannot double-send.
+
+<Callout type="warn" title="No metadata field">
+  Resend has no metadata concept, so `metadata` on a message throws an `EmailValidationError`
+  before any request is made. Use `tags` instead, or pick a [metadata-capable
+  adapter](/docs/adapters/field-support).
+</Callout>
+
+## Verify from the CLI
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+```
+
+```bash
+RESEND_API_KEY="re_..." npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Resend smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` to perform one real send from the environment that will send production email. Local validation cannot tell you whether the account, sender domain, and recipient policy are actually ready; one live send can.

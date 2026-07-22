@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { EmailProviderError, EmailProviderNotFoundError, EmailValidationError } from "./errors.js";
+import {
+  EmailAdapterNotFoundError,
+  EmailProviderError,
+  EmailProviderNotFoundError,
+  EmailValidationError,
+} from "./errors.js";
 import {
   TELEMETRY_NOTICE,
   createTelemetry,
@@ -236,9 +241,9 @@ describe("telemetry exceptions", () => {
     expect(calls[0]?.body.event).toBe("$exception");
     expect(calls[0]?.body.properties).toMatchObject({
       $exception_level: "error",
-      $exception_fingerprint: "EmailProviderError:provider_error",
-      error_name: "EmailProviderError",
-      error_code: "provider_error",
+      $exception_fingerprint: "EmailAdapterError:adapter_error",
+      error_name: "EmailAdapterError",
+      error_code: "adapter_error",
       source: "sdk",
       handled: true,
       adapter: "resend",
@@ -246,7 +251,7 @@ describe("telemetry exceptions", () => {
     });
 
     const [item] = exceptionList(calls[0]);
-    expect(item?.type).toBe("EmailProviderError");
+    expect(item?.type).toBe("EmailAdapterError");
     expect(item?.mechanism).toEqual({ handled: true, type: "generic", synthetic: false });
     expect(item?.stacktrace?.type).toBe("raw");
 
@@ -407,9 +412,7 @@ describe("telemetry exceptions", () => {
     const expectedName = "Error for <email> in ~<path-redacted>";
     expect(exceptionList(calls[0])[0]?.type).toBe(expectedName);
     expect(calls[0]?.body.properties.error_name).toBe(expectedName);
-    expect(calls[0]?.body.properties.$exception_fingerprint).toBe(
-      `${expectedName}:provider_error`,
-    );
+    expect(calls[0]?.body.properties.$exception_fingerprint).toBe(`${expectedName}:adapter_error`);
   });
 
   test("keeps allowlisted error names verbatim and normalizes non-string names", async () => {
@@ -470,6 +473,7 @@ describe("telemetry exceptions", () => {
 describe("isReportableSendError", () => {
   test("excludes caller usage errors", () => {
     expect(isReportableSendError(new EmailValidationError("bad message"))).toBe(false);
+    expect(isReportableSendError(new EmailAdapterNotFoundError("acme"))).toBe(false);
     expect(isReportableSendError(new EmailProviderNotFoundError("acme"))).toBe(false);
   });
 

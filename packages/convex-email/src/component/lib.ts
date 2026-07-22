@@ -1,4 +1,4 @@
-import type { EmailProviderResponse } from "@opencoredev/email-sdk";
+import type { EmailSendResult } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
@@ -10,6 +10,7 @@ import {
   vCancelEmailArgs,
   vEmailConfig,
   vListEmailEventsArgs,
+  vRetryEmailArgs,
   vSendBatchEmailsArgs,
   vSendEmailArgs,
   vStatusArgs,
@@ -99,6 +100,41 @@ export const cancel = mutation({
       terminalAt: now,
     });
     await insertEvent(ctx, { emailId, type: "canceled" });
+
+    return true;
+  },
+});
+
+export const retry = mutation({
+  args: vRetryEmailArgs,
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const emailId = args.emailId as Id<"emails">;
+    const email = await ctx.db.get(emailId);
+
+    if (!email || email.status !== "failed") {
+      return false;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(emailId, {
+      status: "queued",
+      attemptCount: 0,
+      nextAttemptAt: now,
+      lastError: undefined,
+      terminalAt: undefined,
+      updatedAt: now,
+    });
+    await insertEvent(ctx, {
+      emailId,
+      type: "retry_scheduled",
+      payload: {
+        manual: true,
+        previousAttemptCount: email.attemptCount,
+      },
+      createdAt: now,
+    });
+    await ctx.scheduler.runAfter(0, processEmailRef, { emailId });
 
     return true;
   },
@@ -219,12 +255,12 @@ export const markSent = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const response = args.response as EmailProviderResponse;
+    const response = args.response as EmailSendResult;
     const now = Date.now();
 
     await ctx.db.patch(args.emailId, {
       status: "sent",
-      providerMessageId: response.messageId ?? response.id,
+      providerMessageId: response.id,
       updatedAt: now,
       sentAt: now,
       terminalAt: now,
@@ -233,11 +269,10 @@ export const markSent = internalMutation({
     await insertEvent(ctx, {
       emailId: args.emailId,
       type: "sent",
-      adapter: response.provider,
-      providerMessageId: response.messageId ?? response.id,
+      adapter: response.adapter,
+      providerMessageId: response.id,
       payload: {
         id: response.id,
-        messageId: response.messageId,
         accepted: response.accepted,
         rejected: response.rejected,
       },

@@ -1,19 +1,21 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, emailParts, sendAtUtcDateTime } from "./payloads.js";
-import type { EmailAddress, EmailProvider, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   headersToObject,
 } from "./utils.js";
 
-export type MailchimpProviderOptions = {
+export type MailchimpAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function mailchimp(options: MailchimpProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function mailchimp(
+  options: MailchimpAdapterOptions,
+): EmailAdapter<"mailchimp", { baseUrl: string }> {
   return jsonProvider({
     name: "mailchimp",
     baseUrl: options.baseUrl ?? "https://mandrillapp.com/api/1.0",
@@ -57,7 +59,7 @@ export function mailchimp(options: MailchimpProviderOptions): EmailProvider<{ ba
         : undefined;
 
       return {
-        provider: "mailchimp",
+        adapter: "mailchimp",
         id: first ? firstString(first, ["_id", "id"]) : undefined,
         messageId: first ? firstString(first, ["_id", "id"]) : undefined,
         raw: body,

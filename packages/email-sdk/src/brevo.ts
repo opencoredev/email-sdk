@@ -8,15 +8,15 @@ import {
   optionalSingleApiAddress,
   sendAtIso,
 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 
-export type BrevoProviderOptions = {
+export type BrevoAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function brevo(options: BrevoProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { baseUrl: string }> {
   return jsonProvider({
     name: "brevo",
     baseUrl: options.baseUrl ?? "https://api.brevo.com",
@@ -49,7 +49,7 @@ export function brevo(options: BrevoProviderOptions): EmailProvider<{ baseUrl: s
     },
     parseResponse(body) {
       return {
-        provider: "brevo",
+        adapter: "brevo",
         id: firstString(body as Record<string, unknown>, ["messageId", "id"]),
         messageId: firstString(body as Record<string, unknown>, ["messageId", "id"]),
         raw: body,

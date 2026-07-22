@@ -4,6 +4,14 @@ description: Send through the Mailtrap Email Sending API with full field support
 icon: mailtrap
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Mailtrap adapter calls the [Mailtrap Email Sending API](https://api-docs.mailtrap.io/) with plain `fetch`. It supports every common transactional field, and Mailtrap's inspection tooling makes it a natural pick for staging environments.
 
 <ProviderBadge adapter="mailtrap" />
@@ -59,7 +67,7 @@ const result = await email.send({
   ],
 });
 
-console.log(result.messageId); // first entry of Mailtrap's message_ids
+console.log(result.id); // first entry of Mailtrap's message_ids
 ```
 
 <Callout type="warn" title="One tag, one reply-to">

@@ -1,6 +1,7 @@
-import { EmailProviderError, EmailValidationError } from "./errors.js";
-import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
+  builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
   assertSupportedMessageFields,
@@ -12,7 +13,7 @@ import {
   readErrorBody,
 } from "./utils.js";
 
-export type PrimitiveProviderOptions = {
+export type PrimitiveAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -31,12 +32,15 @@ type PrimitiveResponse = {
   };
 };
 
-export function primitive(options: PrimitiveProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function primitive(
+  options: PrimitiveAdapterOptions,
+): EmailAdapter<"primitive", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.primitive.dev/v1";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "primitive",
+    ...builtInAdapterDefinition("primitive"),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/send-mail`, {
@@ -55,11 +59,10 @@ export function primitive(options: PrimitiveProviderOptions): EmailProvider<{ ba
 
       if (!response.ok) {
         const body = await readErrorBody(response);
-        throw new EmailProviderError(primitiveErrorMessage(response.status, body), {
-          provider: "primitive",
+        throw new EmailAdapterError(primitiveErrorMessage(response.status, body), {
+          adapter: "primitive",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: body,
         });
       }
 
@@ -67,9 +70,8 @@ export function primitive(options: PrimitiveProviderOptions): EmailProvider<{ ba
       const data = body.data ?? {};
 
       return {
-        provider: "primitive",
+        adapter: "primitive",
         id: data.id,
-        messageId: data.id,
         accepted: data.accepted,
         rejected: data.rejected,
         raw: body,

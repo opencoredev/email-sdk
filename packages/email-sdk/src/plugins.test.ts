@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
-import { EmailProviderError, EmailValidationError } from "./errors.js";
+import {
+  EmailAdapterError,
+  EmailMiddlewareError,
+  EmailRouteError,
+  EmailValidationError,
+} from "./errors.js";
 import { capturePlugin } from "./plugins-capture.js";
 import { defaultsPlugin } from "./plugins-defaults.js";
 import { observabilityPlugin } from "./plugins-observability.js";
-import type { EmailPlugin, EmailProvider } from "./types.js";
-import { failingProvider, memoryProvider } from "./testing.js";
+import { routingPlugin } from "./plugins-routing.js";
+import { timeoutPlugin } from "./plugins-timeout.js";
+import type { EmailAdapter, EmailPlugin } from "./types.js";
+import { failingAdapter, memoryAdapter } from "./testing.js";
 
 const message = {
   from: "hello@example.com",
@@ -17,21 +24,21 @@ const message = {
 
 describe("email plugins", () => {
   test("uses a plugin adapter as the only adapter", async () => {
-    const provider = memoryProvider("community");
+    const provider = memoryAdapter("community");
     const client = createEmailClient({
       plugins: [adapterPlugin("community-adapter", provider)],
     });
 
     const response = await client.send(message);
 
-    expect(response.provider).toBe("community");
+    expect(response.adapter).toBe("community");
     expect(provider.raw.sent).toHaveLength(1);
   });
 
   test("selects a plugin adapter as the default adapter", async () => {
-    const provider = memoryProvider("community");
+    const provider = memoryAdapter("community");
     const client = createEmailClient({
-      adapters: [memoryProvider("primary")],
+      adapters: [memoryAdapter("primary")],
       defaultAdapter: "community",
       plugins: [adapterPlugin("community-adapter", provider)],
     });
@@ -39,26 +46,34 @@ describe("email plugins", () => {
     const response = await client.send(message);
 
     expect(client.defaultAdapter).toBe("community");
-    expect(response.provider).toBe("community");
+    expect(response.adapter).toBe("community");
   });
 
   test("uses plugin adapters for fallback", async () => {
-    const backup = memoryProvider("backup");
+    const backup = memoryAdapter("backup");
     const client = createEmailClient({
-      adapters: [failingProvider("primary")],
-      fallback: ["backup"],
+      adapters: [
+        failingAdapter(
+          "primary",
+          new EmailAdapterError("not sent", {
+            adapter: "primary",
+            delivery: "not_sent",
+          }),
+        ),
+      ],
+      fallback: { adapters: ["backup"] },
       plugins: [adapterPlugin("backup-adapter", backup)],
     });
 
     const response = await client.send(message);
 
-    expect(response.provider).toBe("backup");
+    expect(response.adapter).toBe("backup");
   });
 
   test("rejects duplicate plugin ids", () => {
     expect(() =>
       createEmailClient({
-        adapters: [memoryProvider()],
+        adapters: [memoryAdapter()],
         plugins: [{ id: "same" }, { id: "same" }],
       }),
     ).toThrow(EmailValidationError);
@@ -67,14 +82,14 @@ describe("email plugins", () => {
   test("rejects duplicate adapter names across direct and plugin adapters", () => {
     expect(() =>
       createEmailClient({
-        adapters: [memoryProvider("same")],
-        plugins: [adapterPlugin("same-plugin", memoryProvider("same"))],
+        adapters: [memoryAdapter("same")],
+        plugins: [adapterPlugin("same-plugin", memoryAdapter("same"))],
       }),
     ).toThrow(EmailValidationError);
   });
 
   test("runs beforeSend middleware before message validation", async () => {
-    const provider = memoryProvider();
+    const provider = memoryAdapter();
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
@@ -87,9 +102,7 @@ describe("email plugins", () => {
                   message: {
                     ...event.message,
                     text: event.message.text ?? "Default body",
-                    headers: {
-                      "X-App": "email-sdk",
-                    },
+                    headers: [{ name: "X-App", value: "email-sdk" }],
                   },
                   options: {
                     metadata: {
@@ -111,12 +124,12 @@ describe("email plugins", () => {
     });
 
     expect(provider.raw.sent[0]?.message.text).toBe("Default body");
-    expect(provider.raw.sent[0]?.message.headers).toEqual({ "X-App": "email-sdk" });
+    expect(provider.raw.sent[0]?.message.headers).toEqual([{ name: "X-App", value: "email-sdk" }]);
   });
 
   test("does not swallow beforeSend middleware failures", async () => {
     const client = createEmailClient({
-      adapters: [memoryProvider()],
+      adapters: [memoryAdapter()],
       plugins: [
         {
           id: "policy",
@@ -131,13 +144,13 @@ describe("email plugins", () => {
       ],
     });
 
-    await expect(client.send(message)).rejects.toThrow("blocked");
+    await expect(client.send(message)).rejects.toBeInstanceOf(EmailMiddlewareError);
   });
 
   test("runs plugin hooks before user hooks", async () => {
     const order: string[] = [];
     const client = createEmailClient({
-      adapters: [memoryProvider()],
+      adapters: [memoryAdapter()],
       plugins: [
         {
           id: "plugin-hooks",
@@ -162,7 +175,7 @@ describe("email plugins", () => {
 
   test("does not let plugin hook failures mask provider errors", async () => {
     const client = createEmailClient({
-      adapters: [failingProvider()],
+      adapters: [failingAdapter()],
       plugins: [
         {
           id: "bad-hook",
@@ -175,15 +188,15 @@ describe("email plugins", () => {
       ],
     });
 
-    await expect(client.send(message)).rejects.toMatchObject({
-      provider: "failing",
-    });
+    const error = await client.send(message).catch((caught) => caught);
+    expect(error).toBeInstanceOf(EmailRouteError);
+    expect((error as EmailRouteError).failures[0]?.adapter).toBe("failing");
   });
 
   test("rejects client extension key collisions", () => {
     expect(() =>
       createEmailClient({
-        adapters: [memoryProvider()],
+        adapters: [memoryAdapter()],
         plugins: [
           {
             id: "collision",
@@ -198,7 +211,7 @@ describe("email plugins", () => {
 
   test("allows client extension keys from Object.prototype", () => {
     const client = createEmailClient({
-      adapters: [memoryProvider()],
+      adapters: [memoryAdapter()],
       plugins: [
         {
           id: "to-string",
@@ -217,7 +230,7 @@ describe("email plugins", () => {
   });
 
   test("applies send middleware to each batch item", async () => {
-    const provider = memoryProvider();
+    const provider = memoryAdapter();
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
@@ -229,9 +242,7 @@ describe("email plugins", () => {
                 return {
                   message: {
                     ...event.message,
-                    headers: {
-                      "X-Batch": event.message.subject,
-                    },
+                    headers: [{ name: "X-Batch", value: event.message.subject }],
                   },
                 };
               },
@@ -241,15 +252,15 @@ describe("email plugins", () => {
       ],
     });
 
-    const results = await client.sendBatch([
-      { ...message, subject: "First" },
-      { ...message, subject: "Second" },
+    const results = await client.sendMany([
+      { message: { ...message, subject: "First" } },
+      { message: { ...message, subject: "Second" } },
     ]);
 
     expect(results.every((result) => result.ok)).toBe(true);
     expect(provider.raw.sent.map((item) => item.message.headers)).toEqual([
-      { "X-Batch": "First" },
-      { "X-Batch": "Second" },
+      [{ name: "X-Batch", value: "First" }],
+      [{ name: "X-Batch", value: "Second" }],
     ]);
   });
 
@@ -260,7 +271,7 @@ describe("email plugins", () => {
           {
             id: "async-adapter",
             async adapters() {
-              return [memoryProvider()];
+              return [memoryAdapter()];
             },
           },
         ],
@@ -272,9 +283,12 @@ describe("email plugins", () => {
     const errors: unknown[] = [];
     const client = createEmailClient({
       adapters: [
-        failingProvider(
+        failingAdapter(
           "failing",
-          new EmailProviderError("Provider failed", { provider: "failing" }),
+          new EmailAdapterError("Adapter failed", {
+            adapter: "failing",
+            delivery: "not_sent",
+          }),
         ),
       ],
       plugins: [
@@ -291,12 +305,12 @@ describe("email plugins", () => {
       ],
     });
 
-    await expect(client.send(message)).rejects.toMatchObject({ provider: "failing" });
+    await expect(client.send(message)).rejects.toBeInstanceOf(EmailRouteError);
     expect(errors).toHaveLength(1);
   });
 
   test("does not double-register adapters added and returned by a plugin factory", async () => {
-    const provider = memoryProvider("factory");
+    const provider = memoryAdapter("factory");
     const client = createEmailClient({
       plugins: [
         {
@@ -311,15 +325,18 @@ describe("email plugins", () => {
 
     const response = await client.send(message);
 
-    expect(response.provider).toBe("factory");
+    expect(response.adapter).toBe("factory");
   });
 
   test("built-in plugins allow custom ids", async () => {
-    const provider = memoryProvider();
+    const provider = memoryAdapter();
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
-        defaultsPlugin({ id: "defaults:app", headers: { "X-App": "email-sdk" } }),
+        defaultsPlugin({
+          id: "defaults:app",
+          headers: [{ name: "X-App", value: "email-sdk" }],
+        }),
         defaultsPlugin({ id: "defaults:route", tags: [{ name: "route", value: "welcome" }] }),
         capturePlugin({ id: "capture:test" }),
       ],
@@ -327,14 +344,14 @@ describe("email plugins", () => {
 
     await client.send(message);
 
-    expect(provider.raw.sent[0]?.message.headers).toEqual({ "X-App": "email-sdk" });
+    expect(provider.raw.sent[0]?.message.headers).toEqual([{ name: "X-App", value: "email-sdk" }]);
     expect(provider.raw.sent[0]?.message.tags).toEqual([{ name: "route", value: "welcome" }]);
     expect(client.capture.events).toHaveLength(2);
   });
 
   test("capture plugins can use custom client extension keys", async () => {
     const client = createEmailClient({
-      adapters: [memoryProvider()],
+      adapters: [memoryAdapter()],
       plugins: [
         capturePlugin({ id: "capture:primary", clientKey: "primaryCapture" }),
         capturePlugin({ id: "capture:audit", clientKey: "auditCapture" }),
@@ -350,7 +367,7 @@ describe("email plugins", () => {
   test("observability callbacks run independently when one callback fails", async () => {
     const events: string[] = [];
     const client = createEmailClient({
-      adapters: [memoryProvider()],
+      adapters: [memoryAdapter()],
       plugins: [
         observabilityPlugin({
           log() {
@@ -370,9 +387,108 @@ describe("email plugins", () => {
 
     expect(events).toEqual(["metric:email.sent", "trace:email.sent"]);
   });
+
+  test("routing plugin selects an adapter from the prepared message", async () => {
+    const primary = memoryAdapter("primary");
+    const transactional = memoryAdapter("transactional");
+    const client = createEmailClient({
+      adapters: [primary, transactional],
+      plugins: [
+        routingPlugin({
+          select(event) {
+            return event.message.subject.startsWith("Receipt") ? "transactional" : undefined;
+          },
+        }),
+      ],
+    });
+
+    const selected = await client.send({ ...message, subject: "Receipt 123" });
+    const defaulted = await client.send(message);
+
+    expect(selected.adapter).toBe("transactional");
+    expect(defaulted.adapter).toBe("primary");
+    expect(transactional.raw.sent).toHaveLength(1);
+    expect(primary.raw.sent).toHaveLength(1);
+  });
+
+  test("timeout plugin composes with caller cancellation", async () => {
+    const caller = new AbortController();
+    let preparedSignal: AbortSignal | undefined;
+    const client = createEmailClient({
+      adapters: [memoryAdapter()],
+      plugins: [
+        timeoutPlugin({ timeoutMs: 20 }),
+        {
+          id: "inspect-signal",
+          middleware: [
+            {
+              beforeSend(event) {
+                preparedSignal = event.options?.signal;
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await client.send(message, { signal: caller.signal });
+    expect(preparedSignal?.aborted).toBe(false);
+    caller.abort();
+    expect(preparedSignal?.aborted).toBe(true);
+  });
+
+  test("timeout plugin rejects invalid durations", () => {
+    expect(() => timeoutPlugin({ timeoutMs: 0 })).toThrow(EmailValidationError);
+  });
+
+  test("built-in and community plugins participate in personalized expanded sends", async () => {
+    const provider = memoryAdapter("community");
+    const observed: string[] = [];
+    const client = createEmailClient({
+      plugins: [
+        adapterPlugin("community-adapter", provider),
+        defaultsPlugin({
+          headers: [{ name: "X-App", value: "email-sdk" }],
+          sendMetadata: { campaign: "welcome" },
+          idempotencyKeyPrefix: "mail:",
+          idempotencyKey: "campaign",
+        }),
+        capturePlugin({ id: "capture:personalized" }),
+        observabilityPlugin({
+          metric(event) {
+            observed.push(`${event.type}:${event.adapter}:${event.metadata?.campaign ?? "none"}`);
+          },
+        }),
+      ],
+    });
+
+    const result = await client.sendPersonalized({
+      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      recipients: [
+        { to: "ada@example.com", variables: { name: "Ada" } },
+        { to: "linus@example.com", variables: { name: "Linus" } },
+      ],
+    });
+
+    expect(result.accepted).toEqual(["ada@example.com", "linus@example.com"]);
+    expect(provider.raw.sent.map((item) => item.message.subject)).toEqual(["Hi Ada", "Hi Linus"]);
+    expect(provider.raw.sent.map((item) => item.message.headers)).toEqual([
+      [{ name: "X-App", value: "email-sdk" }],
+      [{ name: "X-App", value: "email-sdk" }],
+    ]);
+    expect(client.capture.events.map((event) => event.type)).toEqual([
+      "beforeSend",
+      "afterSend",
+      "afterSend",
+    ]);
+    expect(observed).toEqual([
+      "email.sent:community:welcome",
+      "email.sent:community:welcome",
+    ]);
+  });
 });
 
-function adapterPlugin(id: string, provider: EmailProvider): EmailPlugin {
+function adapterPlugin(id: string, provider: EmailAdapter): EmailPlugin {
   return {
     id,
     adapters: [provider],

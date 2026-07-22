@@ -2,8 +2,9 @@ import type { MetaDescriptor } from "@tanstack/react-router";
 
 import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
-export const siteTitle = `${appName} - TypeScript email SDK for every provider`;
-export const siteImageAlt = "Email SDK unified email sending preview";
+export const siteTitle = `${appName} - Transactional email for TypeScript`;
+export const siteImageAlt =
+  "Email SDK: Transactional email across 23 adapters in one typed SDK";
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 
@@ -144,7 +145,7 @@ export const homeStructuredData = {
       name: "Email SDK transactional email integration",
       serviceType: "Transactional email integration",
       description:
-        "Send transactional email through 20+ providers behind one typed TypeScript client, with retries and compatible fallbacks.",
+        "Send transactional email through 22 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
       provider: {
         "@id": `${siteUrl}/#organization`,
       },

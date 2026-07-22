@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "welcome",
+  "type": "registry:component",
+  "title": "Welcome",
+  "description": "A useful first step after account creation.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/welcome.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function WelcomeEmail({ name }: { name: string }) {\n  return (\n    <ShadcnEmail preview=\"Your workspace is ready\">\n      <EmailCard>\n        <EmailHeading>Your workspace is ready</EmailHeading>\n        <EmailText>\n          Welcome, {name}. Send your first email or invite your team when you’re ready.\n        </EmailText>\n        <EmailText>✓ Connect a provider</EmailText>\n        <EmailText>✓ Send a test email</EmailText>\n        <EmailText>✓ Invite your team</EmailText>\n        <EmailButton href=\"https://acme.com/dashboard\">Open dashboard</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/welcome.tsx"
+    }
+  ]
+}

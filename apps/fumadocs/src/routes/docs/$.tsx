@@ -15,6 +15,7 @@ import {
 
 import { useMDXComponents } from "@/components/mdx";
 import { VersionPicker } from "@/components/version-picker";
+import { getLatestDocsRedirect } from "@/lib/docs-redirects";
 import { baseOptions } from "@/lib/layout.shared";
 import { appName, gitConfig, siteUrl } from "@/lib/shared";
 import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
@@ -83,6 +84,13 @@ const loader = createServerFn({
   .middleware([staticFunctionMiddleware])
   .handler(async ({ data: slugs }) => {
     const resolved = resolveDocsVersionedSlugs(slugs);
+    const movedPage = resolved.version.current ? getLatestDocsRedirect(resolved.slugs) : undefined;
+    if (movedPage) {
+      throw redirect({
+        href: `/docs/${movedPage}`,
+        statusCode: 308,
+      });
+    }
     const docsSource = getDocsSource(resolved.version);
     const page = docsSource.getPage(resolved.slugs);
     if (!page) {
@@ -159,6 +167,7 @@ function createDocsClientLoader(collection: (typeof browserCollections)[DocsVers
 
 const clientLoaders = {
   docs: createDocsClientLoader(browserCollections.docs),
+  docsV065: createDocsClientLoader(browserCollections.docsV065),
   docsV064: createDocsClientLoader(browserCollections.docsV064),
   docsV063: createDocsClientLoader(browserCollections.docsV063),
   docsV062: createDocsClientLoader(browserCollections.docsV062),

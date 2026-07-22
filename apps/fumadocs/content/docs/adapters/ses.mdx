@@ -1,8 +1,16 @@
 ---
 title: AWS SES
 description: Send through the SES v2 SendEmail API with built-in SigV4 signing and no AWS SDK dependency.
-icon: Cloud
+icon: ses
 ---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
 
 The SES adapter calls the [SES v2 SendEmail API](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html) with plain `fetch` and implements AWS Signature V4 signing itself, so your bundle does not pull in the AWS SDK. Pick a region, optionally a configuration set, and send.
 
@@ -83,7 +91,7 @@ const result = await email.send({
   tags: [{ name: "type", value: "invoice" }],
 });
 
-console.log(result.id); // SES MessageId, also exposed as result.messageId
+console.log(result.id); // SES MessageId
 ```
 
 <Callout type="warn" title="No metadata field">
