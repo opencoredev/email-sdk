@@ -83,7 +83,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
-    "prepack": "bun run build"
+    "prepack": "if [ \"${EMAIL_SDK_RELEASE_PREBUILT:-0}\" = \"1\" ]; then test -f dist/client/index.js; else bun run build; fi"
   },
   "devDependencies": {
     "@opencoredev/email-sdk": "workspace:*",

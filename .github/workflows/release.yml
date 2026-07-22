@@ -59,6 +59,7 @@ jobs:
           commit: "Version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+          EMAIL_SDK_RELEASE_PREBUILT: "1"
 
       - name: Annotate release in PostHog
         if: steps.changesets.outputs.published == 'true'
