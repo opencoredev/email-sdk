@@ -38,6 +38,7 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     Card: (props) => (
       <defaultMdxComponents.Card
         {...props}
+        className={["docs-card", props.className].filter(Boolean).join(" ")}
         href={versionDocsHref(props.href, docsBasePath) as string}
       />
     ),

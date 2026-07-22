@@ -12,17 +12,33 @@ const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint
 
 type FooterLink = {
   label: string;
-  href: string;
+  href?: string;
   internal?: boolean;
   accent?: boolean;
 };
 
-const footerLinks: readonly FooterLink[] = [
-  { label: "Docs", href: "/docs", internal: true },
-  { label: "Adapters", href: "/docs/adapters", internal: true },
-  { label: "npm", href: "https://www.npmjs.com/package/@opencoredev/email-sdk" },
-  { label: "GitHub", href: `https://github.com/${gitConfig.user}/${gitConfig.repo}` },
-  { label: "Sponsor", href: sponsorHref, accent: true },
+const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] = [
+  {
+    label: "Product",
+    links: [
+      { label: "Docs", href: "/docs", internal: true },
+      { label: "Adapters", href: "/docs/adapters", internal: true },
+    ],
+  },
+  {
+    label: "Package",
+    links: [
+      { label: "npm", href: "https://www.npmjs.com/package/@opencoredev/email-sdk" },
+      { label: "MIT" },
+    ],
+  },
+  {
+    label: "Project",
+    links: [
+      { label: "GitHub", href: `https://github.com/${gitConfig.user}/${gitConfig.repo}` },
+      { label: "Sponsor", href: sponsorHref, accent: true },
+    ],
+  },
 ] as const;
 
 export const Route = createFileRoute("/")({
@@ -84,11 +100,14 @@ function Hero() {
 
       <div className="landing-hero-copy">
         <h1 id="landing-heading">
-          One route.
+          Send email.
           <br />
-          Every provider.
+          Switch providers.
         </h1>
-        <p>Send, retry, personalize, and schedule through 23 providers with one TypeScript API.</p>
+        <p>
+          An open-source TypeScript SDK for transactional email.
+          <span className="landing-hero-brand-line">23 adapters. One typed SDK.</span>
+        </p>
         <div className="landing-hero-actions">
           <DocsVersionLink className="landing-button landing-button-primary" docsPath="/docs/getting-started/quickstart">
             Start sending ↗
@@ -146,9 +165,9 @@ function CodeToInbox() {
     <section className="landing-code-section" aria-labelledby="landing-code-heading">
       <div className="landing-container">
         <h2 id="landing-code-heading">
-          Write the message once.
+          Write one email.
           <br />
-          Choose the provider at the edge.
+          Send it through any adapter.
         </h2>
         <div className="landing-code-flow">
           <CodePanel />
@@ -228,8 +247,8 @@ function MobileSafety() {
   return (
     <section className="landing-mobile-only landing-mobile-safety" aria-labelledby="delivery-safety-heading">
       <p className="landing-kicker">Delivery safety</p>
-      <h2 id="delivery-safety-heading">Retry when you know. Stop when you don’t.</h2>
-      <p>Another adapter is tried only after the provider confirms the message did not leave.</p>
+      <h2 id="delivery-safety-heading">Retry confirmed failures. Stop when delivery is unknown.</h2>
+      <p>Email SDK only tries a fallback when it knows the first attempt did not send.</p>
       <div className="landing-outcomes">
         {outcomes.map(([condition, outcome]) => (
           <div key={condition}>
@@ -251,17 +270,15 @@ function Adapters() {
         <div className="landing-adapters-heading">
           <h2 id="landing-adapters-heading">Adapters</h2>
           <div>
-            <p>Bring the provider account you already use. Your application keeps the same send flow.</p>
+            <p>Use the provider account you already have. Your send calls stay the same.</p>
             <DocsVersionLink docsPath="/docs/adapters">Explore all 23 →</DocsVersionLink>
           </div>
         </div>
         <div className="landing-mobile-adapters-heading">
           <h2>
-            Change the adapter.
-            <br />
-            Keep the workflow.
+            Switch providers without rewriting your send code.
           </h2>
-          <p>Bring the provider account you already use.</p>
+          <p>Use the provider account and API key you already have.</p>
         </div>
         <div className="landing-adapter-band">
           {adapterSponsors.map((adapter) => (
@@ -285,13 +302,12 @@ function Adapters() {
 function MobileOperate() {
   return (
     <section className="landing-mobile-only landing-mobile-operate" aria-labelledby="operate-heading">
-      <h2 id="operate-heading">Check the route before it sends.</h2>
-      <p>Validate credentials and message support without sending an email.</p>
+      <h2 id="operate-heading">Check your configuration before a live send.</h2>
+      <p>The CLI finds missing environment variables without calling the provider.</p>
       <div className="landing-terminal">
         <span>$ email-sdk doctor --adapter resend</span>
-        <strong>✓ credentials found</strong>
-        <strong>✓ message fields supported</strong>
-        <span>No email sent.</span>
+        <strong>resend looks configured.</strong>
+        <span>No provider request made.</span>
       </div>
     </section>
   );
@@ -312,8 +328,8 @@ function Closing() {
         <div className="landing-closing-main">
           <div className="landing-closing-copy">
             <span className="landing-kicker">Install</span>
-            <h2>Install once. Send anywhere.</h2>
-            <p>Choose the adapter you already use, then send the exact message you wrote through one typed API.</p>
+            <h2>Install the SDK. Add your adapter.</h2>
+            <p>Use the same message shape when you add or switch providers.</p>
           </div>
           <div className="landing-install-panel">
             <button className="landing-install-command" onClick={copyInstallCommand} type="button">
@@ -333,31 +349,42 @@ function Closing() {
             </div>
           </div>
         </div>
-        <div className="landing-footer-rail">
-          <p>Open source TypeScript email infrastructure.</p>
-          <nav aria-label="Footer navigation">
-            {footerLinks.map((item) =>
-              item.internal ? (
-                <DocsVersionLink
-                  className={item.accent ? "landing-footer-accent" : undefined}
-                  docsPath={item.href}
-                  key={item.label}
-                >
-                  {item.label} ↗
-                </DocsVersionLink>
-              ) : (
-                <a
-                  className={item.accent ? "landing-footer-accent" : undefined}
-                  href={item.href}
-                  key={item.label}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {item.label} ↗
-                </a>
-              ),
-            )}
-            <span>MIT</span>
+        <div className="landing-footer">
+          <div className="landing-footer-brand">
+            <Link to="/">Email SDK</Link>
+            <p>Open-source TypeScript SDK for transactional email.</p>
+          </div>
+          <nav aria-label="Footer navigation" className="landing-footer-nav">
+            {footerGroups.map((group) => (
+              <div className="landing-footer-group" key={group.label}>
+                <span className="landing-footer-label">{group.label}</span>
+                {group.links.map((item) =>
+                  !item.href ? (
+                    <span className="landing-footer-muted" key={item.label}>
+                      {item.label}
+                    </span>
+                  ) : item.internal ? (
+                    <DocsVersionLink
+                      className={item.accent ? "landing-footer-accent" : undefined}
+                      docsPath={item.href}
+                      key={item.label}
+                    >
+                      {item.label} ↗
+                    </DocsVersionLink>
+                  ) : (
+                    <a
+                      className={item.accent ? "landing-footer-accent" : undefined}
+                      href={item.href}
+                      key={item.label}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {item.label} ↗
+                    </a>
+                  ),
+                )}
+              </div>
+            ))}
           </nav>
         </div>
       </div>

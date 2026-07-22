@@ -310,6 +310,74 @@ html > body[data-scroll-locked] {
   --color-fd-ring: #737373;
 }
 
+/* A single next step keeps Fumadocs' featured-card treatment. Consecutive
+   cards become a compact navigation list instead of repeated large panels. */
+.docs-card:has(+ .docs-card),
+.docs-card + .docs-card {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(10rem, 0.38fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  margin-block: 0 !important;
+  padding: 0.9rem 3rem 0.9rem 1rem;
+  border-radius: 0;
+}
+
+.docs-card:has(+ .docs-card)::after,
+.docs-card + .docs-card::after {
+  position: absolute;
+  right: 1rem;
+  color: var(--color-fd-muted-foreground);
+  content: "→";
+  font-size: 0.95rem;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.docs-card:has(+ .docs-card):hover::after,
+.docs-card + .docs-card:hover::after {
+  color: var(--color-fd-foreground);
+  transform: translateX(2px);
+}
+
+.docs-card:has(+ .docs-card) > h3,
+.docs-card + .docs-card > h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.docs-card:has(+ .docs-card) > p,
+.docs-card + .docs-card > p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.docs-card:has(+ .docs-card):not(.docs-card + .docs-card) {
+  margin-top: 1.25rem !important;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.docs-card + .docs-card {
+  border-top: 0;
+}
+
+.docs-card + .docs-card:not(:has(+ .docs-card)) {
+  margin-bottom: 1.25rem !important;
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .docs-card:has(+ .docs-card),
+  .docs-card + .docs-card {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+    padding-block: 0.8rem;
+  }
+}
+
 .email-landing {
   --landing-bg: #090909;
   --landing-panel: #111111;
@@ -470,6 +538,11 @@ html > body[data-scroll-locked] {
   color: #a9bdd0;
   font-size: 18px;
   line-height: 29px;
+}
+
+.landing-hero-brand-line {
+  display: block;
+  white-space: nowrap;
 }
 
 .landing-hero-actions {
@@ -705,7 +778,6 @@ html > body[data-scroll-locked] {
   height: 344px;
   align-items: center;
   padding-left: 32px;
-  border-left: 1px dashed var(--landing-blue);
 }
 
 .landing-email-card {
@@ -966,39 +1038,73 @@ html > body[data-scroll-locked] {
   font-size: 17px;
 }
 
-.landing-footer-rail {
-  display: flex;
-  min-height: 150px;
-  align-items: center;
-  justify-content: space-between;
+.landing-footer {
+  display: grid;
+  min-height: 256px;
+  grid-template-columns: minmax(0, 1fr) 590px;
+  gap: 64px;
+  padding-block: 52px 46px;
+  border-top: 1px solid var(--landing-line);
 }
 
-.landing-footer-rail p {
-  margin: 0;
-  color: var(--landing-muted);
-  font-size: 15px;
-  line-height: 22px;
+.landing-footer-brand {
+  display: grid;
+  align-content: start;
+  gap: 14px;
 }
 
-.landing-footer-rail nav {
-  display: flex;
-  align-items: center;
-  gap: 30px;
+.landing-footer-brand > a {
+  width: fit-content;
   color: var(--landing-ink);
-  font-size: 15px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 26px;
 }
 
-.landing-footer-rail a {
+.landing-footer-brand p {
+  margin: 0;
+  color: #8f8f8f;
+  font-size: 15px;
+  line-height: 23px;
+}
+
+.landing-footer-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 54px;
+}
+
+.landing-footer-group {
+  display: grid;
+  align-content: start;
+  gap: 15px;
+  color: #d0d0d0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.landing-footer-label {
+  color: #666666;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  line-height: 15px;
+  text-transform: uppercase;
+}
+
+.landing-footer-group a {
+  width: fit-content;
   transition: color 160ms ease;
 }
 
-.landing-footer-rail a:hover,
+.landing-footer-group a:hover,
 .landing-footer-accent {
   color: var(--landing-blue);
 }
 
-.landing-footer-rail nav > span {
-  color: var(--landing-muted);
+.landing-footer-muted {
+  color: #898989;
 }
 
 @media (max-width: 900px) {
@@ -1388,33 +1494,30 @@ html > body[data-scroll-locked] {
     font-size: 15px;
   }
 
-  .landing-footer-rail {
-    min-height: 210px;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: center;
-    gap: 26px;
-    padding-block: 28px 34px;
+  .landing-footer {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    gap: 38px;
+    padding-block: 42px 38px;
   }
 
-  .landing-footer-rail p {
+  .landing-footer-brand {
+    gap: 10px;
+  }
+
+  .landing-footer-brand > a {
+    font-size: 19px;
+    line-height: 25px;
+  }
+
+  .landing-footer-brand p {
     font-size: 14px;
-    line-height: 21px;
+    line-height: 22px;
   }
 
-  .landing-footer-rail nav {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px 12px;
-    font-size: 15px;
-  }
-
-  .landing-footer-rail nav > *:nth-child(3n + 2) {
-    text-align: center;
-  }
-
-  .landing-footer-rail nav > *:nth-child(3n) {
-    text-align: right;
+  .landing-footer-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 34px 64px;
   }
 }
 

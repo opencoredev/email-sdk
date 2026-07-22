@@ -13,7 +13,7 @@ export const Route = createFileRoute("/about")({
       {
         name: "description",
         content:
-          "About Email SDK — an open-source TypeScript SDK that sends transactional email through 22 provider APIs plus SMTP behind one typed API, maintained by OpenCore.",
+          "About Email SDK — an open-source TypeScript SDK for transactional email across 23 adapters, maintained by OpenCore.",
       },
       { property: "og:title", content: `About - ${appName}` },
       {

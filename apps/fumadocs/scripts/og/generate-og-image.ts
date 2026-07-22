@@ -166,10 +166,10 @@ function buildSvg(): string {
     <rect x="18" y="18" width="1164" height="594" rx="28" stroke="#ffffff" stroke-opacity="0.14"/>
 
     <text x="60" y="78" font-family="Liberation Sans" font-size="23" font-weight="bold" fill="#f5f5f5">Email SDK</text>
-    <text x="60" y="193" font-family="Liberation Sans" font-size="72" font-weight="bold" letter-spacing="-2" fill="#f7f7f7">One route.</text>
-    <text x="60" y="273" font-family="Liberation Sans" font-size="72" font-weight="bold" letter-spacing="-2" fill="#f7f7f7">Every provider.</text>
-    <text x="62" y="322" font-family="Liberation Sans" font-size="21" fill="#c6c6c6">Send, retry, personalize, and schedule through</text>
-    <text x="62" y="352" font-family="Liberation Sans" font-size="21" fill="#c6c6c6">${adapterCount} adapters with one TypeScript API.</text>
+    <text x="60" y="193" font-family="Liberation Sans" font-size="72" font-weight="bold" letter-spacing="-2" fill="#f7f7f7">Send email.</text>
+    <text x="60" y="273" font-family="Liberation Sans" font-size="72" font-weight="bold" letter-spacing="-2" fill="#f7f7f7">Switch providers.</text>
+    <text x="62" y="322" font-family="Liberation Sans" font-size="21" fill="#c6c6c6">Open-source TypeScript SDK for transactional email.</text>
+    <text x="62" y="352" font-family="Liberation Sans" font-size="21" fill="#c6c6c6">${adapterCount} adapters. One typed SDK.</text>
 
     <rect x="60" y="388" width="345" height="40" rx="20" fill="#0a0a0a" fill-opacity="0.78" stroke="#ffffff" stroke-opacity="0.18"/>
     <text x="81" y="413" font-family="Liberation Mono" font-size="13" letter-spacing="0.5" fill="#d4d4d4">bun add @opencoredev/email-sdk</text>

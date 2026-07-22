@@ -1,11 +1,11 @@
 ---
 title: Email SDK
-description: A server-side TypeScript SDK for validated email sending through typed adapter routes.
+description: Send transactional email through 23 adapters with one typed TypeScript SDK.
 ---
 
-Send transactional email through one typed client. Pick an adapter, create the client, and call `send`.
+Install the SDK, add the adapter for your provider, and call `email.send()`. The message shape stays the same if you switch providers later.
 
-<Card title="Send your first email" href="/docs/getting-started/quickstart" description="Install one adapter, validate the message, and send it from Node.js or Bun." />
+<Card title="Send your first email" href="/docs/getting-started/quickstart" description="Install the SDK, configure one adapter, and send a message from Node.js or Bun." />
 
 ## Start here
 
@@ -20,22 +20,22 @@ export const email = createEmailClient({
 
 Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugins, and more adapters only when you need them.
 
-## What ships
+## Included
 
 - 22 provider API adapters plus SMTP, 23 adapters total
-- Literal route-name inference across `send`, `validate`, `adapter`, and `withAdapter`
-- Sequential retries and delivery-aware fallback routes
+- Typed adapter names in `send`, `validate`, `adapter`, and `withAdapter`
+- Retries on the current adapter, then fallback only when delivery is known to have failed
 - Independent `sendMany` calls and personalized `sendPersonalized` delivery
 - Hooks, middleware, built-in plugins, and no-network test adapters
 - Provider-native scheduled sends with `sendAt`
-- A Node-shebang CLI for discovery, setup checks, and validated dry runs
+- CLI commands for adapter discovery, setup checks, and validated dry runs
 - Optional AI SDK tools and a separate stdio MCP server for agent workflows
 
 ## Runtime boundary
 
 Email SDK is ESM-only and server-side. It supports Node.js 20+ and Bun 1.1+. Keep API keys and SMTP credentials out of browser bundles.
 
-<Card title="Install" href="/docs/getting-started/install" description="Choose a package manager and verify the runtime." />
-<Card title="Schedule an email" href="/docs/guides/schedule-email" description="See when to use sendAt and when to use your own queue." />
-<Card title="Understand routing" href="/docs/concepts/adapter-model" description="See how typed adapter names flow through validation and sends." />
-<Card title="Upgrade from 0.x" href="/docs/guides/migrate/v0-to-v1" description="Move legacy provider vocabulary and send options to the v1 API." />
+<Card title="Install" href="/docs/getting-started/install" description="Install the SDK and confirm your Node.js or Bun version." />
+<Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use sendAt for provider scheduling, or keep long-running jobs in your own queue." />
+<Card title="Choose an adapter" href="/docs/concepts/adapter-model" description="Set a default adapter and select another by its typed name when needed." />
+<Card title="Upgrade from 0.x" href="/docs/guides/migrate/v0-to-v1" description="Replace v0 provider names and send options with v1 adapters and options." />
