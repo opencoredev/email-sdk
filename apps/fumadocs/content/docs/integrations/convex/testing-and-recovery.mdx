@@ -1,22 +1,26 @@
 ---
-title: Test and recover Convex email
-description: Redirect recipients in test mode, use memory delivery, inspect events, and retry durable work.
+title: Test and recover
+description: Redirect recipients, use in-memory delivery, inspect failure history, cancel queued work, and retry terminal failures.
 ---
 
-## Redirect real recipients
+## Redirect every recipient
 
-`setConfig` replaces the whole stored config. Pass every field you want to keep.
+Test mode changes the stored message before it is queued. It replaces `to`, removes `cc` and `bcc`, and adds `metadata.convexEmailTestMode: true`.
 
-```ts title="convex/testSetup.ts"
+```ts title="convex/emailAdmin.ts"
 await email.setConfig(ctx, {
+  defaultFrom: "Acme <hello@acme.com>",
   testMode: true,
-  sandboxTo: ["dev@example.com"],
+  sandboxTo: ["email-preview@acme.com"],
+  maxAttempts: 2,
+  retryBaseMs: 1_000,
+  cleanupAfterDays: 7,
 });
 ```
 
-Test mode without `sandboxTo` fails before enqueueing, so a partial test configuration cannot contact real recipients.
+`setConfig` replaces the whole document, so include every value you want to keep. Test mode without `sandboxTo` fails before enqueueing and cannot contact the original recipients.
 
-## Use the memory adapter
+## Use in-memory delivery
 
 ```ts title="convex/email.ts"
 export const email = new ConvexEmail(components.convexEmail, {
@@ -25,16 +29,53 @@ export const email = new ConvexEmail(components.convexEmail, {
 });
 ```
 
-The memory route keeps queue, status, and event behavior while avoiding provider network calls.
+The memory adapter exercises the real queue, scheduler, status, event, idempotency, cancellation, and cleanup behavior without a network call.
 
-## Inspect recovery state
+For `convex-test`, register the packaged component helper:
 
-Read `status` and `listEvents` before retrying. The stored document exposes attempted adapters, error information, provider receipts, and terminal state.
+```ts title="convex/test.setup.ts"
+import convexEmailTest from "@opencoredev/convex-email/test";
+import { convexTest } from "convex-test";
 
-Use idempotency keys for user-visible messages that may be enqueued again. Component-level persisted idempotency is the durable layer; core Email SDK idempotency alone does not survive process restarts or guarantee cross-adapter exactly-once delivery.
+export function createTest() {
+  const t = convexTest();
+  convexEmailTest.registerConvexEmail(t);
+  return t;
+}
+```
 
-## Expose functions carefully
+## Read the failure before retrying
 
-`exposeApi()` publishes send, batch, status, events, and cancellation functions. Configuration functions are excluded unless `includeConfigApi: true`; expose them only behind your own authorization checks.
+```ts
+const status = await email.status(ctx, { emailId });
+const events = await email.listEvents(ctx, { emailId });
+```
 
-<Card title="Test the core SDK" href="/docs/guides/test-email-behavior" description="Use memory and failing adapters in application unit tests." />
+Check `lastError`, `attemptCount`, `attemptedAdapters`, and the ordered events. Fix missing credentials, invalid sender configuration, unsupported message fields, or provider policy errors before starting another cycle.
+
+## Retry a terminal failure
+
+```ts title="convex/emailAdmin.ts"
+import { v } from "convex/values";
+import { internalMutation } from "./_generated/server";
+import { email } from "./email";
+
+export const retry = internalMutation({
+  args: { emailId: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => email.retry(ctx, args),
+});
+```
+
+`retry` returns `true` only for a terminal `failed` record. It resets the attempt counter, clears the terminal error, appends a manual `retry_scheduled` event, and queues processing immediately. Sent and canceled messages are not retryable.
+
+Use an idempotency key on the original message. Automatic recovery refuses to retry stale in-flight sends without one because the provider may already have accepted the message before the worker lost its result.
+
+## Expose only authorized operations
+
+`exposeApi()` can generate app function definitions for send, batch, status, events, cancellation, and retry. Configuration functions stay excluded unless `includeConfigApi: true`.
+
+Most applications should write explicit wrappers instead. That keeps authentication, tenant checks, recipient policy, and administrator-only recovery visible in application code.
+
+<Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Understand queue state and event history." />
+<Card title="Test core Email SDK" href="/docs/guides/test-email-behavior" description="Use memory and failing adapters outside Convex." />

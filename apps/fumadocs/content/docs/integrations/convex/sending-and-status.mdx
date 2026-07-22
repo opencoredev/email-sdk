@@ -1,54 +1,92 @@
 ---
-title: Send email and read status
-description: Enqueue messages from Convex mutations and query persisted attempts, receipts, and delivery state.
+title: Send and track email
+description: Queue email from Convex mutations, expose reactive status, and inspect the complete event timeline.
 ---
 
-## Enqueue from a mutation
+## Queue from a mutation
 
 ```ts title="convex/users.ts"
+import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { email } from "./email";
 
 export const sendWelcomeEmail = mutation({
-  args: {},
-  handler: async (ctx) =>
-    email.send(ctx, {
-      from: "Acme <hello@acme.com>",
-      to: "ada@example.com",
-      subject: "Welcome",
-      text: "Your account is ready.",
-      idempotencyKey: "welcome:ada@example.com",
-    }),
+  args: { userId: v.id("users") },
+  returns: v.string(),
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found.");
+
+    return await email.send(ctx, {
+      to: user.email,
+      subject: "Welcome to Acme",
+      text: `Hi ${user.name}, your account is ready.`,
+      idempotencyKey: `welcome:${userId}`,
+    });
+  },
 });
 ```
 
-`send` returns the Convex document id for queued work. Provider delivery runs outside the calling mutation.
+`send` writes the queue record in the calling mutation's transaction and returns its component id. If the outer mutation rolls back, the email is not queued. Provider delivery starts after the transaction commits.
 
-## Query state
+Use a stable idempotency key for every user-visible message that application code may enqueue again. Reusing the key returns the existing email id.
+
+## Expose reactive status
+
+Component functions are not directly callable from a browser. Wrap the query in your app and apply the same authorization rules as the related application data.
 
 ```ts title="convex/emailQueries.ts"
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { email } from "./email";
 
-export const emailStatus = query({
+export const status = query({
   args: { emailId: v.string() },
-  handler: (ctx, args) => email.status(ctx, args),
+  handler: async (ctx, args) => {
+    await requireEmailOperationsAccess(ctx);
+    return await email.status(ctx, args);
+  },
+});
+
+export const events = query({
+  args: { emailId: v.string() },
+  handler: async (ctx, args) => {
+    await requireEmailOperationsAccess(ctx);
+    return await email.listEvents(ctx, args);
+  },
 });
 ```
 
-`status` returns `ConvexEmailDoc | null`. `listEvents` returns `ConvexEmailEventDoc[]` and includes queue, attempt, webhook, and terminal history.
+A subscribed client updates as the record moves through `queued`, `processing`, `sent`, `failed`, or `canceled`. Webhooks add `deliveryStatus` values `delivered`, `bounced`, or `complained` without discarding queue history.
+
+## Understand the two status layers
+
+| Field | Meaning |
+| --- | --- |
+| `status` | Whether the component queued and handed the message to a provider. |
+| `deliveryStatus` | What a provider webhook later reported about mailbox delivery. |
+| `attemptedAdapters` | Every named adapter attempted across the current record. |
+| `providerMessageId` | The provider receipt used to correlate webhook events. |
+| `lastError` | The last component send failure, if the send is retrying or terminal. |
+| `nextAttemptAt` | When the next automatic retry becomes eligible. |
+
+A `sent` queue status is not proof of inbox delivery. Treat webhook-backed `delivered` as the positive delivery signal.
 
 ## Batch enqueue
 
-`sendBatch` accepts at most 100 messages in one mutation and returns ids in input order.
+```ts
+const ids = await email.sendBatch(ctx, messages);
+```
 
-## Cancel queued work
+`sendBatch` accepts at most 100 messages per mutation and returns ids in input order. Duplicate idempotency keys within the batch resolve to the same stored email.
 
-`cancel` returns `true` only when the component changed a cancellable email to cancelled. It cannot recall a provider request that already started.
+## Cancel before processing
 
-## Stored delivery state
+```ts
+const canceled = await email.cancel(ctx, { emailId });
+```
 
-Webhook processing may add `deliveryStatus` values `delivered`, `bounced`, or `complained` and a `deliveredAt` timestamp. Attempted adapters and provider receipt ids remain available for operations and support.
+Cancellation returns `true` only while the record is still queued. It cannot recall a provider request that already started.
 
-<Card title="Webhooks" href="/docs/integrations/convex/webhooks" description="Verify provider events and update delivery state." />
-<Card title="Testing and recovery" href="/docs/integrations/convex/testing-and-recovery" description="Redirect recipients, use memory delivery, and retry safely." />
+<Card title="Process webhooks" href="/docs/integrations/convex/webhooks" description="Turn provider events into normalized delivery state." />
+<Card title="Test and recover" href="/docs/integrations/convex/testing-and-recovery" description="Inspect failures and start a safe manual retry." />

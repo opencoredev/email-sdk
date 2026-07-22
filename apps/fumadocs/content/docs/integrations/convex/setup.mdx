@@ -1,13 +1,27 @@
 ---
-title: Set up Convex Email Ops
-description: Mount the component, map environment variables, and construct a ConvexEmail client.
+title: Install and configure
+description: Mount the Convex component, map provider secrets, create the server client, and set safe defaults.
 ---
 
 <Steps>
 
 <Step>
 
+### Install the packages
+
+```bash
+bun add @opencoredev/convex-email @opencoredev/email-sdk
+```
+
+The component uses the same built-in adapters as Email SDK, but its configuration must be serializable across the Convex component boundary.
+
+</Step>
+
+<Step>
+
 ### Mount the component
+
+Declare only the environment variables your routes need, then map them into the component instance.
 
 ```ts title="convex/convex.config.ts"
 import convexEmail from "@opencoredev/convex-email/convex.config.js";
@@ -18,6 +32,7 @@ const app = defineApp({
   env: {
     RESEND_API_KEY: v.optional(v.string()),
     SMTP_HOST: v.optional(v.string()),
+    SMTP_PORT: v.optional(v.string()),
     SMTP_USER: v.optional(v.string()),
     SMTP_PASS: v.optional(v.string()),
   },
@@ -27,6 +42,7 @@ app.use(convexEmail, {
   env: {
     RESEND_API_KEY: app.env.RESEND_API_KEY,
     SMTP_HOST: app.env.SMTP_HOST,
+    SMTP_PORT: app.env.SMTP_PORT,
     SMTP_USER: app.env.SMTP_USER,
     SMTP_PASS: app.env.SMTP_PASS,
   },
@@ -34,6 +50,8 @@ app.use(convexEmail, {
 
 export default app;
 ```
+
+Run `bunx convex dev` after installing the component so Convex generates `components.convexEmail` in your app.
 
 </Step>
 
@@ -45,11 +63,13 @@ export default app;
 bunx convex env set RESEND_API_KEY re_xxx
 ```
 
+Secrets stay in the Convex deployment. Adapter configuration stores environment-variable names, never raw credentials.
+
 </Step>
 
 <Step>
 
-### Create the client
+### Create the server client
 
 ```ts title="convex/email.ts"
 import { ConvexEmail } from "@opencoredev/convex-email";
@@ -63,13 +83,47 @@ export const email = new ConvexEmail(components.convexEmail, {
   defaultAdapter: "resend",
   fallbackAdapters: ["backup-smtp"],
   maxAttempts: 3,
+  retryBaseMs: 30_000,
 });
 ```
+
+The client is server-only. Component functions are internal to your Convex backend, so expose app queries and mutations with your own authorization checks.
+
+</Step>
+
+<Step>
+
+### Store application defaults
+
+`setConfig` replaces the complete stored configuration. Put it behind an internal mutation or administrator-only action.
+
+```ts title="convex/emailAdmin.ts"
+import { internalMutation } from "./_generated/server";
+import { email } from "./email";
+
+export const configure = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await email.setConfig(ctx, {
+      defaultFrom: "Acme <hello@acme.com>",
+      testMode: true,
+      sandboxTo: ["email-preview@acme.com"],
+      maxAttempts: 3,
+      retryBaseMs: 30_000,
+      cleanupAfterDays: 30,
+    });
+  },
+});
+```
+
+Start with test mode enabled. Move to production by replacing the config with `testMode: false` after your provider domain, webhook verification, and monitoring are ready.
 
 </Step>
 
 </Steps>
 
-Component adapter configuration must be serializable. Custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are not exposed.
+<Callout type="info" title="Serializable adapter options">
+Custom `fetch` functions, SMTP TLS objects, and function-valued provider options cannot cross the component boundary. Use the equivalent serializable option or keep that specialized send in an application Node action.
+</Callout>
 
-<Card title="Send and status" href="/docs/integrations/convex/sending-and-status" description="Queue email from a mutation and query its state." />
+<Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Queue messages and expose reactive state." />

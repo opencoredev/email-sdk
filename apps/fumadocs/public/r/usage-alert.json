@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "usage-alert",
+  "type": "registry:component",
+  "title": "Usage alert",
+  "description": "A calm limit warning with a direct next action.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/usage-alert.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function UsageAlertEmail({ percent }: { percent: number }) {\n  return (\n    <ShadcnEmail preview={`You have used ${percent}% of this month’s email volume`}>\n      <EmailCard>\n        <EmailHeading>You’re nearing your email limit</EmailHeading>\n        <EmailText>Your workspace has used {percent}% of its monthly email volume.</EmailText>\n        <div style={{\n          backgroundColor: \"#e4e4e7\",\n          borderRadius: 999,\n          height: 8,\n          margin: \"24px 0\",\n          overflow: \"hidden\",\n        }}>\n          <div style={{ backgroundColor: \"#18181b\", height: \"100%\", width: `${percent}%` }} />\n        </div>\n        <EmailText>85,240 of 100,000 emails used</EmailText>\n        <EmailButton href=\"https://acme.com/usage\">Review usage</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/usage-alert.tsx"
+    }
+  ]
+}

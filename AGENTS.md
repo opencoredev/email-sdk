@@ -101,10 +101,10 @@ The SDK and CLI send anonymous PostHog telemetry from
 
 ## Convex Component
 
-`@opencoredev/convex-email` (`packages/convex-email`) is `private` in its
-`package.json`, and `.changeset/config.json` sets `privatePackages.version:
-false`, so changesets neither version nor publish it. Do not add a changeset
-for convex-email-only changes.
+`@opencoredev/convex-email` (`packages/convex-email`) is a public Convex
+Component package. User-visible component changes require a changeset, just
+like Email SDK changes. The release workflow publishes it from accumulated
+changesets; normal feature PRs do not publish directly.
 
 Its `build`, `test`, and `check-types` scripts run through turbo with the rest
 of the workspace, so `release:ci` covers them, and `pack:check` already

@@ -96,6 +96,39 @@ describe("convex-email component", () => {
     expect(events.map((event) => event.type)).toContain("failed");
   });
 
+  test("manually retries a failed email and records a new retry cycle", async () => {
+    const t = createTest();
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [],
+      maxAttempts: 1,
+    });
+
+    await flushScheduled(t);
+
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(status).toMatchObject({
+      status: "failed",
+      attemptCount: 1,
+      lastError: "Convex Email requires at least one adapter configuration.",
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      "queued",
+      "processing",
+      "failed",
+      "retry_scheduled",
+      "processing",
+      "failed",
+    ]);
+    const sent = await sendToSent(t);
+    expect(await t.mutation(api.lib.retry, { emailId: sent.emailId })).toBe(false);
+  });
+
   test("returns the existing email id for duplicate idempotency keys", async () => {
     const t = createTest();
     const firstId = await t.mutation(api.lib.enqueue, {

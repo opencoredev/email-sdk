@@ -636,8 +636,7 @@ function warnOnce(feature: string, message: string) {
   if (
     warned.has(feature) ||
     process.env.NODE_ENV === "production" ||
-    process.env.NODE_ENV === "test" ||
-    process.env.EMAIL_SDK_MCP === "1"
+    process.env.NODE_ENV === "test"
   ) {
     return;
   }

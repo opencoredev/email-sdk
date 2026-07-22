@@ -1,38 +1,64 @@
 ---
-title: Convex email webhooks
-description: Register provider webhook routes, verify requests in application code, and normalize delivery events.
+title: Process webhooks
+description: Verify provider webhook requests in application code and store normalized delivery events in the Convex component.
 ---
 
-Register webhook routes from the application `convex/http.ts`. Public routes should always verify a provider signature or shared secret before forwarding the event.
+Provider webhooks are public HTTP endpoints. The application owns the URL and signature check; the component owns deduplication, message correlation, event history, and normalized delivery state.
+
+## Register a route
 
 ```ts title="convex/http.ts"
 import { httpRouter } from "convex/server";
 import { email } from "./email";
+import { verifyResendWebhook } from "./webhookVerification";
 
 const http = httpRouter();
 
 email.registerRoutes(http, {
   pathPrefix: "/email",
   providers: ["resend"],
-  verify: ({ headers }) =>
-    headers["x-webhook-secret"] === process.env.EMAIL_WEBHOOK_SECRET,
+  verify: async ({ body, headers }) =>
+    verifyResendWebhook({
+      body,
+      headers,
+      secret: process.env.RESEND_WEBHOOK_SECRET!,
+    }),
 });
 
 export default http;
 ```
 
-This registers `POST /email/webhooks/resend`. Omitting `verify` is intended only for local development.
+This registers `POST /email/webhooks/resend` on your deployment's `.convex.site` domain.
 
-## Event handling
+<Callout type="warn" title="Never omit verification in production">
+`verify` receives the provider name, original `Request`, raw body, and normalized headers. Verify the raw request with the provider's official algorithm before the component sees it. A shared header comparison is acceptable for a private development tunnel, not for an internet-facing production endpoint.
+</Callout>
 
-The component stores duplicate webhook deliveries idempotently. When a provider message id matches a stored email, it records a `webhook` event and may update normalized delivery state.
+## What the component stores
 
-Permanent failures become `bounced`. Temporary failures remain in event history without overwriting delivery state because the provider may retry. Bounces and complaints remain sticky against a later delivered event; between bounced and complained, the most recent webhook wins.
+Every accepted delivery receives a stable provider delivery id. Replayed webhook requests return successfully without creating a duplicate event.
 
-Opens, clicks, and other non-terminal events stay in history without changing `deliveryStatus`.
+When `providerMessageId` matches a stored send, the component appends a `webhook` event and updates normalized state:
 
-## Verification ownership
+| Provider event | Stored result |
+| --- | --- |
+| Delivered | `deliveryStatus: "delivered"` and `deliveredAt` |
+| Permanent bounce or rejection | `deliveryStatus: "bounced"` |
+| Spam complaint | `deliveryStatus: "complained"` |
+| Temporary failure | Event history only |
+| Open, click, or unknown event | Event history only |
 
-`registerRoutes` passes the provider, original `Request`, raw body, and normalized headers to `verify`. The component does not pretend one shared verifier can validate every provider's signature scheme.
+Bounces and complaints remain sticky against a late delivered event. When both a bounce and complaint arrive, the latest terminal webhook wins.
 
-<Card title="Sending and status" href="/docs/integrations/convex/sending-and-status" description="Read normalized state and stored event history." />
+## Supported payload shapes
+
+The current normalizer understands Resend, Postmark, and Mailgun-style payloads. Other providers are stored through the generic event path when they expose a provider message id and event name, but you should test their exact payload shape before relying on normalized `deliveryStatus`.
+
+## Test locally
+
+1. Send through a provider test address and capture the stored `providerMessageId`.
+2. POST a signed test webhook to the route.
+3. Query `email.status` and `email.listEvents`.
+4. Replay the same delivery id and confirm no second event appears.
+
+<Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Read queue state and the webhook-backed delivery result." />

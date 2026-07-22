@@ -74,7 +74,7 @@ Use `not_sent` only when the adapter can prove the provider did not accept the m
 
 The client enforces declared repeated-header, scheduling, and personalized capabilities. Your adapter still owns address limits, provider-only format rules, and unsupported normalized fields.
 
-`validate` must not send network requests. The CLI and MCP rely on it as a shared dry boundary.
+`validate` must not send network requests. The CLI relies on it as a shared dry boundary.
 
 ## Add tests
 

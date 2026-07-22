@@ -8,6 +8,7 @@
     "plugins",
     "ui",
     "integrations",
+    "agents",
     "guides",
     "reference"
   ]

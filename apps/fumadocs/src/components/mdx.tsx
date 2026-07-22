@@ -8,6 +8,7 @@ import type { MDXComponents } from "mdx/types";
 
 import { AdapterCapabilitySupport, AdapterFieldSupport } from "./adapter-support";
 import { CommunityPluginRegistry } from "./community-plugin-registry";
+import { EmailExample, EmailExampleGallery } from "./email-examples";
 import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
 import { SponsorSpotlight } from "./sponsors";
@@ -47,6 +48,8 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     AdapterCapabilitySupport,
     AdapterFieldSupport,
     CommunityPluginRegistry,
+    EmailExample,
+    EmailExampleGallery,
     File,
     Files,
     Folder,

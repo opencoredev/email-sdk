@@ -1,9 +1,11 @@
 import {
   AlertCircleIcon,
+  AiChat01Icon,
   ArtificialIntelligence02Icon,
   BlocksIcon,
   BookOpen01Icon,
   Database01Icon,
+  FlowConnectionIcon,
   GitCompareArrowsIcon,
   LibraryIcon,
   MailAtSign01Icon,
@@ -23,11 +25,13 @@ import { providers } from "./providers";
 type IconData = ComponentProps<typeof HugeiconsIcon>["icon"];
 
 const docsIcons = {
+  AiChat: AiChat01Icon,
   Blocks: BlocksIcon,
   BookOpen: BookOpen01Icon,
   Bot: ArtificialIntelligence02Icon,
   CircleAlert: AlertCircleIcon,
   Database: Database01Icon,
+  Integrations: FlowConnectionIcon,
   GitCompare: GitCompareArrowsIcon,
   LibraryBig: LibraryIcon,
   MailAtSign: MailAtSign01Icon,
@@ -42,6 +46,10 @@ const docsIcons = {
 export function resolveDocsIcon(icon: string | undefined) {
   if (!icon) {
     return undefined;
+  }
+
+  if (icon === "Convex") {
+    return <BrandSidebarIcon logo="/brand-logos/convex-symbol.svg" name="Convex" />;
   }
 
   const provider = providers.find((item) => item.key === icon);
@@ -68,6 +76,21 @@ export function resolveDocsIcon(icon: string | undefined) {
   }
 
   return <DocsIcon icon={iconData} />;
+}
+
+function BrandSidebarIcon({ logo, name }: { logo: string; name: string }) {
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className="size-5 shrink-0 object-contain"
+      data-brand-icon={name}
+      height={20}
+      loading="lazy"
+      src={logo}
+      width={20}
+    />
+  );
 }
 
 function DocsIcon({ icon }: { icon: IconData }) {

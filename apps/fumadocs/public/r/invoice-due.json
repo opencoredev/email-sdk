@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "invoice-due",
+  "type": "registry:component",
+  "title": "Invoice due",
+  "description": "A clear invoice summary before payment is due.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/invoice-due.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailSeparator,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function InvoiceDueEmail({ amount, dueDate, invoiceUrl }: {\n  amount: string;\n  dueDate: string;\n  invoiceUrl: string;\n}) {\n  return (\n    <ShadcnEmail preview={`Your invoice is due ${dueDate}`}>\n      <EmailCard>\n        <EmailHeading>Invoice due {dueDate}</EmailHeading>\n        <EmailText>\n          Your invoice is ready and will be charged to your saved payment method.\n        </EmailText>\n        <EmailSeparator />\n        <EmailText muted>Amount due</EmailText>\n        <EmailText style={{ fontSize: 24, fontWeight: 700 }}>{amount}</EmailText>\n        <EmailText muted>Due date: {dueDate}</EmailText>\n        <EmailButton href={invoiceUrl}>View invoice</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/invoice-due.tsx"
+    }
+  ]
+}

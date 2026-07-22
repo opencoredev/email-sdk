@@ -1,5 +1,6 @@
 {
   "title": "UI",
   "icon": "Blocks",
-  "pages": ["react-email"]
+  "pagesIndex": "index",
+  "pages": ["account", "product", "commerce", "components"]
 }

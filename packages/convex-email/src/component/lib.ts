@@ -10,6 +10,7 @@ import {
   vCancelEmailArgs,
   vEmailConfig,
   vListEmailEventsArgs,
+  vRetryEmailArgs,
   vSendBatchEmailsArgs,
   vSendEmailArgs,
   vStatusArgs,
@@ -99,6 +100,41 @@ export const cancel = mutation({
       terminalAt: now,
     });
     await insertEvent(ctx, { emailId, type: "canceled" });
+
+    return true;
+  },
+});
+
+export const retry = mutation({
+  args: vRetryEmailArgs,
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const emailId = args.emailId as Id<"emails">;
+    const email = await ctx.db.get(emailId);
+
+    if (!email || email.status !== "failed") {
+      return false;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(emailId, {
+      status: "queued",
+      attemptCount: 0,
+      nextAttemptAt: now,
+      lastError: undefined,
+      terminalAt: undefined,
+      updatedAt: now,
+    });
+    await insertEvent(ctx, {
+      emailId,
+      type: "retry_scheduled",
+      payload: {
+        manual: true,
+        previousAttemptCount: email.attemptCount,
+      },
+      createdAt: now,
+    });
+    await ctx.scheduler.runAfter(0, processEmailRef, { emailId });
 
     return true;
   },

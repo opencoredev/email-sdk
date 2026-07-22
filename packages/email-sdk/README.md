@@ -262,11 +262,9 @@ await email.send({ from, to, subject: "Welcome", ...content });
 
 The optional `/react` subpath also exports email-safe shadcn-themed components such as `ShadcnEmail`, `EmailCard`, and `EmailButton`. They use inline styles instead of browser-only Radix, Tailwind, or CSS-variable behavior.
 
-## AI and MCP
+## AI tools
 
 Import `@opencoredev/email-sdk/ai` only when your app also installs the optional `ai` peer. `createEmailTools` returns one approval-gated `sendEmail` tool whose schema lets the model set only `to`, `subject`, `text`, and `html`; your app binds the sender.
-
-For external agent clients, use the separate `@opencoredev/email-sdk-mcp` stdio server. It validates without network access, stores an opaque validation reference, and sends only after MCP form elicitation approval when `EMAIL_SDK_MCP_ENABLE_SEND=1`.
 
 ## Testing
 

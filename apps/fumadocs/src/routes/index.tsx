@@ -1,18 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 
-import { Copy } from "@/components/icon";
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { homeStructuredData, siteTitle } from "@/lib/metadata";
 import { appDescription, gitConfig, siteUrl } from "@/lib/shared";
 import { openSponsorSlots, sponsorHref, sponsors } from "@/lib/sponsors";
 
-const installCommand = "bun add @opencoredev/email-sdk";
 const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint"] as const;
 
 type FooterLink = {
   label: string;
-  href?: string;
+  href: string;
   internal?: boolean;
   accent?: boolean;
 };
@@ -29,7 +26,7 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
     label: "Package",
     links: [
       { label: "npm", href: "https://www.npmjs.com/package/@opencoredev/email-sdk" },
-      { label: "MIT" },
+      { label: "MIT", href: `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/main/LICENSE` },
     ],
   },
   {
@@ -63,7 +60,7 @@ function Home() {
       <MobileSafety />
       <Adapters />
       <MobileOperate />
-      <Closing />
+      <Footer />
     </main>
   );
 }
@@ -282,15 +279,17 @@ function Adapters() {
         </div>
         <div className="landing-adapter-band">
           {adapterSponsors.map((adapter) => (
-            <a href={adapter.href} key={adapter.name} rel="noreferrer" target="_blank">
+            <DocsVersionLink docsPath={`/docs/adapters/${adapter.name.toLowerCase()}`} key={adapter.name}>
               <img alt={`${adapter.name} logo`} src={adapter.logo} />
               <span>{adapter.name}</span>
-            </a>
+            </DocsVersionLink>
           ))}
         </div>
         <div className="landing-mobile-adapters">
           {adapterSponsors.map((adapter) => (
-            <span key={adapter.name}>{adapter.name}</span>
+            <DocsVersionLink docsPath={`/docs/adapters/${adapter.name.toLowerCase()}`} key={adapter.name}>
+              {adapter.name}
+            </DocsVersionLink>
           ))}
           <DocsVersionLink docsPath="/docs/adapters">+ 18 more</DocsVersionLink>
         </div>
@@ -313,57 +312,24 @@ function MobileOperate() {
   );
 }
 
-function Closing() {
-  const [copied, setCopied] = useState(false);
-
-  async function copyInstallCommand() {
-    await navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }
-
+function Footer() {
   return (
     <footer className="landing-closing">
       <div className="landing-container">
-        <div className="landing-closing-main">
-          <div className="landing-closing-copy">
-            <span className="landing-kicker">Install</span>
-            <h2>Install the SDK. Add your adapter.</h2>
-            <p>Use the same message shape when you add or switch providers.</p>
-          </div>
-          <div className="landing-install-panel">
-            <button className="landing-install-command" onClick={copyInstallCommand} type="button">
-              <code>{installCommand}</code>
-              <span>
-                <Copy aria-hidden="true" size={14} />
-                {copied ? "copied" : "copy"}
-              </span>
-            </button>
-            <div>
-              <DocsVersionLink className="landing-button landing-button-primary" docsPath="/docs/getting-started/quickstart">
-                Quickstart →
-              </DocsVersionLink>
-              <DocsVersionLink className="landing-button landing-button-secondary" docsPath="/docs/adapters">
-                Browse adapters ↗
-              </DocsVersionLink>
-            </div>
-          </div>
-        </div>
         <div className="landing-footer">
           <div className="landing-footer-brand">
-            <Link to="/">Email SDK</Link>
-            <p>Open-source TypeScript SDK for transactional email.</p>
+            <Link to="/">
+              <img alt="" aria-hidden="true" src="/landing/email-sdk-mark.png" />
+              <span>Email SDK</span>
+            </Link>
+            <p>Open source TypeScript email infrastructure.</p>
           </div>
           <nav aria-label="Footer navigation" className="landing-footer-nav">
             {footerGroups.map((group) => (
               <div className="landing-footer-group" key={group.label}>
                 <span className="landing-footer-label">{group.label}</span>
                 {group.links.map((item) =>
-                  !item.href ? (
-                    <span className="landing-footer-muted" key={item.label}>
-                      {item.label}
-                    </span>
-                  ) : item.internal ? (
+                  item.internal ? (
                     <DocsVersionLink
                       className={item.accent ? "landing-footer-accent" : undefined}
                       docsPath={item.href}

@@ -1,0 +1,53 @@
+---
+title: Trial ending
+description: An honest reminder before a trial expires.
+---
+
+<EmailExample id="trial-ending" />
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+<Tab value="CLI">
+
+```bash
+npx shadcn@latest add https://email-sdk.dev/r/trial-ending.json
+```
+
+</Tab>
+<Tab value="Manual">
+
+Copy this template into your app and customize its props, words, and links.
+
+```tsx title="src/ui/email/trial-ending.tsx"
+import {
+  EmailButton,
+  EmailCard,
+  EmailHeading,
+  EmailSeparator,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+export function TrialEndingEmail({ endsOn }: { endsOn: string }) {
+  return (
+    <ShadcnEmail preview="Your Acme trial ends in 3 days">
+      <EmailCard>
+        <EmailHeading>Your trial ends in 3 days</EmailHeading>
+        <EmailText>
+          Your Acme trial ends {endsOn}. Your workspace and data will stay available.
+        </EmailText>
+        <EmailSeparator />
+        <EmailText muted>Current plan</EmailText>
+        <EmailText style={{ fontWeight: 700 }}>Pro trial</EmailText>
+        <EmailText muted>Trial ends</EmailText>
+        <EmailText style={{ fontWeight: 700 }}>{endsOn}</EmailText>
+        <EmailButton href="https://acme.com/plans">Choose a plan</EmailButton>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+</Tab>
+</Tabs>

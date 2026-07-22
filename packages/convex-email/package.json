@@ -1,8 +1,7 @@
 {
   "name": "@opencoredev/convex-email",
   "version": "0.1.0",
-  "private": true,
-  "description": "Convex Email Ops: provider-portable transactional email with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
+  "description": "Provider-portable transactional email for Convex with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
   "keywords": [
     "convex",
     "convex-component",
@@ -27,7 +26,7 @@
     "zeptomail",
     "transactional-email"
   ],
-  "homepage": "https://email-sdk.dev/docs/components/convex-email",
+  "homepage": "https://email-sdk.dev/docs/integrations/convex",
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },

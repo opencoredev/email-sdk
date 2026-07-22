@@ -199,6 +199,10 @@ export const vCancelEmailArgs = {
   emailId: v.string(),
 };
 
+export const vRetryEmailArgs = {
+  emailId: v.string(),
+};
+
 export const vEmailConfig = v.object({
   testMode: v.optional(v.boolean()),
   sandboxTo: v.optional(v.array(v.string())),
