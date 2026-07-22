@@ -1,0 +1,17 @@
+---
+title: AI agent integrations
+description: Give coding agents current integration guidance and runtime agents tightly scoped email tools.
+---
+
+Email SDK exposes separate surfaces for coding assistance and runtime sending.
+
+| Surface | Use it for | Safety boundary |
+| --- | --- | --- |
+| Coding-agent skill | Teach an agent to integrate, test, and document Email SDK. | It does not send email on its own. |
+| `@opencoredev/email-sdk/ai` | Add one approval-gated Vercel AI SDK tool to application code. | Application binds `from`; the model cannot select routing or advanced fields. |
+| `@opencoredev/email-sdk-mcp` | Run a local stdio server with validate-reference-approve-send flow. | Sending is absent unless enabled, credentials stay in server env, and elicitation fails closed. |
+| `/agent-tools` | Legacy framework-neutral tool shape. | Deprecated for v1; prefer `/ai` or MCP. |
+
+<Card title="AI SDK email tools" href="/docs/integrations/agents/ai-tools" description="Compose sendEmail with AI SDK 6 or 7 approval policy." />
+<Card title="Email SDK MCP" href="/docs/integrations/agents/mcp" description="Configure local stdio tools with server-enforced approval." />
+<Card title="Coding-agent skill" href="/docs/integrations/agents/skill" description="Install current integration guidance into your coding agent." />

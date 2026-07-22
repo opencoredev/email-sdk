@@ -1,0 +1,12 @@
+---
+title: all_recipients_failed
+description: A personalized send accepted no recipients on any route allowed by delivery policy.
+---
+
+`EmailAllRecipientsFailedError` has code `all_recipients_failed` and exposes ordered adapter `failures`.
+
+`sendPersonalized` resolves partial success. This error appears only when `accepted` would be empty.
+
+Fallback is considered only when every recipient failure for the current route is `not_sent`, unless the caller explicitly enabled continuation after unknown delivery.
+
+Check recipient validation, native provider rejection details available through server-side causes, and adapter capability before retrying.

@@ -144,7 +144,7 @@ export const homeStructuredData = {
       name: "Email SDK transactional email integration",
       serviceType: "Transactional email integration",
       description:
-        "Send transactional email through 20+ providers behind one typed TypeScript client, with retries and compatible fallbacks.",
+        "Send transactional email through 22 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
       provider: {
         "@id": `${siteUrl}/#organization`,
       },

@@ -1,0 +1,41 @@
+---
+title: Compatibility subpath
+description: Temporary v0 source compatibility available only during the v1 major.
+---
+
+Import the migration bridge explicitly.
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk/compat";
+```
+
+The v1 root does not export legacy provider vocabulary or result aliases.
+
+## Translated surfaces
+
+Compat accepts and translates:
+
+- `providers` and `defaultProvider`
+- per-send `provider`, `fallbackAdapters`, and `fallbackProviders`
+- client `fallback: string[]`
+- `retry.retries` and per-send `retries`
+- `sendBatch` and legacy batch item routing fields
+- message-level `idempotencyKey`
+- message-level `recipientVariables`
+- result `provider` and `messageId`
+- legacy adapters without a capability declaration
+- legacy hooks, middleware, and plugin contexts
+
+Result aliases are non-enumerable getters. Compat warnings print once per deprecated feature only in development, never in production, tests, or MCP stdout.
+
+## Safety differences that compat does not undo
+
+Compat keeps v1 delivery certainty. Legacy fallback arrays become `{ adapters, onUnknownDelivery: "stop" }`. An ambiguous outcome does not automatically advance.
+
+Legacy adapters receive permissive inferred capabilities because v0 had no declarations. Treat that as a migration convenience and add explicit v1 capabilities before removing compat.
+
+## Removal plan
+
+The bridge exists for the v1 major and is excluded from the v2 contract. Do not build new features against it.
+
+<Card title="v0 to v1 migration" href="/docs/guides/migrate/v0-to-v1" description="Replace every translated surface with its v1 form." />

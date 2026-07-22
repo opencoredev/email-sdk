@@ -4,6 +4,14 @@ description: Send through the Plunk API with reply-to, headers, attachments, and
 icon: plunk
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Plunk adapter calls the [Plunk send API](https://docs.useplunk.com) with plain `fetch`. Plunk takes a single `body` field, so the adapter sends `html` when present and falls back to `text`.
 
 <ProviderBadge adapter="plunk" />
@@ -51,7 +59,7 @@ const result = await email.send({
   replyTo: "support@acme.com",
   subject: "Your export is ready",
   html: "<p>Download your workspace export below.</p>",
-  headers: { "X-Export-ID": "exp_123" },
+  headers: [{ name: "X-Export-ID", value: "exp_123" }],
   metadata: { exportId: "exp_123" },
   attachments: [
     { filename: "export.csv", content: "name,total\nAda,42", contentType: "text/csv" },

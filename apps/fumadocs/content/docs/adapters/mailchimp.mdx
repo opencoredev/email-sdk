@@ -4,6 +4,14 @@ description: Send through Mailchimp Transactional (Mandrill) with typed recipien
 icon: mailchimp
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Mailchimp adapter calls the [Mailchimp Transactional API](https://mailchimp.com/developer/transactional/api/messages/send-new-message/), the API formerly known as Mandrill, with plain `fetch`. Unusually, the API key travels in the request body rather than a header, and recipients are a single typed list (`to`/`cc`/`bcc` entries) instead of separate arrays.
 
 <ProviderBadge adapter="mailchimp" />
@@ -57,12 +65,12 @@ const result = await email.send({
 console.log(result.id); // Mandrill _id of the first recipient result
 ```
 
-Mandrill responds with one result per recipient; the normalized `id` and `messageId` come from the first result's `_id`. Each result also carries a per-recipient status (`sent`, `queued`, `rejected`). If a send succeeds but mail does not arrive, check `result.raw` during smoke tests, because a `rejected` status still counts as a successful API call.
+Mandrill responds with one result per recipient; the normalized `id` comes from the first result's `_id`. Each result also carries a per-recipient status (`sent`, `queued`, `rejected`). If a send succeeds but mail does not arrive, check `result.raw` during smoke tests, because a `rejected` status still counts as a successful API call.
 
 <Callout type="warn" title="No replyTo field">
   This adapter does not support `replyTo`; setting it throws an `EmailValidationError` before
-  any request is made. Set a `Reply-To` header instead: `headers: { "Reply-To":
-  "support@acme.com" }`. See [field support](/docs/adapters/field-support) for the full matrix.
+  any request is made. Set a `Reply-To` header instead: `headers: [{ name: "Reply-To", value:
+  "support@acme.com" }]`. See [field support](/docs/adapters/field-support) for the full matrix.
 </Callout>
 
 ## Verify from the CLI

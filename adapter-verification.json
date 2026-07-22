@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "contractEvidence": {
+    "label": "Contract verified",
+    "description": "Request shape, field mapping, validation, and error projection run in the release test suite. No provider network call is made."
+  },
+  "liveChecks": {
+    "resend": {
+      "command": "bun run live:resend",
+      "secret": "RESEND_API_KEY",
+      "evidence": "Authenticated GET /domains; never sends email."
+    },
+    "sequenzy": {
+      "command": "bun run live:sequenzy",
+      "secret": "SEQUENZY_API_KEY",
+      "evidence": "Authenticated account lookup; sending is separately opt-in."
+    },
+    "jetemail": {
+      "command": "bun scripts/check-jetemail-account.ts",
+      "secret": "JETEMAIL_API_KEY",
+      "evidence": "Authenticated account check; sending is separately opt-in."
+    },
+    "primitive": {
+      "command": "bun scripts/check-primitive-account.ts",
+      "secret": "PRIMITIVE_API_KEY",
+      "evidence": "Authenticated account check; sending is separately opt-in."
+    },
+    "lettermint": {
+      "command": "bun run live:lettermint",
+      "secret": "LETTERMINT_API_TOKEN",
+      "evidence": "Authenticated validation-only request; sending is separately opt-in."
+    }
+  }
+}

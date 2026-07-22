@@ -1,0 +1,5 @@
+{
+  "title": "Convex Email Ops",
+  "icon": "Database",
+  "pages": ["index", "setup", "sending-and-status", "webhooks", "testing-and-recovery"]
+}

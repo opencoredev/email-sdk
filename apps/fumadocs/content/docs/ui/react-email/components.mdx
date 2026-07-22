@@ -1,0 +1,75 @@
+---
+title: Components
+description: Email-safe building blocks with shadcn-style theme tokens.
+---
+
+These components render portable inline HTML. They are small on purpose, so a template stays easy to read and works across email clients.
+
+## ShadcnEmail
+
+The root layout supplies the document structure, preview text, background, font, width, and theme.
+
+```tsx
+<ShadcnEmail preview="Your receipt is ready" theme="dark">
+  {/* content */}
+</ShadcnEmail>
+```
+
+`theme` accepts `"light"`, `"dark"`, or resolved token overrides from `createShadcnEmailTheme()`.
+
+## EmailCard
+
+A bordered content surface that uses the current card, foreground, border, and radius tokens.
+
+```tsx
+<EmailCard>{/* content */}</EmailCard>
+```
+
+## EmailHeading
+
+The primary heading for a message.
+
+```tsx
+<EmailHeading>Welcome to Acme</EmailHeading>
+```
+
+## EmailText
+
+Body copy with inbox-safe spacing, color, and line height.
+
+```tsx
+<EmailText>Your workspace is ready.</EmailText>
+```
+
+## EmailButton
+
+A link styled from the primary and primary-foreground tokens.
+
+```tsx
+<EmailButton href="https://acme.com/dashboard">Open dashboard</EmailButton>
+```
+
+## EmailSeparator
+
+A simple horizontal rule using the border token.
+
+```tsx
+<EmailSeparator />
+```
+
+## Theme tokens
+
+```tsx
+import { createShadcnEmailTheme } from "@opencoredev/email-sdk/react";
+
+const theme = createShadcnEmailTheme("light", {
+  background: "#fafafa",
+  primary: "#7c3aed",
+  primaryForeground: "#ffffff",
+  radius: 12,
+});
+
+<ShadcnEmail theme={theme}>{/* content */}</ShadcnEmail>;
+```
+
+Pass resolved colors, not CSS variable expressions. Email clients cannot reliably read your application's stylesheet.

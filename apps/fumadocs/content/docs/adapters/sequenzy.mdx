@@ -4,6 +4,14 @@ description: Send through the Sequenzy transactional API with metadata variables
 icon: sequenzy
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Sequenzy adapter calls Sequenzy's transactional send endpoint with plain `fetch`. Its distinctive feature: reserved `metadata` keys switch a send from direct content to a Sequenzy template slug, so the same message shape covers both modes.
 
 <ProviderBadge adapter="sequenzy" />

@@ -15,6 +15,8 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@hugeicons/core-free-icons": "^4.2.3",
+    "@hugeicons/react": "^1.1.9",
     "@orama/orama": "^3.1.18",
     "@tanstack/react-router": "1.170.8",
     "@tanstack/react-router-devtools": "1.167.0",

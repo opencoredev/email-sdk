@@ -1,14 +1,14 @@
 import { EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
 import { apiAddresses, formatAddress } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
 
 export type IterableDataFields =
   | Record<string, unknown>
   | ((message: EmailMessage) => Record<string, unknown>);
 
-export type IterableProviderOptions = {
+export type IterableAdapterOptions = {
   apiKey: string;
   campaignId: number;
   allowRepeatMarketingSends?: boolean;
@@ -18,7 +18,9 @@ export type IterableProviderOptions = {
   fetch?: typeof fetch;
 };
 
-export function iterable(options: IterableProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function iterable(
+  options: IterableAdapterOptions,
+): EmailAdapter<"iterable", { baseUrl: string }> {
   if (!Number.isFinite(options.campaignId)) {
     throw new EmailValidationError("iterable requires a numeric campaignId.");
   }
@@ -59,7 +61,7 @@ export function iterable(options: IterableProviderOptions): EmailProvider<{ base
     fetch: options.fetch,
     parseResponse(body) {
       return {
-        provider: "iterable",
+        adapter: "iterable",
         raw: body,
       };
     },

@@ -1,0 +1,85 @@
+---
+title: MailerSend
+description: Send through the MailerSend Email API with cc/bcc, headers, tags, attachments, and a single reply-to address.
+icon: mailersend
+---
+
+The MailerSend adapter calls the [MailerSend Email API](https://developers.mailersend.com/api/v1/email.html) with plain `fetch`. Two quirks to know: MailerSend accepts exactly one reply-to address, and the message id comes back in the `x-message-id` response header rather than the body.
+
+<ProviderBadge adapter="mailersend" />
+
+## Configure
+
+Create an API token in the [MailerSend dashboard](https://app.mailersend.com/api-tokens) and verify the domain you plan to send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailersend } from "@opencoredev/email-sdk/mailersend";
+
+export const email = createEmailClient({
+  adapters: [mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "MailerSend API token, sent as a Bearer header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.mailersend.com"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+MailerSend maps `cc`, `bcc`, `headers`, `attachments` (an attachment's `contentId` becomes MailerSend's `id`), and `tags` (values only). `replyTo` accepts a single address; two or more throw an `EmailValidationError` before any request. `sendAt` maps to `send_at` (a Unix timestamp in seconds), so MailerSend holds the message until then. It accepts at most 72 hours in the future.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  replyTo: "support@acme.com",
+  subject: "Reset your Acme password",
+  html: "<p>Click the link below to choose a new password.</p>",
+  tags: [{ name: "type", value: "password-reset" }],
+});
+
+console.log(result.id); // MailerSend message id from the x-message-id header
+```
+
+The response `id` comes from the `x-message-id` response header, falling back to `message_id` or `id` in the body. Use it to look the send up in MailerSend's activity log.
+
+<Callout type="warn" title="No metadata field">
+  MailerSend has no metadata concept, so `metadata` on a message throws an
+  `EmailValidationError` before any request is made. Use `tags` instead, or pick a
+  [metadata-capable adapter](/docs/adapters/field-support). MailerSend also gates custom
+  `headers` behind its Professional and Enterprise plans.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+MAILERSEND_API_KEY="mlsn..." npx email-sdk doctor --adapter mailersend
+```
+
+```bash
+MAILERSEND_API_KEY="mlsn..." npx email-sdk send \
+  --adapter mailersend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "MailerSend smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send. The token, domain verification, and plan limits only prove themselves against the live API.

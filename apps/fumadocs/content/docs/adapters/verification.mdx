@@ -1,0 +1,49 @@
+---
+title: How adapters are tested
+sidebarTitle: Verification
+heading: How adapters are tested
+sidebar: true
+description: See what Verified means and how adapter checks run.
+---
+
+Every adapter has tests for request building, validation, errors, and secret handling.
+
+**Verified** means the adapter also has a safe real-account check in release CI. The check signs in to the provider but does not send an email. A failed check blocks the release.
+
+## Verified adapters
+
+- Resend
+- Sequenzy
+- JetEmail
+- Primitive
+- Lettermint
+
+## How the release check works
+
+When adapter code changes on `main`, Depot checks that provider. A shared sending change checks every verified adapter.
+
+```bash
+bun run live:plan <base-sha> <head-sha>
+```
+
+Missing or invalid credentials fail the job.
+
+## Run the same checks locally
+
+```bash
+bun run live:resend
+bun run live:sequenzy
+bun run live:lettermint
+bun scripts/check-jetemail-account.ts
+bun scripts/check-primitive-account.ts
+```
+
+The scripts read `.env.local`, then `.env`, then your shell. Keep those files out of Git and do not paste keys into commands or chat.
+
+## Add another provider check
+
+1. Find an endpoint that checks the account without sending an email. Account, domain, identity, and settings endpoints usually work well.
+2. Add `scripts/check-<adapter>-account.ts`. Only print safe fields.
+3. Add the command and secret name to `adapter-verification.json`.
+4. Test a bad key and a good key. Neither run should create an email.
+5. Update the adapter page with what the check actually does.

@@ -1,0 +1,32 @@
+---
+title: Convex Email Ops
+description: Durable queued email operations for Convex applications using Email SDK adapters.
+---
+
+`@opencoredev/convex-email` is a private workspace Convex Component that adds persisted queue state around the public Email SDK.
+
+Use it when a Convex mutation should enqueue email rather than wait for a provider request, or when you need persisted status, fallback attempts, cancellation, test-mode redirection, and webhook history.
+
+## Boundary
+
+The component owns durable queue records and recovery. Email SDK still owns normalized messages, adapter payloads, validation, and provider calls.
+
+```bash
+bun add @opencoredev/convex-email @opencoredev/email-sdk
+```
+
+The package is currently private in this repository and Changesets do not publish or version it.
+
+## Main operations
+
+| Operation | Result |
+| --- | --- |
+| `send(ctx, args)` | Queued email id |
+| `sendBatch(ctx, messages)` | Queued ids in input order, up to 100 |
+| `status(ctx, { emailId })` | Stored email or `null` |
+| `listEvents(ctx, { emailId })` | Ordered stored events |
+| `cancel(ctx, { emailId })` | Whether a queued email was cancelled |
+| `setConfig` / `getConfig` | Stored component configuration |
+
+<Card title="Set up the component" href="/docs/integrations/convex/setup" description="Mount the component and configure serializable adapter routes." />
+<Card title="Send and query status" href="/docs/integrations/convex/sending-and-status" description="Enqueue work and read persisted delivery state." />

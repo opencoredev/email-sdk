@@ -1,5 +1,12 @@
 {
   "title": "Guides",
   "icon": "BookOpen",
-  "pages": ["production-send-pipeline", "test-email-behavior", "authoring"]
+  "pages": [
+    "schedule-email",
+    "production-send-pipeline",
+    "test-email-behavior",
+    "troubleshoot-failed-sends",
+    "migrate",
+    "authoring"
+  ]
 }

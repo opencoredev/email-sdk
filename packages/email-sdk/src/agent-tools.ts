@@ -30,7 +30,8 @@ export function createEmailAgentTools(client: EmailClient): { sendEmail: EmailAg
       },
       async execute(input) {
         const { adapter, provider, ...message } = input;
-        return client.send(message, adapter || provider ? { adapter, provider } : undefined);
+        const selectedAdapter = adapter ?? provider;
+        return client.send(message, selectedAdapter ? { adapter: selectedAdapter } : undefined);
       },
     },
   };

@@ -88,7 +88,14 @@ export const vAdapterConfig = v.union(
     sendAt: v.optional(v.string()),
     baseUrl: v.optional(v.string()),
   }),
-  vApiKeyEnvAdapter("loops"),
+  v.object({
+    kind: v.literal("loops"),
+    ...vOptionalName,
+    apiKeyEnv: v.optional(v.string()),
+    transactionalIdEnv: v.optional(v.string()),
+    transactionalId: v.optional(v.string()),
+    baseUrl: v.optional(v.string()),
+  }),
   vApiKeyEnvAdapter("mailchimp"),
   vApiKeyEnvAdapter("mailersend"),
   v.object({

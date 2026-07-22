@@ -1,6 +1,12 @@
 "use node";
 
-import { createEmailClient, type EmailMessage, type EmailProvider } from "@opencoredev/email-sdk";
+import {
+  createEmailClient,
+  type EmailAdapter,
+  type EmailAttachment,
+  type EmailHeader,
+  type EmailMessage,
+} from "@opencoredev/email-sdk";
 import { brevo } from "@opencoredev/email-sdk/brevo";
 import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
 import { iterable } from "@opencoredev/email-sdk/iterable";
@@ -11,7 +17,7 @@ import { mailgun } from "@opencoredev/email-sdk/mailgun";
 import { mailpace } from "@opencoredev/email-sdk/mailpace";
 import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
 import { plunk } from "@opencoredev/email-sdk/plunk";
-import { memoryProvider } from "@opencoredev/email-sdk/testing";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
 import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
 import { postmark } from "@opencoredev/email-sdk/postmark";
@@ -26,7 +32,11 @@ import { unosend } from "@opencoredev/email-sdk/unosend";
 import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 
 import { env } from "./_generated/server.js";
-import type { ConvexEmailAdapterConfig } from "../shared/types.js";
+import type {
+  ConvexEmailAdapterConfig,
+  ConvexEmailAttachment,
+  ConvexEmailMessage,
+} from "../shared/types.js";
 
 export type BuildEmailClientOptions = {
   adapters: ConvexEmailAdapterConfig[];
@@ -43,11 +53,13 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
   return createEmailClient({
     adapters,
     defaultAdapter,
-    fallback: options.fallbackAdapters,
+    fallback: options.fallbackAdapters
+      ? { adapters: options.fallbackAdapters, onUnknownDelivery: "stop" }
+      : undefined,
     hooks: options.recordAttempt
       ? {
           async beforeSend(event) {
-            await options.recordAttempt?.({ adapter: event.provider, attempt: event.attempt });
+            await options.recordAttempt?.({ adapter: event.adapter, attempt: event.attempt });
           },
         }
       : undefined,
@@ -66,10 +78,10 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
   });
 }
 
-function buildAdapter(config: ConvexEmailAdapterConfig): EmailProvider {
+function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
   switch (config.kind) {
     case "memory": {
-      return memoryProvider(config.name ?? "memory");
+      return memoryAdapter(config.name ?? "memory");
     }
     case "brevo": {
       return withName(
@@ -107,6 +119,8 @@ function buildAdapter(config: ConvexEmailAdapterConfig): EmailProvider {
       return withName(
         loops({
           apiKey: requiredEnv(config.apiKeyEnv ?? "LOOPS_API_KEY"),
+          transactionalId:
+            config.transactionalId ?? requiredEnv(config.transactionalIdEnv ?? "LOOPS_TRANSACTIONAL_ID"),
           baseUrl: config.baseUrl,
         }),
         config.name,
@@ -269,35 +283,54 @@ function buildAdapter(config: ConvexEmailAdapterConfig): EmailProvider {
   }
 }
 
-export async function hydrateAttachments(message: EmailMessage): Promise<EmailMessage> {
-  if (!message.attachments?.length) {
-    return message;
+export async function hydrateAttachments(message: ConvexEmailMessage): Promise<EmailMessage> {
+  const attachments = message.attachments
+    ? await Promise.all(message.attachments.map(hydrateAttachment))
+    : undefined;
+  const headers = normalizeHeaders(message.headers);
+  const { idempotencyKey: _, ...envelope } = message;
+  const hydrated = { ...envelope, headers, attachments };
+
+  if (message.html !== undefined) {
+    return { ...hydrated, html: message.html };
+  }
+  if (message.text !== undefined) {
+    return { ...hydrated, text: message.text };
   }
 
-  const attachments = await Promise.all(
-    message.attachments.map(async (attachment) => {
-      const attachmentWithUrl = attachment as typeof attachment & { url?: string };
-      const url = attachmentWithUrl.url;
+  throw new Error("Email message requires `html` or `text` content.");
+}
 
-      if (!url || attachment.content) {
-        return attachment;
-      }
+async function hydrateAttachment(attachment: ConvexEmailAttachment): Promise<EmailAttachment> {
+  const { url, ...base } = attachment;
 
-      const safeUrl = safeAttachmentUrl(url, attachment.filename);
-      const response = await fetch(safeUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch email attachment "${attachment.filename}" from ${url}.`);
-      }
+  if (attachment.content !== undefined) {
+    return { ...base, content: attachment.content };
+  }
+  if (!url) {
+    throw new Error(`Attachment "${attachment.filename}" requires \`content\` or \`url\`.`);
+  }
 
-      return {
-        ...attachmentWithUrl,
-        url: undefined,
-        content: await response.arrayBuffer(),
-      };
-    }),
-  );
+  const safeUrl = safeAttachmentUrl(url, attachment.filename);
+  const response = await fetch(safeUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch email attachment "${attachment.filename}" from ${url}.`);
+  }
 
-  return { ...message, attachments };
+  return { ...base, content: await response.arrayBuffer() };
+}
+
+function normalizeHeaders(
+  headers: ConvexEmailMessage["headers"],
+): readonly EmailHeader[] | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  if (Array.isArray(headers)) {
+    return headers;
+  }
+
+  return Object.entries(headers).map(([name, value]) => ({ name, value }));
 }
 
 function safeAttachmentUrl(value: string, filename: string) {
@@ -336,12 +369,12 @@ function isIpAddressLiteral(hostname: string) {
   return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
 }
 
-function withName<TProvider extends EmailProvider>(provider: TProvider, name: string | undefined) {
-  if (!name || name === provider.name) {
-    return provider;
+function withName<TAdapter extends EmailAdapter>(adapter: TAdapter, name: string | undefined) {
+  if (!name || name === adapter.name) {
+    return adapter;
   }
 
-  return { ...provider, name };
+  return { ...adapter, name };
 }
 
 function requiredEnv(name: string) {

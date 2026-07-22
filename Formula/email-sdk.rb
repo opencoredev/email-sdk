@@ -5,7 +5,7 @@ class EmailSdk < Formula
   sha256 "e9d2cae336d2638ada971772d1740b2e525183979b55145ec1731e956d5ded67"
   license "AGPL-3.0-only"
 
-  depends_on "bun"
+  depends_on "node"
 
   def install
     package_root = buildpath/"package"

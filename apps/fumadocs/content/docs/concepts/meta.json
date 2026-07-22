@@ -1,5 +1,10 @@
 {
   "title": "Concepts",
   "icon": "BookOpen",
-  "pages": ["adapter-model", "fallbacks-and-retries", "hooks"]
+  "pages": [
+    "adapter-model",
+    "fallbacks-and-retries",
+    "hooks",
+    "sending-modes"
+  ]
 }

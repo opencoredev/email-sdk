@@ -4,6 +4,14 @@ description: Send over raw SMTP with the built-in TCP/TLS transport. No Nodemail
 icon: smtp
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `message_id` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets. There is no Nodemailer and no HTTP API in the path. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
 
 <ProviderBadge adapter="smtp" />
@@ -94,7 +102,7 @@ With `secure: true` the whole session is TLS. Otherwise the adapter connects in 
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
+SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when send options include an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
@@ -104,14 +112,14 @@ const result = await email.send({
   subject: "Disk usage above 90% on db-1",
   text: "db-1 is at 92% disk usage.",
   html: "<p><strong>db-1</strong> is at 92% disk usage.</p>",
-  headers: { "X-Alert-ID": "alert_481" },
+  headers: [{ name: "X-Alert-ID", value: "alert_481" }],
 });
 
 console.log(result.accepted); // every recipient the server accepted
 console.log(result.id); // parsed from the server's "queued as ..." reply, else the idempotency key
 ```
 
-`rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
+`rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Retryable transport failures surface as `EmailAdapterError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
 <Callout type="warn" title="No attachments, tags, or metadata">
   The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
@@ -138,7 +146,7 @@ export const email = createEmailClient({
     }),
   ],
   defaultAdapter: "purelymail",
-  fallback: ["backup-smtp"],
+  fallback: { adapters: ["backup-smtp"] },
 });
 ```
 

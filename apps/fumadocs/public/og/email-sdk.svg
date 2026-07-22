@@ -34,7 +34,7 @@
 
   <g transform="translate(74 434)" font-family="Arial, Helvetica, sans-serif">
     <path d="M0 0H360" stroke="#27272a" stroke-width="1"/>
-    <text x="0" y="34" fill="#d4d4d8" font-size="17" font-weight="700">18 built-in providers</text>
+    <text x="0" y="34" fill="#d4d4d8" font-size="17" font-weight="700">22 provider APIs + SMTP</text>
     <text x="0" y="65" fill="#8f8f98" font-size="17">plus custom transports when you need them.</text>
   </g>
 

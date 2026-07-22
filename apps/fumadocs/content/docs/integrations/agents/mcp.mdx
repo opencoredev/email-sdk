@@ -1,0 +1,52 @@
+---
+title: Email SDK MCP server
+description: Run a local stdio MCP server with env-only credentials, no-network validation, and server-enforced approval.
+---
+
+`@opencoredev/email-sdk-mcp` exposes safe local tools over stdio. It does not accept command-line flags or load `.env` files.
+
+```json title="mcp.json"
+{
+  "mcpServers": {
+    "email": {
+      "command": "npx",
+      "args": ["-y", "@opencoredev/email-sdk-mcp"],
+      "env": {
+        "EMAIL_SDK_MCP_ADAPTER": "resend",
+        "EMAIL_SDK_MCP_FROM": "Acme <hello@example.com>",
+        "RESEND_API_KEY": "${RESEND_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+## Tool availability
+
+The default server registers `email_configuration_status` and `email_validate`. It registers `email_send` only when `EMAIL_SDK_MCP_ENABLE_SEND=1`.
+
+| Tool | Network effect | Output |
+| --- | --- | --- |
+| `email_configuration_status` | None | Adapter, booleans, missing env names, and policy limits |
+| `email_validate` | Calls core `validate`, never provider send | Opaque five-minute reference and content-redacted counts |
+| `email_send` | One irreversible adapter send after elicitation approval | Status, adapter, sanitized receipt id, accepted/rejected counts |
+
+## Validation references
+
+References are random, immutable, single-use, bounded in memory, and invalid after process restart. They bind the exact message digest, adapter, sender policy, and policy version. The default TTL is five minutes.
+
+`email_send` accepts only the opaque reference. A model-supplied confirmation, repeated message, or second tool call is not approval.
+
+## Approval and failure policy
+
+Tool outputs stay content-redacted. The approval form is the deliberate exception: it shows the stored sender, recipients, subject, text body, HTML body, and irreversible effect before any adapter call. Text and HTML bodies are rejected before storage when they exceed the approval-renderable body limit, and accepted bodies are displayed in full with no preview truncation. Missing elicitation support, decline, cancel, timeout, or changed policy fails before the adapter call.
+
+MCP sends use one adapter, `retry.maxAttempts: 1`, and no fallback. An ambiguous provider outcome becomes terminal `outcome_unknown`.
+
+## Server policy environment
+
+Optional policy values include recipient and domain allowlists, maximum recipient/body sizes, validation TTL, pending-reference count, and approval timeout. Defaults are 10 recipients, 200 subject characters, 4,000 text or HTML characters, 1,000 pending validations, and a 60-second approval timeout. Configured text and HTML limits are capped at 4,000 characters so every accepted body can be fully rendered in approval.
+
+The core client runs with telemetry disabled inside MCP. Tool arguments, flags, logs, and outputs never carry provider credentials or base URLs.
+
+<Card title="MCP package README" href="https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk-mcp" description="See package-level setup and source." />

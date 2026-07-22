@@ -1,0 +1,54 @@
+---
+title: Send email and read status
+description: Enqueue messages from Convex mutations and query persisted attempts, receipts, and delivery state.
+---
+
+## Enqueue from a mutation
+
+```ts title="convex/users.ts"
+import { mutation } from "./_generated/server";
+import { email } from "./email";
+
+export const sendWelcomeEmail = mutation({
+  args: {},
+  handler: async (ctx) =>
+    email.send(ctx, {
+      from: "Acme <hello@acme.com>",
+      to: "ada@example.com",
+      subject: "Welcome",
+      text: "Your account is ready.",
+      idempotencyKey: "welcome:ada@example.com",
+    }),
+});
+```
+
+`send` returns the Convex document id for queued work. Provider delivery runs outside the calling mutation.
+
+## Query state
+
+```ts title="convex/emailQueries.ts"
+import { query } from "./_generated/server";
+import { email } from "./email";
+
+export const emailStatus = query({
+  args: { emailId: v.string() },
+  handler: (ctx, args) => email.status(ctx, args),
+});
+```
+
+`status` returns `ConvexEmailDoc | null`. `listEvents` returns `ConvexEmailEventDoc[]` and includes queue, attempt, webhook, and terminal history.
+
+## Batch enqueue
+
+`sendBatch` accepts at most 100 messages in one mutation and returns ids in input order.
+
+## Cancel queued work
+
+`cancel` returns `true` only when the component changed a cancellable email to cancelled. It cannot recall a provider request that already started.
+
+## Stored delivery state
+
+Webhook processing may add `deliveryStatus` values `delivered`, `bounced`, or `complained` and a `deliveredAt` timestamp. Attempted adapters and provider receipt ids remain available for operations and support.
+
+<Card title="Webhooks" href="/docs/integrations/convex/webhooks" description="Verify provider events and update delivery state." />
+<Card title="Testing and recovery" href="/docs/integrations/convex/testing-and-recovery" description="Redirect recipients, use memory delivery, and retry safely." />

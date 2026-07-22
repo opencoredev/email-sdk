@@ -1,6 +1,7 @@
-import { EmailProviderError } from "./errors.js";
-import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
+import { EmailAdapterError } from "./errors.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
+  builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
   assertSupportedMessageFields,
@@ -13,7 +14,7 @@ import {
   readErrorBody,
 } from "./utils.js";
 
-export type LettermintProviderOptions = {
+export type LettermintAdapterOptions = {
   apiToken: string;
   baseUrl?: string;
   /** Optional routing key (Lettermint route slug). Defaults to the project's default route. */
@@ -27,12 +28,15 @@ type LettermintResponse = {
   status?: string;
 };
 
-export function lettermint(options: LettermintProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function lettermint(
+  options: LettermintAdapterOptions,
+): EmailAdapter<"lettermint", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.lettermint.co/v1";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "lettermint",
+    ...builtInAdapterDefinition("lettermint"),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/send`, {
@@ -52,20 +56,18 @@ export function lettermint(options: LettermintProviderOptions): EmailProvider<{ 
 
       if (!response.ok) {
         const body = await readErrorBody(response);
-        throw new EmailProviderError(httpErrorMessage("Lettermint", response.status, body), {
-          provider: "lettermint",
+        throw new EmailAdapterError(httpErrorMessage("Lettermint", response.status, body), {
+          adapter: "lettermint",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: body,
         });
       }
 
       const body = (await response.json().catch(() => ({}))) as LettermintResponse;
 
       return {
-        provider: "lettermint",
+        adapter: "lettermint",
         id: body.message_id,
-        messageId: body.message_id,
         raw: body,
       };
     },

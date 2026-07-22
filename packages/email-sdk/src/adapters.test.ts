@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
-import { EmailValidationError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
 import { lettermint } from "./lettermint.js";
@@ -21,11 +21,13 @@ import { sequenzy } from "./sequenzy.js";
 import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { sparkpost } from "./sparkpost.js";
-import type { EmailMessage, EmailProviderContext } from "./types.js";
+import type { EmailAdapter, EmailAdapterContext, EmailMessage } from "./types.js";
 import { unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
-const context: EmailProviderContext = {
+const context: EmailAdapterContext = {
+  adapter: "test",
+  operation: "send",
   attempt: 1,
   idempotencyKey: "idem_123",
 };
@@ -120,7 +122,7 @@ describe("provider payloads", () => {
       fetch: capture.fetch,
     }).send(message, context);
 
-    expect(response.messageId).toBe("postmark_123");
+    expect(response.id).toBe("postmark_123");
     expect(capture.calls[0]?.json).toMatchObject({
       From: "Acme <hello@example.com>",
       To: "Ada <ada@example.com>",
@@ -166,17 +168,21 @@ describe("provider payloads", () => {
     const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
     const provider = sendgrid({ apiKey: "sg", fetch: capture.fetch });
 
-    expect(provider.sendBulk).toBeDefined();
-    const response = await provider.sendBulk?.(
+    expect(provider.sendPersonalized).toBeDefined();
+    const response = await provider.sendPersonalized?.(
       {
-        from: "Acme <hello@acme.com>",
-        to: ["a@example.com", { email: "b@example.com", name: "Linus" }],
-        subject: "Hi %recipient.name%",
-        html: "<p>Hi %recipient.name%</p>",
-        recipientVariables: {
-          "a@example.com": { name: "Ada", id: "u_1" },
-          "b@example.com": { name: "Linus", id: "u_2" },
+        message: {
+          from: "Acme <hello@acme.com>",
+          subject: "Hi %recipient.name%",
+          html: "<p>Hi %recipient.name%</p>",
         },
+        recipients: [
+          { to: "a@example.com", variables: { name: "Ada", id: "u_1" } },
+          {
+            to: { email: "b@example.com", name: "Linus" },
+            variables: { name: "Linus", id: "u_2" },
+          },
+        ],
       },
       context,
     );
@@ -202,13 +208,17 @@ describe("provider payloads", () => {
     const to = Array.from({ length: 1001 }, (_, index) => `user${index}@example.com`);
 
     await expect(
-      provider.sendBulk?.(
+      provider.sendPersonalized?.(
         {
-          from: "Acme <hello@acme.com>",
-          to,
-          subject: "Hi %recipient.name%",
-          text: "Hi %recipient.name%",
-          recipientVariables: { "user0@example.com": { name: "Ada" } },
+          message: {
+            from: "Acme <hello@acme.com>",
+            subject: "Hi %recipient.name%",
+            text: "Hi %recipient.name%",
+          },
+          recipients: to.map((address) => ({
+            to: address,
+            variables: { name: "Ada" },
+          })),
         },
         context,
       ),
@@ -259,6 +269,38 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Cloudflare accepts object recipients without display names", async () => {
+    const capture = jsonCapture({ success: true, result: { delivered: ["ada@example.com"] } });
+
+    await cloudflare({ apiToken: "cf_token", accountId: "account_123", fetch: capture.fetch }).send(
+      {
+        ...cloudflareMessage,
+        to: { email: "ada@example.com" },
+        cc: [{ email: "cc@example.com" }],
+        bcc: { email: "bcc@example.com" },
+      },
+      context,
+    );
+
+    expect(capture.calls[0]?.json).toMatchObject({
+      to: ["ada@example.com"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+    });
+  });
+
+  test("Cloudflare rejects recipient display names before fetch", async () => {
+    const capture = jsonCapture({ success: true });
+
+    await expect(
+      cloudflare({ apiToken: "cf_token", accountId: "account_123", fetch: capture.fetch }).send(
+        { ...cloudflareMessage, to: { email: "ada@example.com", name: "Ada" } },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+    expect(capture.calls).toHaveLength(0);
+  });
+
   test("Cloudflare surfaces provider envelope errors", async () => {
     await expect(
       cloudflare({
@@ -283,21 +325,26 @@ describe("provider payloads", () => {
     ).rejects.toThrow("cloudflare failed.");
   });
 
-  test("Cloudflare surfaces HTTP error details", async () => {
-    await expect(
-      cloudflare({
-        apiToken: "cf_token",
-        accountId: "account_123",
-        fetch: jsonCapture(
-          {
-            success: false,
-            errors: [{ code: 10001, message: "Authentication failed." }],
-            result: null,
-          },
-          { status: 401 },
-        ).fetch,
-      }).send(cloudflareMessage, context),
-    ).rejects.toThrow("Authentication failed.");
+  test("Cloudflare exposes a safe HTTP error without the raw response body", async () => {
+    const error = await cloudflare({
+      apiToken: "cf_token",
+      accountId: "account_123",
+      fetch: jsonCapture(
+        {
+          success: false,
+          errors: [{ code: 10001, message: "Authentication failed.", secret: "raw-token" }],
+          result: null,
+        },
+        { status: 401 },
+      ).fetch,
+    })
+      .send(cloudflareMessage, context)
+      .catch((failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(EmailAdapterError);
+    expect((error as EmailAdapterError).message).toContain("Authentication failed.");
+    expect((error as EmailAdapterError).cause).toBeUndefined();
+    expect("details" in (error as object)).toBe(false);
   });
 
   test("Unosend maps REST payloads and response IDs", async () => {
@@ -315,7 +362,7 @@ describe("provider payloads", () => {
     }).send(messageWithoutMetadata, context);
 
     expect(response.id).toBe("uno_123");
-    expect(response.messageId).toBe("uno_123");
+    expect(response.id).toBe("uno_123");
     expect(capture.calls[0]?.url).toBe("https://api.unosend.co/emails");
     expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer un_test");
     expect(capture.calls[0]?.json).toMatchObject({
@@ -364,7 +411,7 @@ describe("provider payloads", () => {
       fetch: capture.fetch,
     }).send(messageWithoutMetadata, context);
 
-    expect(response.messageId).toBe("ses_123");
+    expect(response.id).toBe("ses_123");
     expect(capture.calls[0]?.url).toBe(
       "https://email.us-east-1.amazonaws.com/v2/email/outbound-emails",
     );
@@ -422,17 +469,18 @@ describe("provider payloads", () => {
     const capture = formCapture({ id: "<mailgun_batch>" });
     const provider = mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: capture.fetch });
 
-    expect(provider.sendBulk).toBeDefined();
-    await provider.sendBulk?.(
+    expect(provider.sendPersonalized).toBeDefined();
+    await provider.sendPersonalized?.(
       {
-        from: "Acme <hello@acme.com>",
-        to: ["a@example.com", "b@example.com"],
-        subject: "Hi %recipient.name%",
-        html: "<p>Hi %recipient.name%</p>",
-        recipientVariables: {
-          "a@example.com": { name: "Ada", id: "u_1" },
-          "b@example.com": { name: "Linus", id: "u_2" },
+        message: {
+          from: "Acme <hello@acme.com>",
+          subject: "Hi %recipient.name%",
+          html: "<p>Hi %recipient.name%</p>",
         },
+        recipients: [
+          { to: "a@example.com", variables: { name: "Ada", id: "u_1" } },
+          { to: "b@example.com", variables: { name: "Linus", id: "u_2" } },
+        ],
       },
       context,
     );
@@ -452,13 +500,17 @@ describe("provider payloads", () => {
     const to = Array.from({ length: 1001 }, (_, index) => `user${index}@example.com`);
 
     await expect(
-      provider.sendBulk?.(
+      provider.sendPersonalized?.(
         {
-          from: "Acme <hello@acme.com>",
-          to,
-          subject: "Hi %recipient.name%",
-          text: "Hi %recipient.name%",
-          recipientVariables: { "user0@example.com": { name: "Ada" } },
+          message: {
+            from: "Acme <hello@acme.com>",
+            subject: "Hi %recipient.name%",
+            text: "Hi %recipient.name%",
+          },
+          recipients: to.map((address) => ({
+            to: address,
+            variables: { name: "Ada" },
+          })),
         },
         context,
       ),
@@ -538,7 +590,7 @@ describe("provider payloads", () => {
 
     for (const item of cases) {
       const response = await item.provider.send(item.message ?? message, context);
-      expect(response.provider).toBe(item.name);
+      expect(response.adapter).toBe(item.name);
     }
   });
 
@@ -548,7 +600,7 @@ describe("provider payloads", () => {
     const response = await mailtrap({ apiKey: "key", fetch: capture.fetch }).send(message, context);
 
     expect(response.id).toBe("mt_123");
-    expect(response.messageId).toBe("mt_123");
+    expect(response.id).toBe("mt_123");
     expect(capture.calls[0]?.headers.get("api-token")).toBe("key");
     expect(capture.calls[0]?.json).toMatchObject({
       from: { email: "hello@example.com", name: "Acme" },
@@ -687,6 +739,182 @@ describe("provider payloads", () => {
       contentType: "application/octet-stream",
       data: base64("hello"),
     });
+  });
+
+  test("Loops rejects multiple recipients with a typed validation error before fetch", async () => {
+    const capture = jsonCapture({ id: "loop_123" });
+
+    await expect(
+      loops({ apiKey: "key", transactionalId: "tx", fetch: capture.fetch }).send(
+        {
+          ...message,
+          to: ["ada@example.com", "grace@example.com"],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+        },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("MailPace maps positive payload fields", async () => {
+    const capture = jsonCapture({ id: "mailpace_123" });
+
+    const response = await mailpace({ apiKey: "key", fetch: capture.fetch }).send(
+      {
+        ...message,
+        headers: undefined,
+        attachments: undefined,
+        tags: undefined,
+        metadata: undefined,
+      },
+      context,
+    );
+
+    expect(response.id).toBe("mailpace_123");
+    expect(capture.calls[0]?.json).toEqual({
+      from: "Acme <hello@example.com>",
+      to: "Ada <ada@example.com>",
+      cc: "cc@example.com",
+      bcc: "bcc@example.com",
+      replyto: "reply@example.com",
+      subject: "Welcome",
+      htmlbody: "<p>Hello</p>",
+      textbody: "Hello",
+    });
+  });
+
+  test("direct JSON adapter send validates baseline and adapter rules before fetch", async () => {
+    const loopUnsupported = jsonCapture({ id: "loop_123" });
+    const sendgridRepeated = jsonCapture({}, { headers: { "x-message-id": "sg_123" } });
+    const resendMissing = jsonCapture({ id: "res_123" });
+    const resendEmpty = jsonCapture({ id: "res_123" });
+    const loopLimit = jsonCapture({ id: "loop_123" });
+    const cases: Array<{
+      name: string;
+      adapter: EmailAdapter<string>;
+      capture: ReturnType<typeof jsonCapture>;
+      invalid: EmailMessage;
+    }> = [
+      {
+        name: "unsupported fields",
+        capture: loopUnsupported,
+        adapter: loops({ apiKey: "key", transactionalId: "tx", fetch: loopUnsupported.fetch }),
+        invalid: {
+          ...message,
+          cc: "cc@example.com",
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+        },
+      },
+      {
+        name: "repeated headers",
+        capture: sendgridRepeated,
+        adapter: sendgrid({ apiKey: "sg", fetch: sendgridRepeated.fetch }),
+        invalid: {
+          ...message,
+          metadata: undefined,
+          headers: [
+            { name: "X-Test", value: "one" },
+            { name: "x-test", value: "two" },
+          ],
+        },
+      },
+      {
+        name: "missing recipient",
+        capture: resendMissing,
+        adapter: sendgrid({ apiKey: "sg", fetch: resendMissing.fetch }),
+        invalid: { ...message, metadata: undefined, to: [] },
+      },
+      {
+        name: "empty subject",
+        capture: resendEmpty,
+        adapter: sendgrid({ apiKey: "sg", fetch: resendEmpty.fetch }),
+        invalid: { ...message, metadata: undefined, subject: "" },
+      },
+      {
+        name: "adapter recipient limit",
+        capture: loopLimit,
+        adapter: loops({ apiKey: "key", transactionalId: "tx", fetch: loopLimit.fetch }),
+        invalid: {
+          ...message,
+          to: ["ada@example.com", "grace@example.com"],
+          cc: undefined,
+          bcc: undefined,
+          replyTo: undefined,
+          headers: undefined,
+          tags: undefined,
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      await expect(testCase.adapter.send(testCase.invalid, context), testCase.name).rejects.toBeInstanceOf(
+        EmailValidationError,
+      );
+      expect(testCase.capture.calls, testCase.name).toHaveLength(0);
+    }
+  });
+
+  test("unsupported optional recipient arrays are absent when empty and rejected before fetch when populated", async () => {
+    const accepted = jsonCapture({ id: "loop_123" });
+    await expect(
+      loops({ apiKey: "key", transactionalId: "tx", fetch: accepted.fetch }).send(
+        {
+          ...message,
+          cc: [],
+          bcc: [],
+          replyTo: [],
+          headers: undefined,
+          tags: undefined,
+        },
+        context,
+      ),
+    ).resolves.toMatchObject({ id: "loop_123" });
+    expect(accepted.calls).toHaveLength(1);
+
+    for (const field of ["cc", "bcc", "replyTo"] as const) {
+      const rejected = jsonCapture({ id: "loop_123" });
+      await expect(
+        loops({ apiKey: "key", transactionalId: "tx", fetch: rejected.fetch }).send(
+          {
+            ...message,
+            cc: undefined,
+            bcc: undefined,
+            replyTo: undefined,
+            headers: undefined,
+            tags: undefined,
+            [field]: ["extra@example.com"],
+          },
+          context,
+        ),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+      expect(rejected.calls, field).toHaveLength(0);
+    }
+  });
+
+  test("one-replyTo validation agrees for validate and direct send", async () => {
+    const cases = [
+      brevo({ apiKey: "key", fetch: jsonCapture({ messageId: "brevo_123" }).fetch }),
+      mailersend({ apiKey: "key", fetch: jsonCapture({}).fetch }),
+      mailtrap({ apiKey: "key", fetch: jsonCapture({ message_ids: ["mt_123"] }).fetch }),
+      plunk({ apiKey: "key", fetch: jsonCapture({ success: true, data: { emails: [] } }).fetch }),
+    ];
+    const invalid = {
+      ...message,
+      replyTo: ["reply@example.com", "support@example.com"],
+      metadata: undefined,
+    } satisfies EmailMessage;
+
+    for (const adapter of cases) {
+      expect(() => adapter.validate?.(invalid)).toThrow(EmailValidationError);
+      await expect(adapter.send(invalid, context)).rejects.toBeInstanceOf(EmailValidationError);
+    }
   });
 
   test("Sequenzy maps direct transactional sends and reserved metadata", async () => {
@@ -890,7 +1118,7 @@ describe("provider payloads", () => {
       context,
     );
 
-    expect(response.provider).toBe("iterable");
+    expect(response.adapter).toBe("iterable");
     expect(response.raw).toEqual({ code: "Success", msg: "Email sent" });
     expect(capture.calls[0]?.url).toBe("https://api.iterable.com/api/email/target");
     expect(capture.calls[0]?.headers.get("api-key")).toBe("iterable_key");
@@ -983,7 +1211,7 @@ describe("provider payloads", () => {
     );
 
     expect(response.id).toBe("jet_123");
-    expect(response.messageId).toBe("jet_123");
+    expect(response.id).toBe("jet_123");
     expect(capture.calls[0]?.url).toBe("https://api.jetemail.com/email");
     expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer key");
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
@@ -1042,7 +1270,7 @@ describe("provider payloads", () => {
     );
 
     expect(response.id).toBe("prim_123");
-    expect(response.messageId).toBe("prim_123");
+    expect(response.id).toBe("prim_123");
     expect(capture.calls[0]?.url).toBe("https://api.primitive.dev/v1/send-mail");
     expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer key");
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
@@ -1135,7 +1363,7 @@ describe("provider payloads", () => {
     );
 
     expect(response.id).toBe("lm_123");
-    expect(response.messageId).toBe("lm_123");
+    expect(response.id).toBe("lm_123");
     expect(capture.calls[0]?.url).toBe("https://api.lettermint.co/v1/send");
     expect(capture.calls[0]?.headers.get("x-lettermint-token")).toBe("lm_token");
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
@@ -1226,23 +1454,24 @@ describe("provider payloads", () => {
   test("native batch sends carry sendAt in the same scheduled call", async () => {
     const sendAt = new Date("2026-07-10T12:30:00.000Z");
     const batch = {
-      from: "Acme <hello@acme.com>",
-      to: ["a@example.com", "b@example.com"],
-      subject: "Hi %recipient.name%",
-      html: "<p>Hi %recipient.name%</p>",
-      recipientVariables: {
-        "a@example.com": { name: "Ada" },
-        "b@example.com": { name: "Linus" },
+      message: {
+        from: "Acme <hello@acme.com>",
+        subject: "Hi %recipient.name%",
+        html: "<p>Hi %recipient.name%</p>",
+        sendAt,
       },
-      sendAt,
-    } satisfies EmailMessage;
+      recipients: [
+        { to: "a@example.com", variables: { name: "Ada" } },
+        { to: "b@example.com", variables: { name: "Linus" } },
+      ],
+    };
 
     const mailgunCapture = formCapture({ id: "<mailgun_batch>" });
     await mailgun({
       apiKey: "mg",
       domain: "mg.example.com",
       fetch: mailgunCapture.fetch,
-    }).sendBulk?.(batch, context);
+    }).sendPersonalized?.(batch, context);
     expect(mailgunCapture.calls).toHaveLength(1);
     expect(mailgunCapture.calls[0]?.form.get("recipient-variables")).toBeTruthy();
     expect(mailgunCapture.calls[0]?.form.get("o:deliverytime")).toBe(
@@ -1250,7 +1479,10 @@ describe("provider payloads", () => {
     );
 
     const sendgridCapture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
-    await sendgrid({ apiKey: "sg", fetch: sendgridCapture.fetch }).sendBulk?.(batch, context);
+    await sendgrid({ apiKey: "sg", fetch: sendgridCapture.fetch }).sendPersonalized?.(
+      batch,
+      context,
+    );
     expect(sendgridCapture.calls).toHaveLength(1);
     expect(sendgridCapture.calls[0]?.json.personalizations).toHaveLength(2);
     expect(sendgridCapture.calls[0]?.json.send_at).toBe(Math.floor(sendAt.getTime() / 1000));
@@ -1269,7 +1501,7 @@ describe("provider payloads", () => {
         { ...messageWithoutMetadata, sendAt: "tomorrow-ish" },
         context,
       ),
-    ).rejects.toThrow('Email message sendAt is not a valid date: "tomorrow-ish".');
+    ).rejects.toThrow("Email message sendAt must be an RFC 3339 timestamp");
 
     await expect(
       resend({ apiKey: "key", fetch: jsonCapture({ id: "res_123" }).fetch }).send(

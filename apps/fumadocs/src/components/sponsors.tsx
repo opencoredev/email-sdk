@@ -1,5 +1,4 @@
-import { ExternalLink, Plus } from "lucide-react";
-
+import { ExternalLink, Plus } from "@/components/icon";
 import { openSponsorSlots, sponsorHref, sponsors } from "@/lib/sponsors";
 
 type SponsorSpotlightProps = {

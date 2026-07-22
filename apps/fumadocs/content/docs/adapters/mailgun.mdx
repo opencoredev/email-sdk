@@ -4,7 +4,15 @@ description: "Send through the Mailgun Messages API with domain-scoped multipart
 icon: mailgun
 ---
 
-The Mailgun adapter calls the [Mailgun Messages API](https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Messages/) with plain `fetch`. It is the one adapter that posts multipart form data instead of JSON, using Mailgun's prefixed field names: `h:` for headers, `v:` for metadata variables, `o:` for sending options. Every send is scoped to the `domain` you configure.
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `none` | Yes | `native` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Mailgun adapter calls the [Mailgun Messages API](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages) with plain `fetch`. It is the one adapter that posts multipart form data instead of JSON, using Mailgun's prefixed field names: `h:` for headers, `v:` for metadata variables, `o:` for sending options. Every send is scoped to the `domain` you configure.
 
 <ProviderBadge adapter="mailgun" />
 
@@ -70,25 +78,26 @@ const result = await email.send({
   tags: [{ name: "type", value: "receipt" }],
 });
 
-console.log(result.id); // Mailgun message id, also exposed as result.messageId
+console.log(result.id); // Mailgun message id
 ```
 
 The response `id` is Mailgun's queued message id from the response body. Match it against delivery events in webhooks or the Mailgun logs.
 
-### Batch sends with recipient variables
+### Personalized sends
 
-Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and Mailgun personalizes every recipient in a single call through its native `recipient-variables` field (up to 1000 recipients). Mailgun substitutes `%recipient.key%` tokens in `subject`, `html`, and `text` on its side:
+Mailgun implements native `sendPersonalized`, so all recipients and variables travel in one request through Mailgun's `recipient-variables` field.
 
 ```ts
-await email.send({
-  from: "Acme <hello@mg.acme.com>",
-  to: ["ada@example.com", "linus@example.com"],
-  subject: "Hi %recipient.name%",
-  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
-  recipientVariables: {
-    "ada@example.com": { name: "Ada", id: "u_1" },
-    "linus@example.com": { name: "Linus", id: "u_2" },
+await email.sendPersonalized({
+  message: {
+    from: "Acme <hello@mg.acme.com>",
+    subject: "Hi %recipient.name%",
+    html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
   },
+  recipients: [
+    { to: "ada@example.com", variables: { name: "Ada", id: "u_1" } },
+    { to: "linus@example.com", variables: { name: "Linus", id: "u_2" } },
+  ],
 });
 ```
 

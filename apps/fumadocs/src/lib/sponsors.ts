@@ -15,34 +15,44 @@ export const sponsors: readonly Sponsor[] = [
   {
     name: "Resend",
     href: "https://go.resend.com/email-sdk",
-    logo: "/og/provider-logos/resend-mark.svg",
+    logo: "/landing/sponsors/resend.png",
   },
   {
     name: "Sequenzy",
     href: "https://www.sequenzy.com/?ref=emailsdk",
-    logo: "/og/provider-logos/sequenzy.jpeg",
+    logo: "/landing/sponsors/sequenzy.png",
   },
   {
     name: "JetEmail",
     href: "https://jetemail.com",
-    logo: "/og/provider-logos/jetemail.jpeg",
+    logo: "/landing/sponsors/jetemail.svg",
   },
   {
     name: "Primitive",
     href: "https://www.primitive.dev",
-    logo: "/og/provider-logos/primitive.png",
+    logo: "/landing/sponsors/primitive.png",
   },
   {
     name: "Lettermint",
     href: "https://lettermint.co/?ref=emailsdk",
-    logo: "/og/provider-logos/lettermint.png",
+    logo: "/landing/sponsors/lettermint.svg",
   },
   {
     name: "Instatus",
     href: "https://instatus.com/?ref=emailsdk",
-    logo: "/og/provider-logos/instatus.png",
+    logo: "/landing/sponsors/instatus.png",
+  },
+  {
+    name: "Neon",
+    href: "https://neon.com",
+    logo: "/landing/sponsors/neon.png",
+  },
+  {
+    name: "Notra",
+    href: "https://usenotra.com",
+    logo: "/landing/sponsors/notra.svg",
   },
 ];
 
-export const openSponsorSlots = [1] as const;
+export const openSponsorSlots = [1, 2] as const;
 export const sponsorHref = "https://github.com/sponsors/opencoredev";

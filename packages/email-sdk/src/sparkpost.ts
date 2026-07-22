@@ -6,21 +6,23 @@ import {
   optionalStringAddresses,
   sendAtIsoUtcSeconds,
 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   headersToObject,
 } from "./utils.js";
 
-export type SparkPostProviderOptions = {
+export type SparkPostAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   sandbox?: boolean;
   fetch?: typeof fetch;
 };
 
-export function sparkpost(options: SparkPostProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function sparkpost(
+  options: SparkPostAdapterOptions,
+): EmailAdapter<"sparkpost", { baseUrl: string }> {
   return jsonProvider({
     name: "sparkpost",
     baseUrl: options.baseUrl ?? "https://api.sparkpost.com/api/v1",
@@ -63,7 +65,7 @@ export function sparkpost(options: SparkPostProviderOptions): EmailProvider<{ ba
       const results = record.results as Record<string, unknown> | undefined;
 
       return {
-        provider: "sparkpost",
+        adapter: "sparkpost",
         id: results ? firstString(results, ["id", "transmission_id"]) : undefined,
         raw: body,
       };

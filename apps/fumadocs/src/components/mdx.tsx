@@ -6,6 +6,7 @@ import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
+import { AdapterCapabilitySupport, AdapterFieldSupport } from "./adapter-support";
 import { CommunityPluginRegistry } from "./community-plugin-registry";
 import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
@@ -42,6 +43,8 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     ),
     Accordion,
     Accordions,
+    AdapterCapabilitySupport,
+    AdapterFieldSupport,
     CommunityPluginRegistry,
     File,
     Files,

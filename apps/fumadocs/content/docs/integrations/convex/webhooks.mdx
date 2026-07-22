@@ -1,0 +1,38 @@
+---
+title: Convex email webhooks
+description: Register provider webhook routes, verify requests in application code, and normalize delivery events.
+---
+
+Register webhook routes from the application `convex/http.ts`. Public routes should always verify a provider signature or shared secret before forwarding the event.
+
+```ts title="convex/http.ts"
+import { httpRouter } from "convex/server";
+import { email } from "./email";
+
+const http = httpRouter();
+
+email.registerRoutes(http, {
+  pathPrefix: "/email",
+  providers: ["resend"],
+  verify: ({ headers }) =>
+    headers["x-webhook-secret"] === process.env.EMAIL_WEBHOOK_SECRET,
+});
+
+export default http;
+```
+
+This registers `POST /email/webhooks/resend`. Omitting `verify` is intended only for local development.
+
+## Event handling
+
+The component stores duplicate webhook deliveries idempotently. When a provider message id matches a stored email, it records a `webhook` event and may update normalized delivery state.
+
+Permanent failures become `bounced`. Temporary failures remain in event history without overwriting delivery state because the provider may retry. Bounces and complaints remain sticky against a later delivered event; between bounced and complained, the most recent webhook wins.
+
+Opens, clicks, and other non-terminal events stay in history without changing `deliveryStatus`.
+
+## Verification ownership
+
+`registerRoutes` passes the provider, original `Request`, raw body, and normalized headers to `verify`. The component does not pretend one shared verifier can validate every provider's signature scheme.
+
+<Card title="Sending and status" href="/docs/integrations/convex/sending-and-status" description="Read normalized state and stored event history." />

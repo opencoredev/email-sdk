@@ -6,7 +6,7 @@ export const appDescription =
 // machine indexes lead with what the project is and the rules for using it safely.
 export const llmsOverview = `> ${appDescription}
 
-Email SDK is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 20+ providers — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, not a hosted API or a service you sign up for.
+Email SDK is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 22 provider APIs plus SMTP — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, not a hosted API or a service you sign up for.
 
 ## When to use Email SDK
 

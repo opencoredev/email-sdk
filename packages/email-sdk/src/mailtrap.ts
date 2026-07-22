@@ -7,16 +7,18 @@ import {
   optionalApiAddresses,
   optionalSingleApiAddress,
 } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
 
-export type MailtrapProviderOptions = {
+export type MailtrapAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function mailtrap(options: MailtrapProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function mailtrap(
+  options: MailtrapAdapterOptions,
+): EmailAdapter<"mailtrap", { baseUrl: string }> {
   return jsonProvider({
     name: "mailtrap",
     baseUrl: options.baseUrl ?? "https://send.api.mailtrap.io",
@@ -57,7 +59,7 @@ export function mailtrap(options: MailtrapProviderOptions): EmailProvider<{ base
       const messageId = messageIds.find((value) => typeof value === "string") as string | undefined;
 
       return {
-        provider: "mailtrap",
+        adapter: "mailtrap",
         id: messageId ?? firstString(record, ["message_id", "id"]),
         messageId: messageId ?? firstString(record, ["message_id", "id"]),
         raw: body,

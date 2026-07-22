@@ -1,4 +1,4 @@
-import type { EmailProviderResponse } from "@opencoredev/email-sdk";
+import type { EmailSendResult } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
@@ -219,12 +219,12 @@ export const markSent = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const response = args.response as EmailProviderResponse;
+    const response = args.response as EmailSendResult;
     const now = Date.now();
 
     await ctx.db.patch(args.emailId, {
       status: "sent",
-      providerMessageId: response.messageId ?? response.id,
+      providerMessageId: response.id,
       updatedAt: now,
       sentAt: now,
       terminalAt: now,
@@ -233,11 +233,10 @@ export const markSent = internalMutation({
     await insertEvent(ctx, {
       emailId: args.emailId,
       type: "sent",
-      adapter: response.provider,
-      providerMessageId: response.messageId ?? response.id,
+      adapter: response.adapter,
+      providerMessageId: response.id,
       payload: {
         id: response.id,
-        messageId: response.messageId,
         accepted: response.accepted,
         rejected: response.rejected,
       },

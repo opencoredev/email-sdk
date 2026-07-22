@@ -14,13 +14,17 @@
     "check": "oxlint && oxfmt --write",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release:ci": "bun run check-types && bun run test && bun run community:check && bun run docs:versions:check && bun run build && bun run pack:check",
+    "release:ci": "bun run check-types && bun run test && bun run community:check && bun run docs:versions:check && bun run docs:check && bun run build && bun run pack:check",
     "release": "changeset publish",
-    "pack:check": "cd packages/email-sdk && npm pack --dry-run && cd ../convex-email && npm pack --dry-run",
+    "pack:check": "bun scripts/check-package-tarballs.ts",
+    "live:resend": "bun scripts/check-resend-account.ts",
     "live:sequenzy": "bun scripts/check-sequenzy-account.ts",
     "live:lettermint": "bun scripts/check-lettermint-account.ts",
+    "live:plan": "bun scripts/changed-live-adapters.ts",
+    "live:run": "bun scripts/run-live-adapters.ts",
     "community:check": "bun scripts/validate-community-registry.ts",
     "docs:versions:check": "bun scripts/validate-docs-versions.ts",
+    "docs:check": "bun scripts/check-adapter-support-docs.ts && cd apps/fumadocs && bun run types:check && bun run build",
     "homebrew:update": "bun scripts/update-homebrew-formula.ts"
   },
   "dependencies": {
@@ -28,7 +32,15 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "ws": "^8.20.1"
+    "@opencoredev/email-sdk": "workspace:*",
+    "ws": "^8.20.1",
+    "brace-expansion": "1.1.16",
+    "dompurify": "3.4.12",
+    "@hono/node-server": "2.0.11",
+    "fast-uri": "3.1.4",
+    "js-yaml": "4.3.0",
+    "read-yaml-file": "3.0.0",
+    "esbuild": "0.28.1"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

@@ -10,7 +10,7 @@
 
 One TypeScript client for transactional email. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- Adapters for 23 providers behind one normalized message
+- Adapters for 22 provider APIs plus SMTP, 23 adapters total, behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
 - Fail-fast field-support checks before a provider drops data
 - Batch personalization with per-recipient variables, plus provider-side scheduled sends
@@ -73,7 +73,7 @@ What gets collected:
 - Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
 - Success or failure, error codes, and send duration
 - Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
-- Whether a send used recipient variables or scheduling, and which delivery path ran
+- Whether scheduling was requested
 - SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
 - Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
 

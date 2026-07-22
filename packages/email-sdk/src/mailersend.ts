@@ -8,16 +8,18 @@ import {
   optionalSingleApiAddress,
   sendAtUnixSeconds,
 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type MailerSendProviderOptions = {
+export type MailerSendAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function mailersend(
+  options: MailerSendAdapterOptions,
+): EmailAdapter<"mailersend", { baseUrl: string }> {
   return jsonProvider({
     name: "mailersend",
     baseUrl: options.baseUrl ?? "https://api.mailersend.com",
@@ -52,7 +54,7 @@ export function mailersend(options: MailerSendProviderOptions): EmailProvider<{ 
     },
     parseResponse(body, _message, response) {
       return {
-        provider: "mailersend",
+        adapter: "mailersend",
         id:
           response.headers.get("x-message-id") ??
           firstString(body as Record<string, unknown>, ["message_id", "id"]),

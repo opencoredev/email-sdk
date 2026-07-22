@@ -4,6 +4,14 @@ description: Send through the MailerSend Email API with cc/bcc, headers, tags, a
 icon: mailersend
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The MailerSend adapter calls the [MailerSend Email API](https://developers.mailersend.com/api/v1/email.html) with plain `fetch`. Two quirks to know: MailerSend accepts exactly one reply-to address, and the message id comes back in the `x-message-id` response header rather than the body.
 
 <ProviderBadge adapter="mailersend" />

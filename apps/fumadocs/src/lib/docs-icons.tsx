@@ -1,7 +1,43 @@
-import { icons } from "lucide-react";
-import { createElement } from "react";
+import {
+  AlertCircleIcon,
+  ArtificialIntelligence02Icon,
+  BlocksIcon,
+  BookOpen01Icon,
+  Database01Icon,
+  GitCompareArrowsIcon,
+  LibraryIcon,
+  MailAtSign01Icon,
+  PackageAddIcon,
+  PlugSocketIcon,
+  ReplaceAllIcon,
+  Rocket01Icon,
+  ServerStack01Icon,
+  TerminalIcon,
+  Wrench01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import type { ComponentProps } from "react";
 
 import { providers } from "./providers";
+
+type IconData = ComponentProps<typeof HugeiconsIcon>["icon"];
+
+const docsIcons = {
+  Blocks: BlocksIcon,
+  BookOpen: BookOpen01Icon,
+  Bot: ArtificialIntelligence02Icon,
+  CircleAlert: AlertCircleIcon,
+  Database: Database01Icon,
+  GitCompare: GitCompareArrowsIcon,
+  LibraryBig: LibraryIcon,
+  MailAtSign: MailAtSign01Icon,
+  PackagePlus: PackageAddIcon,
+  Plug: PlugSocketIcon,
+  Replace: ReplaceAllIcon,
+  Rocket: Rocket01Icon,
+  Terminal: TerminalIcon,
+  Wrench: Wrench01Icon,
+} satisfies Record<string, IconData>;
 
 export function resolveDocsIcon(icon: string | undefined) {
   if (!icon) {
@@ -12,43 +48,59 @@ export function resolveDocsIcon(icon: string | undefined) {
 
   if (provider) {
     if (!provider.logo) {
-      return createElement(TransportSidebarIcon);
+      return <DocsIcon icon={ServerStack01Icon} />;
     }
 
-    return createElement(ProviderSidebarIcon, {
-      logo: "sidebarLogo" in provider ? provider.sidebarLogo : provider.logo,
-      name: provider.name,
-    });
+    return (
+      <ProviderSidebarIcon
+        invertOnDark={"invertOnDark" in provider && provider.invertOnDark}
+        logo={provider.logo}
+        name={provider.name}
+      />
+    );
   }
 
-  const Icon = icons[icon as keyof typeof icons];
+  const iconData = docsIcons[icon as keyof typeof docsIcons];
 
-  if (!Icon) {
+  if (!iconData) {
     console.warn(`[docs-icons] Unknown icon detected: ${icon}.`);
     return undefined;
   }
 
-  return createElement(Icon);
+  return <DocsIcon icon={iconData} />;
 }
 
-function ProviderSidebarIcon({ logo, name }: { logo: string; name: string }) {
+function DocsIcon({ icon }: { icon: IconData }) {
   return (
-    <img
-      alt=""
+    <HugeiconsIcon
       aria-hidden="true"
-      className="size-4 shrink-0 object-contain opacity-85"
-      data-provider-icon={name}
-      height={16}
-      loading="lazy"
-      src={logo}
-      width={16}
+      className="size-4 shrink-0 text-fd-muted-foreground"
+      icon={icon}
+      size={16}
+      strokeWidth={1.8}
     />
   );
 }
 
-function TransportSidebarIcon() {
-  return createElement(icons.Server, {
-    className: "size-4 shrink-0 text-fd-muted-foreground",
-    strokeWidth: 2,
-  });
+function ProviderSidebarIcon({
+  invertOnDark,
+  logo,
+  name,
+}: {
+  invertOnDark: boolean;
+  logo: string;
+  name: string;
+}) {
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className={`size-5 shrink-0 object-contain ${invertOnDark ? "dark:invert" : ""}`}
+      data-provider-icon={name}
+      height={20}
+      loading="lazy"
+      src={logo}
+      width={20}
+    />
+  );
 }

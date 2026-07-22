@@ -2,19 +2,37 @@ import emailSdkPackage from "../../../../packages/email-sdk/package.json";
 
 export const sdkPackageName = emailSdkPackage.name;
 export const latestPublishedVersion = emailSdkPackage.version;
-export const docsVersion = `v${latestPublishedVersion}`;
+export const currentDocsMajorVersion = 1;
+export const docsVersion = `v${currentDocsMajorVersion}`;
+export const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
 export const docsVersionRoutePrefix = "v";
 export const docsVersionStorageKey = "email-sdk-docs-version";
 
+export function getCurrentDocsPublishedVersion(packageVersion: string) {
+  return packageVersion.startsWith(`${currentDocsMajorVersion}.`) ? packageVersion : undefined;
+}
+
 export const docsVersions = [
   {
-    label: "latest",
+    label: currentDocsPublishedVersion ? "latest" : "v1 preview",
     version: docsVersion,
-    description: "Current SDK, CLI, and docs",
+    description: currentDocsPublishedVersion
+      ? "Current v1 SDK, CLI, and docs"
+      : "Unreleased v1 SDK, CLI, and docs",
     href: "/docs",
     collection: "docs",
     contentPath: "content/docs",
     current: true,
+    external: false,
+  },
+  {
+    label: "v0.6.5",
+    version: "v0.6.5",
+    description: "Docs for the v0.6.5 patch release",
+    href: "/docs/v/0.6.5",
+    collection: "docsV065",
+    contentPath: "content/docs-v/0.6.5",
+    current: false,
     external: false,
   },
   {
@@ -203,11 +221,19 @@ export function getDocsVersionFromPathname(pathname: string) {
 }
 
 export function getVersionLinks(version: DocsVersion) {
+  const publishedPackageVersion = version.current
+    ? currentDocsPublishedVersion
+    : getDocsVersionSlug(version);
+
   return [
-    {
-      label: "npm package",
-      href: `https://www.npmjs.com/package/${sdkPackageName}/v/${getDocsVersionSlug(version)}`,
-    },
+    ...(publishedPackageVersion
+      ? [
+          {
+            label: "npm package",
+            href: `https://www.npmjs.com/package/${sdkPackageName}/v/${publishedPackageVersion}`,
+          },
+        ]
+      : []),
     {
       label: "Changelog",
       href: "https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/CHANGELOG.md",

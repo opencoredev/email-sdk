@@ -580,6 +580,18 @@ describe("convex-email component", () => {
     ).not.toThrow();
   });
 
+  test("Loops adapter reads its transactional template ID from component environment", () => {
+    process.env.LOOPS_API_KEY = "test-key";
+    process.env.LOOPS_TRANSACTIONAL_ID = "transactional-template";
+
+    expect(() =>
+      buildEmailClient({
+        adapters: [{ kind: "loops" }],
+        defaultAdapter: "loops",
+      }),
+    ).not.toThrow();
+  });
+
   test("rejects unsafe attachment URLs before server-side fetch", async () => {
     await expect(
       hydrateAttachments({

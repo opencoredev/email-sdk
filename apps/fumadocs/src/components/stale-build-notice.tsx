@@ -1,6 +1,6 @@
-import { RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { RefreshCw, X } from "@/components/icon";
 import { currentBuildInfo, isOutdatedBuild, type BuildInfo } from "@/lib/build-info";
 
 const checkIntervalMs = 5 * 60 * 1000;

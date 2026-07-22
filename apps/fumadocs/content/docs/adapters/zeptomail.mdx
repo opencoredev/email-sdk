@@ -4,6 +4,14 @@ description: Send through Zoho ZeptoMail with automatic send-mail token prefixin
 icon: zeptomail
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The ZeptoMail adapter calls the [Zoho ZeptoMail email API](https://www.zoho.com/zeptomail/help/api/email-sending.html) with plain `fetch`. Paste your send mail token as-is: the adapter prepends Zoho's `Zoho-enczapikey ` authorization prefix automatically when it is missing.
 
 <ProviderBadge adapter="zeptomail" />

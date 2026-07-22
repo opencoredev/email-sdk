@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["$TURBO_EXTENDS$", "@opencoredev/email-sdk#build"]
+    },
+    "check-types": {
+      "dependsOn": ["$TURBO_EXTENDS$", "@opencoredev/email-sdk#build"]
+    },
+    "test": {
+      "dependsOn": ["$TURBO_EXTENDS$", "@opencoredev/email-sdk#build"]
+    }
+  }
+}

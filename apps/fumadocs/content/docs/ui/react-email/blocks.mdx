@@ -1,0 +1,104 @@
+---
+title: Blocks
+description: Complete copyable templates built from the Email SDK React components.
+---
+
+Copy a block into `ui/email`, change the words and links, then render it with `renderEmail`.
+
+## Welcome email
+
+```tsx title="ui/email/welcome.tsx"
+import {
+  EmailButton,
+  EmailCard,
+  EmailHeading,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+export function WelcomeEmail({ name }: { name: string }) {
+  return (
+    <ShadcnEmail preview="Your account is ready.">
+      <EmailCard>
+        <EmailHeading>Welcome, {name}</EmailHeading>
+        <EmailText>
+          Your account is ready. You can invite your team or start building now.
+        </EmailText>
+        <EmailButton href="https://acme.com/dashboard">
+          Open dashboard
+        </EmailButton>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+## Verification code
+
+```tsx title="ui/email/verification-code.tsx"
+import {
+  EmailCard,
+  EmailHeading,
+  EmailSeparator,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+export function VerificationCodeEmail({ code }: { code: string }) {
+  return (
+    <ShadcnEmail preview={`${code} is your verification code`}>
+      <EmailCard>
+        <EmailHeading>Verify your email</EmailHeading>
+        <EmailText>Enter this code to finish signing in:</EmailText>
+        <EmailText
+          style={{
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 30,
+            fontWeight: 700,
+            letterSpacing: 8,
+          }}
+        >
+          {code}
+        </EmailText>
+        <EmailSeparator />
+        <EmailText>If you did not request this code, you can ignore this email.</EmailText>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+## Receipt
+
+```tsx title="ui/email/receipt.tsx"
+import {
+  EmailButton,
+  EmailCard,
+  EmailHeading,
+  EmailSeparator,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+type ReceiptEmailProps = {
+  amount: string;
+  invoiceUrl: string;
+  orderId: string;
+};
+
+export function ReceiptEmail({ amount, invoiceUrl, orderId }: ReceiptEmailProps) {
+  return (
+    <ShadcnEmail preview={`Receipt for order ${orderId}`}>
+      <EmailCard>
+        <EmailHeading>Payment received</EmailHeading>
+        <EmailText>Order {orderId}</EmailText>
+        <EmailSeparator />
+        <EmailText style={{ fontSize: 24, fontWeight: 700 }}>{amount}</EmailText>
+        <EmailButton href={invoiceUrl}>View receipt</EmailButton>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+All three blocks use the same theme contract, so changing `ShadcnEmail` from the default theme to `"dark"` or a token override updates the whole template.

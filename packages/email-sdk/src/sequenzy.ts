@@ -1,7 +1,7 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses } from "./payloads.js";
-import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
@@ -9,7 +9,7 @@ import {
   attachmentToBase64,
 } from "./utils.js";
 
-export type SequenzyProviderOptions = {
+export type SequenzyAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -34,8 +34,10 @@ const reservedMetadataKeys = new Set([
   "sequenzySubscriberExternalId",
 ]);
 
-export function sequenzy(options: SequenzyProviderOptions): EmailProvider<{ baseUrl: string }> {
-  return jsonProvider<SequenzyResponse>({
+export function sequenzy(
+  options: SequenzyAdapterOptions,
+): EmailAdapter<"sequenzy", { baseUrl: string }> {
+  return jsonProvider<"sequenzy", SequenzyResponse>({
     name: "sequenzy",
     baseUrl: options.baseUrl ?? "https://api.sequenzy.com/api/v1",
     endpoint: "/transactional/send",
@@ -72,15 +74,14 @@ export function sequenzy(options: SequenzyProviderOptions): EmailProvider<{ base
     },
     parseResponse(body) {
       if (body.success === false || body.error) {
-        throw new EmailProviderError(`Sequenzy failed: ${body.error ?? "Unknown error"}`, {
-          provider: "sequenzy",
+        throw new EmailAdapterError(`Sequenzy failed: ${body.error ?? "Unknown error"}`, {
+          adapter: "sequenzy",
           retryable: false,
-          details: body,
         });
       }
 
       return {
-        provider: "sequenzy",
+        adapter: "sequenzy",
         id: firstString(body as Record<string, unknown>, ["jobId", "id"]),
         messageId: firstString(body as Record<string, unknown>, ["jobId", "id"]),
         accepted: Array.isArray(body.to) ? body.to : body.to ? [body.to] : undefined,

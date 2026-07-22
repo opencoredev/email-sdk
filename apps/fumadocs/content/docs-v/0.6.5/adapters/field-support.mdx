@@ -1,0 +1,179 @@
+---
+title: Field support
+description: Which EmailMessage fields each adapter maps, and which it rejects before the request.
+icon: Table
+---
+
+Email SDK keeps one message shape, but provider APIs do not expose the same features. Every adapter either **maps** a field or **rejects** it with an `EmailValidationError` before calling the provider. There is no silent drop. This page is the authoritative matrix.
+
+**Reading the tables:** `Yes` = mapped, `No` = rejected before the request, `Values` = each tag's value is sent but its name is dropped, `One tag` = the provider API represents a single tag and a second one fails fast. Of the one-tag providers, Postmark keeps the name (the tag arrives as a joined `name:value` string) while Mailtrap and Lettermint forward only the value.
+
+## API adapters
+
+The best fit when your app needs CC, BCC, reply-to, custom headers, tags, metadata, or attachments.
+
+| Adapter                 | CC  | BCC | Reply-To | Headers | Metadata | Tags    | Attachments | Send at |
+| ----------------------- | --- | --- | -------- | ------- | -------- | ------- | ----------- | ------- |
+| Resend                  | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | Yes     |
+| Postmark                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
+| SendGrid                | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| Cloudflare              | Yes | Yes | Yes      | Yes     | No       | No      | Yes         | No      |
+| Unosend                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | No      |
+| AWS SES                 | Yes | Yes | Yes      | Yes     | No       | Yes     | Yes         | No      |
+| Mailgun                 | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| MailerSend              | Yes | Yes | Yes      | Yes     | No       | Values  | Yes         | Yes     |
+| Brevo                   | Yes | Yes | Yes      | Yes     | Yes      | Values  | Yes         | Yes     |
+| Mailchimp Transactional | Yes | Yes | No       | Yes     | Yes      | Values  | Yes         | Yes     |
+| Mailtrap                | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
+| JetEmail                | Yes | Yes | Yes      | Yes     | No       | No      | Yes         | No      |
+| Lettermint              | Yes | Yes | Yes      | Yes     | Yes      | One tag | Yes         | No      |
+
+## Narrow adapters
+
+Useful services whose public APIs cover less of the `EmailMessage` shape. The SDK keeps them safe by rejecting what they cannot represent.
+
+| Adapter   | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments | Send at |
+| --------- | --- | --- | -------- | ------- | -------- | ---- | ----------- | ------- |
+| SparkPost | No  | No  | Yes      | Yes     | Yes      | Yes  | Yes         | Yes     |
+| Iterable  | No  | No  | No       | No      | Yes      | No   | No          | No      |
+| Loops     | No  | No  | No       | No      | Yes      | No   | Yes         | No      |
+| Primitive | No  | No  | No       | No      | No       | No   | Yes         | No      |
+| Sequenzy  | No  | No  | Yes      | No      | Yes      | No   | Yes         | No      |
+| Plunk     | No  | No  | Yes      | Yes     | Yes      | No   | Yes         | No      |
+| Scaleway  | Yes | Yes | Yes      | Yes     | No       | No   | Yes         | No      |
+| ZeptoMail | Yes | Yes | Yes      | No      | No       | No   | Yes         | No      |
+| MailPace  | Yes | Yes | Yes      | No      | No       | No   | No          | No      |
+
+## SMTP transport
+
+Built in, no Nodemailer. SMTP maps address fields and headers directly into the message but has no provider-side concepts like tags or metadata.
+
+| Adapter | CC  | BCC | Reply-To | Headers | Metadata | Tags | Attachments | Send at |
+| ------- | --- | --- | -------- | ------- | -------- | ---- | ----------- | ------- |
+| SMTP    | Yes | Yes | Yes      | Yes     | No       | No   | No          | No      |
+
+## Recipient variables
+
+`recipientVariables` personalizes a batch send with `%recipient.key%` tokens (see [the message reference](/docs/reference/message#recipient-variables)). Unlike the fields above, it is never rejected: it works on **every** adapter. The difference is _how_:
+
+| Native batch (one API call) | Client-side fallback (one send per recipient) |
+| --------------------------- | --------------------------------------------- |
+| Mailgun, SendGrid           | every other adapter                           |
+
+Native routes substitute provider-side, so `%recipient.key%` reaches the provider untouched; fallback routes substitute before the request. The same message code runs on any route, so a fallback to a non-native adapter still personalizes every recipient.
+
+## Choosing compatible routes
+
+A [fallback route](/docs/concepts/fallbacks-and-retries) is only safe when the backup adapter supports every field your messages actually use. Pick routes from your message shape, not provider popularity:
+
+| Your messages use…                    | Compatible route examples                          |
+| ------------------------------------- | -------------------------------------------------- |
+| Addresses, subject, body, headers     | Almost anything; Resend + SMTP works               |
+| Attachments                           | Resend, Postmark, SendGrid, Mailgun, MailerSend…   |
+| Metadata for analytics or routing     | Postmark, SendGrid, Mailgun, Brevo, Mailtrap       |
+| Tags and metadata together            | SendGrid, Mailgun, Brevo, Mailtrap                 |
+| Scheduled sends (`sendAt`)            | Resend, SendGrid, Mailgun, Brevo, MailerSend…      |
+
+This pair works because both routes can carry every field used:
+
+```ts
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! }), smtp({ host: process.env.SMTP_HOST! })],
+  fallback: ["smtp"],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Password reset",
+  text: "Use this link to reset your password.",
+  headers: { "X-Template": "password-reset" },
+});
+```
+
+The same client with `tags` or `metadata` on the message would fail fast on the SMTP route instead of dropping those fields. That failure is the feature: you find out about the incompatible route in development, not by discovering missing analytics data in the provider dashboard weeks later.
+
+Before adding a backup route, run through this checklist:
+
+- Does the backup adapter support every `EmailMessage` field your messages use?
+- Does it preserve attachments when receipts, exports, or files matter?
+- Does it preserve `metadata` or `tags` your app relies on for provider dashboards, analytics, or routing?
+- Does it support `replyTo` and `headers` if support workflows depend on them?
+- Has the backup provider account been live-verified (one real smoke send) in the target environment?
+
+## Scheduled sends
+
+`sendAt` (a `Date` or ISO 8601 string) maps to each provider's native scheduling parameter. The SDK never queues or delays anything itself:
+
+| Adapter                 | Provider parameter    | Wire format                          |
+| ----------------------- | --------------------- | ------------------------------------ |
+| Resend                  | `scheduled_at`        | ISO 8601                             |
+| SendGrid                | `send_at`             | Unix timestamp (seconds)             |
+| Mailgun                 | `o:deliverytime`      | RFC 2822                             |
+| MailerSend              | `send_at`             | Unix timestamp (seconds)             |
+| Brevo                   | `scheduledAt`         | ISO 8601                             |
+| Mailchimp Transactional | `send_at`             | `YYYY-MM-DD HH:MM:SS` (UTC)          |
+| SparkPost               | `options.start_time`  | `YYYY-MM-DDTHH:MM:SS+00:00`          |
+
+Two things to keep in mind:
+
+- The SDK validates that `sendAt` parses to a real date but does not enforce a scheduling window — providers apply their own limits (SendGrid, MailerSend, and Brevo cap at 72 hours out, Mailgun at 3–7 days depending on plan, SparkPost at 3 days) and most treat a past date as "send now".
+- Adapters without a `Yes` in the *Send at* column reject `sendAt` before any request, like every other unmapped field. If you need scheduling with those providers, delay the `send` call with your own queue or job scheduler.
+
+## Attachment rules
+
+Attachment `content` is treated as raw data by default and Base64-encoded for APIs that need it:
+
+```ts
+attachments: [{ filename: "receipt.txt", content: "Thanks for your order.", contentType: "text/plain" }];
+```
+
+Already have Base64? Mark it so it is not double-encoded:
+
+```ts
+attachments: [
+  { filename: "receipt.pdf", content: base64Pdf, contentEncoding: "base64", contentType: "application/pdf" },
+];
+```
+
+Adapters with attachment support can also read from disk via `path`:
+
+```ts
+attachments: [{ filename: "receipt.pdf", path: "./receipt.pdf", contentType: "application/pdf" }];
+```
+
+## Adapter-specific notes
+
+<Accordions type="multiple">
+  <Accordion title="Loops — attachments need account enablement">
+    Loops attachments map to the provider's transactional attachments payload, which Loops only
+    enables per account on request. Omit `attachments` until your account has it.
+  </Accordion>
+  <Accordion title="Sequenzy — reserved metadata keys and one body field">
+    Metadata maps to transactional `variables`, except reserved keys that map to provider fields:
+    `sequenzySlug` (template slug), `sequenzyPreview`, and `subscriberExternalId` /
+    `sequenzySubscriberExternalId`. Sequenzy also has a single body field: when a message has both
+    `html` and `text`, the HTML body is sent and the text body stays available for other routes.
+  </Accordion>
+  <Accordion title="Iterable — template sends, one recipient">
+    Iterable target sends render a campaign template: `subject`, `html`, `text`, and `from` flow
+    into template `dataFields`, and `metadata` maps to webhook metadata. CC, BCC, reply-to,
+    headers, tags, and attachments are rejected, and each send targets exactly one recipient.
+  </Accordion>
+  <Accordion title="Cloudflare — plain addresses, recipient caps">
+    Cloudflare Email Sending requires plain email addresses (no display names) and caps a message
+    at 50 total recipients across to/cc/bcc with a single reply-to.
+  </Accordion>
+  <Accordion title="Primitive — single recipient, no CC/BCC or headers">
+    Primitive's `send-mail` API targets exactly one recipient and has no CC, BCC, reply-to, custom
+    headers, tags, or metadata, so the adapter rejects those fields (and a second recipient) before
+    the request. Send `from` a verified outbound domain, and pass `idempotencyKey` to dedupe retries.
+  </Accordion>
+</Accordions>
+
+<Callout title="Local checks are not deliverability">
+  These checks stop bad requests before they leave your process. Live delivery still needs a ready
+  provider account: verified senders or domains, the right region, API scopes, and any sandbox or
+  allow-list rules. Finish with one real smoke send per route.
+</Callout>

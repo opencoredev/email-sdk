@@ -99,4 +99,13 @@ export const docsV064 = defineDocs({
   },
 });
 
+export const docsV065 = defineDocs({
+  dir: "content/docs-v/0.6.5",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
 export default defineConfig();

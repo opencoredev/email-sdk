@@ -4,7 +4,15 @@ description: Send through the Resend API with attachments, tags, and native idem
 icon: resend
 ---
 
-The Resend adapter calls the [Resend Email API](https://resend.com/docs/api-reference/emails/send-email) with plain `fetch`. It is the default first adapter in these docs: setup is one API key, field support is broad, and it forwards [idempotency keys](/docs/concepts/fallbacks-and-retries#idempotency-keys) to the provider as the `Idempotency-Key` header, so Resend itself deduplicates retried sends.
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Resend adapter calls the [Resend Email API](https://resend.com/docs/api-reference/emails/send-email) with plain `fetch`. It is the default first adapter in these docs: setup is one API key, field support is broad, and it forwards [idempotency keys](/docs/concepts/sending-modes#idempotency) to the provider as the `Idempotency-Key` header, so Resend itself deduplicates retried sends.
 
 <ProviderBadge adapter="resend" />
 
@@ -64,7 +72,7 @@ const result = await email.send(
   { idempotencyKey: "welcome:user_123" },
 );
 
-console.log(result.id); // Resend email id, also exposed as result.messageId
+console.log(result.id); // Resend email id
 ```
 
 The `idempotencyKey` is sent as Resend's `Idempotency-Key` header, so retried requests cannot double-send.

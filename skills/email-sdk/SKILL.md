@@ -69,8 +69,8 @@ export const email = createEmailClient({
       },
     }),
   ],
-  fallback: ["smtp"],
-  retry: { retries: 1 },
+  fallback: { adapters: ["smtp"] },
+  retry: { maxAttempts: 2 },
 });
 ```
 
@@ -81,8 +81,9 @@ export const email = createEmailClient({
 - Do not treat SMTP as a universal backup; it is best for simple text/html sends with address fields and headers.
 - Use idempotency keys for externally visible transactional sends that may be retried or sent through fallback routes.
 - Use hooks or `observabilityPlugin()` for redacted route, attempt, retry, success, and error events.
-- Add tests with `memoryProvider()`, `failingProvider()`, and `capturePlugin()` when fallback or retry behavior matters.
-- Use the CLI `doctor` and `--dry-run` before live provider smoke tests.
+- Add tests with `memoryAdapter()`, `failingAdapter()`, and `capturePlugin()` when fallback or retry behavior matters.
+- Use the CLI `doctor` and `send --dry-run` before live provider authentication checks.
+- Use the separate `email-sdk-migrate` skill for v0-to-v1 application migrations instead of applying static find-and-replace rules.
 
 Inside this repo, the main public docs for this pattern are:
 
@@ -95,7 +96,7 @@ Inside this repo, the main public docs for this pattern are:
 - For SDK changes, run `bun test` in `packages/email-sdk`.
 - For docs changes, run `bun run check-types` and `bun run build` from the repo root when practical.
 - For app integrations, run the narrowest test/typecheck that covers the send path.
-- For real provider smoke tests, use the CLI with explicit test recipients and do not send external mail without the user's approval.
+- For real provider authentication checks, use the repository's non-sending `live:*` scripts when available. Do not send external mail without the user's separate approval.
 
 ## Review Checklist
 

@@ -1,0 +1,40 @@
+---
+title: Test and recover Convex email
+description: Redirect recipients in test mode, use memory delivery, inspect events, and retry durable work.
+---
+
+## Redirect real recipients
+
+`setConfig` replaces the whole stored config. Pass every field you want to keep.
+
+```ts title="convex/testSetup.ts"
+await email.setConfig(ctx, {
+  testMode: true,
+  sandboxTo: ["dev@example.com"],
+});
+```
+
+Test mode without `sandboxTo` fails before enqueueing, so a partial test configuration cannot contact real recipients.
+
+## Use the memory adapter
+
+```ts title="convex/email.ts"
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [{ kind: "memory" }],
+  defaultAdapter: "memory",
+});
+```
+
+The memory route keeps queue, status, and event behavior while avoiding provider network calls.
+
+## Inspect recovery state
+
+Read `status` and `listEvents` before retrying. The stored document exposes attempted adapters, error information, provider receipts, and terminal state.
+
+Use idempotency keys for user-visible messages that may be enqueued again. Component-level persisted idempotency is the durable layer; core Email SDK idempotency alone does not survive process restarts or guarantee cross-adapter exactly-once delivery.
+
+## Expose functions carefully
+
+`exposeApi()` publishes send, batch, status, events, and cancellation functions. Configuration functions are excluded unless `includeConfigApi: true`; expose them only behind your own authorization checks.
+
+<Card title="Test the core SDK" href="/docs/guides/test-email-behavior" description="Use memory and failing adapters in application unit tests." />

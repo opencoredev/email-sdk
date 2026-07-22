@@ -1,6 +1,7 @@
-import { EmailProviderError, EmailValidationError } from "./errors.js";
-import type { EmailAttachment, EmailMessage, EmailProvider } from "./types.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
+  builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
   assertSupportedMessageFields,
@@ -13,7 +14,7 @@ import {
   readErrorBody,
 } from "./utils.js";
 
-export type JetemailProviderOptions = {
+export type JetemailAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -26,12 +27,15 @@ type JetemailResponse = {
   scheduled_at?: number;
 };
 
-export function jetemail(options: JetemailProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function jetemail(
+  options: JetemailAdapterOptions,
+): EmailAdapter<"jetemail", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.jetemail.com";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "jetemail",
+    ...builtInAdapterDefinition("jetemail"),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/email`, {
@@ -48,20 +52,18 @@ export function jetemail(options: JetemailProviderOptions): EmailProvider<{ base
 
       if (!response.ok) {
         const body = await readErrorBody(response);
-        throw new EmailProviderError(httpErrorMessage("JetEmail", response.status, body), {
-          provider: "jetemail",
+        throw new EmailAdapterError(httpErrorMessage("JetEmail", response.status, body), {
+          adapter: "jetemail",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: body,
         });
       }
 
       const body = (await response.json().catch(() => ({}))) as JetemailResponse;
 
       return {
-        provider: "jetemail",
+        adapter: "jetemail",
         id: body.id,
-        messageId: body.id,
         raw: body,
       };
     },

@@ -1,16 +1,16 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type LoopsProviderOptions = {
+export type LoopsAdapterOptions = {
   apiKey: string;
   transactionalId: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { baseUrl: string }> {
   if (!options.transactionalId) {
     throw new Error("loops requires a transactionalId.");
   }
@@ -52,7 +52,7 @@ export function loops(options: LoopsProviderOptions): EmailProvider<{ baseUrl: s
     fetch: options.fetch,
     parseResponse(body) {
       return {
-        provider: "loops",
+        adapter: "loops",
         id: firstString(body as Record<string, unknown>, ["id", "transactionalId"]),
         raw: body,
       };

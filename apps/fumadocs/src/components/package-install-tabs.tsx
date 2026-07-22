@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, Clipboard } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+
+import { Check, Clipboard } from "@/components/icon";
 
 type PackageManager = "bun" | "npm" | "pnpm" | "yarn";
 
