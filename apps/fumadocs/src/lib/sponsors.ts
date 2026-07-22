@@ -43,11 +43,6 @@ export const sponsors: readonly Sponsor[] = [
     logo: "/landing/sponsors/instatus.png",
   },
   {
-    name: "Neon",
-    href: "https://neon.com",
-    logo: "/landing/sponsors/neon.png",
-  },
-  {
     name: "Notra",
     href: "https://usenotra.com",
     logo: "/landing/sponsors/notra.svg",
