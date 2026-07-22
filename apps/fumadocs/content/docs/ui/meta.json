@@ -1,6 +1,6 @@
 {
   "title": "UI",
-  "icon": "Blocks",
+  "icon": "MailAtSign",
   "pagesIndex": "index",
-  "pages": ["account", "product", "commerce", "components"]
+  "pages": ["components", "account", "product", "commerce"]
 }

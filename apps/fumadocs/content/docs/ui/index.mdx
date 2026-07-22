@@ -1,20 +1,22 @@
 ---
 title: Email UI
 description: Browse complete, email-safe templates by the job they need to do.
-icon: Blocks
+icon: MailAtSign
 ---
 
 Start with a real email, see the rendered result, then copy the TSX into `src/ui/email`. Every example uses the same small set of Email SDK React components and works with any adapter after rendering.
 
 <EmailExampleGallery />
 
-## Install once
+## Add a template
+
+Open any template above and run its registry command. The command adds the email component to `src/ui/email` and installs Email SDK, React Email, and React dependencies when they are missing.
 
 ```bash
-bun add react react-dom @react-email/render
+bunx shadcn@latest add https://email-sdk.dev/r/verification-code.json
 ```
 
-Render any example with `renderEmail`, then pass the returned `html` and `text` through your normal Email SDK client.
+Then render the installed component with `renderEmail` and pass the returned `html` and `text` through your normal Email SDK client.
 
 ```tsx
 import { renderEmail } from "@opencoredev/email-sdk/react";
