@@ -1,4 +1,5 @@
 import type { BlogPost } from "./blog-types";
+import { localBlogPosts } from "./local-blog-posts";
 import { notraPosts } from "./notra-posts.generated";
 
 export type { BlogPost };
@@ -6,10 +7,14 @@ export type { BlogPost };
 const blogMetaTitleSuffix = " - Email SDK";
 const maxBlogMetaTitleLength = 68;
 
-// Published posts come from Notra and are baked into notra-posts.generated.ts at
-// build time (see scripts/fetch-notra-posts.ts). The helpers below keep the same
-// shape the rest of the site already consumes (OG images, sitemap, RSS, feed).
-export const blogPosts: readonly BlogPost[] = notraPosts;
+// Launch and editorial posts can live in source control, while recurring posts
+// continue to come from the Notra snapshot. Local posts win on slug collisions so
+// a Notra draft cannot accidentally replace a versioned launch article.
+const localSlugs = new Set(localBlogPosts.map((post) => post.slug));
+export const blogPosts: readonly BlogPost[] = [
+  ...localBlogPosts,
+  ...notraPosts.filter((post) => !localSlugs.has(post.slug)),
+].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 
 export function getBlogPost(slug: string, options: { includeFuture?: boolean } = {}) {
   const post = blogPosts.find((item) => item.slug === slug);

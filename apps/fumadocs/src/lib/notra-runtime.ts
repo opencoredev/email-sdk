@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type { BlogPost } from "./blog-types";
+import { localBlogPosts } from "./local-blog-posts";
 import type { NotraPostInput } from "../../scripts/notra-content";
 
 export type BlogPostDetail = {
@@ -40,7 +41,7 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
     page = nextPage;
   }
 
-  const seenSlugs = new Set<string>();
+  const seenSlugs = new Set(localBlogPosts.map((post) => post.slug));
   const posts: BlogPost[] = [];
   const bodies: Record<string, string> = {};
 
@@ -57,12 +58,17 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
 }
 
 export const getBlogPostsServerFn = createServerFn({ method: "GET" }).handler(async () => {
-  return (await fetchBlogData()).posts;
+  const { posts } = await fetchBlogData();
+  return [...localBlogPosts, ...posts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 });
 
 export const getBlogPostServerFn = createServerFn({ method: "GET" })
   .inputValidator((slug: string) => slug)
   .handler(async ({ data: slug }): Promise<BlogPostDetail | null> => {
+    const { getLocalBlogPostDetail } = await import("./local-blog-runtime");
+    const localDetail = getLocalBlogPostDetail(slug);
+    if (localDetail) return localDetail;
+
     const { posts, bodies } = await fetchBlogData();
     const post = posts.find((item) => item.slug === slug);
     if (!post) return null;
