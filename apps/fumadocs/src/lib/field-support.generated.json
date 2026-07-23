@@ -1,0 +1,169 @@
+{
+  "resend": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "sendAt": true
+  },
+  "postmark": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true
+  },
+  "sendgrid": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true,
+    "sendAt": true
+  },
+  "cloudflare": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true
+  },
+  "unosend": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true
+  },
+  "ses": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true
+  },
+  "mailgun": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true,
+    "sendAt": true
+  },
+  "mailersend": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "sendAt": true
+  },
+  "brevo": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true,
+    "sendAt": true
+  },
+  "mailchimp": {
+    "cc": true,
+    "bcc": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true,
+    "sendAt": true
+  },
+  "sparkpost": {
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true,
+    "sendAt": true
+  },
+  "iterable": {
+    "metadata": true
+  },
+  "loops": {
+    "attachments": true,
+    "metadata": true
+  },
+  "sequenzy": {
+    "replyTo": true,
+    "attachments": true,
+    "metadata": true
+  },
+  "jetemail": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true
+  },
+  "lettermint": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true
+  },
+  "primitive": {
+    "attachments": true
+  },
+  "plunk": {
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "metadata": true
+  },
+  "mailtrap": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "metadata": true
+  },
+  "scaleway": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true
+  },
+  "zeptomail": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "attachments": true
+  },
+  "mailpace": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true
+  },
+  "smtp": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true
+  }
+}

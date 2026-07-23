@@ -14,7 +14,11 @@
       "destination": "/docs/getting-started/quickstart",
       "permanent": true
     },
-    { "source": "/docs/install", "destination": "/docs/getting-started/install", "permanent": true },
+    {
+      "source": "/docs/install",
+      "destination": "/docs/getting-started/install",
+      "permanent": true
+    },
     {
       "source": "/docs/installation",
       "destination": "/docs/getting-started/install",
@@ -24,7 +28,77 @@
     { "source": "/docs/cli", "destination": "/docs/reference/cli", "permanent": true },
     { "source": "/docs/api", "destination": "/docs/reference", "permanent": true },
     { "source": "/docs/providers", "destination": "/docs/adapters", "permanent": true },
-    { "source": "/docs/provider", "destination": "/docs/adapters", "permanent": true }
+    { "source": "/docs/provider", "destination": "/docs/adapters", "permanent": true },
+    {
+      "source": "/compare/postmark-vs-resend",
+      "destination": "/compare/resend-vs-postmark",
+      "permanent": true
+    },
+    {
+      "source": "/compare/sendgrid-vs-resend",
+      "destination": "/compare/resend-vs-sendgrid",
+      "permanent": true
+    },
+    {
+      "source": "/compare/ses-vs-resend",
+      "destination": "/compare/resend-vs-ses",
+      "permanent": true
+    },
+    {
+      "source": "/compare/mailgun-vs-resend",
+      "destination": "/compare/resend-vs-mailgun",
+      "permanent": true
+    },
+    {
+      "source": "/compare/loops-vs-resend",
+      "destination": "/compare/resend-vs-loops",
+      "permanent": true
+    },
+    {
+      "source": "/compare/mailersend-vs-resend",
+      "destination": "/compare/resend-vs-mailersend",
+      "permanent": true
+    },
+    {
+      "source": "/compare/sendgrid-vs-postmark",
+      "destination": "/compare/postmark-vs-sendgrid",
+      "permanent": true
+    },
+    {
+      "source": "/compare/mailgun-vs-postmark",
+      "destination": "/compare/postmark-vs-mailgun",
+      "permanent": true
+    },
+    {
+      "source": "/compare/ses-vs-postmark",
+      "destination": "/compare/postmark-vs-ses",
+      "permanent": true
+    },
+    {
+      "source": "/compare/mailgun-vs-sendgrid",
+      "destination": "/compare/sendgrid-vs-mailgun",
+      "permanent": true
+    },
+    {
+      "source": "/compare/ses-vs-sendgrid",
+      "destination": "/compare/sendgrid-vs-ses",
+      "permanent": true
+    },
+    {
+      "source": "/compare/brevo-vs-sendgrid",
+      "destination": "/compare/sendgrid-vs-brevo",
+      "permanent": true
+    },
+    {
+      "source": "/compare/ses-vs-mailgun",
+      "destination": "/compare/mailgun-vs-ses",
+      "permanent": true
+    },
+    {
+      "source": "/compare/mailersend-vs-brevo",
+      "destination": "/compare/brevo-vs-mailersend",
+      "permanent": true
+    }
   ],
   "headers": [
     {

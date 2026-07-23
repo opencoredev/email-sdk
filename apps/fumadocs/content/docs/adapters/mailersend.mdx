@@ -68,10 +68,10 @@ console.log(result.id); // MailerSend message id from the x-message-id header
 The response `id` comes from the `x-message-id` response header, falling back to `message_id` or `id` in the body. Use it to look the send up in MailerSend's activity log.
 
 <Callout type="warn" title="No metadata field">
-  MailerSend has no metadata concept, so `metadata` on a message throws an
-  `EmailValidationError` before any request is made. Use `tags` instead, or pick a
-  [metadata-capable adapter](/docs/adapters/field-support). MailerSend also gates custom
-  `headers` behind its Professional and Enterprise plans.
+  MailerSend has no metadata concept, so `metadata` on a message throws an `EmailValidationError`
+  before any request is made. Use `tags` instead, or pick a [metadata-capable
+  adapter](/docs/adapters/field-support). MailerSend also gates custom `headers` behind its
+  Professional and Enterprise plans.
 </Callout>
 
 ## Verify from the CLI
@@ -91,3 +91,10 @@ MAILERSEND_API_KEY="mlsn..." npx email-sdk send \
 ```
 
 Drop `--dry-run` for one real send. The token, domain verification, and plan limits only prove themselves against the live API.
+
+## Compare MailerSend with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs MailerSend](/compare/resend-vs-mailersend)
+- [Brevo vs MailerSend](/compare/brevo-vs-mailersend)

@@ -8,6 +8,8 @@
     "build": "bun run registry:check && bun scripts/check-module-identity.ts && bun scripts/fetch-notra-posts.ts && bun scripts/og/generate-og-image.ts && vite build && bun scripts/check-client-bundle.ts && bun scripts/ensure-root-index.ts",
     "posts:fetch": "bun scripts/fetch-notra-posts.ts",
     "og:generate": "bun scripts/og/generate-og-image.ts",
+    "lastmod:generate": "bun scripts/generate-docs-lastmod.ts",
+    "field-support:generate": "bun scripts/generate-field-support.ts",
     "registry:generate": "bun scripts/generate-email-registry.ts",
     "registry:check": "bun scripts/generate-email-registry.ts --check",
     "start": "serve .output/public --config ../../serve.json",

@@ -9,26 +9,33 @@ Run development server:
 bun run dev
 ```
 
-## Blog content (Notra)
+## Blog content
 
-The blog is powered by [Notra](https://usenotra.com). The site uses **two
-rendering paths** for Notra content, both reading the API key server-side only —
-no Notra calls ever happen from the browser:
+The blog combines source-controlled launch/editorial posts with [Notra](https://usenotra.com)
+content. Notra API calls and credentials stay server-side, while local Markdown ships with
+the site build:
 
 | Path | Surface | Source | When it updates |
 | --- | --- | --- | --- |
+| **Source-controlled post** | `/blog`, `/blog/$slug`, OG, sitemap, feeds | `content/blog/*.md` + `src/lib/local-blog-posts.ts` | On deploy |
 | **On-demand SSR** | `/blog`, `/blog/$slug` | Live fetch from Notra at request time | Within the edge-cache window (~60s), no rebuild |
 | **On-demand SSR (OG images)** | `/og/blog/*` | Live fetch from Notra, rendered to SVG | No rebuild, but cached up to ~1 day (`max-age=86400`) |
 | **Build-time snapshot** | `sitemap.xml`, `rss.xml`, `feed.json` | `src/lib/notra-posts.generated.ts`, written at build | On the next deploy |
 
-Both SSR paths pick up new posts without a rebuild, but the OG image SVGs cache
-far longer than the blog pages (up to a day vs. ~60s), so a changed post title or
+Notra SSR picks up new posts without a rebuild, but its OG image SVGs cache far
+longer than the blog pages (up to a day vs. ~60s), so a changed post title or
 description can keep serving the old image for a while.
 
 Everything else on the site (docs, home, marketing pages) is prerendered to
 static HTML at build time.
 
 ### How it works
+
+- **`src/lib/local-blog-posts.ts` + `src/lib/local-blog-runtime.ts`** — metadata
+  and sanitized Markdown bodies for launch or editorial posts that need to ship in
+  the same repository change as their images. Local posts take precedence on slug
+  collisions and are merged with Notra for the blog index, post routes, OG images,
+  sitemap, RSS, and JSON feed.
 
 - **`src/lib/notra-runtime.ts`** — server functions (`getBlogPostsServerFn`,
   `getBlogPostServerFn`) that fetch published posts from Notra at request time.
@@ -128,7 +135,8 @@ build never fails.
 
 ### Publishing cadence
 
-New and updated posts appear on the live blog pages within the edge-cache window
+Source-controlled posts require a deploy and appear in the blog, sitemap, and feeds
+from that same build. New and updated Notra posts appear on the live blog pages within the edge-cache window
 (~60s) with no rebuild. OG images (`/og/blog/*`) also update without a rebuild
 but cache for up to a day, so a changed title or description can keep serving the
 old SVG for a while. A rebuild is only needed to refresh the sitemap/RSS/feed

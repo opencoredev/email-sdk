@@ -42,7 +42,8 @@ export const email = createEmailClient({
       required: true,
     },
     transactionalId: {
-      description: "Published transactional email to render. Must be non-empty; the adapter throws at construction otherwise.",
+      description:
+        "Published transactional email to render. Must be non-empty; the adapter throws at construction otherwise.",
       type: "string",
       required: true,
     },
@@ -82,8 +83,8 @@ Attachments are supported and sent as `{ filename, contentType, data }` with bas
 <Callout type="warn" title="Attachments need account enablement">
   Loops only accepts transactional attachments on accounts where the capability has been enabled.
   Without it, sends with attachments fail at the API. Also note `cc`, `bcc`, `replyTo`, `headers`,
-  and `tags` throw an `EmailValidationError` before any request; see
-  [field support](/docs/adapters/field-support).
+  and `tags` throw an `EmailValidationError` before any request; see [field
+  support](/docs/adapters/field-support).
 </Callout>
 
 ## Verify from the CLI
@@ -103,3 +104,9 @@ LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npx email-sdk send \
 ```
 
 Drop `--dry-run` to trigger one real template send and confirm the API key and published transactional email are live.
+
+## Compare Loops with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs Loops](/compare/resend-vs-loops)

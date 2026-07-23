@@ -22,11 +22,15 @@ import { Route as FeedDotjsonRouteImport } from './routes/feed[.]json'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ToolsIndexRouteImport } from './routes/tools/index'
+import { Route as CompareIndexRouteImport } from './routes/compare/index'
 import { Route as BlogIndexRouteImport } from './routes/blog/index'
+import { Route as ToolsEmailDnsCheckerRouteImport } from './routes/tools/email-dns-checker'
 import { Route as FeedsDocsDotjsonlRouteImport } from './routes/feeds/docs[.]jsonl'
 import { Route as DocsChar123Char125DotmdRouteImport } from './routes/docs/{$}[.]md'
 import { Route as DocsLlmsDottxtRouteImport } from './routes/docs/llms[.]txt'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
+import { Route as ComparePairRouteImport } from './routes/compare/$pair'
 import { Route as BlogSlugRouteImport } from './routes/blog/$slug'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as ApiBuildInfoRouteImport } from './routes/api/build-info'
@@ -97,9 +101,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToolsIndexRoute = ToolsIndexRouteImport.update({
+  id: '/tools/',
+  path: '/tools/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompareIndexRoute = CompareIndexRouteImport.update({
+  id: '/compare/',
+  path: '/compare/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogIndexRoute = BlogIndexRouteImport.update({
   id: '/blog/',
   path: '/blog/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsEmailDnsCheckerRoute = ToolsEmailDnsCheckerRouteImport.update({
+  id: '/tools/email-dns-checker',
+  path: '/tools/email-dns-checker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedsDocsDotjsonlRoute = FeedsDocsDotjsonlRouteImport.update({
@@ -120,6 +139,11 @@ const DocsLlmsDottxtRoute = DocsLlmsDottxtRouteImport.update({
 const DocsSplatRoute = DocsSplatRouteImport.update({
   id: '/docs/$',
   path: '/docs/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComparePairRoute = ComparePairRouteImport.update({
+  id: '/compare/$pair',
+  path: '/compare/$pair',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BlogSlugRoute = BlogSlugRouteImport.update({
@@ -160,11 +184,15 @@ export interface FileRoutesByFullPath {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/compare/$pair': typeof ComparePairRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
   '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
+  '/tools/email-dns-checker': typeof ToolsEmailDnsCheckerRoute
   '/blog/': typeof BlogIndexRoute
+  '/compare/': typeof CompareIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
 export interface FileRoutesByTo {
@@ -184,11 +212,15 @@ export interface FileRoutesByTo {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/compare/$pair': typeof ComparePairRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
   '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
+  '/tools/email-dns-checker': typeof ToolsEmailDnsCheckerRoute
   '/blog': typeof BlogIndexRoute
+  '/compare': typeof CompareIndexRoute
+  '/tools': typeof ToolsIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
 export interface FileRoutesById {
@@ -209,11 +241,15 @@ export interface FileRoutesById {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/compare/$pair': typeof ComparePairRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
   '/feeds/docs.jsonl': typeof FeedsDocsDotjsonlRoute
+  '/tools/email-dns-checker': typeof ToolsEmailDnsCheckerRoute
   '/blog/': typeof BlogIndexRoute
+  '/compare/': typeof CompareIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/og/blog/$': typeof OgBlogSplatRoute
 }
 export interface FileRouteTypes {
@@ -235,11 +271,15 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/compare/$pair'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
     | '/feeds/docs.jsonl'
+    | '/tools/email-dns-checker'
     | '/blog/'
+    | '/compare/'
+    | '/tools/'
     | '/og/blog/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -259,11 +299,15 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/compare/$pair'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
     | '/feeds/docs.jsonl'
+    | '/tools/email-dns-checker'
     | '/blog'
+    | '/compare'
+    | '/tools'
     | '/og/blog/$'
   id:
     | '__root__'
@@ -283,11 +327,15 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/compare/$pair'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
     | '/feeds/docs.jsonl'
+    | '/tools/email-dns-checker'
     | '/blog/'
+    | '/compare/'
+    | '/tools/'
     | '/og/blog/$'
   fileRoutesById: FileRoutesById
 }
@@ -308,11 +356,15 @@ export interface RootRouteChildren {
   ApiBuildInfoRoute: typeof ApiBuildInfoRoute
   ApiSearchRoute: typeof ApiSearchRoute
   BlogSlugRoute: typeof BlogSlugRoute
+  ComparePairRoute: typeof ComparePairRoute
   DocsSplatRoute: typeof DocsSplatRoute
   DocsLlmsDottxtRoute: typeof DocsLlmsDottxtRoute
   DocsChar123Char125DotmdRoute: typeof DocsChar123Char125DotmdRoute
   FeedsDocsDotjsonlRoute: typeof FeedsDocsDotjsonlRoute
+  ToolsEmailDnsCheckerRoute: typeof ToolsEmailDnsCheckerRoute
   BlogIndexRoute: typeof BlogIndexRoute
+  CompareIndexRoute: typeof CompareIndexRoute
+  ToolsIndexRoute: typeof ToolsIndexRoute
   OgBlogSplatRoute: typeof OgBlogSplatRoute
 }
 
@@ -409,11 +461,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tools/': {
+      id: '/tools/'
+      path: '/tools'
+      fullPath: '/tools/'
+      preLoaderRoute: typeof ToolsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compare/': {
+      id: '/compare/'
+      path: '/compare'
+      fullPath: '/compare/'
+      preLoaderRoute: typeof CompareIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog/': {
       id: '/blog/'
       path: '/blog'
       fullPath: '/blog/'
       preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tools/email-dns-checker': {
+      id: '/tools/email-dns-checker'
+      path: '/tools/email-dns-checker'
+      fullPath: '/tools/email-dns-checker'
+      preLoaderRoute: typeof ToolsEmailDnsCheckerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feeds/docs.jsonl': {
@@ -442,6 +515,13 @@ declare module '@tanstack/react-router' {
       path: '/docs/$'
       fullPath: '/docs/$'
       preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compare/$pair': {
+      id: '/compare/$pair'
+      path: '/compare/$pair'
+      fullPath: '/compare/$pair'
+      preLoaderRoute: typeof ComparePairRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/blog/$slug': {
@@ -492,11 +572,15 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBuildInfoRoute: ApiBuildInfoRoute,
   ApiSearchRoute: ApiSearchRoute,
   BlogSlugRoute: BlogSlugRoute,
+  ComparePairRoute: ComparePairRoute,
   DocsSplatRoute: DocsSplatRoute,
   DocsLlmsDottxtRoute: DocsLlmsDottxtRoute,
   DocsChar123Char125DotmdRoute: DocsChar123Char125DotmdRoute,
   FeedsDocsDotjsonlRoute: FeedsDocsDotjsonlRoute,
+  ToolsEmailDnsCheckerRoute: ToolsEmailDnsCheckerRoute,
   BlogIndexRoute: BlogIndexRoute,
+  CompareIndexRoute: CompareIndexRoute,
+  ToolsIndexRoute: ToolsIndexRoute,
   OgBlogSplatRoute: OgBlogSplatRoute,
 }
 export const routeTree = rootRouteImport

@@ -55,11 +55,15 @@ export const Route = createFileRoute("/docs/$")({
         : data.docsBasePath
       : "/docs";
     const canonicalUrl = `${siteUrl}${canonicalPath}`;
+    // Old-version docs stay reachable (version picker, inbound links) but must
+    // not compete with current docs in search; "follow" preserves link equity.
+    const isCurrentVersion = !data || data.docsBasePath === "/docs";
 
     return {
       meta: [
         { title },
         { name: "description", content: description },
+        ...(isCurrentVersion ? [] : [{ name: "robots", content: "noindex, follow" }]),
         { property: "og:type", content: "article" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },

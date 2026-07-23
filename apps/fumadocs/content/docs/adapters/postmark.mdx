@@ -83,8 +83,8 @@ console.log(result.id); // Postmark MessageID
 
 <Callout type="warn" title="One tag per message">
   Postmark has a single `Tag` field. The adapter serializes the first tag as `name:value` and a
-  second tag throws an `EmailValidationError` before any request is made. Need multiple tags?
-  Check the [field support matrix](/docs/adapters/field-support).
+  second tag throws an `EmailValidationError` before any request is made. Need multiple tags? Check
+  the [field support matrix](/docs/adapters/field-support).
 </Callout>
 
 ## Verify from the CLI
@@ -105,3 +105,12 @@ POSTMARK_SERVER_TOKEN="..." npx email-sdk send \
 ```
 
 The token also accepts the `--server-token` flag. Drop `--dry-run` for one real send to confirm the server token, sender signature, and message stream actually work together.
+
+## Compare Postmark with other providers
+
+Side-by-side message-field support from the SDK capability matrix, with working code for both adapters:
+
+- [Resend vs Postmark](/compare/resend-vs-postmark)
+- [Postmark vs SendGrid](/compare/postmark-vs-sendgrid)
+- [Postmark vs Mailgun](/compare/postmark-vs-mailgun)
+- [Postmark vs AWS SES](/compare/postmark-vs-ses)

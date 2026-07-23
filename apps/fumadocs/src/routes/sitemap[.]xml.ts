@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
+import { comparePairs } from "@/lib/compare";
+import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { siteUrl } from "@/lib/shared";
 import { getDocsSource } from "@/lib/source";
-import { docsVersions } from "@/lib/versions";
+import { latestDocsVersion } from "@/lib/versions";
 
 type SitemapEntry = {
   loc: string;
@@ -76,6 +78,30 @@ function getSitemapEntries() {
       changefreq: "monthly",
       priority: "0.3",
     },
+    {
+      loc: `${siteUrl}/compare`,
+      lastmod: "2026-07-11",
+      changefreq: "monthly",
+      priority: "0.7",
+    },
+    ...comparePairs.map((pair) => ({
+      loc: `${siteUrl}/compare/${pair.slug}`,
+      lastmod: "2026-07-11",
+      changefreq: "monthly" as const,
+      priority: "0.7",
+    })),
+    {
+      loc: `${siteUrl}/tools`,
+      lastmod: "2026-07-11",
+      changefreq: "monthly",
+      priority: "0.6",
+    },
+    {
+      loc: `${siteUrl}/tools/email-dns-checker`,
+      lastmod: "2026-07-11",
+      changefreq: "monthly",
+      priority: "0.7",
+    },
     ...publishedBlogPosts.map((post) => ({
       loc: `${siteUrl}${getBlogPostUrl(post.slug)}`,
       lastmod: post.updatedAt,
@@ -108,16 +134,17 @@ function getSitemapEntries() {
     },
   ];
 
-  for (const version of docsVersions) {
-    const docsSource = getDocsSource(version);
-    for (const page of docsSource.getPages()) {
-      entries.push({
-        loc: `${siteUrl}${page.url}`,
-        lastmod: "2026-06-01",
-        changefreq: version.current ? "weekly" : "monthly",
-        priority: version.current ? "0.8" : "0.4",
-      });
-    }
+  // Only the current docs version is listed: old /docs/v/<x> snapshots are
+  // near-duplicates that carry noindex and would dilute crawl priority.
+  const docsSource = getDocsSource(latestDocsVersion);
+  const lastmodByPath: Record<string, string> = docsLastmod;
+  for (const page of docsSource.getPages()) {
+    entries.push({
+      loc: `${siteUrl}${page.url}`,
+      lastmod: lastmodByPath[page.path] ?? "2026-06-01",
+      changefreq: "weekly",
+      priority: "0.8",
+    });
   }
 
   return dedupeEntries(entries);

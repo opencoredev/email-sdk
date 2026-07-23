@@ -1,4 +1,6 @@
 export { createEmailClient } from "./core.js";
+export { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
+export type { MessageFieldSupport } from "./utils.js";
 export {
   EmailAbortError,
   EmailAdapterError,
