@@ -35,6 +35,7 @@ type DocsLoaderData = {
   versionCollection: DocsVersionCollection;
   contentPath: string;
   docsBasePath: string;
+  indexable: boolean;
   pageTree: Awaited<ReturnType<typeof source.serializePageTree>>;
 };
 
@@ -60,6 +61,9 @@ export const Route = createFileRoute("/docs/$")({
       meta: [
         { title },
         { name: "description", content: description },
+        ...(data?.indexable === false
+          ? [{ name: "robots", content: "noindex, follow" } as const]
+          : []),
         { property: "og:type", content: "article" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
@@ -105,6 +109,7 @@ const loader = createServerFn({
       versionCollection: resolved.version.collection,
       contentPath: resolved.version.contentPath,
       docsBasePath: getDocsVersionBase(resolved.version),
+      indexable: resolved.version.current,
       pageTree: await docsSource.serializePageTree(docsSource.getPageTree()),
     };
   });

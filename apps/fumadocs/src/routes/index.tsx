@@ -26,7 +26,7 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
     label: "Package",
     links: [
       { label: "npm", href: "https://www.npmjs.com/package/@opencoredev/email-sdk" },
-      { label: "MIT", href: `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/main/LICENSE` },
+      { label: "AGPL-3.0", href: `https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/main/LICENSE` },
     ],
   },
   {
@@ -101,7 +101,7 @@ function Hero() {
           <br />
           Switch providers.
         </h1>
-        <p>
+        <p id="landing-summary">
           An open-source TypeScript SDK for transactional email.
           <span className="landing-hero-brand-line">23 adapters. One typed SDK.</span>
         </p>
@@ -188,8 +188,11 @@ function CodePanel() {
       <pre className="landing-code landing-code-desktop" aria-label="TypeScript email send example">
         <code>
           <span><b>import</b> {"{ createEmailClient }"} <b>from</b> <i>'@opencoredev/email-sdk'</i></span>
+          <span><b>import</b> {"{ resend }"} <b>from</b> <i>'@opencoredev/email-sdk/resend'</i></span>
           <span className="landing-code-space" />
-          <span><b>const</b> <em>email</em> = createEmailClient({"{ adapters: [resend] }"})</span>
+          <span><b>const</b> <em>email</em> = createEmailClient({"{"})</span>
+          <span className="landing-code-indent">adapters: [resend({"{ apiKey: process.env.RESEND_API_KEY! }"})],</span>
+          <span>{"})"}</span>
           <span className="landing-code-space" />
           <span><b>await</b> <em>email</em>.send({"{"}</span>
           <span className="landing-code-indent"><i>from: 'hello@acme.dev',</i></span>
@@ -200,10 +203,15 @@ function CodePanel() {
         </code>
       </pre>
       <pre className="landing-code landing-code-mobile" aria-label="TypeScript email send example">
-        <code>{`const email = createEmailClient({
-  adapters: [resend],
+        <code>{`import { createEmailClient } from '@opencoredev/email-sdk'
+import { resend } from '@opencoredev/email-sdk/resend'
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
 })
 await email.send({
+  from: 'hello@acme.dev',
+  to: 'ada@example.com',
   subject: 'Welcome',
   text: 'Hi Ada, your account is ready.',
 })`}</code>

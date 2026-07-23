@@ -136,7 +136,7 @@ export const homeStructuredData = {
       // text-to-speech readout (the hero heading and one-line summary).
       speakable: {
         "@type": "SpeakableSpecification",
-        cssSelector: ["#hero-heading", "#hero-summary"],
+        cssSelector: ["#landing-heading", "#landing-summary"],
       },
     },
     {

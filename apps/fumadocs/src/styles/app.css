@@ -432,7 +432,7 @@ html > body[data-scroll-locked] {
   inset-inline: 0;
   bottom: 0;
   height: 720px;
-  background: url("/landing/alpine-hero.png") center 58% / cover no-repeat;
+  background: url("/landing/alpine-hero.webp") center 58% / cover no-repeat;
   filter: grayscale(82%) saturate(35%) contrast(118%) brightness(70%);
 }
 
