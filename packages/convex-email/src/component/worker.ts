@@ -1,6 +1,5 @@
 "use node";
 
-import type { EmailMessage } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -8,7 +7,7 @@ import { createHash } from "node:crypto";
 import { internal } from "./_generated/api.js";
 import { internalAction } from "./_generated/server.js";
 import { buildEmailClient, hydrateAttachments } from "./providers.js";
-import type { ConvexEmailAdapterConfig } from "../shared/types.js";
+import type { ConvexEmailAdapterConfig, ConvexEmailMessage } from "../shared/types.js";
 
 type InternalMutationRef = FunctionReference<
   "mutation",
@@ -20,7 +19,7 @@ type QueuedEmail = {
   adapters: ConvexEmailAdapterConfig[];
   adapter?: string;
   fallbackAdapters: string[];
-  message: EmailMessage;
+  message: ConvexEmailMessage;
   idempotencyKey?: string;
   sendMetadata?: Record<string, unknown>;
 };
@@ -60,10 +59,10 @@ export const processEmail = internalAction({
           });
         },
       });
-      const message = await hydrateAttachments(email.message as EmailMessage);
+      const message = await hydrateAttachments(email.message);
       const response = await client.send(message, {
         adapter: email.adapter,
-        fallbackAdapters: email.fallbackAdapters,
+        fallback: { adapters: email.fallbackAdapters, onUnknownDelivery: "stop" },
         idempotencyKey: email.idempotencyKey,
         metadata: email.sendMetadata,
       });

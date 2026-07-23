@@ -4,6 +4,14 @@ description: Send through the Twilio SendGrid Mail Send API with the fullest fie
 icon: sendgrid
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `native` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The SendGrid adapter calls the [Twilio SendGrid Mail Send API](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send) with plain `fetch`. It supports every `EmailMessage` field: recipients land in a `personalizations` entry, `metadata` becomes `custom_args`, and tags become `categories`.
 
 <ProviderBadge adapter="sendgrid" />
@@ -60,20 +68,21 @@ console.log(result.id); // SendGrid message id from the x-message-id header
 
 SendGrid's send endpoint returns `202 Accepted` with an empty body, so the adapter reads `result.id` from the `x-message-id` response header. `metadata` values arrive in SendGrid event webhooks as `custom_args`; tag values arrive as `categories`.
 
-### Batch sends with recipient variables
+### Personalized sends
 
-Pass [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter emits one `personalizations` entry per recipient with SendGrid `substitutions`, so one API call personalizes every recipient (up to 1000, SendGrid's personalizations cap). SendGrid substitutes `%recipient.key%` tokens in `subject`, `html`, and `text` on its side:
+SendGrid implements native `sendPersonalized`, so the adapter emits one `personalizations` entry per recipient and sends the complete set in one request.
 
 ```ts
-await email.send({
-  from: "Acme <hello@acme.com>",
-  to: ["ada@example.com", "linus@example.com"],
-  subject: "Hi %recipient.name%",
-  html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
-  recipientVariables: {
-    "ada@example.com": { name: "Ada", id: "u_1" },
-    "linus@example.com": { name: "Linus", id: "u_2" },
+await email.sendPersonalized({
+  message: {
+    from: "Acme <hello@acme.com>",
+    subject: "Hi %recipient.name%",
+    html: '<a href="https://acme.com/unsub?id=%recipient.id%">Unsubscribe</a>',
   },
+  recipients: [
+    { to: "ada@example.com", variables: { name: "Ada", id: "u_1" } },
+    { to: "linus@example.com", variables: { name: "Linus", id: "u_2" } },
+  ],
 });
 ```
 

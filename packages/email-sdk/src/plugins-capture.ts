@@ -1,4 +1,4 @@
-import type { EmailMessage, EmailPlugin, EmailProviderResponse } from "./types.js";
+import type { EmailMessage, EmailPlugin, EmailSendResult } from "./types.js";
 
 export type CapturedEmailEvent =
   | {
@@ -8,15 +8,15 @@ export type CapturedEmailEvent =
     }
   | {
       type: "afterSend";
-      provider: string;
+      adapter: string;
       attempt: number;
       message: EmailMessage;
-      response: EmailProviderResponse;
+      response: EmailSendResult;
       metadata?: Record<string, unknown>;
     }
   | {
       type: "retry";
-      provider: string;
+      adapter: string;
       attempt: number;
       nextAttempt: number;
       delayMs: number;
@@ -26,7 +26,7 @@ export type CapturedEmailEvent =
     }
   | {
       type: "error";
-      provider: string;
+      adapter: string;
       attempt: number;
       message: EmailMessage;
       error: unknown;
@@ -81,7 +81,7 @@ export function capturePlugin(
       onRetry(event) {
         store.events.push({
           type: "retry",
-          provider: event.provider,
+          adapter: event.adapter,
           attempt: event.attempt,
           nextAttempt: event.nextAttempt,
           delayMs: event.delayMs,
@@ -103,7 +103,7 @@ export function capturePlugin(
         afterSend(event) {
           store.events.push({
             type: "afterSend",
-            provider: event.provider,
+            adapter: event.adapter,
             attempt: event.attempt,
             message: event.message,
             response: event.response,
@@ -113,7 +113,7 @@ export function capturePlugin(
         onError(event) {
           store.events.push({
             type: "error",
-            provider: event.provider,
+            adapter: event.adapter,
             attempt: event.attempt,
             message: event.message,
             error: event.error,

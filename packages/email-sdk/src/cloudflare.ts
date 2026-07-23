@@ -1,7 +1,7 @@
-import { EmailProviderError, EmailValidationError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
 import { base64Attachments, commonHeadersObject, emailParts } from "./payloads.js";
-import type { EmailAddress, EmailMessage, EmailProvider, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailMessage, EmailAdapter, OneOrMany } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   arrayify,
@@ -9,7 +9,7 @@ import {
   assertSupportedMessageFields,
 } from "./utils.js";
 
-export type CloudflareProviderOptions = {
+export type CloudflareAdapterOptions = {
   apiToken: string;
   accountId: string;
   baseUrl?: string;
@@ -28,12 +28,12 @@ type CloudflareSendResponse = {
 };
 
 export function cloudflare(
-  options: CloudflareProviderOptions,
-): EmailProvider<{ baseUrl: string; accountId: string }> {
+  options: CloudflareAdapterOptions,
+): EmailAdapter<"cloudflare", { baseUrl: string; accountId: string }> {
   const baseUrl = options.baseUrl ?? "https://api.cloudflare.com/client/v4";
 
   return {
-    ...jsonProvider<CloudflareSendResponse>({
+    ...jsonProvider<"cloudflare", CloudflareSendResponse>({
       name: "cloudflare",
       baseUrl,
       endpoint: `/accounts/${encodeURIComponent(options.accountId)}/email/sending/send`,
@@ -67,10 +67,9 @@ export function cloudflare(
       },
       parseResponse(body) {
         if (body.success !== true) {
-          throw new EmailProviderError(cloudflareErrorMessage(body), {
-            provider: "cloudflare",
+          throw new EmailAdapterError(cloudflareErrorMessage(body), {
+            adapter: "cloudflare",
             retryable: false,
-            details: body,
           });
         }
 
@@ -79,7 +78,7 @@ export function cloudflare(
         const rejected = result.permanent_bounces ?? [];
 
         return {
-          provider: "cloudflare",
+          adapter: "cloudflare",
           accepted,
           rejected,
           raw: body,

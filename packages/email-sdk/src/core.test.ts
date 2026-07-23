@@ -1,887 +1,840 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
-import { EmailProviderError, EmailSdkError, EmailValidationError } from "./errors.js";
-import { postmark } from "./postmark.js";
 import {
-  resetTelemetry,
-  setSharedTelemetry,
-  resetTelemetrySource,
-  setTelemetrySource,
-  type CaptureExceptionContext,
-  type Telemetry,
-  type TelemetryEventName,
-  type TelemetryProperties,
-} from "./telemetry.js";
-import { failingProvider, memoryProvider } from "./testing.js";
-import type { EmailMessage, EmailProvider, EmailProviderContext } from "./types.js";
+  EmailAbortError,
+  EmailAdapterError,
+  EmailAllRecipientsFailedError,
+  EmailMiddlewareError,
+  EmailRouteError,
+  EmailValidationError,
+} from "./errors.js";
+import type { EmailAdapter, EmailMessage } from "./types.js";
+import type { Telemetry, TelemetryEventName, TelemetryProperties } from "./telemetry.js";
+import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 
-const message = {
+const message: EmailMessage = {
   from: "hello@example.com",
   to: "user@example.com",
-  subject: "Welcome",
-  text: "Hello",
+  subject: "Hello",
+  text: "Hello there",
 };
 
-describe("createEmailClient", () => {
-  test("sends with the default provider", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    const response = await client.send(message);
-
-    expect(response.provider).toBe("memory");
-    expect(provider.raw.sent).toHaveLength(1);
-  });
-
-  test("falls back to another provider", async () => {
-    const client = createEmailClient({
-      adapters: [failingProvider(), memoryProvider("backup")],
-      fallback: ["backup"],
-    });
-
-    const response = await client.send(message);
-
-    expect(response.provider).toBe("backup");
-  });
-
-  test("keeps legacy provider aliases working", async () => {
-    const client = createEmailClient({
-      providers: [failingProvider(), memoryProvider("backup")],
-    });
-
-    const response = await client.send(message, {
-      provider: "failing",
-      fallbackProviders: ["backup"],
-    });
-
-    expect(response.provider).toBe("backup");
-    expect(client.providers.get("backup")).toBe(client.adapters.get("backup"));
-  });
-
-  test("supports adapter-first routing aliases", async () => {
-    const client = createEmailClient({
-      adapters: [memoryProvider("primary"), memoryProvider("backup")],
-      defaultAdapter: "primary",
-    });
-
-    const response = await client.send(message, {
-      adapter: "backup",
-    });
-
-    expect(client.defaultAdapter).toBe("primary");
-    expect(client.adapter("backup")).toBe(client.provider("backup"));
-    expect(response.provider).toBe("backup");
-  });
-
-  test("retries retryable provider errors", async () => {
-    let attempts = 0;
-    const provider = {
-      name: "retry",
-      send() {
-        attempts += 1;
-
-        if (attempts === 1) {
-          throw new EmailProviderError("Temporary failure", {
-            provider: "retry",
-            retryable: true,
-          });
-        }
-
-        return {
-          provider: "retry",
-          id: "ok",
-        };
-      },
-    };
-
-    const client = createEmailClient({
-      adapters: [provider],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-    });
-
-    const response = await client.send(message);
-
-    expect(response.id).toBe("ok");
-    expect(attempts).toBe(2);
-  });
-
-  test("validates message content", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-
-    await expect(
-      client.send({
-        from: "hello@example.com",
-        to: "user@example.com",
-        subject: "No body",
-      }),
-    ).rejects.toBeInstanceOf(EmailValidationError);
-  });
-
-  test("validates sendAt before any adapter runs", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    await expect(client.send({ ...message, sendAt: "not-a-date" })).rejects.toThrow(
-      'Email message sendAt is not a valid date: "not-a-date".',
-    );
-    expect(provider.raw.sent).toHaveLength(0);
-
-    const response = await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
-    expect(response.provider).toBe("memory");
-  });
-
-  test("sendAt on a fallback route without scheduling support fails instead of sending unscheduled", async () => {
-    let fallbackRequests = 0;
-    const backup = postmark({
-      serverToken: "server",
-      fetch: () => {
-        fallbackRequests += 1;
-        throw new Error("unreachable — postmark must reject sendAt before any request");
-      },
-    });
-
-    const client = createEmailClient({
-      adapters: [failingProvider(), backup],
-      fallback: ["postmark"],
-    });
-
-    const error = await client
-      .send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") })
-      .then(() => {
-        throw new Error("send should have failed");
-      })
-      .catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(EmailSdkError);
-    expect((error as EmailSdkError).code).toBe("all_providers_failed");
-
-    // The fallback's rejection is recorded as an EmailProviderError wrapping the
-    // adapter's EmailValidationError (toProviderError keeps the original as `cause`).
-    const failures = (error as EmailSdkError).details as EmailProviderError[];
-    const fallbackFailure = failures.find((failure) => failure.provider === "postmark");
-    expect(fallbackFailure?.message).toBe(
-      "postmark does not support these EmailMessage fields: sendAt.",
-    );
-    expect(fallbackFailure?.cause).toBeInstanceOf(EmailValidationError);
-    expect(fallbackRequests).toBe(0);
-  });
-
-  test("captures batch failures without throwing", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-    const results = await client.sendBatch([
-      message,
-      {
-        from: "hello@example.com",
-        to: "user@example.com",
-        subject: "Missing body",
-      },
-    ]);
-
-    expect(results[0]?.ok).toBe(true);
-    expect(results[1]?.ok).toBe(false);
-  });
-
-  test("lets item-level provider aliases override batch-level adapter aliases", async () => {
-    const client = createEmailClient({
-      adapters: [memoryProvider("primary"), memoryProvider("secondary")],
-    });
-
-    const [result] = await client.sendBatch([{ ...message, provider: "secondary" }], {
-      adapter: "primary",
-    });
-
-    expect(result?.ok).toBe(true);
-    if (result?.ok) {
-      expect(result.response.provider).toBe("secondary");
-    }
-  });
-
-  test("retries transient runtime errors from provider transports", async () => {
-    let attempts = 0;
-    const provider = {
-      name: "runtime",
-      send() {
-        attempts += 1;
-
-        if (attempts === 1) {
-          throw new TypeError("fetch failed");
-        }
-
-        return {
-          provider: "runtime",
-          id: "ok",
-        };
-      },
-    };
-
-    const client = createEmailClient({
-      adapters: [provider],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-    });
-
-    const response = await client.send(message);
-
-    expect(response.id).toBe("ok");
-    expect(attempts).toBe(2);
-  });
-
-  test("does not retry programming TypeErrors from provider transports", async () => {
-    let attempts = 0;
-    const provider = {
-      name: "runtime",
-      send() {
-        attempts += 1;
-        throw new TypeError("Cannot read properties of null (reading 'apiKey')");
-      },
-    };
-
-    const client = createEmailClient({
-      adapters: [provider],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-    });
-
-    await expect(client.send(message)).rejects.toThrow("Cannot read properties");
-    expect(attempts).toBe(1);
-  });
-
-  test("does not retry ENOTFOUND runtime errors", async () => {
-    let attempts = 0;
-    const provider = {
-      name: "runtime",
-      send() {
-        attempts += 1;
-        throw Object.assign(new Error("getaddrinfo ENOTFOUND api.example.com"), {
-          code: "ENOTFOUND",
-        });
-      },
-    };
-
-    const client = createEmailClient({
-      adapters: [provider],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-    });
-
-    await expect(client.send(message)).rejects.toThrow("ENOTFOUND");
-    expect(attempts).toBe(1);
-  });
-
-  test("does not retry runtime errors with unrelated reset messages", async () => {
-    let attempts = 0;
-    const provider = {
-      name: "runtime",
-      send() {
-        attempts += 1;
-        throw new Error("password reset link expired");
-      },
-    };
-
-    const client = createEmailClient({
-      adapters: [provider],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-    });
-
-    await expect(client.send(message)).rejects.toThrow("password reset");
-    expect(attempts).toBe(1);
-  });
-
-  test("reports the final retry attempt to onError", async () => {
-    const attempts: number[] = [];
-    const client = createEmailClient({
-      adapters: [
-        failingProvider(
-          "failing",
-          new EmailProviderError("Temporary failure", {
-            provider: "failing",
-            retryable: true,
-          }),
-        ),
-      ],
-      retry: {
-        retries: 1,
-        delay: () => 0,
-      },
-      hooks: {
-        onError(event) {
-          attempts.push(event.attempt);
-        },
-      },
-    });
-
-    await expect(client.send(message)).rejects.toBeInstanceOf(EmailProviderError);
-    expect(attempts).toEqual([2]);
-  });
-
-  test("does not let hook failures mask provider errors", async () => {
-    const client = createEmailClient({
-      adapters: [failingProvider()],
-      hooks: {
-        onError() {
-          throw new Error("hook failed");
-        },
-      },
-    });
-
-    await expect(client.send(message)).rejects.toMatchObject({
-      provider: "failing",
-    });
-  });
-});
-
-const batchMessage: EmailMessage = {
-  from: "Acme <hello@acme.com>",
-  to: ["a@example.com", "b@example.com"],
-  subject: "Hi %recipient.name%",
-  html: '<p>Hi %recipient.name%</p><a href="https://acme.com/u?id=%recipient.id%">Unsub</a>',
-  recipientVariables: {
-    "a@example.com": { name: "Ada", id: "u_1" },
-    "b@example.com": { name: "Linus", id: "u_2" },
-  },
+const capabilities = {
+  repeatedHeaders: true,
+  idempotency: "native" as const,
+  scheduling: true,
+  personalized: "expanded" as const,
 };
 
-describe("recipientVariables", () => {
-  test("routes to a native sendBulk in a single call", async () => {
-    const { provider, calls } = recordingProvider("native", { bulk: true });
-    const client = createEmailClient({ adapters: [provider] });
-
-    const response = await client.send(batchMessage);
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.kind).toBe("sendBulk");
-    expect(calls[0]?.message.to).toEqual(["a@example.com", "b@example.com"]);
-    expect(calls[0]?.message.recipientVariables).toEqual(batchMessage.recipientVariables);
-    expect(response.provider).toBe("native");
-  });
-
-  test("invokes sendBulk on the provider so class-based adapters keep `this`", async () => {
-    class ClassProvider implements EmailProvider {
-      name = "class";
-      apiKey = "secret_key";
-
-      send() {
-        return { provider: this.name, id: "single" };
-      }
-
-      sendBulk() {
-        // Regression: a detached `perform: provider.sendBulk` loses `this`, making
-        // fields like apiKey silently undefined for class-based adapters.
-        return { provider: this.name, id: this.apiKey };
-      }
-    }
-
-    const client = createEmailClient({ adapters: [new ClassProvider()] });
-
-    const response = await client.send(batchMessage);
-
-    expect(response.provider).toBe("class");
-    expect(response.id).toBe("secret_key");
-  });
-
-  test("expands per recipient when the adapter has no native batch", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    const response = await client.send(batchMessage);
-
-    expect(provider.raw.sent).toHaveLength(2);
-    const [first, second] = provider.raw.sent;
-    expect(first?.message.to).toBe("a@example.com");
-    expect(first?.message.subject).toBe("Hi Ada");
-    expect(first?.message.html).toContain("Hi Ada");
-    expect(first?.message.html).toContain("id=u_1");
-    expect(first?.message.recipientVariables).toBeUndefined();
-    expect(second?.message.subject).toBe("Hi Linus");
-    expect(second?.message.html).toContain("id=u_2");
-
-    expect(response.provider).toBe("memory");
-    expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
-  });
-
-  test("substitutes html and text and keeps regex-special values literal", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({
-      from: "hello@example.com",
-      to: ["a@example.com"],
-      subject: "Hi %recipient.name%",
-      html: "<p>%recipient.name% owes %recipient.amount%</p>",
-      text: "%recipient.name% owes %recipient.amount%",
-      recipientVariables: {
-        "a@example.com": { name: "A. $& (Ada)", amount: "$100.50" },
-      },
-    });
-
-    const sent = provider.raw.sent[0]?.message;
-    expect(sent?.subject).toBe("Hi A. $& (Ada)");
-    expect(sent?.html).toBe("<p>A. $& (Ada) owes $100.50</p>");
-    expect(sent?.text).toBe("A. $& (Ada) owes $100.50");
-  });
-
-  test("leaves unknown %recipient% tokens intact", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({
-      from: "hello@example.com",
-      to: ["a@example.com"],
-      subject: "Hi %recipient.name% %recipient.missing%",
-      text: "x",
-      recipientVariables: { "a@example.com": { name: "Ada" } },
-    });
-
-    expect(provider.raw.sent[0]?.message.subject).toBe("Hi Ada %recipient.missing%");
-  });
-
-  test("derives a per-recipient idempotency key in the fallback", async () => {
-    const { provider, calls } = recordingProvider("rec");
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({ ...batchMessage, idempotencyKey: "batch-1" });
-
-    expect(calls.map((call) => call.context.idempotencyKey)).toEqual([
-      "batch-1:a@example.com",
-      "batch-1:b@example.com",
-    ]);
-  });
-
-  test("falls back to the next adapter when every recipient fails", async () => {
-    const client = createEmailClient({
-      adapters: [failingProvider("primary"), memoryProvider("backup")],
-      fallback: ["backup"],
-    });
-
-    const response = await client.send(batchMessage);
-
-    expect(response.provider).toBe("backup");
-    expect(response.accepted).toEqual(["a@example.com", "b@example.com"]);
-  });
-
-  test("expanded per-recipient sends inherit sendAt", async () => {
-    const sendAt = new Date("2026-07-10T12:30:00.000Z");
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({ ...batchMessage, sendAt });
-
-    expect(provider.raw.sent).toHaveLength(2);
-    for (const sent of provider.raw.sent) {
-      expect(sent.message.sendAt).toBe(sendAt);
-    }
-  });
-
-  test("sendAt with recipientVariables on an adapter without scheduling rejects every expanded send", async () => {
-    let requests = 0;
-    const adapter = postmark({
-      serverToken: "server",
-      fetch: () => {
-        requests += 1;
-        throw new Error("unreachable — postmark must reject sendAt before any request");
-      },
-    });
-    const client = createEmailClient({ adapters: [adapter] });
-
-    const error = await client
-      .send({ ...batchMessage, sendAt: new Date("2026-07-10T12:30:00.000Z") })
-      .then(() => {
-        throw new Error("send should have failed");
-      })
-      .catch((caught: unknown) => caught);
-
-    // Every expanded per-recipient send runs the adapter's field assertion, so the
-    // whole batch fails fast instead of delivering unscheduled mail.
-    expect(error).toBeInstanceOf(EmailSdkError);
-    expect((error as EmailSdkError).code).toBe("all_recipients_failed");
-    const failures = (error as EmailSdkError).details as EmailProviderError[];
-    expect(failures).toHaveLength(2);
-    for (const failure of failures) {
-      expect(failure.message).toBe("postmark does not support these EmailMessage fields: sendAt.");
-    }
-    expect(requests).toBe(0);
-  });
-
-  test("rejects recipientVariables combined with cc", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-
-    await expect(client.send({ ...batchMessage, cc: "cc@example.com" })).rejects.toBeInstanceOf(
-      EmailValidationError,
-    );
-  });
-
-  test("rejects recipientVariables for addresses not in to", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-
-    await expect(
-      client.send({
-        ...batchMessage,
-        recipientVariables: { "stranger@example.com": { name: "X" } },
-      }),
-    ).rejects.toBeInstanceOf(EmailValidationError);
-  });
-
-  test("rejects variable keys outside letters, numbers, underscores, and hyphens", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-
-    // Dotted keys personalize on native provider routes but stay literal in the
-    // client-side fallback regex, so they must fail fast on every route.
-    await expect(
-      client.send({
-        from: "hello@example.com",
-        to: ["a@example.com"],
-        subject: "Hi %recipient.user.name%",
-        text: "x",
-        recipientVariables: { "a@example.com": { "user.name": "Ada" } },
-      }),
-    ).rejects.toThrow(
-      'recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "a@example.com" has "user.name".',
-    );
-  });
-
-  test("accepts variable keys with underscores and hyphens", async () => {
-    const provider = memoryProvider();
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({
-      from: "hello@example.com",
-      to: ["a@example.com"],
-      subject: "Hi %recipient.first_name% %recipient.last-name%",
-      text: "x",
-      recipientVariables: { "a@example.com": { first_name: "Ada", "last-name": "Lovelace" } },
-    });
-
-    expect(provider.raw.sent[0]?.message.subject).toBe("Hi Ada Lovelace");
-  });
-
-  test("treats empty recipientVariables as a normal send", async () => {
-    const { provider, calls } = recordingProvider("native", { bulk: true });
-    const client = createEmailClient({ adapters: [provider] });
-
-    await client.send({
-      from: "hello@example.com",
-      to: ["a@example.com", "b@example.com"],
-      subject: "Hi",
-      text: "x",
-      recipientVariables: {},
-    });
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.kind).toBe("send");
-  });
-
-  test("rejects duplicate to addresses with recipientVariables", async () => {
-    const client = createEmailClient({ adapters: [memoryProvider()] });
-
-    await expect(
-      client.send({
-        from: "hello@example.com",
-        to: ["a@example.com", "a@example.com"],
-        subject: "Hi",
-        text: "x",
-        recipientVariables: { "a@example.com": { name: "Ada" } },
-      }),
-    ).rejects.toBeInstanceOf(EmailValidationError);
-  });
-
-  test("fires onError per rejected recipient and reports partial results in the fallback", async () => {
-    const errored: string[] = [];
-    const provider: EmailProvider = {
-      name: "partial",
-      send(outgoing) {
-        if (outgoing.to === "b@example.com") {
-          throw new EmailProviderError("rejected", { provider: "partial", retryable: false });
-        }
-
-        return { provider: "partial", id: "ok" };
-      },
-    };
-    const client = createEmailClient({
-      adapters: [provider],
-      hooks: {
-        onError(event) {
-          errored.push(String(event.message.to));
-        },
-      },
-    });
-
-    const response = await client.send(batchMessage);
-
-    expect(response.accepted).toEqual(["a@example.com"]);
-    expect(response.rejected).toEqual(["b@example.com"]);
-    expect(errored).toEqual(["b@example.com"]);
-  });
-});
-
-type RecordedCall = {
-  kind: "send" | "sendBulk";
-  message: EmailMessage;
-  context: EmailProviderContext;
-};
-
-function recordingProvider(name: string, options: { bulk?: boolean } = {}) {
-  const calls: RecordedCall[] = [];
-  const provider: EmailProvider = {
-    name,
-    send(message, context) {
-      calls.push({ kind: "send", message, context });
-      return { provider: name, id: `${name}_${calls.length}` };
-    },
-  };
-
-  if (options.bulk) {
-    provider.sendBulk = (message, context) => {
-      calls.push({ kind: "sendBulk", message, context });
-      return { provider: name, id: `${name}_bulk` };
-    };
-  }
-
-  return { provider, calls };
+function adapter<const Name extends string>(
+  name: Name,
+  send: EmailAdapter<Name>["send"] = () => ({ adapter: name, id: `${name}_1` }),
+  overrides: Partial<EmailAdapter<Name>> = {},
+): EmailAdapter<Name> {
+  return { name, capabilities, send, ...overrides };
 }
 
-type CapturedEvent = { event: TelemetryEventName; properties?: TelemetryProperties };
-type CapturedException = { error: unknown; context: CaptureExceptionContext };
-
-function stubTelemetry() {
-  const events: CapturedEvent[] = [];
-  const exceptions: CapturedException[] = [];
+function telemetryCapture() {
+  const events: Array<{ event: TelemetryEventName; properties?: TelemetryProperties }> = [];
+  const exceptions: unknown[] = [];
   const telemetry: Telemetry = {
     enabled: true,
-    capture(event, properties) {
+    async capture(event, properties) {
       events.push({ event, properties });
-      return Promise.resolve();
     },
-    captureException(error, context) {
-      exceptions.push({ error, context });
-      return Promise.resolve();
+    async captureException(error) {
+      exceptions.push(error);
     },
-    flush: () => Promise.resolve(),
+    async flush() {},
   };
 
   return { events, exceptions, telemetry };
 }
 
-function withTelemetry<T>(telemetry: Telemetry, run: () => Promise<T>) {
-  setSharedTelemetry(telemetry);
-
-  return run().finally(() => resetTelemetry());
+function emailAddressOfTest(value: EmailMessage["to"]): string {
+  return typeof value === "string" ? value : Array.isArray(value) ? emailAddressOfTest(value[0]) : value.email;
 }
 
-describe("createEmailClient telemetry", () => {
-  test("tags events with their source", async () => {
-    const { events, telemetry } = stubTelemetry();
+describe("createEmailClient v1", () => {
+  test("uses the first adapter and returns the normalized result", async () => {
+    const client = createEmailClient({ adapters: [adapter("primary")] });
+    const result = await client.send(message);
 
-    await withTelemetry(telemetry, async () => {
-      await createEmailClient({ adapters: [memoryProvider()] }).send(message);
-      setTelemetrySource("cli");
+    expect(client.defaultAdapter).toBe("primary");
+    expect(client.adapter("primary").name).toBe("primary");
+    expect(result).toEqual({ adapter: "primary", id: "primary_1" });
+    expect("provider" in result).toBe(false);
+    expect("messageId" in result).toBe(false);
+  });
 
-      try {
-        await createEmailClient({ adapters: [memoryProvider()] }).send(message);
-      } finally {
-        resetTelemetrySource();
+  test("fails construction for duplicate, unknown default, and unknown fallback names", () => {
+    expect(() => createEmailClient({ adapters: [adapter("same"), adapter("same")] })).toThrow(
+      'Duplicate email adapter "same".',
+    );
+    expect(() =>
+      createEmailClient({ adapters: [adapter("one")], defaultAdapter: "missing" as "one" }),
+    ).toThrow('Email adapter "missing" is not registered.');
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter("one")],
+        fallback: { adapters: ["missing" as "one"] },
+      }),
+    ).toThrow('Email adapter "missing" is not registered.');
+  });
+
+  test("validates without sending and validates every candidate route", async () => {
+    let sends = 0;
+    const primary = adapter("primary", () => {
+      sends += 1;
+      return { adapter: "primary" };
+    });
+    const backup = adapter("backup", undefined, {
+      capabilities: { ...capabilities, repeatedHeaders: false },
+    });
+    const client = createEmailClient({
+      adapters: [primary, backup],
+      fallback: { adapters: ["backup"] },
+    });
+
+    await expect(client.validate(message)).resolves.toEqual({ adapter: "primary", warnings: [] });
+    expect(sends).toBe(0);
+
+    await expect(
+      client.validate({
+        ...message,
+        headers: [
+          { name: "X-Test", value: "one" },
+          { name: "x-test", value: "two" },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+    expect(sends).toBe(0);
+  });
+
+  test("enforces message, attachment, and zoned RFC 3339 validation", async () => {
+    const client = createEmailClient({ adapters: [adapter("primary")] });
+
+    await expect(client.validate({ ...message, text: undefined } as EmailMessage)).rejects.toThrow(
+      "requires either html or text",
+    );
+    await expect(
+      client.validate({
+        ...message,
+        attachments: [{ filename: "bad.txt" } as never],
+      }),
+    ).rejects.toThrow("requires exactly one of content or path");
+    await expect(
+      client.validate({ ...message, sendAt: "2026-07-21T01:00:00Z" }),
+    ).resolves.toMatchObject({ adapter: "primary" });
+    await expect(
+      client.validate({ ...message, sendAt: "2026-07-21T01:00:00+02:00" }),
+    ).resolves.toMatchObject({ adapter: "primary" });
+    await expect(
+      client.validate({ ...message, sendAt: "2026-07-21T01:00:00" as never }),
+    ).rejects.toThrow("must be an RFC 3339 timestamp");
+  });
+
+  test("retries maxAttempts total calls", async () => {
+    let calls = 0;
+    const retrying = adapter("retrying", () => {
+      calls += 1;
+      if (calls < 3) {
+        throw new EmailAdapterError("temporary", {
+          adapter: "retrying",
+          retryable: true,
+          delivery: "not_sent",
+        });
       }
+      return { adapter: "retrying", id: "sent" };
+    });
+    const client = createEmailClient({
+      adapters: [retrying],
+      retry: { maxAttempts: 3, delay: () => 0 },
     });
 
-    const created = events.filter((item) => item.event === "client created");
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(created.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
-    expect(sent.map((item) => item.properties?.source)).toEqual(["sdk", "cli"]);
-    expect(sent[0]?.properties).toMatchObject({
-      success: true,
-      recipients: 1,
-      delivery_path: "single",
-      used_recipient_variables: false,
-      used_send_at: false,
-    });
+    await expect(client.send(message)).resolves.toMatchObject({ id: "sent" });
+    expect(calls).toBe(3);
   });
 
-  test("reports failed sends as handled exceptions", async () => {
-    const { events, exceptions, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [failingProvider()] });
-      await expect(client.send(message)).rejects.toBeInstanceOf(EmailProviderError);
+  test("falls back only for known not-sent outcomes unless explicitly opted in", async () => {
+    let backupCalls = 0;
+    const backup = adapter("backup", () => {
+      backupCalls += 1;
+      return { adapter: "backup", id: "ok" };
     });
 
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(sent[0]?.properties).toMatchObject({ success: false, error_code: "provider_error" });
-    expect(exceptions).toHaveLength(1);
-    expect(exceptions[0]?.context).toMatchObject({
-      source: "sdk",
-      handled: true,
-      adapter: "custom",
+    const safeClient = createEmailClient({
+      adapters: [
+        adapter("primary", () => {
+          throw new EmailAdapterError("rejected", {
+            adapter: "primary",
+            delivery: "not_sent",
+          });
+        }),
+        backup,
+      ],
+      fallback: { adapters: ["backup"] },
     });
-    expect(exceptions[0]?.error).toBeInstanceOf(EmailProviderError);
+    await expect(safeClient.send(message)).resolves.toMatchObject({ adapter: "backup" });
+    expect(backupCalls).toBe(1);
+
+    const unknownClient = createEmailClient({
+      adapters: [
+        adapter("primary", () => {
+          throw new EmailAdapterError("timeout", {
+            adapter: "primary",
+            delivery: "unknown",
+          });
+        }),
+        backup,
+      ],
+      fallback: { adapters: ["backup"] },
+    });
+    await expect(unknownClient.send(message)).rejects.toBeInstanceOf(EmailRouteError);
+    expect(backupCalls).toBe(1);
+
+    await expect(
+      unknownClient.send(message, {
+        fallback: { adapters: ["backup"], onUnknownDelivery: "continue" },
+      }),
+    ).resolves.toMatchObject({ adapter: "backup" });
+    expect(backupCalls).toBe(2);
   });
 
-  test("does not report usage errors as exceptions", async () => {
-    const { events, exceptions, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [memoryProvider()] });
-      await expect(client.send(message, { adapter: "missing" })).rejects.toThrow(
-        'Email provider "missing" is not registered.',
-      );
+  test("exposes ordered typed route failures", async () => {
+    const client = createEmailClient({
+      adapters: [
+        adapter("one", () => {
+          throw new EmailAdapterError("one failed", {
+            adapter: "one",
+            delivery: "not_sent",
+          });
+        }),
+        adapter("two", () => {
+          throw new EmailAdapterError("two failed", {
+            adapter: "two",
+            delivery: "not_sent",
+          });
+        }),
+      ],
+      fallback: { adapters: ["two"] },
     });
 
-    expect(events.filter((item) => item.event === "email sent")).toHaveLength(1);
-    expect(exceptions).toHaveLength(0);
+    const error = await client.send(message).catch((caught) => caught);
+    expect(error).toBeInstanceOf(EmailRouteError);
+    expect((error as EmailRouteError).failures.map((failure) => failure.adapter)).toEqual([
+      "one",
+      "two",
+    ]);
   });
 
-  test("marks scheduled sends", async () => {
-    const { events, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [memoryProvider("resend")] });
-      await client.send({ ...message, sendAt: new Date("2026-07-10T12:30:00Z") });
+  test("aborts during backoff without retrying or falling back", async () => {
+    const controller = new AbortController();
+    let primaryCalls = 0;
+    let backupCalls = 0;
+    const client = createEmailClient({
+      adapters: [
+        adapter("primary", () => {
+          primaryCalls += 1;
+          throw new EmailAdapterError("retry", {
+            adapter: "primary",
+            retryable: true,
+            delivery: "not_sent",
+          });
+        }),
+        adapter("backup", () => {
+          backupCalls += 1;
+          return { adapter: "backup" };
+        }),
+      ],
+      retry: { maxAttempts: 3, delay: () => 1_000 },
+      fallback: { adapters: ["backup"] },
     });
 
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(sent[0]?.properties).toMatchObject({ used_send_at: true, delivery_path: "single" });
+    const sending = client.send(message, { signal: controller.signal });
+    setTimeout(() => controller.abort("stop"), 5);
+    await expect(sending).rejects.toBeInstanceOf(EmailAbortError);
+    expect(primaryCalls).toBe(1);
+    expect(backupCalls).toBe(0);
   });
 
-  test("counts one bulk_native send for recipientVariables on a native adapter", async () => {
-    const { events, telemetry } = stubTelemetry();
-    const { provider, calls } = recordingProvider("native", { bulk: true });
-
-    await withTelemetry(telemetry, async () => {
-      await createEmailClient({ adapters: [provider] }).send(batchMessage);
+  test("aborts when an adapter ignores the signal and resolves after cancellation", async () => {
+    const controller = new AbortController();
+    const client = createEmailClient({
+      adapters: [
+        adapter("slow", async () => {
+          await Bun.sleep(20);
+          return { adapter: "slow", id: "sent" };
+        }),
+      ],
     });
 
-    expect(calls.map((call) => call.kind)).toEqual(["sendBulk"]);
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.properties).toMatchObject({
-      success: true,
-      recipients: 2,
-      delivery_path: "bulk_native",
-      used_recipient_variables: true,
-      adapter: "custom",
-    });
+    const sending = client.send(message, { signal: controller.signal });
+    setTimeout(() => controller.abort("stop"), 5);
+
+    await expect(sending).rejects.toBeInstanceOf(EmailAbortError);
   });
 
-  test("counts one bulk_expanded send even when the client expands per recipient", async () => {
-    const { events, telemetry } = stubTelemetry();
-    const provider = memoryProvider();
-
-    await withTelemetry(telemetry, async () => {
-      await createEmailClient({ adapters: [provider] }).send(batchMessage);
+  test("aborts native personalized sends that resolve after cancellation", async () => {
+    const controller = new AbortController();
+    const client = createEmailClient({
+      adapters: [
+        adapter("slow", undefined, {
+          capabilities: { ...capabilities, personalized: "native" },
+          async sendPersonalized() {
+            await Bun.sleep(20);
+            return {
+              adapter: "slow",
+              accepted: ["user@example.com"],
+              rejected: [],
+            };
+          },
+        }),
+      ],
     });
 
-    // Two provider-level sends, one user-facing send() call, one event.
-    expect(provider.raw.sent).toHaveLength(2);
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.properties).toMatchObject({
-      success: true,
-      recipients: 2,
-      delivery_path: "bulk_expanded",
-      used_recipient_variables: true,
-    });
+    const sending = client.sendPersonalized(
+      {
+        message: { from: message.from, subject: "Hello", text: "Hello" },
+        recipients: [{ to: "user@example.com", variables: {} }],
+      },
+      { signal: controller.signal },
+    );
+    setTimeout(() => controller.abort("stop"), 5);
+
+    await expect(sending).rejects.toBeInstanceOf(EmailAbortError);
   });
 
-  test("derives the failed delivery path from the primary adapter", async () => {
-    const { events, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [failingProvider()] });
-      // Every expanded recipient fails, so the client aggregates the failures.
-      await expect(client.send(batchMessage)).rejects.toBeInstanceOf(EmailSdkError);
+  test("sendMany is sequential, ordered, settled, and replaces item fallback", async () => {
+    const order: string[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("primary", async (value) => {
+          order.push(value.subject);
+          if (value.subject === "fail") {
+            throw new EmailAdapterError("no", {
+              adapter: "primary",
+              delivery: "not_sent",
+            });
+          }
+          return { adapter: "primary", id: value.subject };
+        }),
+        adapter("backup"),
+      ],
+      fallback: { adapters: ["backup"] },
     });
 
-    const sent = events.filter((item) => item.event === "email sent");
-    expect(sent[0]?.properties).toMatchObject({
-      success: false,
-      error_code: "all_recipients_failed",
-      delivery_path: "bulk_expanded",
-      used_recipient_variables: true,
-    });
+    const results = await client.sendMany([
+      { message: { ...message, subject: "first" } },
+      {
+        message: { ...message, subject: "fail" },
+        options: { fallback: { adapters: [] } },
+      },
+      { message: { ...message, subject: "third" } },
+    ]);
+
+    expect(order).toEqual(["first", "fail", "third"]);
+    expect(results.map((result) => [result.index, result.ok])).toEqual([
+      [0, true],
+      [1, false],
+      [2, true],
+    ]);
   });
 
-  test("summarizes sendBatch runs", async () => {
-    const { events, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [memoryProvider()] });
-      await client.sendBatch([
-        { ...message, cc: "copy@example.com" },
-        { ...message, adapter: "missing" },
-      ]);
+  test("sendMany settles an unsupported scheduled item and continues", async () => {
+    const sent: string[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("scheduled", (value) => {
+          sent.push(value.subject);
+          return { adapter: "scheduled", id: value.subject };
+        }),
+        adapter("immediate", undefined, {
+          capabilities: { ...capabilities, scheduling: false },
+        }),
+      ],
     });
+    const sendAt = new Date("2026-08-01T09:00:00Z");
 
-    const batch = events.filter((item) => item.event === "email batch sent");
-    expect(batch).toHaveLength(1);
-    expect(batch[0]?.properties).toMatchObject({
-      message_count: 2,
-      succeeded: 1,
-      failed: 1,
-      recipients: 3,
-      success: false,
-      error_code: "provider_not_found",
-      source: "sdk",
-      // Both items normalize to the same adapter, so the summary is uniform.
-      adapter: "custom",
-    });
-    // Per-item events still fire through send().
-    expect(events.filter((item) => item.event === "email sent")).toHaveLength(2);
+    const results = await client.sendMany([
+      { message: { ...message, subject: "first", sendAt } },
+      {
+        message: { ...message, subject: "unsupported", sendAt },
+        options: { adapter: "immediate" },
+      },
+      { message: { ...message, subject: "third", sendAt } },
+    ]);
+
+    expect(sent).toEqual(["first", "third"]);
+    expect(results.map((result) => [result.index, result.ok])).toEqual([
+      [0, true],
+      [1, false],
+      [2, true],
+    ]);
+    expect(results[1]?.ok === false ? results[1].error.code : undefined).toBe("validation_error");
   });
 
-  test("reports a mixed adapter when batch items differ", async () => {
-    const { events, telemetry } = stubTelemetry();
+  test("sendPersonalized expands sequentially, derives keys, and resolves partial success", async () => {
+    const calls: Array<{ to: unknown; key?: string }> = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("expanded", (value, context) => {
+          calls.push({ to: value.to, key: context.idempotencyKey });
+          if (value.to === "bad@example.com") {
+            throw new EmailAdapterError("bad", {
+              adapter: "expanded",
+              delivery: "not_sent",
+            });
+          }
+          return { adapter: "expanded", id: "ok" };
+        }),
+      ],
+    });
 
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({
-        adapters: [memoryProvider("resend"), memoryProvider("smtp")],
-        defaultAdapter: "resend",
+    const result = await client.sendPersonalized(
+      {
+        message: {
+          from: message.from,
+          subject: "Hi %recipient.name%",
+          text: "Welcome %recipient.name%",
+        },
+        recipients: [
+          { to: "good@example.com", variables: { name: "Ada" } },
+          { to: "bad@example.com", variables: { name: "Linus" } },
+        ],
+      },
+      { idempotencyKey: "campaign" },
+    );
+
+    expect(result.accepted).toEqual(["good@example.com"]);
+    expect(result.rejected).toEqual(["bad@example.com"]);
+    expect(calls).toEqual([
+      { to: "good@example.com", key: "campaign:good@example.com" },
+      { to: "bad@example.com", key: "campaign:bad@example.com" },
+    ]);
+  });
+
+  test("expanded sendPersonalized preserves sendAt for every recipient", async () => {
+    const calls: EmailMessage[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("expanded", (value) => {
+          calls.push(value);
+          return { adapter: "expanded", id: emailAddressOfTest(value.to) };
+        }),
+      ],
+    });
+    const sendAt = new Date("2026-08-01T09:00:00Z");
+
+    await client.sendPersonalized({
+      message: {
+        from: message.from,
+        subject: "Hi %recipient.name%",
+        text: "Welcome %recipient.name%",
+        sendAt,
+      },
+      recipients: [
+        { to: "ada@example.com", variables: { name: "Ada" } },
+        { to: "linus@example.com", variables: { name: "Linus" } },
+      ],
+    });
+
+    expect(calls.map((sent) => sent.sendAt)).toEqual([sendAt, sendAt]);
+  });
+
+  test("sendPersonalized applies beforeSend middleware to native and expanded delivery", async () => {
+    let expandedBefore = 0;
+    const expandedCalls: EmailMessage[] = [];
+    const expandedClient = createEmailClient({
+      adapters: [
+        adapter("expanded", (value) => {
+          expandedCalls.push(value);
+          return { adapter: "expanded", id: emailAddressOfTest(value.to) };
+        }),
+      ],
+      plugins: [
+        {
+          id: "personalized-defaults",
+          middleware: [
+            {
+              beforeSend(event) {
+                expandedBefore += 1;
+                return {
+                  message: {
+                    ...event.message,
+                    headers: [{ name: "X-Campaign", value: "welcome" }],
+                    text: `${event.message.text} via middleware`,
+                  },
+                  options: { metadata: { campaign: "welcome" } },
+                };
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expandedClient.sendPersonalized({
+      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      recipients: [
+        { to: "ada@example.com", variables: { name: "Ada" } },
+        { to: "linus@example.com", variables: { name: "Linus" } },
+      ],
+    });
+
+    expect(expandedBefore).toBe(1);
+    expect(expandedCalls.map((sent) => sent.subject)).toEqual(["Hi Ada", "Hi Linus"]);
+    expect(expandedCalls.map((sent) => sent.text)).toEqual([
+      "Hello Ada via middleware",
+      "Hello Linus via middleware",
+    ]);
+    expect(expandedCalls.every((sent) => sent.headers?.[0]?.name === "X-Campaign")).toBe(true);
+
+    let nativeInput: unknown;
+    let nativeContextMetadata: unknown;
+    const nativeClient = createEmailClient({
+      adapters: [
+        adapter("native", undefined, {
+          capabilities: { ...capabilities, personalized: "native" },
+          sendPersonalized(value, context) {
+            nativeInput = value;
+            nativeContextMetadata = context.metadata;
+            return {
+              adapter: "native",
+              accepted: value.recipients.map((recipient) => emailAddressOfTest(recipient.to)),
+              rejected: [],
+            };
+          },
+        }),
+      ],
+      plugins: [
+        {
+          id: "native-defaults",
+          middleware: [
+            {
+              beforeSend(event) {
+                return {
+                  message: {
+                    ...event.message,
+                    headers: [{ name: "X-Native", value: "yes" }],
+                  },
+                  options: { metadata: { mode: "native" } },
+                };
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await nativeClient.sendPersonalized({
+      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      recipients: [{ to: "ada@example.com", variables: { name: "Ada" } }],
+    });
+
+    expect(nativeInput).toMatchObject({
+      message: {
+        subject: "Hi %recipient.name%",
+        text: "Hello %recipient.name%",
+        headers: [{ name: "X-Native", value: "yes" }],
+      },
+    });
+    expect("to" in (nativeInput as { message: object }).message).toBe(false);
+    expect(nativeContextMetadata).toEqual({ mode: "native" });
+  });
+
+  test("sendPersonalized invokes error middleware and hooks for partial and all-recipient failures", async () => {
+    const middlewareErrors: string[] = [];
+    const hookErrors: string[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("expanded", (value) => {
+          if (value.to === "bad@example.com" || value.to === "worse@example.com") {
+            throw new EmailAdapterError("recipient rejected", {
+              adapter: "expanded",
+              delivery: "not_sent",
+            });
+          }
+          return { adapter: "expanded", id: "ok" };
+        }),
+      ],
+      hooks: {
+        onError(event) {
+          hookErrors.push(emailAddressOfTest(event.message.to));
+        },
+      },
+      plugins: [
+        {
+          id: "capture-errors",
+          middleware: [
+            {
+              onError(event) {
+                middlewareErrors.push(emailAddressOfTest(event.message.to));
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const partial = await client.sendPersonalized({
+      message: { from: message.from, subject: "Hi", text: "Hello" },
+      recipients: [
+        { to: "good@example.com", variables: {} },
+        { to: "bad@example.com", variables: {} },
+      ],
+    });
+
+    expect(partial.accepted).toEqual(["good@example.com"]);
+    expect(partial.rejected).toEqual(["bad@example.com"]);
+    expect(middlewareErrors).toEqual(["bad@example.com"]);
+    expect(hookErrors).toEqual(["bad@example.com"]);
+
+    await expect(
+      client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [
+          { to: "bad@example.com", variables: {} },
+          { to: "worse@example.com", variables: {} },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
+    expect(middlewareErrors).toEqual([
+      "bad@example.com",
+      "bad@example.com",
+      "worse@example.com",
+    ]);
+    expect(hookErrors).toEqual(["bad@example.com", "bad@example.com", "worse@example.com"]);
+  });
+
+  test("sendPersonalized invokes error lifecycle for native adapter failures", async () => {
+    const errors: string[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("native", undefined, {
+          capabilities: { ...capabilities, personalized: "native" },
+          sendPersonalized() {
+            throw new EmailAdapterError("native failed", {
+              adapter: "native",
+              delivery: "not_sent",
+            });
+          },
+        }),
+      ],
+      plugins: [
+        {
+          id: "capture-native-errors",
+          middleware: [
+            {
+              onError(event) {
+                errors.push(`${event.adapter}:${event.attempt}`);
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [{ to: "bad@example.com", variables: {} }],
+      }),
+    ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
+    expect(errors).toEqual(["native:1"]);
+  });
+
+  test("sendPersonalized does not emit success lifecycle when native adapter rejects every recipient", async () => {
+    const events: string[] = [];
+    const client = createEmailClient({
+      adapters: [
+        adapter("native", undefined, {
+          capabilities: { ...capabilities, personalized: "native" },
+          sendPersonalized(value) {
+            return {
+              adapter: "native",
+              accepted: [],
+              rejected: value.recipients.map((recipient) => emailAddressOfTest(recipient.to)),
+            };
+          },
+        }),
+      ],
+      hooks: {
+        afterSend() {
+          events.push("hook:afterSend");
+        },
+        onError() {
+          events.push("hook:onError");
+        },
+      },
+      plugins: [
+        {
+          id: "native-all-rejected-lifecycle",
+          middleware: [
+            {
+              afterSend() {
+                events.push("middleware:afterSend");
+              },
+              onError() {
+                events.push("middleware:onError");
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [
+          { to: "bad@example.com", variables: {} },
+          { to: "worse@example.com", variables: {} },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
+
+    expect(events).toEqual(["middleware:onError", "hook:onError"]);
+    expect(events.filter((event) => event.endsWith(":afterSend"))).toHaveLength(0);
+    expect(events.filter((event) => event.endsWith(":onError"))).toHaveLength(2);
+  });
+
+  test("sendPersonalized emits safe telemetry for native and expanded delivery", async () => {
+    const nativeCapture = telemetryCapture();
+    setSharedTelemetry(nativeCapture.telemetry);
+    try {
+      const nativeClient = createEmailClient({
+        adapters: [
+          adapter("sendgrid", undefined, {
+            capabilities: { ...capabilities, personalized: "native" },
+            sendPersonalized() {
+              return {
+                adapter: "sendgrid",
+                accepted: ["ada@example.com", "linus@example.com"],
+                rejected: ["bad@example.com"],
+              };
+            },
+          }),
+        ],
       });
-      await client.sendBatch([
-        { ...message, adapter: "resend" },
-        { ...message, adapter: "smtp" },
-      ]);
-    });
 
-    const batch = events.filter((item) => item.event === "email batch sent");
-    expect(batch[0]?.properties).toMatchObject({ adapter: "mixed", message_count: 2 });
-  });
-
-  test("batch adapter reflects the adapter that actually delivered", async () => {
-    const { events, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({
-        adapters: [failingProvider("resend"), memoryProvider("smtp")],
+      await nativeClient.sendPersonalized({
+        message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+        recipients: [
+          { to: "ada@example.com", variables: { name: "Ada" } },
+          { to: "linus@example.com", variables: { name: "Linus" } },
+          { to: "bad@example.com", variables: { name: "Bad" } },
+        ],
       });
-      await client.sendBatch([{ ...message, adapter: "resend", fallbackAdapters: ["smtp"] }]);
-    });
 
-    const batch = events.filter((item) => item.event === "email batch sent");
-    // Primary "resend" failed and "smtp" delivered, so the summary names smtp.
-    expect(batch[0]?.properties).toMatchObject({ adapter: "smtp", succeeded: 1, failed: 0 });
+      const nativeEvent = nativeCapture.events.findLast((item) => item.event === "email sent");
+      expect(nativeEvent?.properties).toMatchObject({
+        adapter: "sendgrid",
+        delivery_path: "personalized_native",
+        success: true,
+        recipients: 3,
+        personalized_recipient_count: 3,
+        used_recipient_variables: true,
+        accepted_recipient_count: 2,
+        rejected_recipient_count: 1,
+        failure_count: 0,
+        source: "sdk",
+      });
+      expect(JSON.stringify(nativeEvent?.properties)).not.toContain("Ada");
+      expect(JSON.stringify(nativeEvent?.properties)).not.toContain("ada@example.com");
+      expect(nativeCapture.exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
+
+    const expandedCapture = telemetryCapture();
+    setSharedTelemetry(expandedCapture.telemetry);
+    try {
+      const expandedClient = createEmailClient({
+        adapters: [
+          adapter("resend", (value) => {
+            if (value.to === "bad@example.com") {
+              throw new EmailAdapterError("bad", {
+                adapter: "resend",
+                delivery: "not_sent",
+              });
+            }
+            return { adapter: "resend", id: "ok" };
+          }),
+        ],
+      });
+
+      await expandedClient.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [
+          { to: "good@example.com", variables: {} },
+          { to: "bad@example.com", variables: {} },
+        ],
+      });
+
+      const expandedEvent = expandedCapture.events.findLast((item) => item.event === "email sent");
+      expect(expandedEvent?.properties).toMatchObject({
+        adapter: "resend",
+        delivery_path: "personalized_expanded",
+        success: true,
+        recipients: 2,
+        accepted_recipient_count: 1,
+        rejected_recipient_count: 1,
+        failure_count: 1,
+      });
+      expect(expandedCapture.exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
   });
 
-  test("createEmailClient({ telemetry: false }) disables client events", async () => {
-    const { events, exceptions, telemetry } = stubTelemetry();
-
-    await withTelemetry(telemetry, async () => {
-      const client = createEmailClient({ adapters: [memoryProvider()], telemetry: false });
-      await client.send(message);
-      await client.sendBatch([message]);
+  test("sendPersonalized throws when every recipient fails", async () => {
+    const client = createEmailClient({
+      adapters: [
+        adapter("expanded", () => {
+          throw new EmailAdapterError("bad", {
+            adapter: "expanded",
+            delivery: "not_sent",
+          });
+        }),
+      ],
     });
 
-    expect(events).toHaveLength(0);
-    expect(exceptions).toHaveLength(0);
+    await expect(
+      client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [{ to: "bad@example.com", variables: {} }],
+      }),
+    ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
+  });
+
+  test("wraps middleware exceptions but isolates hook exceptions", async () => {
+    const middlewareClient = createEmailClient({
+      adapters: [adapter("primary")],
+      plugins: [
+        {
+          id: "middleware",
+          middleware: [
+            {
+              beforeSend() {
+                throw new Error("middleware failed");
+              },
+            },
+          ],
+        },
+      ],
+    });
+    await expect(middlewareClient.send(message)).rejects.toBeInstanceOf(EmailMiddlewareError);
+
+    const hookClient = createEmailClient({
+      adapters: [adapter("primary")],
+      hooks: {
+        beforeSend() {
+          throw new Error("hook failed");
+        },
+      },
+    });
+    await expect(hookClient.send(message)).resolves.toMatchObject({ adapter: "primary" });
   });
 });

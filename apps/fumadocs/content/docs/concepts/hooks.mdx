@@ -1,133 +1,76 @@
 ---
-title: Hooks
-description: Observe every send attempt (retries, fallback routing, failures) without changing the message or the result.
-icon: Activity
+title: Hooks and middleware
+sidebarTitle: Hooks & middleware
+description: Observe sends with hooks or change them with middleware.
 ---
 
-Hooks are read-only observers of the send pipeline: logs, metrics, traces. They fire for **every adapter attempt**, they cannot change the message, and a throwing hook does not break a send. To *transform* messages, use [plugin middleware](/docs/plugins/writing-plugins) instead. Keeping observation and transformation separate is deliberate: you can add logging anywhere without worrying about breaking delivery.
+Hooks observe the send lifecycle. Middleware may change the message or options and can fail the operation.
 
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
+## Lifecycle order
 
+For a normal send, the client runs this sequence:
+
+1. `beforeSend` middleware prepares the message and send options.
+2. Public validation checks the complete route.
+3. `beforeSend` hooks run before each adapter attempt.
+4. The adapter sends or throws.
+5. Retry hooks run before an eligible backoff.
+6. `afterSend` middleware and hooks run after success.
+7. Error middleware and hooks run after a terminal adapter failure.
+
+## Add hooks
+
+Hook failures are swallowed because observability must not change delivery behavior.
+
+```ts title="src/email.ts"
 const email = createEmailClient({
-  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: { retries: 2 },
+  adapters: [adapter],
   hooks: {
-    beforeSend({ provider, attempt, metadata }) {
-      console.log("email.attempt", { provider, attempt, route: metadata?.route });
-    },
-    afterSend({ provider, attempt, response }) {
-      console.log("email.sent", { provider, attempt, id: response.id });
-    },
-    onRetry({ provider, nextAttempt, delayMs, error }) {
-      console.warn("email.retry", { provider, nextAttempt, delayMs, error });
-    },
-    onError({ provider, attempt, error }) {
-      console.error("email.failed", { provider, attempt, error });
+    onRetry(event) {
+      console.info("email retry", {
+        adapter: event.adapter,
+        attempt: event.attempt,
+        nextAttempt: event.nextAttempt,
+        delayMs: event.delayMs,
+        code: event.error.code,
+      });
     },
   },
 });
-
-await email.send(message, { metadata: { route: "checkout.receipt" } });
 ```
 
-The `metadata` here is send-scope: it flows to every hook event for correlation but is not merged into the message. That makes it different from `message.metadata`, which adapters map to the wire.
+Hook events include the normalized message. Do not log addresses, subjects, bodies, headers, attachments, credentials, or arbitrary metadata without your own redaction policy.
 
-## The four events
+## Add middleware
 
-Every event carries the same base payload:
+Middleware exceptions become `EmailMiddlewareError` with phase `before_send`, `after_send`, or `on_error`.
 
-<TypeTable
-  type={{
-    provider: {
-      description: "Routing name of the adapter handling this attempt.",
-      type: "string",
-    },
-    message: {
-      description: "The EmailMessage being sent, after middleware transforms.",
-      type: "EmailMessage",
-    },
-    attempt: {
-      description: "1-based attempt number, per adapter.",
-      type: "number",
-    },
-    metadata: {
-      description: "Send-scope metadata passed in send options.",
-      type: "Record<string, unknown>",
-    },
-  }}
-/>
+```ts title="src/plugins/tenant-metadata.ts"
+import type { EmailPlugin } from "@opencoredev/email-sdk";
 
-Each event adds its own fields:
-
-| Event | Fires | Extra fields |
-| --- | --- | --- |
-| `beforeSend` | Before every attempt, on every adapter | — |
-| `afterSend` | Once, on the attempt that succeeded | `response` (normalized, `provider` always set) |
-| `onRetry` | When the same adapter will be retried, before the backoff sleep | `error`, `nextAttempt`, `delayMs` |
-| `onError` | Once per adapter, after its final failure, before [fallback](/docs/concepts/fallbacks-and-retries) continues | `error` |
-
-So a send with `retries: 2` and one fallback adapter can fire `beforeSend` up to six times, `onRetry` up to four, `onError` up to twice, and `afterSend` at most once.
-
-One exception: a [recipient-variables batch](/docs/reference/message#recipient-variables) on an adapter without native batch support becomes one real send per recipient, so `afterSend` fires once per delivered recipient and `onError` once per failed one.
-
-## Hooks observe, middleware transforms
-
-Hooks are deliberately powerless. When you need to *change* a send (add default headers, stamp idempotency keys, rewrite recipients), that is plugin middleware, a separate mechanism with different rules:
-
-| | Hooks | Plugin middleware `beforeSend` |
-| --- | --- | --- |
-| Registered via | Client `hooks` option or `plugin.hooks` | Plugins only (`plugin.middleware`) |
-| Runs | Per attempt, per adapter | Once per send, before validation and routing |
-| Knows the adapter | Yes (`provider` on every event) | No, it runs before the route is resolved |
-| Can change the send | Never | Yes, by returning `{ message?, options? }` |
-| If it throws | Swallowed, send unaffected | Send fails |
-
-```ts title="A transform belongs in middleware, not a hook"
-const brandPlugin = {
-  id: "brand",
+export const tenantMetadata = (tenantId: string): EmailPlugin => ({
+  id: "tenant-metadata",
   middleware: [
     {
-      beforeSend({ message }) {
-        return { message: { ...message, headers: { "X-App": "acme", ...message.headers } } };
+      beforeSend({ message, options }) {
+        return {
+          message,
+          options: {
+            ...options,
+            metadata: { ...options?.metadata, tenantId },
+          },
+        };
       },
     },
   ],
-};
+});
 ```
 
-[`defaultsPlugin`](/docs/plugins/built-in/defaults) is this pattern packaged up. The full middleware surface (`beforeSend`, `afterSend`, `onError`) is in the [plugin API reference](/docs/plugins/api).
+Message `metadata` is provider-facing when an adapter supports it. Send-option `metadata` is application context for hooks, middleware, telemetry feature facts, and adapters that inspect context.
 
-## Guarantees
+## Use the built-in observability plugin
 
-- **Failures are swallowed.** A hook that throws (or rejects) is ignored, because observability must not mask a send result. The flip side: don't put delivery-critical logic in a hook, since its errors disappear.
-- **Hooks are awaited in order.** Async hooks run sequentially: plugin hooks first, then client hooks. Slow hooks slow down sends, so keep them fast or fire-and-forget internally.
-- **Hooks see the final message.** Middleware transforms run first, so `event.message` is what the adapter actually receives.
+The default redactor keeps the subject, recipient counts, body-presence booleans, attachment count, tag names, and metadata keys. Replace it if the subject is sensitive in your application.
 
-## Production telemetry and tests
-
-Hand-rolled `console.log` hooks leak recipients and bodies into logs sooner or later. Two built-in plugins cover the common cases:
-
-- [`observabilityPlugin`](/docs/plugins/built-in/observability) emits `email.sent` / `email.retry` / `email.error` events with a redacted message shape: counts and flags, no bodies or recipients. Use it for production logging, metrics, and tracing.
-- [`capturePlugin`](/docs/plugins/built-in/capture) records every hook event to an inspectable store. Use it to assert send behavior in [tests](/docs/guides/test-email-behavior).
-
-## Next
-
-<Cards>
-  <Card
-    title="Observability plugin"
-    href="/docs/plugins/built-in/observability"
-    description="Redacted, structured send telemetry for production."
-  />
-  <Card
-    title="Writing plugins"
-    href="/docs/plugins/writing-plugins"
-    description="Middleware, plugin hooks, adapters, and client extensions."
-  />
-  <Card
-    title="Fallbacks and retries"
-    href="/docs/concepts/fallbacks-and-retries"
-    description="The pipeline these events narrate: backoff, routes, failures."
-  />
-</Cards>
+<Card title="Observability plugin" href="/docs/plugins/built-in/observability" description="Emit redacted log, metric, and trace events." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="Look up hooks, middleware, adapter registration, and client extensions." />

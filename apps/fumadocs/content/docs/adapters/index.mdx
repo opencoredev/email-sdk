@@ -1,96 +1,48 @@
 ---
 title: Adapters
-description: 23 provider adapters and transports, each with explicit field support and fail-fast validation.
-icon: Cable
+description: Configure one of 22 provider API adapters or the built-in SMTP transport, 23 adapters total.
 ---
-
-Email SDK ships 23 adapters. Each is its own entry point, so you import only what you send through, and each follows the same contract: map the fields the provider supports, throw a validation error for fields it cannot represent. Nothing is silently dropped.
-
-<SponsorSpotlight />
 
 <ProviderGrid />
 
-## Which adapter should I start with?
+## Compare support
 
-| If you want…                            | Start with                                                                   |
-| --------------------------------------- | ---------------------------------------------------------------------------- |
-| The fastest first send                  | Resend                                                                       |
-| Mature transactional delivery controls  | Postmark, SendGrid, AWS SES, Mailgun, Unosend, or Brevo                      |
-| A backup route for production delivery  | A primary API adapter plus Postmark or SMTP                                  |
-| Product-triggered or template emails    | Iterable, Sequenzy, Loops, or Plunk                                          |
-| A cheap or self-managed transport       | SMTP (built in, no Nodemailer)                                               |
-| Heavy attachment use                    | Resend, Postmark, SendGrid, Mailgun, Unosend, MailerSend, Mailtrap, Sequenzy |
+| Requirement | Check first |
+| --- | --- |
+| CC, BCC, reply-to, attachments, tags, or metadata | [Field support](/docs/adapters/field-support) |
+| Repeated headers, scheduled delivery, native idempotency, or personalized fanout | [Delivery capabilities](/docs/adapters/capability-groups) |
+| Existing SMTP service | [SMTP](/docs/adapters/smtp) |
 
-Whatever you pick, choose fallback routes by [field support](/docs/adapters/field-support), not popularity. A fallback only helps if it can carry the same message.
+## Add more than one provider
 
-## One pattern for every provider
-
-```ts
+```ts title="src/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { smtp } from "@opencoredev/email-sdk/smtp";
 
-const email = createEmailClient({
+export const email = createEmailClient({
   adapters: [
     resend({ apiKey: process.env.RESEND_API_KEY! }),
     smtp({
+      name: "backup",
       host: process.env.SMTP_HOST!,
-      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
     }),
   ],
-  fallback: ["smtp"],
+  fallback: { adapters: ["backup"] },
 });
-
-// route one send through a specific adapter
-await email.send(message, { adapter: "smtp" });
 ```
 
-Before a provider goes to production, dry-run it, then run one live smoke send from the environment that will send real mail:
+Email SDK checks every fallback before sending. If your backup cannot handle part of the message, you get an error instead of a half-broken email.
+
+## Check your setup without sending
 
 ```bash
 npx email-sdk adapters
-RESEND_API_KEY="re_..." npx email-sdk send \
-  --dry-run \
-  --adapter resend \
-  --from "Acme <hello@acme.com>" \
-  --to user@example.com \
-  --subject "Dry run" \
-  --text "Validate only"
+npx email-sdk doctor --adapter resend
 ```
 
-## Status labels
-
-<Accordions type="single">
-  <Accordion title="What the provider card labels mean">
-    - **Official**: the adapter ships in `@opencoredev/email-sdk`.
-    - **API tested**: a local check has successfully called the live provider API with a real key.
-      It does not prove delivery unless the adapter page says a send was performed.
-    - **Not API tested**: no live provider API check has been run yet.
-    - **Request tested**: repository tests cover request mapping, responses, and fail-fast
-      validation with injected fetch calls.
-    - **Built-in transport**: sends through Email SDK's own transport implementation instead of a
-      provider HTTP API.
-    - **No provider API**: the adapter does not call a hosted provider API.
-
-    Email SDK can catch unsupported fields before a request. It cannot make a provider account
-    ready to send from an unverified domain.
-
-  </Accordion>
-</Accordions>
-
-## Missing a provider?
-
-Don't fork the official package. Wrap the provider in the [adapter contract](/docs/reference/adapter-contract) and publish it as a community package instead.
-
-<Cards>
-  <Card
-    title="Create an adapter"
-    href="/docs/guides/authoring/create-adapter"
-    description="Implement the provider mapping and wrap it as an adapter plugin."
-  />
-  <Card
-    title="Publish a community adapter"
-    href="/docs/guides/authoring/publish-community-adapter"
-    description="Ship a third-party provider package and list it in the community registry."
-  />
-</Cards>
+`doctor` checks your credentials and required settings. `send --dry-run` checks the whole message without sending it.

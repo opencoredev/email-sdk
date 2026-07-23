@@ -4,15 +4,15 @@ import type {
   EmailMessage,
   EmailPlugin,
   EmailTag,
-  SendOptions,
+  EmailSendOptions,
 } from "./types.js";
 
 export type EmailDefaultsPluginOptions = {
   id?: string;
-  headers?: Record<string, string> | EmailHeader[];
-  tags?: EmailTag[];
+  headers?: readonly EmailHeader[];
+  tags?: readonly EmailTag[];
   metadata?: EmailMessage["metadata"];
-  sendMetadata?: SendOptions["metadata"];
+  sendMetadata?: EmailSendOptions["metadata"];
   replyTo?: EmailAddress | EmailAddress[];
   idempotencyKey?: string;
   idempotencyKeyPrefix?: string;
@@ -47,19 +47,18 @@ function withMessageDefaults(
     headers: mergeHeaders(options.headers, message.headers),
     tags: mergeTags(options.tags, message.tags),
     metadata: mergeMetadata(options.metadata, message.metadata),
-    idempotencyKey: applyIdempotencyDefault(message.idempotencyKey, options),
   };
 }
 
 function withSendOptionDefaults(
-  sendOptions: SendOptions | undefined,
-  message: EmailMessage,
+  sendOptions: EmailSendOptions | undefined,
+  _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
-): SendOptions | undefined {
+): EmailSendOptions | undefined {
   const metadata = mergeUnknownMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 
-  if (!sendOptions && !metadata && idempotencyKey === message.idempotencyKey) {
+  if (!sendOptions && !metadata && !idempotencyKey) {
     return undefined;
   }
 
@@ -71,8 +70,8 @@ function withSendOptionDefaults(
 }
 
 function mergeHeaders(
-  defaults: Record<string, string> | EmailHeader[] | undefined,
-  value: Record<string, string> | EmailHeader[] | undefined,
+  defaults: readonly EmailHeader[] | undefined,
+  value: readonly EmailHeader[] | undefined,
 ) {
   if (!defaults) {
     return value;
@@ -82,21 +81,13 @@ function mergeHeaders(
     return defaults;
   }
 
-  return {
-    ...headersToRecord(defaults),
-    ...headersToRecord(value),
-  };
+  return [...defaults, ...value];
 }
 
-function headersToRecord(headers: Record<string, string> | EmailHeader[]) {
-  if (!Array.isArray(headers)) {
-    return headers;
-  }
-
-  return Object.fromEntries(headers.map((header) => [header.name, header.value]));
-}
-
-function mergeTags(defaults: EmailTag[] | undefined, value: EmailTag[] | undefined) {
+function mergeTags(
+  defaults: readonly EmailTag[] | undefined,
+  value: readonly EmailTag[] | undefined,
+) {
   if (!defaults?.length) {
     return value;
   }
@@ -123,8 +114,8 @@ function mergeMetadata(
 }
 
 function mergeUnknownMetadata(
-  defaults: SendOptions["metadata"] | undefined,
-  value: SendOptions["metadata"] | undefined,
+  defaults: EmailSendOptions["metadata"] | undefined,
+  value: EmailSendOptions["metadata"] | undefined,
 ) {
   if (!defaults) {
     return value;

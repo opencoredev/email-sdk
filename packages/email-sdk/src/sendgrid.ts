@@ -8,16 +8,18 @@ import {
   sendAtUnixSeconds,
   sendgridAttachments,
 } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailAddress, EmailMessage, EmailAdapter } from "./types.js";
 import { arrayify, assertMaxItems, hasRecipientVariables } from "./utils.js";
 
-export type SendGridProviderOptions = {
+export type SendGridAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function sendgrid(
+  options: SendGridAdapterOptions,
+): EmailAdapter<"sendgrid", { baseUrl: string }> {
   const provider = jsonProvider({
     name: "sendgrid",
     baseUrl: options.baseUrl ?? "https://api.sendgrid.com",
@@ -43,7 +45,7 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
     },
     parseResponse(body, _message, response) {
       return {
-        provider: "sendgrid",
+        adapter: "sendgrid",
         id:
           firstString(body as Record<string, unknown>, ["id", "message_id"]) ??
           response.headers.get("x-message-id") ??
@@ -53,7 +55,33 @@ export function sendgrid(options: SendGridProviderOptions): EmailProvider<{ base
     },
   });
 
-  return { ...provider, sendBulk: provider.send };
+  return {
+    ...provider,
+    async sendPersonalized(input, context) {
+      const recipientVariables = Object.fromEntries(
+        input.recipients.map((recipient) => [emailAddress(recipient.to), recipient.variables]),
+      );
+      const result = await provider.send(
+        {
+          ...input.message,
+          to: input.recipients.map((recipient) => recipient.to),
+          recipientVariables,
+        } as EmailMessage,
+        context,
+      );
+      return {
+        ...result,
+        accepted: input.recipients.map((recipient) => emailAddress(recipient.to)),
+        rejected: [],
+      };
+    },
+  };
+}
+
+function emailAddress(address: EmailAddress) {
+  return typeof address === "string"
+    ? (address.match(/<([^>]+)>/)?.[1] ?? address).trim()
+    : address.email;
 }
 
 // With recipientVariables, emit one personalization per recipient so SendGrid substitutes

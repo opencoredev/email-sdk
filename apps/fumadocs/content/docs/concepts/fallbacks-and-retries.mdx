@@ -1,205 +1,80 @@
 ---
-title: Fallbacks and retries
-description: Retry transient provider errors with backoff, then fail over to a compatible backup adapter. Two layers, one send call.
-icon: Repeat2
+title: Retries and fallback
+sidebarTitle: Retries & fallback
+description: Retry one provider, then decide when it is safe to try another.
 ---
 
-A failing send gets two distinct layers of recovery. **Retries** re-attempt the *same* adapter when an error looks transient (rate limit, timeout, 5xx). **Fallback** moves to the *next* adapter only after the current one has finally failed. Both are off by default: `retries` is `0` and `fallback` is empty.
+Retries stay on the current adapter. Fallback starts only after that adapter reaches a terminal failure.
 
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { resend } from "@opencoredev/email-sdk/resend";
-import { smtp } from "@opencoredev/email-sdk/smtp";
+## Configure a route
 
+`maxAttempts` counts total calls, so `1` means one call and no retry.
+
+```ts title="src/email.ts"
 const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    smtp({
-      host: process.env.SMTP_HOST!,
-      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
-    }),
-  ],
-  retry: { retries: 2 },
-  fallback: ["smtp"],
-});
-```
-
-With that client, one `send` call that keeps hitting rate limits plays out like this:
-
-```txt
-resend  attempt 1 → 429 (retryable)   wait 100ms
-resend  attempt 2 → 429               wait 200ms
-resend  attempt 3 → 429               retries exhausted → onError("resend")
-smtp    attempt 1 → accepted          response.provider === "smtp"
-```
-
-**The retry budget resets for each adapter on the route.** The fallback adapter gets its own `retries: 2`, so the worst case for this client is six provider attempts. Size the retry budget with the whole route in mind.
-
-<Callout type="warn" title="Fallback routes must be field-compatible">
-  A backup adapter only helps if it supports every `EmailMessage` field your messages actually
-  use. Adapters reject unsupported fields instead of silently dropping them, so an incompatible
-  fallback fails too. Pick routes from the [field support matrix](/docs/adapters/field-support).
-</Callout>
-
-## Retries
-
-Configure retries once on the client with the `retry` option:
-
-<TypeTable
-  type={{
-    retries: {
-      description: "Extra attempts per adapter after the first one fails.",
-      type: "number",
-      default: "0",
-    },
-    delay: {
-      description: "Backoff in milliseconds before the next attempt.",
-      type: "(attempt: number, error: unknown) => number",
-      default: "min(100 * 2^(attempt - 1), 2000)",
-    },
-    shouldRetry: {
-      description: "Decides whether an error is worth retrying.",
-      type: "(error: unknown, attempt: number) => boolean",
-      default: "isRetryableEmailError",
-    },
-  }}
-/>
-
-The default backoff doubles from 100ms and caps at 2 seconds: 100, 200, 400, 800, 1600, 2000, 2000…
-
-### What retries by default
-
-The default `shouldRetry` is `isRetryableEmailError`: it retries only errors the SDK has marked `retryable: true`. Adapters set that flag for:
-
-| Error | Why it retries |
-| --- | --- |
-| HTTP `408`, `409`, `425`, `429` | Timeout, conflict, too-early, rate limit |
-| HTTP `5xx` | Provider-side failure |
-| Network errors | `ECONNRESET`-style failures, `fetch failed`, timeouts |
-
-Everything else (`401`, `422`, validation errors, bugs in your code) fails immediately. To change the policy, supply your own `shouldRetry` or `delay`:
-
-```ts
-const email = createEmailClient({
-  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: {
-    retries: 3,
-    delay: (attempt) => 250 * attempt + Math.random() * 100, // linear + jitter
+  adapters: [primary, backup],
+  defaultAdapter: "primary",
+  retry: { maxAttempts: 3 },
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
   },
 });
 ```
 
-## Fallback routes
+The default retry policy makes one attempt. The default delay uses capped exponential backoff. Override `delay` or `shouldRetry` when your application has a specific policy.
 
-For each send, the SDK builds a route from the selected adapter followed by the fallback adapters, with duplicate names removed:
+## Delivery certainty
 
-```txt
-[adapter, ...fallbackAdapters]
-```
+`EmailAdapterError.delivery` is either `not_sent` or `unknown`.
 
-The selected adapter comes from the per-send `adapter` option or the client's `defaultAdapter` (the first registered adapter unless you set it). Fallbacks come from the per-send `fallbackAdapters` option or the client-level `fallback` list. A route name that is not registered throws `EmailProviderNotFoundError` when the route reaches it.
+| Delivery value | Meaning | Default fallback behavior |
+| --- | --- | --- |
+| `not_sent` | The adapter can prove the provider did not accept the message. | Continue to the next configured adapter. |
+| `unknown` | Dispatch may have started, so delivery cannot be ruled out. | Stop to avoid an automatic duplicate. |
 
-Fallback is not limited to retryable errors. Retryability decides whether the *same* adapter gets another attempt; fallback fires on *any* final adapter failure, including a non-retryable `401` on the first attempt.
+Network timeouts and failures after dispatch begins are conservatively classified as `unknown` unless the adapter can prove otherwise.
 
-## Per-send overrides
+Opt into continuation only when the duplicate-delivery risk is acceptable.
 
-`send` options can reroute or re-budget a single send without touching the client:
-
-```ts
-// More retries for a payment receipt, different backup route
+```ts title="src/send-critical.ts"
 await email.send(message, {
-  retries: 4,
-  adapter: "resend",
-  fallbackAdapters: ["postmark"],
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "continue",
+  },
 });
-
-// Disable the client-level fallback for one send
-await email.send(message, { fallbackAdapters: [] });
 ```
 
-An empty `fallbackAdapters` array is the right tool when one message uses fields the default backup route cannot represent. `provider` and `fallbackProviders` are [aliases](/docs/concepts/adapter-model#naming-aliases) for the same options.
+The SDK never claims exactly-once delivery across adapters. Use idempotency where the adapter supports it, and keep durable workflow state in your application.
 
-## When every route fails
+## Override one send
 
-If only one adapter was attempted, its error is rethrown as-is. If multiple routes failed, the SDK throws an `EmailSdkError` with code `all_providers_failed` and every per-adapter failure collected in `details`:
+Per-send policy replaces the client fallback object and retry object.
 
-```ts
-import { EmailSdkError } from "@opencoredev/email-sdk";
-
-try {
-  await email.send(message);
-} catch (error) {
-  if (error instanceof EmailSdkError && error.code === "all_providers_failed") {
-    console.error(error.details); // one failure per attempted adapter, in route order
-  }
-}
-```
-
-See the [errors reference](/docs/reference/errors) for the full error taxonomy, and [hooks](/docs/concepts/hooks) for observing attempts, retries, and route changes as they happen.
-
-## Idempotency keys
-
-Retries and fallbacks mean the same logical email can be transmitted more than once. Give externally visible sends a stable key:
-
-```ts
+```ts title="src/send.ts"
 await email.send(message, {
-  idempotencyKey: "receipt:order_123",
+  adapter: "primary",
+  retry: { maxAttempts: 1 },
+  fallback: { adapters: [] },
 });
 ```
 
-The key (from `send` options, falling back to `message.idempotencyKey`) is passed to the adapter on every attempt. What happens next depends on the adapter:
+## Abort the whole route
 
-- **Resend, JetEmail, Lettermint, and Primitive** transmit it as the `Idempotency-Key` HTTP header, so the provider itself deduplicates repeated sends.
-- **SMTP** uses `message.idempotencyKey` as the `Message-ID` header value, so downstream mail systems can recognize duplicates.
-- Every other adapter ignores it on the wire.
+An `AbortSignal` stops active work or backoff and prevents every later retry and fallback.
 
-Even where the provider ignores the key, set one anyway. It gives your own pipeline (queues, workers, hook-based logging) a stable identity, so application-level retries and re-enqueues stay safe to deduplicate.
+```ts title="src/send.ts"
+const controller = new AbortController();
 
-One interaction to know: when a send carries [`recipientVariables`](/docs/reference/message#recipient-variables) and the adapter has no native batch support, each recipient becomes its own send and the key gets a per-recipient suffix (`<key>:<address>`). Retries then dedupe per recipient instead of dropping the whole batch, and the longer key still counts toward provider key-length limits.
-
-## Testing the route
-
-`failingProvider` and `memoryProvider` from the testing entry point make fallback behavior assertable without network calls:
-
-```ts
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
-
-const backup = memoryProvider("backup");
-const email = createEmailClient({
-  adapters: [failingProvider("primary"), backup],
-  fallback: ["backup"],
-});
-
-const response = await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Fallback",
-  text: "Hello",
-});
-
-expect(response.provider).toBe("backup");
-expect(backup.raw.sent).toHaveLength(1);
+const pending = email.send(message, { signal: controller.signal });
+controller.abort();
+await pending; // throws EmailAbortError
 ```
 
-Test with the same message shape production sends. That is what proves the routes are compatible.
+## Route exhaustion
 
-## Next
+When no route succeeds, the client throws `EmailRouteError`. Its `failures` array preserves adapter order and contains typed `EmailAdapterError` values.
 
-<Cards>
-  <Card
-    title="Field support"
-    href="/docs/adapters/field-support"
-    description="The matrix for choosing compatible primary and fallback routes."
-  />
-  <Card
-    title="Hooks"
-    href="/docs/concepts/hooks"
-    description="Watch attempts, retries, and fallback routing in real time."
-  />
-  <Card
-    title="Production send pipeline"
-    href="/docs/guides/production-send-pipeline"
-    description="Routing, retries, fallbacks, observability, and tests assembled end to end."
-  />
-</Cards>
+<Card title="Error reference" href="/docs/reference/errors" description="Match on closed error codes and typed fields." />
+<Card title="Production pipeline" href="/docs/guides/production-send-pipeline" description="Combine routing with idempotency, queues, and observability." />

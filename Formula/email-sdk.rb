@@ -1,11 +1,11 @@
 class EmailSdk < Formula
   desc "Lightweight TypeScript SDK and CLI for unified email sending"
   homepage "https://github.com/opencoredev/email-sdk"
-  url "https://registry.npmjs.org/@opencoredev/email-sdk/-/email-sdk-0.6.5.tgz"
-  sha256 "e9d2cae336d2638ada971772d1740b2e525183979b55145ec1731e956d5ded67"
+  url "https://registry.npmjs.org/@opencoredev/email-sdk/-/email-sdk-1.0.0.tgz"
+  sha256 "126b7b9525976d586b31c56a3ec49db2f373016946a3b417a2574bc04b6c7d8f"
   license "AGPL-3.0-only"
 
-  depends_on "bun"
+  depends_on "node"
 
   def install
     package_root = buildpath/"package"

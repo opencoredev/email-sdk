@@ -1,4 +1,4 @@
-import { ExternalLink, PackageCheck, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { ExternalLink, PackageCheck, ShieldCheck, ShieldQuestion } from "@/components/icon";
 
 import communityPlugins from "../../content/community/plugins.json";
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "verification-code",
+  "type": "registry:component",
+  "title": "Verification code",
+  "description": "A focused one-time code with a clear expiry.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/verification-code.tsx",
+      "content": "import {\n  EmailCard,\n  EmailHeading,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function VerificationCodeEmail({ code }: { code: string }) {\n  return (\n    <ShadcnEmail preview={`${code} is your verification code`}>\n      <EmailCard>\n        <EmailHeading>Verify your email</EmailHeading>\n        <EmailText>Enter this code to finish signing in. It expires in 10 minutes.</EmailText>\n        <EmailText style={{\n          backgroundColor: \"#f4f4f5\",\n          borderRadius: 8,\n          fontFamily: \"ui-monospace, SFMono-Regular, Menlo, monospace\",\n          fontSize: 28,\n          fontWeight: 700,\n          letterSpacing: 8,\n          padding: \"18px 20px\",\n          textAlign: \"center\",\n        }}>\n          {code}\n        </EmailText>\n        <EmailText muted>If you didn’t request this code, ignore this email.</EmailText>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/verification-code.tsx"
+    }
+  ]
+}

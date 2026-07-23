@@ -8,9 +8,9 @@ import { appName, siteUrl } from "@/lib/shared";
 // instead of marketing HTML. Kept in sync by hand with the homepage hero copy.
 const body = `# ${appName}
 
-> One TypeScript email SDK for every provider.
+> An open-source TypeScript SDK for transactional email. 23 adapters. One typed SDK.
 
-${appName} is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 20+ providers — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
+${appName} is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 22 provider APIs plus SMTP — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
 
 ## Install
 
@@ -26,7 +26,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: { retries: 1 },
+  retry: { maxAttempts: 2 },
 });
 
 await email.send({
@@ -39,7 +39,7 @@ await email.send({
 
 ## Why use it
 
-- **One API, every provider.** Swap or add a provider without rewriting send sites — adapters import from their own entry points (\`@opencoredev/email-sdk/resend\`, \`/smtp\`, \`/ses\`, …).
+- **Switch providers without rewriting your app.** Adapters import from their own entry points (\`@opencoredev/email-sdk/resend\`, \`/smtp\`, \`/ses\`, …) while every send site keeps the same typed call.
 - **Retries and fallbacks.** Retry transient failures and route across compatible adapters automatically.
 - **Agent-ready.** \`createEmailAgentTools(client)\` from \`@opencoredev/email-sdk/agent-tools\` returns a guarded \`send_email\` tool that runs the full validate/retry/fallback pipeline.
 - **Local CLI.** \`email-sdk doctor\` and \`send --dry-run\` check configuration and test sends before going live.

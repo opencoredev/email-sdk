@@ -1,6 +1,7 @@
-import { EmailProviderError } from "./errors.js";
-import type { EmailAttachment, EmailMessage, EmailProvider, EmailTag } from "./types.js";
+import { EmailAdapterError } from "./errors.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
 import {
+  builtInAdapterDefinition,
   attachmentToBase64,
   formatAddress,
   formatAddresses,
@@ -13,7 +14,7 @@ import {
   SUPPORTED_MESSAGE_FIELDS,
 } from "./utils.js";
 
-export type PostmarkProviderOptions = {
+export type PostmarkAdapterOptions = {
   serverToken: string;
   baseUrl?: string;
   messageStream?: string;
@@ -21,12 +22,15 @@ export type PostmarkProviderOptions = {
   headers?: Record<string, string>;
 };
 
-export function postmark(options: PostmarkProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function postmark(
+  options: PostmarkAdapterOptions,
+): EmailAdapter<"postmark", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.postmarkapp.com";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "postmark",
+    ...builtInAdapterDefinition("postmark"),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/email`, {
@@ -43,11 +47,10 @@ export function postmark(options: PostmarkProviderOptions): EmailProvider<{ base
 
       if (!response.ok) {
         const body = await readErrorBody(response);
-        throw new EmailProviderError(httpErrorMessage("Postmark", response.status, body), {
-          provider: "postmark",
+        throw new EmailAdapterError(httpErrorMessage("Postmark", response.status, body), {
+          adapter: "postmark",
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          details: body,
         });
       }
 
@@ -58,9 +61,8 @@ export function postmark(options: PostmarkProviderOptions): EmailProvider<{ base
       };
 
       return {
-        provider: "postmark",
+        adapter: "postmark",
         id: body.MessageID,
-        messageId: body.MessageID,
         accepted: body.To ? [body.To] : undefined,
         raw: body,
       };
@@ -103,7 +105,7 @@ async function toPostmarkAttachment(attachment: EmailAttachment) {
   };
 }
 
-function firstPostmarkTag(tags: EmailTag[] | undefined) {
+function firstPostmarkTag(tags: readonly EmailTag[] | undefined) {
   if (!tags || tags.length === 0) {
     return undefined;
   }

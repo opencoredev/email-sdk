@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { brevo } from "./brevo.js";
-import { assertCloudflareMessage, cloudflare } from "./cloudflare.js";
+import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { iterable } from "./iterable.js";
@@ -29,22 +29,16 @@ import type {
   EmailAttachment,
   EmailHeader,
   EmailMessage,
-  EmailProvider,
+  EmailAdapter,
   EmailTag,
 } from "./types.js";
 import { getTelemetry, normalizeAdapterName, setTelemetrySource } from "./telemetry.js";
-import {
-  SUPPORTED_MESSAGE_FIELDS,
-  arrayify,
-  assertMaxItems,
-  assertMessage,
-  assertSupportedMessageFields,
-} from "./utils.js";
-import { assertUnosendMessage, unosend } from "./unosend.js";
+import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
+import { unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
-type ProviderFactory = (flags: CliFlags) => EmailProvider;
+type AdapterFactory = (flags: CliFlags) => EmailAdapter;
 type SupportedAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
 type PackageInfo = {
   name: string;
@@ -127,7 +121,7 @@ const factories = {
       apiKey: flagOrEnv(flags, "api-key", "ITERABLE_API_KEY"),
       campaignId: numberFlagOrEnv(flags, "campaign-id", "ITERABLE_CAMPAIGN_ID"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.ITERABLE_BASE_URL,
-      sendAt: stringFlag(flags, "send-at") ?? process.env.ITERABLE_SEND_AT,
+      sendAt: stringFlag(flags, "iterable-send-at") ?? process.env.ITERABLE_SEND_AT,
       allowRepeatMarketingSends:
         booleanFlag(flags, "allow-repeat-marketing-sends") ??
         booleanEnv("ITERABLE_ALLOW_REPEAT_MARKETING_SENDS"),
@@ -204,7 +198,7 @@ const factories = {
             }
           : undefined,
     }),
-} satisfies Record<ProviderName, ProviderFactory>;
+} satisfies Record<ProviderName, AdapterFactory>;
 
 const envFlagNames: Record<string, string> = {
   RESEND_API_KEY: "api-key",
@@ -268,7 +262,9 @@ async function main(command: string | undefined, flags: CliFlags) {
   const message = await buildMessage(flags);
 
   if (truthyFlag(flags, "dry-run")) {
-    validateDryRun(providerName, message);
+    const adapter = createProvider(providerName, dryRunFlags(providerName, flags));
+    const client = createEmailClient({ adapters: [adapter] });
+    await client.validate(message);
     console.log(
       JSON.stringify(
         {
@@ -291,7 +287,7 @@ async function main(command: string | undefined, flags: CliFlags) {
   console.log(JSON.stringify(response, null, 2));
 }
 
-function createProvider(name: string, flags: CliFlags): EmailProvider {
+function createProvider(name: string, flags: CliFlags): EmailAdapter {
   if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
@@ -299,29 +295,19 @@ function createProvider(name: string, flags: CliFlags): EmailProvider {
   return factories[name](flags);
 }
 
-function validateDryRun(name: string, message: EmailMessage) {
+function dryRunFlags(name: string, flags: CliFlags): CliFlags {
   if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
-
-  assertMessage(message);
-  assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS[name]);
-
-  if (name === "loops") {
-    assertMaxItems("loops", "recipient", arrayify(message.to), 1);
-  }
-
-  if (name === "iterable") {
-    assertMaxItems("iterable", "recipient", arrayify(message.to), 1);
-  }
-
-  if (name === "cloudflare") {
-    assertCloudflareMessage(message);
-  }
-
-  if (name === "unosend") {
-    assertUnosendMessage(message);
-  }
+  const defaults = Object.fromEntries(
+    providerDocs
+      .find((adapter) => adapter.name === name)!
+      .env.map((environmentName) => [
+        envFlagNames[environmentName],
+        environmentName.endsWith("CAMPAIGN_ID") ? "1" : "dry-run",
+      ]),
+  );
+  return { ...defaults, ...flags };
 }
 
 function isProviderName(name: string): name is ProviderName {
@@ -553,6 +539,8 @@ async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
   if (stringFlag(flags, "bcc")) message.bcc = splitAddresses(requiredFlag(flags, "bcc"));
   if (stringFlag(flags, "reply-to"))
     message.replyTo = splitAddresses(requiredFlag(flags, "reply-to"));
+  if (stringFlag(flags, "send-at"))
+    message.sendAt = stringFlag(flags, "send-at") as EmailMessage["sendAt"];
 
   const headers = parseHeaders(stringFlags(flags, "header"));
   if (headers.length > 0) message.headers = headers;
@@ -669,6 +657,7 @@ Send options:
   --metadata <key=value>       Add provider metadata. Repeatable.
   --attachment <path[:type]>   Attach a local file. Repeatable.
   --message <path>             Read the EmailMessage JSON payload from a file.
+  --send-at <rfc3339>          Schedule the message on capable adapters.
   --dry-run                    Validate input and print the send plan without sending.
   --base-url <url>             Overrides supported adapter base URL variables.
 
@@ -678,7 +667,7 @@ Cloudflare options:
 
 Iterable options:
   --campaign-id <id>           Overrides ITERABLE_CAMPAIGN_ID.
-  --send-at <utc>              Overrides ITERABLE_SEND_AT.
+  --iterable-send-at <utc>     Overrides ITERABLE_SEND_AT for Iterable's campaign API.
   --allow-repeat-marketing-sends
                                 Allows repeat marketing sends.
 

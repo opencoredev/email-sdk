@@ -1,0 +1,71 @@
+---
+title: Sending modes
+sidebarTitle: Sending modes
+description: Pick the right method for batches, personalization, schedules, and idempotency.
+---
+
+Email SDK separates independent messages from one message personalized across recipients.
+
+## Independent sends
+
+Use `sendMany` when every item is a complete message with its own outcome. Execution is sequential and preserves input order.
+
+```ts title="src/send-notifications.ts"
+const results = await email.sendMany([
+  { message: welcomeMessage, options: { idempotencyKey: "welcome:1" } },
+  { message: receiptMessage, options: { idempotencyKey: "receipt:1" } },
+]);
+```
+
+The method returns one settled result per item. Item options override method-level options, including replacement of the fallback object.
+
+## Personalized recipients
+
+Use `sendPersonalized` when subject or body tokens vary by recipient.
+
+```ts title="src/send-campaign.ts"
+const result = await email.sendPersonalized(
+  {
+    message: {
+      from: "Acme <hello@acme.com>",
+      subject: "Hi %recipient.name%",
+      text: "Welcome, %recipient.name%.",
+    },
+    recipients: [
+      { to: "ada@example.com", variables: { name: "Ada" } },
+      { to: "linus@example.com", variables: { name: "Linus" } },
+    ],
+  },
+  { idempotencyKey: "campaign:42" },
+);
+```
+
+Mailgun and SendGrid use native personalized APIs. Other built-in adapters expand recipients into deterministic sequential sends. At least one accepted recipient resolves with `accepted` and `rejected`; zero accepted recipients throws `EmailAllRecipientsFailedError`.
+
+## Scheduled sends
+
+`sendAt` accepts a `Date` or RFC 3339 string with `Z` or a numeric offset.
+
+```ts title="src/send-later.ts"
+await email.send({
+  ...message,
+  sendAt: "2026-08-01T09:00:00Z",
+});
+```
+
+The SDK does not wait or queue. Capable adapters translate the timestamp into the provider's scheduling field. Incapable adapters reject it during validation.
+
+## Idempotency
+
+Pass `idempotencyKey` in send options, not in `EmailMessage`.
+
+```ts title="src/send-receipt.ts"
+await email.send(receipt, {
+  idempotencyKey: "receipt:order_123",
+});
+```
+
+Resend, JetEmail, Lettermint, and Primitive have native idempotency support. SMTP derives `Message-ID` from the key. Other adapters receive the key in context but cannot guarantee provider-side deduplication.
+
+<Card title="Message reference" href="/docs/reference/message" description="See exact message, attachment, header, and schedule types." />
+<Card title="Capability groups" href="/docs/adapters/capability-groups" description="Choose adapters that support the sending mode you need." />

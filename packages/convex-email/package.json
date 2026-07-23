@@ -1,8 +1,7 @@
 {
   "name": "@opencoredev/convex-email",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Convex Email Ops: provider-portable transactional email with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
+  "version": "1.0.0",
+  "description": "Provider-portable transactional email for Convex with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
   "keywords": [
     "convex",
     "convex-component",
@@ -27,7 +26,7 @@
     "zeptomail",
     "transactional-email"
   ],
-  "homepage": "https://email-sdk.dev/docs/components/convex-email",
+  "homepage": "https://email-sdk.dev/docs/integrations/convex",
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },
@@ -84,7 +83,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
-    "prepack": "bun run build"
+    "prepack": "if [ \"${EMAIL_SDK_RELEASE_PREBUILT:-0}\" = \"1\" ]; then test -f dist/client/index.js; else bun run build; fi"
   },
   "devDependencies": {
     "@opencoredev/email-sdk": "workspace:*",
@@ -93,7 +92,7 @@
     "convex-test": "0.0.53"
   },
   "peerDependencies": {
-    "@opencoredev/email-sdk": "^0.6.5",
+    "@opencoredev/email-sdk": "^1.0.0",
     "convex": "^1.36.1"
   },
   "engines": {

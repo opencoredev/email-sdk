@@ -23,8 +23,8 @@ export function baseOptions({
         </span>
       ),
     },
-    themeSwitch: {
-      component: <ThemeToggle />,
+    slots: {
+      themeSwitch: ThemeToggle,
     },
     links: [
       ...(mainLinks
@@ -52,6 +52,12 @@ export function baseOptions({
               text: "Tools",
               url: "/tools",
               active: "nested-url" as const,
+            },
+            {
+              type: "main" as const,
+              text: "Stats",
+              url: "/stats",
+              active: "url" as const,
             },
           ]
         : []),

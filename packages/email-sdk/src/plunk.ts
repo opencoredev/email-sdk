@@ -6,16 +6,16 @@ import {
   commonHeadersObject,
   optionalSingleApiAddress,
 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type PlunkProviderOptions = {
+export type PlunkAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function plunk(options: PlunkProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { baseUrl: string }> {
   return jsonProvider({
     name: "plunk",
     baseUrl: options.baseUrl ?? "https://next-api.useplunk.com",
@@ -47,7 +47,7 @@ export function plunk(options: PlunkProviderOptions): EmailProvider<{ baseUrl: s
     parseResponse(body) {
       const record = body as Record<string, unknown>;
       return {
-        provider: "plunk",
+        adapter: "plunk",
         id: plunkEmailId(record) ?? firstString(record, ["id", "emailId"]),
         raw: body,
       };

@@ -1,163 +1,50 @@
 ---
 title: Publish a community plugin
-description: Package an Email SDK plugin for npm and list it in the community registry.
-icon: PackageCheck
+description: Package a v1-compatible plugin with explicit peer versions, tests, and support documentation.
 ---
 
-This guide publishes a plugin (built in [Create your first plugin](/docs/guides/authoring/create-first-plugin)) as an npm package and lists it in the [community registry](/docs/plugins/community). The registry is a static JSON file in the docs repo; there is no hosted plugin service.
+Community plugins are independent npm packages. They should depend on the public contract rather than repository internals.
 
-If your package adds a new email provider, follow [Publish a community adapter](/docs/guides/authoring/publish-community-adapter) instead. It is the same process plus field-support documentation.
-
-<Steps>
-<Step>
-
-### Shape the package
-
-Name it `email-sdk-{plugin}` and export the plugin factory (and its options type) from the package root:
-
-```txt
-email-sdk-audit-log/
-  src/
-    index.ts
-    audit-log.ts
-    audit-log.test.ts
-  package.json
-  README.md
-```
-
-```ts title="src/index.ts"
-export { auditLogPlugin } from "./audit-log";
-export type { AuditLog, AuditLogEntry } from "./audit-log";
-```
-
-The bar: apps use it in one line inside `plugins`.
-
-```ts
-createEmailClient({
-  plugins: [auditLogPlugin()],
-});
-```
-
-</Step>
-<Step>
-
-### Set the package.json requirements
-
-Declare `@opencoredev/email-sdk` as a peer dependency so apps never end up with two copies of the core types:
+## Package the plugin
 
 ```json title="package.json"
 {
-  "name": "email-sdk-audit-log",
+  "name": "@example/email-sdk-receipts",
   "type": "module",
-  "sideEffects": false,
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^1.0.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
-  },
-  "peerDependencies": {
-    "@opencoredev/email-sdk": "^0.6.0"
   }
 }
 ```
 
-Plugin packages should be boring libraries. To qualify for a `verified` listing later, the package must have:
+Keep Email SDK as a peer and development dependency so consumers use one client type identity.
 
-- A public source repository (matching the registry entry).
-- npm provenance or trusted publishing.
-- No `preinstall`, `install`, or `postinstall` scripts.
-- No binaries.
-- A small runtime dependency surface.
-- No network calls during import or plugin construction.
+## Test the public behavior
 
-These checks reduce supply-chain risk; they do not make third-party code risk-free.
+Cover every middleware phase, hook, registered adapter, client extension, reserved-key collision, and duplicate plugin id your package uses. Use `memoryAdapter`, `failingAdapter`, and injected dependencies instead of real credentials.
 
-</Step>
-<Step>
+## Document the contract
 
-### Test registration and behavior
+The package README should state:
 
-At minimum, prove the plugin registers with `createEmailClient` and does its job against the [memory adapter](/docs/guides/test-email-behavior):
+- exact import and setup
+- required environment variables
+- message or send-option changes
+- client extension types
+- failure behavior
+- data retained or logged
+- supported Email SDK versions
 
-```ts title="src/audit-log.test.ts"
-import { expect, test } from "bun:test";
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { memoryProvider } from "@opencoredev/email-sdk/testing";
-import { auditLogPlugin } from "./index";
+Never include live provider credentials or message data in examples.
 
-test("records sends on the extended client", async () => {
-  const email = createEmailClient({
-    adapters: [memoryProvider()],
-    plugins: [auditLogPlugin()],
-  });
+## Request registry listing
 
-  await email.send({
-    from: "Acme <hello@acme.com>",
-    to: "user@example.com",
-    subject: "Hello",
-    text: "Hi",
-  });
+Add the package to the repository's community registry through a pull request. The listing is discovery, not a security or delivery endorsement.
 
-  expect(email.auditLog.entries).toHaveLength(1);
-});
-```
-
-Add a README with the install command, a minimal client example, and what the plugin extends the client with.
-
-</Step>
-<Step>
-
-### Publish and open the registry PR
-
-Publish to npm from your own repository, then add an entry to `apps/fumadocs/content/community/plugins.json` in the Email SDK repo:
-
-```json
-{
-  "name": "Audit log",
-  "package": "email-sdk-audit-log",
-  "kind": "plugin",
-  "status": "community",
-  "description": "Records every send outcome on a typed client extension.",
-  "href": "https://www.npmjs.com/package/email-sdk-audit-log",
-  "repo": "https://github.com/acme/email-sdk-audit-log",
-  "maintainer": "acme",
-  "pluginId": "audit-log"
-}
-```
-
-Every field except `pluginId` is required; `href` and `repo` must be `https` URLs, and name, package, and plugin id must be unique across the registry. Start with `status: "community"`; `verified` requires a per-version review with `verifiedVersion` and `verification` metadata in the entry.
-
-</Step>
-<Step>
-
-### Verify the entry
-
-```bash
-bun run community:check
-```
-
-CI runs the same validation on the PR. For `verified` and `official` entries it also downloads the published tarball and audits it: install scripts, binaries, the peer dependency, repository match, and runtime dependency count.
-
-</Step>
-</Steps>
-
-## Next
-
-<Cards>
-  <Card
-    title="Community registry reference"
-    href="/docs/reference/community-registry"
-    description="All entry fields, statuses, and the verification block."
-  />
-  <Card
-    title="Publish a community adapter"
-    href="/docs/guides/authoring/publish-community-adapter"
-    description="The extra steps for packages that add a provider."
-  />
-  <Card
-    title="Writing plugins"
-    href="/docs/plugins/writing-plugins"
-    description="Hooks vs middleware, plugin adapters, and typed extensions."
-  />
-</Cards>
+<Card title="Community extensions" href="/docs/plugins/community" description="See the review and support boundary for third-party packages." />

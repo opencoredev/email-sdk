@@ -4,7 +4,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EmailProviderNotFoundError, EmailSdkError, EmailValidationError } from "./errors.js";
+import {
+  EmailAdapterNotFoundError,
+  EmailProviderNotFoundError,
+  EmailSdkError,
+  EmailValidationError,
+} from "./errors.js";
 import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 
 const POSTHOG_HOST = "https://us.i.posthog.com";
@@ -74,7 +79,11 @@ export function normalizeAdapterName(name: string | undefined) {
  * caller errors, not SDK defects, so they stay out of error reports.
  */
 export function isReportableSendError(error: unknown) {
-  return !(error instanceof EmailValidationError) && !(error instanceof EmailProviderNotFoundError);
+  return (
+    !(error instanceof EmailValidationError) &&
+    !(error instanceof EmailAdapterNotFoundError) &&
+    !(error instanceof EmailProviderNotFoundError)
+  );
 }
 
 export function detectCiVendor(env: Record<string, string | undefined>) {

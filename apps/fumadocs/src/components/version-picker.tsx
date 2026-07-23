@@ -1,8 +1,8 @@
-import { Check, ChevronDown, ExternalLink, PackageCheck } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "fumadocs-ui/components/ui/popover";
 import { usePathname } from "fumadocs-core/framework";
 
+import { Check, ChevronDown, ExternalLink, PackageCheck } from "@/components/icon";
 import { rememberDocsVersion, useSelectedDocsVersion } from "@/lib/docs-version-state";
 import { docsVersions, getDocsVersionHref, getVersionLinks, sdkPackageName } from "@/lib/versions";
 

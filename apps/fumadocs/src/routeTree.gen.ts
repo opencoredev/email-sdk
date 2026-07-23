@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -38,6 +39,11 @@ import { Route as OgBlogSplatRouteImport } from './routes/og/blog/$'
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
@@ -228,6 +236,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rss.xml'
     | '/sitemap.xml'
+    | '/stats'
     | '/terms'
     | '/api/build-info'
     | '/api/search'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rss.xml'
     | '/sitemap.xml'
+    | '/stats'
     | '/terms'
     | '/api/build-info'
     | '/api/search'
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/rss.xml'
     | '/sitemap.xml'
+    | '/stats'
     | '/terms'
     | '/api/build-info'
     | '/api/search'
@@ -339,6 +351,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StatsRoute: typeof StatsRoute
   TermsRoute: typeof TermsRoute
   ApiBuildInfoRoute: typeof ApiBuildInfoRoute
   ApiSearchRoute: typeof ApiSearchRoute
@@ -362,6 +375,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -547,6 +567,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   RssDotxmlRoute: RssDotxmlRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StatsRoute: StatsRoute,
   TermsRoute: TermsRoute,
   ApiBuildInfoRoute: ApiBuildInfoRoute,
   ApiSearchRoute: ApiSearchRoute,

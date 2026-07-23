@@ -22,6 +22,7 @@ function send(message: EmailMessage) {
 async function captureSmtpData(message: EmailMessage) {
   let captured = "";
   let inData = false;
+  const commands: string[] = [];
 
   const server = net.createServer((socket) => {
     socket.setEncoding("utf8");
@@ -39,6 +40,7 @@ async function captureSmtpData(message: EmailMessage) {
       }
 
       const command = chunk.trim().toUpperCase();
+      commands.push(command);
 
       if (command.startsWith("EHLO")) {
         socket.write("250 test.local\r\n");
@@ -65,7 +67,7 @@ async function captureSmtpData(message: EmailMessage) {
     server.close();
   }
 
-  return captured;
+  return { commands, data: captured };
 }
 
 describe("smtp injection guards", () => {
@@ -96,6 +98,14 @@ describe("smtp injection guards", () => {
     ).rejects.toBeInstanceOf(EmailValidationError);
   });
 
+  test("rejects custom Bcc headers case-insensitively before connecting", async () => {
+    for (const name of ["Bcc", "bcc", "BCC"] as const) {
+      await expect(
+        send({ ...baseMessage, headers: [{ name, value: "hidden@example.com" }] }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+    }
+  });
+
   test("rejects DEL and non-ASCII characters in the envelope address", async () => {
     await expect(send({ ...baseMessage, to: "victim\x7f@example.com" })).rejects.toBeInstanceOf(
       EmailValidationError,
@@ -113,11 +123,49 @@ describe("smtp injection guards", () => {
 
     // The lone \r is folded into a space, so the value stays on one header line
     // and no injected Bcc header reaches the wire.
-    expect(transmitted).toContain("X-Custom: legit Bcc: evil@example.com");
-    const injected = transmitted
+    expect(transmitted.data).toContain("X-Custom: legit Bcc: evil@example.com");
+    const injected = transmitted.data
       .split(/\r\n|[\r\n]/)
       .some((line) => line.toLowerCase().startsWith("bcc:"));
     expect(injected).toBe(false);
+  });
+
+  test("preserves repeated header names on the wire", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      headers: [
+        { name: "X-Trace", value: "one" },
+        { name: "X-Trace", value: "two" },
+      ],
+    });
+
+    expect(transmitted.data.match(/^X-Trace:/gim)).toHaveLength(2);
+    expect(transmitted.data).toContain("X-Trace: one");
+    expect(transmitted.data).toContain("X-Trace: two");
+  });
+
+  test("omits Bcc from DATA while sending all recipients as RCPT", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      to: ["to@example.com"],
+      cc: "cc@example.com",
+      bcc: ["bcc@example.com"],
+    });
+
+    expect(transmitted.commands).toContain("RCPT TO:<TO@EXAMPLE.COM>");
+    expect(transmitted.commands).toContain("RCPT TO:<CC@EXAMPLE.COM>");
+    expect(transmitted.commands).toContain("RCPT TO:<BCC@EXAMPLE.COM>");
+    const dataHeaderLines = transmitted.data.split(/\r\n\r\n/)[0]?.split(/\r\n|[\r\n]/) ?? [];
+    expect(dataHeaderLines.some((line) => line.toLowerCase().startsWith("bcc:"))).toBe(false);
+  });
+
+  test("rejects attachments before connecting", async () => {
+    await expect(
+      send({
+        ...baseMessage,
+        attachments: [{ filename: "hello.txt", content: "hello" }],
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
   });
 
   test("accepts addresses with hyphens and plus signs", async () => {

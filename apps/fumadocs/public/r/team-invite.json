@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "team-invite",
+  "type": "registry:component",
+  "title": "Team invite",
+  "description": "A personal invitation to join a workspace.",
+  "dependencies": [
+    "@opencoredev/email-sdk",
+    "@react-email/render",
+    "react",
+    "react-dom"
+  ],
+  "files": [
+    {
+      "path": "ui/email/team-invite.tsx",
+      "content": "import {\n  EmailButton,\n  EmailCard,\n  EmailHeading,\n  EmailText,\n  ShadcnEmail,\n} from \"@opencoredev/email-sdk/react\";\n\nexport function TeamInviteEmail({ inviteUrl, inviter }: {\n  inviteUrl: string;\n  inviter: string;\n}) {\n  return (\n    <ShadcnEmail preview={`${inviter} invited you to join Acme`}>\n      <EmailCard>\n        <EmailHeading>Join {inviter} on Acme</EmailHeading>\n        <EmailText>{inviter} invited you to collaborate in the Acme workspace.</EmailText>\n        <EmailText style={{\n          borderLeft: \"2px solid #d4d4d8\",\n          color: \"#52525b\",\n          fontStyle: \"italic\",\n          paddingLeft: 16,\n        }}>\n          “We’re keeping launch notes, approvals, and customer updates here.”\n        </EmailText>\n        <EmailButton href={inviteUrl}>Join workspace</EmailButton>\n      </EmailCard>\n    </ShadcnEmail>\n  );\n}\n",
+      "type": "registry:component",
+      "target": "ui/email/team-invite.tsx"
+    }
+  ]
+}

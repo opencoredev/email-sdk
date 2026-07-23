@@ -4,6 +4,14 @@ description: Send through Primitive's email API for AI agents, with base64 attac
 icon: primitive
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Primitive adapter calls Primitive's `POST /v1/send-mail` endpoint with plain `fetch`. [Primitive](https://www.primitive.dev) is email infrastructure for AI agents: a REST API for sending and receiving mail, with idempotency, typed errors, and an async delivery model. The adapter maps the normalized `EmailMessage` straight onto its send payload.
 
 <ProviderBadge adapter="primitive" />

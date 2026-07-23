@@ -1,0 +1,168 @@
+---
+title: SMTP
+description: Send over raw SMTP with the built-in TCP/TLS transport. No Nodemailer, no HTTP API.
+icon: smtp
+---
+
+The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets. There is no Nodemailer and no HTTP API in the path. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
+
+<ProviderBadge adapter="smtp" />
+
+## Configure
+
+Get the host, port, TLS mode, and credentials from your SMTP provider.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+export const email = createEmailClient({
+  adapters: [
+    smtp({
+      host: "smtp.purelymail.com",
+      port: 587,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    host: {
+      description: "SMTP server hostname.",
+      type: "string",
+      required: true,
+    },
+    port: {
+      description: "SMTP server port.",
+      type: "number",
+      default: "465 when secure, else 587",
+    },
+    secure: {
+      description: "Connect with implicit TLS from the first byte (typically port 465).",
+      type: "boolean",
+      default: "false",
+    },
+    auth: {
+      description:
+        'SMTP credentials. method picks the AUTH mechanism; the default is "plain" (AUTH PLAIN), set "login" for AUTH LOGIN.',
+      type: '{ user: string; pass: string; method?: "plain" | "login" }',
+    },
+    requireTLS: {
+      description: "Force a STARTTLS upgrade even when no auth is configured.",
+      type: "boolean",
+      default: "false",
+    },
+    allowInsecureAuth: {
+      description: "Permit AUTH over a plaintext connection. Only for trusted local servers.",
+      type: "boolean",
+      default: "false",
+    },
+    tls: {
+      description: "Extra options merged into the TLS connection (e.g. ca, rejectUnauthorized).",
+      type: "tls.ConnectionOptions",
+    },
+    defaults: {
+      description: "Default Reply-To header applied when a message has no replyTo.",
+      type: "{ replyTo?: string }",
+    },
+    name: {
+      description: "Adapter name override, for registering several SMTP servers side by side.",
+      type: "string",
+      default: '"smtp"',
+    },
+    heloName: {
+      description: "Hostname announced in the EHLO command.",
+      type: "string",
+      default: '"localhost"',
+    },
+    timeoutMs: {
+      description: "Timeout for the connection and each SMTP command.",
+      type: "number",
+      default: "15000",
+    },
+  }}
+/>
+
+### TLS and auth semantics
+
+With `secure: true` the whole session is TLS. Otherwise the adapter connects in plaintext and upgrades with `STARTTLS` before authenticating whenever `requireTLS` is set or `auth` is present, so credentials do not travel unencrypted. Authenticating against a server that cannot do TLS requires an explicit `allowInsecureAuth: true`; without it the adapter throws instead of sending the password in the clear.
+
+## Send
+
+SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when the message has an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
+
+```ts
+const result = await email.send({
+  from: "Acme <alerts@acme.com>",
+  to: "ops@example.com",
+  cc: "oncall@example.com",
+  subject: "Disk usage above 90% on db-1",
+  text: "db-1 is at 92% disk usage.",
+  html: "<p><strong>db-1</strong> is at 92% disk usage.</p>",
+  headers: { "X-Alert-ID": "alert_481" },
+});
+
+console.log(result.accepted); // every recipient the server accepted
+console.log(result.id); // parsed from the server's "queued as ..." reply, else the idempotency key
+```
+
+`rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Every transport error surfaces as a retryable `EmailProviderError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
+
+<Callout type="warn" title="No attachments, tags, or metadata">
+  The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
+  concept. Any of these fields throws an `EmailValidationError` before connecting. See the
+  [field support matrix](/docs/adapters/field-support).
+</Callout>
+
+## Multiple SMTP routes
+
+`name` lets you register the adapter twice and use one route as the [fallback](/docs/concepts/fallbacks-and-retries) for the other.
+
+```ts
+export const email = createEmailClient({
+  adapters: [
+    smtp({
+      name: "purelymail",
+      host: "smtp.purelymail.com",
+      auth: { user: process.env.PURELYMAIL_USER!, pass: process.env.PURELYMAIL_PASS! },
+    }),
+    smtp({
+      name: "backup-smtp",
+      host: "smtp.backup.example",
+      auth: { user: process.env.BACKUP_SMTP_USER!, pass: process.env.BACKUP_SMTP_PASS! },
+    }),
+  ],
+  defaultAdapter: "purelymail",
+  fallback: ["backup-smtp"],
+});
+```
+
+## Verify from the CLI
+
+`doctor` only checks `SMTP_HOST`; the other settings are optional.
+
+```bash
+SMTP_HOST=smtp.purelymail.com npx email-sdk doctor --adapter smtp
+```
+
+```bash
+npx email-sdk send \
+  --adapter smtp \
+  --host smtp.purelymail.com \
+  --port 587 \
+  --require-tls \
+  --user hello@acme.com \
+  --pass "$SMTP_PASS" \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SMTP smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send to prove the host, TLS mode, and credentials actually deliver.

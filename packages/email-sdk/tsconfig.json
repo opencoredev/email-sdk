@@ -8,9 +8,10 @@
     "emitDeclarationOnly": false,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "jsx": "react-jsx",
     "lib": ["ESNext", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["dist", "src/**/*.test.ts"]
 }

@@ -1,248 +1,74 @@
 ---
-title: Production send pipeline
-description: Build one production-ready email client with retries, a compatible fallback route, shared defaults, idempotency keys, observability, tests, and CLI verification.
-icon: Workflow
+title: Build a production send pipeline
+description: Validate before queueing, preserve durable state, and use retries and fallback without hiding delivery uncertainty.
 ---
 
-This guide grows one `lib/email.ts` from a single adapter into a production send pipeline: retries on transient failures, a fallback route for outages, org-wide defaults, idempotency keys, secret-safe observability, a test that proves the routing, and CLI checks before the first live send.
+The core SDK owns one process-local delivery attempt. Your application owns durable queueing, persisted idempotency, and recovery after process failure.
 
-It assumes you have finished the [quickstart](/docs/getting-started/quickstart). None of the steps touch your application code, since `email.send(...)` stays the only call sites know about.
+## Construct explicit routes
 
-<Steps>
-<Step>
-
-### Start with the primary adapter
-
-One shared client, one adapter. These docs use Resend, but any [adapter](/docs/adapters) slots in the same way.
-
-```ts title="lib/email.ts"
+```ts title="src/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
-
-export const email = createEmailClient({
-  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-});
-```
-
-</Step>
-<Step>
-
-### Add retries for transient failures
-
-By default a send makes exactly one attempt. Give the client a retry budget for rate limits, 5xx responses, and network errors:
-
-```ts title="lib/email.ts"
-export const email = createEmailClient({
-  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: { retries: 2 },
-});
-```
-
-Only [retryable errors](/docs/reference/errors) are retried: HTTP 408, 409, 425, 429, 5xx, and network failures. Validation errors and hard rejections fail immediately. The default backoff is `min(100 * 2^(attempt - 1), 2000)` milliseconds, doubling from 100ms and capped at 2s. See [fallbacks and retries](/docs/concepts/fallbacks-and-retries) for the full retry config, including custom `delay` and `shouldRetry`.
-
-</Step>
-<Step>
-
-### Add a compatible fallback route
-
-Retries cover blips. For a real outage you want a fallback adapter. Pick a backup that supports every field your messages use, checking [field support](/docs/adapters/field-support) first. Postmark pairs well with Resend here: both carry CC, BCC, reply-to, headers, attachments, and tags.
-
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { postmark } from "@opencoredev/email-sdk/postmark";
-import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
 export const email = createEmailClient({
   adapters: [
     resend({ apiKey: process.env.RESEND_API_KEY! }),
-    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
-  ],
-  fallback: ["postmark"],
-  retry: { retries: 2 },
-});
-```
-
-Each send now tries Resend (with retries), then Postmark (with retries). A send that includes a field a route rejects, say `metadata` on the Resend side or a second tag on Postmark, throws an `EmailValidationError` instead of silently dropping data.
-
-</Step>
-<Step>
-
-### Apply org-wide defaults
-
-The [defaults plugin](/docs/plugins/built-in/defaults) merges shared values into every message before validation, so individual call sites stay minimal:
-
-```ts title="lib/email.ts"
-import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
-
-export const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
-  ],
-  fallback: ["postmark"],
-  retry: { retries: 2 },
-  plugins: [
-    defaultsPlugin({
-      replyTo: "Acme Support <support@acme.com>",
-      headers: { "X-Service": "checkout" },
-      sendMetadata: { service: "checkout" },
+    smtp({
+      name: "backup",
+      host: process.env.SMTP_HOST!,
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
     }),
   ],
-});
-```
-
-Message values always win: a send that sets its own `replyTo` keeps it. `sendMetadata` attaches context for hooks and observability without touching the message. Use it instead of message `metadata` when a route (like Resend) cannot carry provider metadata.
-
-</Step>
-<Step>
-
-### Add idempotency keys to externally visible sends
-
-Retries and fallbacks mean one logical send can become several provider requests. Give every send a user could notice twice (receipts, password resets, invoices) a stable key derived from your domain:
-
-```ts
-await email.send(
-  {
-    from: "Acme <receipts@acme.com>",
-    to: "user@example.com",
-    subject: "Your receipt",
-    text: "Thanks for your order.",
+  defaultAdapter: "resend",
+  retry: { maxAttempts: 2 },
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
   },
-  { idempotencyKey: `receipt:${order.id}` },
-);
-```
-
-The key reaches every adapter attempt through the provider context. Resend, JetEmail, Lettermint, and Primitive forward it as an `Idempotency-Key` header so the provider deduplicates. Custom adapters get the same key and can build their own dedupe logic on it. `defaultsPlugin` can add an `idempotencyKeyPrefix` to namespace keys per environment.
-
-</Step>
-<Step>
-
-### Wire up observability
-
-The [observability plugin](/docs/plugins/built-in/observability) emits `email.sent`, `email.retry`, and `email.error` events with a redacted message: counts, tag names, and the subject, without bodies or recipients. The complete client:
-
-```ts title="lib/email.ts"
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
-import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
-import { postmark } from "@opencoredev/email-sdk/postmark";
-import { resend } from "@opencoredev/email-sdk/resend";
-
-export const email = createEmailClient({
-  adapters: [
-    resend({ apiKey: process.env.RESEND_API_KEY! }),
-    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
-  ],
-  fallback: ["postmark"],
-  retry: { retries: 2 },
-  plugins: [
-    defaultsPlugin({
-      replyTo: "Acme Support <support@acme.com>",
-      headers: { "X-Service": "checkout" },
-      sendMetadata: { service: "checkout" },
-    }),
-    observabilityPlugin({
-      log(event) {
-        console.log(event.type, event.provider, event.attempt, event.metadata);
-      },
-      metric(event) {
-        // increment counters: emails_sent_total{provider}, emails_error_total{provider}, ...
-      },
-    }),
-  ],
 });
 ```
 
-A spike of `email.retry` followed by `email.sent` on `postmark` tells you the fallback route earned its keep. Observer exceptions are swallowed, so monitoring cannot break a send.
+Choose the backup from the [field support](/docs/adapters/field-support) and [capability](/docs/adapters/capability-groups) tables. SMTP is not a universal backup because it rejects attachments, tags, metadata, and schedules.
 
-</Step>
-<Step>
+## Validate before accepting work
 
-### Prove the routing with a test
+Use the same public no-network boundary as `send` before committing a job to your queue.
 
-Rebuild the same topology with [testing adapters](/docs/guides/test-email-behavior): a failing primary, a memory backup, and the [capture plugin](/docs/plugins/built-in/capture) recording lifecycle events.
+```ts title="src/jobs/enqueue-email.ts"
+await email.validate(message, {
+  fallback: { adapters: ["backup"] },
+});
 
-```ts title="lib/email.test.ts"
-import { expect, test } from "bun:test";
-import { createEmailClient } from "@opencoredev/email-sdk";
-import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
-import { failingProvider, memoryProvider } from "@opencoredev/email-sdk/testing";
+await queue.add("send-email", { message, idempotencyKey });
+```
 
-test("falls back to the backup route when the primary fails", async () => {
-  const backup = memoryProvider("backup");
-  const email = createEmailClient({
-    adapters: [failingProvider("primary"), backup],
-    fallback: ["backup"],
-    retry: { retries: 2, delay: () => 0 },
-    plugins: [capturePlugin()],
-  });
+## Send with a stable idempotency key
 
-  const response = await email.send({
-    from: "Acme <receipts@acme.com>",
-    to: "user@example.com",
-    subject: "Your receipt",
-    text: "Thanks for your order.",
-  });
-
-  expect(response.provider).toBe("backup");
-  expect(backup.raw.sent).toHaveLength(1);
-
-  const types = email.capture.events.map((event) => event.type);
-  expect(types).toContain("error"); // primary route failed
-  expect(types).toContain("afterSend"); // backup route delivered
+```ts title="src/jobs/send-email.ts"
+await email.send(job.message, {
+  idempotencyKey: job.idempotencyKey,
+  metadata: { jobId: job.id },
+  signal: job.signal,
 });
 ```
 
-Run it with `bun test`. Use the message shape production actually sends, because that is what catches a fallback route that cannot carry one of your fields.
+The key is effective only where the selected adapter supports it. Persist your own business-level deduplication before invoking the SDK.
 
-</Step>
-<Step>
+## Handle delivery certainty
 
-### Verify from the CLI
+- Retry `not_sent` failures when `retryable` is true.
+- Let configured fallback advance after terminal `not_sent` failures.
+- Stop on `unknown` by default and reconcile provider state before retrying.
+- Opt into `onUnknownDelivery: "continue"` only when a duplicate is safer than a missed message.
 
-Check the environment for both routes, dry-run a representative message, then make one real smoke send:
+## Record safe facts
 
-```bash
-npx email-sdk doctor --adapter resend
-npx email-sdk doctor --adapter postmark
-```
+Use hooks or `observabilityPlugin` for adapter, attempt, stable error code, duration, and redacted message facts. Avoid bodies, addresses, credentials, idempotency keys, provider response bodies, URLs, and filesystem paths.
 
-```bash
-npx email-sdk send \
-  --adapter resend \
-  --from "Acme <receipts@acme.com>" \
-  --to "user@example.com" \
-  --subject "Pipeline check" \
-  --text "It works" \
-  --dry-run
-```
+## Use a durable integration when needed
 
-`--dry-run` validates message shape and adapter field support without a provider request. Then drop the flag once per route, from the environment that will send production email. That live send is the only check that proves the account, sender domain, and recipient policy are ready.
+[Convex Email](/docs/integrations/convex) provides queue state, attempts, cancellation, test-mode redirection, and webhook history for Convex applications.
 
-</Step>
-</Steps>
-
-## Next
-
-<Cards>
-  <Card
-    title="Fallbacks and retries"
-    href="/docs/concepts/fallbacks-and-retries"
-    description="Route resolution, backoff tuning, error classification, and per-send overrides."
-  />
-  <Card
-    title="Test email behavior"
-    href="/docs/guides/test-email-behavior"
-    description="More recipes: assert fields, retries, and shared capture stores."
-  />
-  <Card
-    title="Built-in plugins"
-    href="/docs/plugins"
-    description="Everything defaultsPlugin, observabilityPlugin, and capturePlugin can do."
-  />
-  <Card
-    title="CLI reference"
-    href="/docs/reference/cli"
-    description="All doctor, send, and dry-run flags."
-  />
-</Cards>
+<Card title="Troubleshoot failures" href="/docs/guides/troubleshoot-failed-sends" description="Inspect typed errors and delivery classification." />

@@ -64,6 +64,7 @@ noise to your diff.
 When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from the repo-root `.env.local`, then `.env`, then your shell environment:
 
 ```bash
+bun run live:resend
 bun run live:sequenzy
 bun run live:lettermint
 # Adapters without a script alias run directly:
@@ -74,6 +75,14 @@ bun scripts/check-primitive-account.ts
 By default they only verify that the credentials authenticate; no email is sent.
 Set `<PROVIDER>_LIVE_SEND=true` (plus the provider's from/to env vars, e.g.
 `SEQUENZY_LIVE_SEND=true`) to send a real test message.
+
+`adapter-verification.json` is the source of truth for live gates. Add a check
+there only after its command is safe by default, emits no credentials, and can
+authenticate without sending email. `bun run live:plan <base> <head>` selects
+the registered checks affected by a diff; `LIVE_ADAPTERS=all bun run live:plan`
+selects every live gate for a manual release rehearsal. `bun run live:run --
+<adapter list>` executes the selected checks with every `*_LIVE_SEND` flag
+removed from the child environment.
 
 ## Telemetry
 
@@ -92,10 +101,10 @@ The SDK and CLI send anonymous PostHog telemetry from
 
 ## Convex Component
 
-`@opencoredev/convex-email` (`packages/convex-email`) is `private` in its
-`package.json`, and `.changeset/config.json` sets `privatePackages.version:
-false`, so changesets neither version nor publish it. Do not add a changeset
-for convex-email-only changes.
+`@opencoredev/convex-email` (`packages/convex-email`) is a public Convex
+Component package. User-visible component changes require a changeset, just
+like Email SDK changes. The release workflow publishes it from accumulated
+changesets; normal feature PRs do not publish directly.
 
 Its `build`, `test`, and `check-types` scripts run through turbo with the rest
 of the workspace, so `release:ci` covers them, and `pack:check` already

@@ -1,10 +1,13 @@
 {
   "title": "Adapters",
-  "icon": "Cable",
+  "icon": "MailAtSign",
   "pages": [
     "index",
-    "field-support",
     "resend",
+    "sequenzy",
+    "jetemail",
+    "primitive",
+    "lettermint",
     "postmark",
     "sendgrid",
     "cloudflare",
@@ -17,15 +20,14 @@
     "sparkpost",
     "iterable",
     "loops",
-    "sequenzy",
-    "jetemail",
-    "lettermint",
-    "primitive",
     "plunk",
     "mailtrap",
     "scaleway",
     "zeptomail",
     "mailpace",
-    "smtp"
+    "smtp",
+    "field-support",
+    "capability-groups",
+    "verification"
   ]
 }

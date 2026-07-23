@@ -4,6 +4,14 @@ description: Send through the Brevo transactional email API with full field supp
 icon: brevo
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Brevo adapter calls the [Brevo transactional email API](https://developers.brevo.com/reference/sendtransacemail) with plain `fetch`. It authenticates with Brevo's `api-key` header (not a Bearer token), supports every common field, and maps `metadata` to Brevo's `params`, the same values Brevo templates substitute.
 
 <ProviderBadge adapter="brevo" />
@@ -55,10 +63,10 @@ const result = await email.send({
   tags: [{ name: "type", value: "invite" }],
 });
 
-console.log(result.id); // Brevo messageId, also exposed as result.messageId
+console.log(result.id); // Brevo messageId
 ```
 
-The response `id` is Brevo's `messageId` (falling back to `id`). Match it against events in Brevo's logs and webhooks.
+The response `id` is Brevo's `messageId` (falling back to the provider's `id` field). Match it against events in Brevo's logs and webhooks.
 
 <Callout type="warn" title="Metadata becomes template params">
   `metadata` is sent as Brevo `params`, the values Brevo substitutes into templates. If you use

@@ -1,0 +1,95 @@
+---
+title: Email SDK
+description: One typed send() for 23 email providers, with explicit routing, retries, and fallbacks. Zero runtime dependencies.
+icon: Mail
+---
+
+Email SDK is a zero-dependency TypeScript library for transactional email. You write one typed message, and the adapters you configured decide how it reaches Resend, Postmark, SendGrid, AWS SES, Mailgun, SMTP, or any of [23 providers](/docs/adapters). Switching providers, or surviving an outage with a fallback route, is a config change. Your application code stays the same.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+```
+
+## Why Email SDK
+
+Provider SDKs are easy to adopt and hard to leave. Each has its own message shape, its own error format, and its own opinion about retries. Email SDK puts one client in front of all of them. Every adapter is a separate entry point, so your bundle only contains the providers you actually send through, and the core has no runtime dependencies.
+
+Providers genuinely differ. Resend has no metadata field, SMTP has no tags, Iterable takes exactly one recipient. When a message uses a field the selected adapter cannot carry, the adapter throws before making the request instead of quietly dropping the field. The [field support matrix](/docs/adapters/field-support) shows what each provider maps.
+
+Failure handling has two explicit layers: exponential backoff inside an adapter for transient errors, then fallback adapters once the current one has failed for good. [How routing works](/docs/concepts/fallbacks-and-retries) covers both, including why a fallback route only helps when it can carry the same fields.
+
+The one message shape also covers batches and scheduling. [`recipientVariables`](/docs/reference/message#recipient-variables) personalizes a batch per recipient on any adapter (natively on Mailgun and SendGrid, client-side everywhere else), and [`sendAt`](/docs/reference/message#scheduled-sends) hands delivery timing to providers with a scheduling API.
+
+The rest is operational plumbing you would otherwise write yourself. [Hooks](/docs/concepts/hooks) and the [observability plugin](/docs/plugins/built-in/observability) emit redacted events (counts and tag names, not bodies or recipients). [Memory and failing adapters](/docs/guides/test-email-behavior) plus the [capture plugin](/docs/plugins/built-in/capture) let unit tests assert send behavior without a provider account. The CLI covers setup checks: `email-sdk doctor` inspects your environment, `send --dry-run` validates a message against an adapter, and `send` runs a real smoke test. See the [CLI reference](/docs/reference/cli).
+
+## Start here
+
+<Cards>
+  <Card
+    title="Quickstart"
+    href="/docs/getting-started/quickstart"
+    description="Install, create a client, send your first email, and add a fallback in ~5 minutes."
+  />
+  <Card
+    title="Choose an adapter"
+    href="/docs/adapters"
+    description="Browse all 23 providers and pick primary and backup routes."
+  />
+  <Card
+    title="Production send pipeline"
+    href="/docs/guides/production-send-pipeline"
+    description="Retries, fallbacks, idempotency, observability, and tests for a real app."
+  />
+  <Card
+    title="API reference"
+    href="/docs/reference/client"
+    description="Client options, the message shape, errors, and the CLI."
+  />
+</Cards>
+
+## Beyond the core
+
+<Cards>
+  <Card
+    title="Plugins"
+    href="/docs/plugins"
+    description="Shared defaults, observability, test capture, and typed client extensions."
+  />
+  <Card
+    title="Convex Email Ops"
+    href="/docs/components/convex-email"
+    description="Queued sends from Convex with status tracking, retries, webhooks, and test mode."
+  />
+  <Card
+    title="Build an adapter"
+    href="/docs/guides/authoring/create-adapter"
+    description="Wrap any provider API in the adapter contract and publish it for others."
+  />
+  <Card
+    title="Agent skill"
+    href="/docs/agents/skill"
+    description="Teach Claude and other coding agents to integrate Email SDK correctly."
+  />
+</Cards>
+
+## What it is not
+
+Email SDK is not a campaign tool, a queue, a template engine, or a hosted analytics product. It is the layer apps keep rebuilding by hand: adapter setup, one consistent send call, typed errors, compatibility checks, and fallback routes explicit enough to debug at 3 a.m.
+
+<Callout title="Local checks are not deliverability">
+  The SDK validates message shape and field support before every request, but live delivery still
+  depends on your provider account: verified sender domains, API scopes, regions, and sandbox
+  rules. Dry-run first, then run one real smoke send from your production environment.
+</Callout>

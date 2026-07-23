@@ -1,0 +1,34 @@
+---
+title: email-sdk doctor
+description: Check whether required adapter configuration is present without authenticating to the provider.
+---
+
+```bash
+RESEND_API_KEY=re_xxx email-sdk doctor --adapter resend
+```
+
+Success prints:
+
+```text
+resend looks configured.
+```
+
+## Selection
+
+Use `--adapter <name>` or the `--provider` alias. Without either flag, the command selects the first adapter whose required environment variables are all set.
+
+## What it checks
+
+`doctor` checks the required environment variables from the CLI registry. It also recognizes the corresponding credential flags, such as `--api-key`, `--server-token`, `--host`, or provider-specific account fields.
+
+It does not call the provider, verify sender domains, inspect API scopes, or prove deliverability.
+
+## Failures
+
+- Unknown adapter: `Unsupported adapter "<name>".`
+- Missing values: `Missing environment for <adapter>: <NAMES>`
+- No explicit or detectable route: `Pass --adapter or set the required environment for one adapter.`
+
+Use `send --dry-run` after doctor to validate a representative message and adapter-specific constraints.
+
+<Card title="Send command" href="/docs/reference/cli/send" description="Validate the exact message without provider delivery." />

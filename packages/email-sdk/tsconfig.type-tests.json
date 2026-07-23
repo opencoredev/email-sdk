@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "paths": {
+      "@opencoredev/email-sdk/react": ["./src/react.ts"]
+    },
+    "rootDir": ".",
+    "types": ["node", "bun"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "type-tests/**/*.ts", "examples/**/*.ts", "examples/**/*.tsx"],
+  "exclude": ["dist", "src/**/*.test.ts"]
+}

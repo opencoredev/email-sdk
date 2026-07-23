@@ -1,29 +1,33 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
-import type { EmailProvider } from "./types.js";
+import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
+  builtInAdapterDefinition,
   arrayify,
   assertMaxItems,
   attachmentToBytes,
   formatAddress,
   formatAddresses,
+  headersToArray,
   hasRecipientVariables,
   isRetryableStatus,
   readErrorBody,
   httpErrorMessage,
 } from "./utils.js";
 
-export type MailgunProviderOptions = {
+export type MailgunAdapterOptions = {
   apiKey: string;
   domain: string;
   baseUrl?: string;
   fetch?: typeof fetch;
 };
 
-export function mailgun(options: MailgunProviderOptions): EmailProvider<{ baseUrl: string }> {
+export function mailgun(
+  options: MailgunAdapterOptions,
+): EmailAdapter<"mailgun", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.mailgun.net";
 
-  const send: EmailProvider["send"] = async (message, context) => {
+  const send: EmailAdapter<"mailgun">["send"] = async (message, context) => {
     const body = new FormData();
     body.set("from", formatAddress(message.from));
     body.set("subject", message.subject);
@@ -32,18 +36,8 @@ export function mailgun(options: MailgunProviderOptions): EmailProvider<{ baseUr
     for (const cc of formatAddresses(message.cc)) body.append("cc", cc);
     for (const bcc of formatAddresses(message.bcc)) body.append("bcc", bcc);
     for (const replyTo of formatAddresses(message.replyTo)) body.append("h:Reply-To", replyTo);
-    for (const [name, value] of Object.entries(message.headers ?? {})) {
-      if (Array.isArray(message.headers)) {
-        break;
-      }
-
-      body.append(`h:${name}`, value);
-    }
-
-    if (Array.isArray(message.headers)) {
-      for (const header of message.headers) {
-        body.append(`h:${header.name}`, header.value);
-      }
+    for (const header of headersToArray(message.headers) ?? []) {
+      body.append(`h:${header.name}`, header.value);
     }
 
     if (message.text) body.set("text", message.text);
@@ -93,11 +87,10 @@ export function mailgun(options: MailgunProviderOptions): EmailProvider<{ baseUr
     const responseBody = await readErrorBody(response);
 
     if (!response.ok) {
-      throw new EmailProviderError(httpErrorMessage("mailgun", response.status, responseBody), {
-        provider: "mailgun",
+      throw new EmailAdapterError(httpErrorMessage("mailgun", response.status, responseBody), {
+        adapter: "mailgun",
         status: response.status,
         retryable: isRetryableStatus(response.status),
-        details: responseBody,
       });
     }
 
@@ -105,17 +98,40 @@ export function mailgun(options: MailgunProviderOptions): EmailProvider<{ baseUr
     const id = typeof record.id === "string" ? record.id : undefined;
 
     return {
-      provider: "mailgun",
+      adapter: "mailgun",
       id,
-      messageId: id,
       raw: responseBody,
     };
   };
 
   return {
     name: "mailgun",
+    ...builtInAdapterDefinition("mailgun"),
     raw: { baseUrl },
     send,
-    sendBulk: send,
+    async sendPersonalized(input, context) {
+      const recipientVariables = Object.fromEntries(
+        input.recipients.map((recipient) => [emailAddress(recipient.to), recipient.variables]),
+      );
+      const result = await send(
+        {
+          ...input.message,
+          to: input.recipients.map((recipient) => recipient.to),
+          recipientVariables,
+        } as EmailMessage,
+        context,
+      );
+      return {
+        ...result,
+        accepted: input.recipients.map((recipient) => emailAddress(recipient.to)),
+        rejected: [],
+      };
+    },
   };
+}
+
+function emailAddress(address: import("./types.js").EmailAddress) {
+  return typeof address === "string"
+    ? (address.match(/<([^>]+)>/)?.[1] ?? address).trim()
+    : address.email;
 }

@@ -1,20 +1,31 @@
-import type { EmailMessage, EmailProvider, EmailProviderResponse } from "./types.js";
+import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 
 export type MemoryEmail = {
   message: EmailMessage;
-  response: EmailProviderResponse;
+  response: EmailSendResult;
 };
 
-export type MemoryProvider = EmailProvider<{
-  sent: MemoryEmail[];
-  clear: () => void;
-}>;
+export type MemoryAdapter<Name extends string = string> = EmailAdapter<
+  Name,
+  {
+    sent: MemoryEmail[];
+    clear: () => void;
+  }
+>;
 
-export function memoryProvider(name = "memory"): MemoryProvider {
+export function memoryAdapter<const Name extends string = "memory">(
+  name = "memory" as Name,
+): MemoryAdapter<Name> {
   const sent: MemoryEmail[] = [];
 
   return {
     name,
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "native",
+      scheduling: true,
+      personalized: "expanded",
+    },
     raw: {
       sent,
       clear() {
@@ -22,25 +33,28 @@ export function memoryProvider(name = "memory"): MemoryProvider {
       },
     },
     send(message) {
-      const response = {
-        provider: name,
+      const response: EmailSendResult<Name> = {
+        adapter: name,
         id: `mem_${sent.length + 1}`,
-        messageId: `mem_${sent.length + 1}`,
       };
-
       sent.push({ message, response });
-
       return response;
     },
   };
 }
 
-export function failingProvider(
-  name = "failing",
-  error: Error = new Error("Provider failed"),
-): EmailProvider {
+export function failingAdapter<const Name extends string = "failing">(
+  name = "failing" as Name,
+  error: Error = new Error("Adapter failed"),
+): EmailAdapter<Name> {
   return {
     name,
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
     send() {
       throw error;
     },

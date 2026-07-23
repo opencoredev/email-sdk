@@ -169,6 +169,119 @@ describe("email-sdk CLI", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("cloudflare only supports 50 recipients per message");
   });
+
+  test.each([
+    {
+      name: "Postmark with two tags",
+      adapter: "postmark",
+      extra: ["--tag", "one=1", "--tag", "two=2"],
+      error: "postmark only supports 1 tag per message",
+    },
+    {
+      name: "Primitive with two recipients",
+      adapter: "primitive",
+      to: "ada@example.com,grace@example.com",
+      extra: [],
+      error: "primitive only supports 1 recipient per message",
+    },
+    {
+      name: "JetEmail without a display name",
+      adapter: "jetemail",
+      extra: [],
+      error: "jetemail requires a from address with a display name",
+    },
+    {
+      name: "unsupported scheduling",
+      adapter: "postmark",
+      extra: ["--send-at", "2026-07-21T01:00:00Z"],
+      error: "does not support scheduled email",
+    },
+  ])("dry run rejects $name", async ({ adapter, to, extra, error }) => {
+    const { stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      adapter,
+      "--from",
+      adapter === "jetemail" ? "hello@example.com" : "Acme <hello@example.com>",
+      "--to",
+      to ?? "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      ...extra,
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain(error);
+  });
+
+  test("dry run maps --send-at into the validated message", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--from",
+      "Acme <hello@example.com>",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--send-at",
+      "2026-07-21T01:00:00Z",
+      "--dry-run",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout).message.sendAt).toBe("2026-07-21T01:00:00Z");
+  });
+
+  test("Iterable keeps adapter scheduling separate from message scheduling", async () => {
+    const adapterSchedule = await runCli([
+      "send",
+      "--adapter",
+      "iterable",
+      "--from",
+      "Acme <hello@example.com>",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--iterable-send-at",
+      "2026-07-21 01:00:00",
+      "--dry-run",
+    ]);
+
+    expect(adapterSchedule.stderr).toBe("");
+    expect(adapterSchedule.exitCode).toBe(0);
+    expect(JSON.parse(adapterSchedule.stdout).message.sendAt).toBeUndefined();
+
+    const messageSchedule = await runCli([
+      "send",
+      "--adapter",
+      "iterable",
+      "--from",
+      "Acme <hello@example.com>",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--send-at",
+      "2026-07-21T01:00:00Z",
+      "--dry-run",
+    ]);
+
+    expect(messageSchedule.exitCode).toBe(1);
+    expect(messageSchedule.stderr).toContain("does not support scheduled email");
+  });
 });
 
 async function runCli(args: string[]) {

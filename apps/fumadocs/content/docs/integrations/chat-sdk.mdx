@@ -1,0 +1,64 @@
+---
+title: Chat SDK
+description: Send transactional email from Chat SDK handlers while keeping identity, authorization, and delivery policy in application code.
+icon: AiChat
+---
+
+[Chat SDK](https://chat-sdk.dev/) gives one event-driven API for Slack, Teams, Discord, Google Chat, and other chat platforms. Email SDK fits inside those handlers when a chat workflow needs to send a receipt, invite, report, or other transactional message.
+
+## Install
+
+```bash
+bun add chat @opencoredev/email-sdk
+```
+
+Configure Email SDK once in a server-only module. The Chat SDK handler should receive an already configured client rather than provider credentials.
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+export const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+```
+
+## Send from a handler
+
+```ts title="src/bot.ts"
+import { Chat } from "chat";
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { email } from "./email.js";
+
+export const bot = new Chat({
+  userName: "acme-ops",
+  adapters: { slack: createSlackAdapter() },
+});
+
+bot.onNewMention(async (thread, message) => {
+  if (message.text.trim() !== "send my weekly report") return;
+
+  const user = await loadAuthorizedUser(message.author.id);
+  const report = await renderWeeklyReport(user.id);
+
+  await email.send(
+    {
+      from: "Acme Reports <reports@acme.com>",
+      to: user.email,
+      subject: "Your weekly report",
+      html: report.html,
+    },
+    { idempotencyKey: `weekly-report:${user.id}:${report.week}` },
+  );
+
+  await thread.post("Your weekly report was queued for email delivery.");
+});
+```
+
+Keep the authorization check, recipient lookup, sender, template, and idempotency key in application code. Do not let arbitrary chat text select recipients, adapters, fallback routes, headers, or attachments.
+
+## Add an AI agent
+
+Chat SDK and AI SDK can be used together. Chat SDK owns the conversation and platform adapters; [AI SDK](/docs/integrations/ai-sdk) owns model execution and the approval-gated `sendEmail` tool.
+
+<Card title="AI SDK" href="/docs/integrations/ai-sdk" description="Add a narrow email tool with explicit user approval." />

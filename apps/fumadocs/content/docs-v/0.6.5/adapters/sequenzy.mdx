@@ -1,0 +1,104 @@
+---
+title: Sequenzy
+description: Send through the Sequenzy transactional API with metadata variables, template slugs, and URL or base64 attachments.
+icon: sequenzy
+---
+
+The Sequenzy adapter calls Sequenzy's transactional send endpoint with plain `fetch`. Its distinctive feature: reserved `metadata` keys switch a send from direct content to a Sequenzy template slug, so the same message shape covers both modes.
+
+<ProviderBadge adapter="sequenzy" />
+
+## Configure
+
+Create a Sequenzy API key and verify the sender domain or address you plan to use in `from`.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
+
+export const email = createEmailClient({
+  adapters: [sequenzy({ apiKey: process.env.SEQUENZY_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Sequenzy API key.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.sequenzy.com/api/v1"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Sequenzy accepts up to 50 recipients and one `replyTo` per message. Flat `metadata` values become Sequenzy `variables`. Sequenzy has a single `body` field, so when a message carries both `html` and `text`, the adapter sends `html`. Omit `html` to send plain text.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: [{ email: "user@example.com", name: "Ada" }],
+  replyTo: "support@acme.com",
+  subject: "You've been invited to Acme",
+  html: "<p>Ada invited you to the Acme workspace.</p>",
+  metadata: { inviterName: "Ada", workspaceName: "Acme" },
+});
+
+console.log(result.id); // Sequenzy jobId; result.accepted lists the recipients Sequenzy took
+```
+
+Attachments work two ways: an `http(s)` `path` is forwarded as a Sequenzy URL attachment; anything else is encoded as base64 `content`.
+
+Reserved metadata keys map to provider fields instead of `variables`:
+
+| Metadata key                                             | Sequenzy field         |
+| -------------------------------------------------------- | ---------------------- |
+| `sequenzySlug`                                           | `slug`                 |
+| `sequenzyPreview`                                        | `preview`              |
+| `subscriberExternalId` or `sequenzySubscriberExternalId` | `subscriberExternalId` |
+
+When `metadata.sequenzySlug` is set, the adapter sends a template request: the slug and variables drive rendering, and `subject`/`html`/`text` are left out of the payload (they still satisfy local message validation).
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "You've been invited to Acme",
+  html: "<p>Fallback body for local validation.</p>",
+  metadata: { sequenzySlug: "workspace-invite", inviterName: "Ada" },
+});
+```
+
+<Callout type="warn" title="No cc, bcc, headers, or tags">
+  Sequenzy rejects `cc`, `bcc`, `headers`, and `tags` with an `EmailValidationError` before any
+  request, as it does for more than 50 recipients or more than one `replyTo`. Check
+  [field support](/docs/adapters/field-support) before using Sequenzy in a fallback route.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+SEQUENZY_API_KEY="seq_live_..." npx email-sdk doctor --adapter sequenzy
+```
+
+```bash
+SEQUENZY_API_KEY="seq_live_..." npx email-sdk send \
+  --adapter sequenzy \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Sequenzy smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. Sequenzy queues sends as jobs, so success comes back as a `jobId` rather than a message id. If you use template slugs, add `--metadata "sequenzySlug=..."` to the live send, since the slug lookup only happens on Sequenzy's servers.

@@ -2,20 +2,19 @@ import { randomUUID } from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
 
-import { EmailProviderError, EmailValidationError } from "./errors.js";
-import type { EmailAddress, EmailMessage, EmailProvider } from "./types.js";
+import { EmailAdapterError } from "./errors.js";
+import type { EmailAddress, EmailMessage, EmailAdapter } from "./types.js";
 import {
-  SUPPORTED_MESSAGE_FIELDS,
-  assertSupportedMessageFields,
-  formatAddress,
-  formatAddresses,
-  headersToArray,
-  headersToObject,
+	BUILT_IN_ADAPTER_CAPABILITIES,
+	formatAddress,
+	formatAddresses,
+	headersToArray,
+	validateBuiltInAdapter,
 } from "./utils.js";
 
 type Socket = net.Socket | tls.TLSSocket;
 
-export type SmtpProviderOptions = {
+export type SmtpAdapterOptions = {
   host: string;
   port?: number;
   secure?: boolean;
@@ -35,35 +34,39 @@ export type SmtpProviderOptions = {
   timeoutMs?: number;
 };
 
-export function smtp(options: SmtpProviderOptions): EmailProvider<{ host: string; port: number }> {
-  const name = options.name ?? "smtp";
+export function smtp<const Name extends string = "smtp">(
+  options: SmtpAdapterOptions & { name?: Name },
+): EmailAdapter<Name, { host: string; port: number }> {
+  const name = (options.name ?? "smtp") as Name;
   const port = options.port ?? (options.secure ? 465 : 587);
 
   return {
     name,
-    raw: {
-      host: options.host,
-      port,
-    },
-    async send(message) {
-      assertSupportedMessageFields(name, message, SUPPORTED_MESSAGE_FIELDS.smtp);
-      assertSmtpMessage(message);
-      const client = new SmtpClient(options, port);
+		capabilities: BUILT_IN_ADAPTER_CAPABILITIES.smtp,
+		validate(message) {
+			validateBuiltInAdapter("smtp", message);
+		},
+		raw: {
+			host: options.host,
+			port,
+		},
+		async send(message, context) {
+			validateBuiltInAdapter("smtp", message);
+			const client = new SmtpClient(options, port, context.idempotencyKey);
 
       try {
         const response = await client.send(message);
 
         return {
-          provider: name,
+          adapter: name,
           id: response.messageId,
-          messageId: response.messageId,
           accepted: response.accepted,
           rejected: [],
           raw: response,
         };
       } catch (error) {
-        throw new EmailProviderError(error instanceof Error ? error.message : "SMTP send failed.", {
-          provider: name,
+        throw new EmailAdapterError(error instanceof Error ? error.message : "SMTP send failed.", {
+          adapter: name,
           retryable: true,
           cause: error,
         });
@@ -80,8 +83,9 @@ class SmtpClient {
   private readonly pending: Array<(line: string) => void> = [];
 
   constructor(
-    private readonly options: SmtpProviderOptions,
+    private readonly options: SmtpAdapterOptions,
     private readonly port: number,
+    private readonly idempotencyKey?: string,
   ) {}
 
   async send(message: EmailMessage) {
@@ -129,12 +133,12 @@ class SmtpClient {
     }
 
     await this.command("DATA", [354]);
-    const raw = buildMimeMessage(message, this.options.defaults);
+    const raw = buildMimeMessage(message, this.options.defaults, this.idempotencyKey);
     const response = await this.command(`${escapeData(raw)}\r\n.`, [250]);
     await this.command("QUIT", [221]).catch(() => undefined);
 
     return {
-      messageId: extractSmtpMessageId(response) ?? message.idempotencyKey,
+      messageId: extractSmtpMessageId(response) ?? this.idempotencyKey,
       accepted,
       response,
     };
@@ -277,27 +281,32 @@ class SmtpClient {
   }
 }
 
-function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["defaults"]) {
-  const headers: Record<string, string> = {
-    From: formatAddress(message.from),
-    To: formatAddresses(message.to).join(", "),
-    Subject: message.subject,
-    Date: new Date().toUTCString(),
-    "Message-ID": `<${message.idempotencyKey ?? randomUUID()}@email-sdk.local>`,
-    "MIME-Version": "1.0",
-    ...headersToObject(message.headers),
-  };
+function buildMimeMessage(
+  message: EmailMessage,
+  defaults: SmtpAdapterOptions["defaults"],
+  idempotencyKey?: string,
+) {
+	const headers: Array<[string, string]> = [
+		["From", formatAddress(message.from)],
+		["To", formatAddresses(message.to).join(", ")],
+		["Subject", message.subject],
+		["Date", new Date().toUTCString()],
+		["Message-ID", `<${idempotencyKey ?? randomUUID()}@email-sdk.local>`],
+		["MIME-Version", "1.0"],
+		...(headersToArray(message.headers)?.map((header) => [header.name, header.value] as [string, string]) ?? []),
+	];
 
-  if (message.cc) headers.Cc = formatAddresses(message.cc).join(", ");
-  if (message.replyTo ?? defaults?.replyTo) {
-    headers["Reply-To"] = message.replyTo
-      ? formatAddresses(message.replyTo).join(", ")
-      : (defaults?.replyTo ?? "");
-  }
+	if (message.cc) headers.push(["Cc", formatAddresses(message.cc).join(", ")]);
+	if (message.replyTo ?? defaults?.replyTo) {
+		headers.push([
+			"Reply-To",
+			message.replyTo ? formatAddresses(message.replyTo).join(", ") : (defaults?.replyTo ?? ""),
+		]);
+	}
 
-  const headerText = Object.entries(headers)
-    .filter(([, value]) => value)
-    .map(([key, value]) => `${key}: ${foldHeader(value)}`)
+	const headerText = headers
+		.filter(([, value]) => value)
+		.map(([key, value]) => `${key}: ${foldHeader(value)}`)
     .join("\r\n");
 
   if (message.html && message.text) {
@@ -310,46 +319,6 @@ function buildMimeMessage(message: EmailMessage, defaults: SmtpProviderOptions["
   const body = message.html ?? message.text ?? "";
 
   return `${headerText}\r\nContent-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
-}
-
-// Envelope addresses are interpolated into MAIL FROM/RCPT TO commands. RFC 5321
-// envelopes only allow printable US-ASCII, so reject whitespace (including
-// CR/LF), control characters (including DEL), angle brackets, and non-ASCII
-// characters before connecting.
-// oxlint-disable-next-line no-control-regex -- control characters are the point
-const SMTP_FORBIDDEN_ENVELOPE = /[\x00-\x20<>\x7f-\uffff]/;
-
-// RFC 5322 header field names: printable US-ASCII (0x21-0x7e) excluding the
-// colon (0x3a). A name containing CR/LF would terminate the header and inject more.
-const SMTP_HEADER_NAME = /^[!-9;-~]+$/;
-
-function assertSmtpMessage(message: EmailMessage) {
-  const addresses = [
-    formatAddress(message.from),
-    ...formatAddresses(message.to),
-    ...formatAddresses(message.cc),
-    ...formatAddresses(message.bcc),
-  ];
-
-  for (const address of addresses) {
-    const envelope = parseEmailAddress(address);
-
-    if (envelope.length === 0 || SMTP_FORBIDDEN_ENVELOPE.test(envelope)) {
-      throw new EmailValidationError(
-        `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
-        { adapter: "smtp", address: envelope },
-      );
-    }
-  }
-
-  for (const header of headersToArray(message.headers) ?? []) {
-    if (!SMTP_HEADER_NAME.test(header.name)) {
-      throw new EmailValidationError(
-        `SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
-        { adapter: "smtp", header: header.name },
-      );
-    }
-  }
 }
 
 function envelopeAddress(address: EmailAddress) {

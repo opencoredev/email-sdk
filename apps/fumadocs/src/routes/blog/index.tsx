@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { ArrowRight } from "lucide-react";
 
+import { ArrowRight } from "@/components/icon";
 import { formatBlogDate, type BlogPost } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { getBlogPostsServerFn } from "@/lib/notra-runtime";

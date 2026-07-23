@@ -2,7 +2,7 @@
 
 Machine-facing guide for AI agents and coding assistants. Email SDK is an
 open-source **TypeScript SDK** (npm: `@opencoredev/email-sdk`) that sends
-transactional email through 20+ providers behind one typed `send()` call. It is
+transactional email through 22 provider APIs plus SMTP behind one typed `send()` call. It is
 a library you install into an app — not a hosted API or a service you sign up
 for. There are no API keys to obtain from us; you bring the provider credentials
 the app already has.

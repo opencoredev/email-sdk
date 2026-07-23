@@ -55,6 +55,12 @@ function getSitemapEntries() {
       priority: "0.5",
     },
     {
+      loc: `${siteUrl}/stats`,
+      lastmod: "2026-07-09",
+      changefreq: "daily",
+      priority: "0.5",
+    },
+    {
       loc: `${siteUrl}/contact`,
       lastmod: "2026-06-01",
       changefreq: "monthly",

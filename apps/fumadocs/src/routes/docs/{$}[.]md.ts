@@ -1,5 +1,6 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
+import { getLatestDocsRedirect } from "@/lib/docs-redirects";
 import { getDocsSource, getLLMText, markdownPathToSlugs } from "@/lib/source";
 import { getDocsVersionBase, latestDocsVersion, resolveDocsVersionedSlugs } from "@/lib/versions";
 
@@ -9,6 +10,15 @@ export const Route = createFileRoute("/docs/{$}.md")({
       GET: async ({ params }) => {
         const slugs = markdownPathToSlugs(params._splat?.split("/") ?? []);
         const resolved = resolveDocsVersionedSlugs(slugs);
+        const movedPage = resolved.version.current
+          ? getLatestDocsRedirect(resolved.slugs)
+          : undefined;
+        if (movedPage) {
+          throw redirect({
+            href: `/docs/${movedPage}.md`,
+            statusCode: 308,
+          });
+        }
         const page = getDocsSource(resolved.version).getPage(resolved.slugs);
         if (!page) {
           throw resolveMissingMarkdownPage(resolved);

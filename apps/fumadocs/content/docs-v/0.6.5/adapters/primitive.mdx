@@ -1,0 +1,104 @@
+---
+title: Primitive
+description: Send through Primitive's email API for AI agents, with base64 attachments, idempotent retries, and fail-fast validation for fields it cannot represent.
+icon: primitive
+---
+
+The Primitive adapter calls Primitive's `POST /v1/send-mail` endpoint with plain `fetch`. [Primitive](https://www.primitive.dev) is email infrastructure for AI agents: a REST API for sending and receiving mail, with idempotency, typed errors, and an async delivery model. The adapter maps the normalized `EmailMessage` straight onto its send payload.
+
+<ProviderBadge adapter="primitive" />
+
+## Configure
+
+Create a Primitive API key (prefixed `prim_`) and verify the outbound domain you send `from`.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { primitive } from "@opencoredev/email-sdk/primitive";
+
+export const email = createEmailClient({
+  adapters: [primitive({ apiKey: process.env.PRIMITIVE_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Primitive API key (prefixed prim_) or OAuth access token (prefixed prim_oat_).",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.primitive.dev/v1"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+    headers: {
+      description: "Extra headers merged into every request.",
+      type: "Record<string, string>",
+    },
+  }}
+/>
+
+## Send
+
+Primitive's send API targets a single recipient and accepts `html`, `text`, and attachments. Attachments are base64-encoded automatically.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome to Acme",
+  html: "<p>Thanks for joining Acme.</p>",
+  text: "Thanks for joining Acme.",
+});
+
+console.log(result.id); // Primitive sent-email id
+```
+
+<Callout type="warn" title="One recipient, no CC or BCC">
+  Primitive's `send-mail` accepts exactly one recipient and has no CC or BCC field. The adapter
+  fails fast with an `EmailValidationError` when a message carries more than one recipient, `cc`, or
+  `bcc`, so route fan-out to multiple people as separate sends.
+</Callout>
+
+<Callout type="warn" title="No custom headers, tags, or metadata">
+  Primitive's send API has no custom-header, tags, or metadata field, so the adapter rejects
+  `headers`, `tags`, and `metadata` with an `EmailValidationError` before the request. Check [field
+  support](/docs/adapters/field-support) before using Primitive in a fallback route.
+</Callout>
+
+<Callout title="From a verified outbound domain">
+  The sender domain in `from` must be a verified outbound domain for your Primitive organization,
+  and recipient eligibility depends on your account's outbound entitlements.
+</Callout>
+
+## Idempotent sends
+
+Pass an `idempotencyKey` and the adapter forwards it as Primitive's `Idempotency-Key` header, so a retried send with the same key and body replays the original result instead of sending twice.
+
+```ts
+await email.send(message, { idempotencyKey: "receipt:order_123" });
+```
+
+## Verify from the CLI
+
+```bash
+PRIMITIVE_API_KEY="prim_..." npx email-sdk doctor --adapter primitive
+```
+
+```bash
+PRIMITIVE_API_KEY="prim_..." npx email-sdk send \
+  --adapter primitive \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Primitive smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. The single-recipient rule is checked locally, so the live send is really testing your `prim_` key and outbound domain. Check `accepted` and `rejected` in the response: Primitive queues delivery asynchronously, and those arrays tell you what it actually took.

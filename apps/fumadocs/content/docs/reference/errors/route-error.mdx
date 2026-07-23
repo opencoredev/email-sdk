@@ -1,0 +1,18 @@
+---
+title: route_error
+description: Every attempted adapter route failed without producing a successful normalized result.
+---
+
+`EmailRouteError` has code `route_error` and an ordered `failures: readonly EmailAdapterError[]` array.
+
+The array contains every terminal adapter failure reached by the route. Unknown delivery may stop the route before later configured adapters are attempted.
+
+```ts title="src/send.ts"
+if (error instanceof EmailRouteError) {
+  for (const failure of error.failures) {
+    console.error(failure.adapter, failure.delivery, failure.status);
+  }
+}
+```
+
+The error cause is the final failure in the array. Preserve ordering in diagnostics because it explains primary, retry, and fallback decisions.

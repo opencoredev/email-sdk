@@ -1,0 +1,16 @@
+---
+title: validation_error
+description: The message, route, schedule, capability, or adapter-specific input is invalid before dispatch.
+---
+
+`EmailValidationError` has code `validation_error` and is not retryable.
+
+It covers missing required message fields, invalid attachment sources, invalid zoned timestamps, incompatible fallback fields, repeated headers on incapable adapters, recipient/tag limits, duplicate adapter/plugin names, invalid retry counts, and other synchronous configuration errors.
+
+Fix the input or client construction. Retrying unchanged data cannot succeed.
+
+```ts title="src/validate.ts"
+await email.validate(message, options);
+```
+
+Use public `validate` or CLI `send --dry-run` to reproduce this class without sending.

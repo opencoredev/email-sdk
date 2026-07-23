@@ -4,6 +4,14 @@ description: Send through the Unosend REST API, a single Bearer-authenticated en
 icon: unosend
 ---
 
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
 The Unosend adapter calls the Unosend REST API with plain `fetch`. It is one of the simplest providers to wire up: one Bearer-authenticated `/emails` endpoint, one API key, no other configuration.
 
 <ProviderBadge adapter="unosend" />
@@ -54,10 +62,10 @@ const result = await email.send({
   tags: [{ name: "type", value: "invite" }],
 });
 
-console.log(result.id); // Unosend email id, also exposed as result.messageId
+console.log(result.id); // Unosend email id
 ```
 
-The adapter checks `success` in the response body and throws an `EmailProviderError` when Unosend reports a failure, even on an HTTP 200.
+The adapter checks `success` in the response body and throws an `EmailAdapterError` when Unosend reports a failure, even on an HTTP 200.
 
 <Callout type="warn" title="No metadata, one reply-to">
   Unosend has no metadata field and accepts only one `replyTo` address. A message with `metadata`

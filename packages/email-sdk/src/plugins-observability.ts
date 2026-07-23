@@ -9,16 +9,15 @@ import type {
 export type EmailObservabilityEvent =
   | {
       type: "email.sent";
-      provider: string;
+      adapter: string;
       attempt: number;
       message: RedactedEmailMessage;
       responseId?: string;
-      messageId?: string;
       metadata?: Record<string, unknown>;
     }
   | {
       type: "email.retry";
-      provider: string;
+      adapter: string;
       attempt: number;
       nextAttempt: number;
       delayMs: number;
@@ -28,7 +27,7 @@ export type EmailObservabilityEvent =
     }
   | {
       type: "email.error";
-      provider: string;
+      adapter: string;
       attempt: number;
       message: RedactedEmailMessage;
       error: unknown;
@@ -72,7 +71,7 @@ export function observabilityPlugin(options: EmailObservabilityPluginOptions): E
       async onRetry(event) {
         await emit({
           type: "email.retry",
-          provider: event.provider,
+          adapter: event.adapter,
           attempt: event.attempt,
           nextAttempt: event.nextAttempt,
           delayMs: event.delayMs,
@@ -87,18 +86,17 @@ export function observabilityPlugin(options: EmailObservabilityPluginOptions): E
         async afterSend(event: EmailAfterSendEvent) {
           await emit({
             type: "email.sent",
-            provider: event.provider,
+            adapter: event.adapter,
             attempt: event.attempt,
             message: redactMessage(event.message),
             responseId: event.response.id,
-            messageId: event.response.messageId,
             metadata: event.metadata,
           });
         },
         async onError(event: EmailErrorEvent) {
           await emit({
             type: "email.error",
-            provider: event.provider,
+            adapter: event.adapter,
             attempt: event.attempt,
             message: redactMessage(event.message),
             error: event.error,

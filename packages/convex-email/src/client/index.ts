@@ -21,6 +21,7 @@ import {
   vCancelEmailArgs,
   vEmailConfig,
   vListEmailEventsArgs,
+  vRetryEmailArgs,
   vSendBatchEmailsArgs,
   vSendEmailArgs,
   vStatusArgs,
@@ -35,6 +36,7 @@ type ComponentApi = {
     status: unknown;
     listEvents: unknown;
     cancel: unknown;
+    retry: unknown;
     setConfig: unknown;
     getConfig: unknown;
   };
@@ -123,6 +125,10 @@ export class ConvexEmail {
 
   cancel(ctx: MutationCtx, args: { emailId: string }) {
     return ctx.runMutation(this.component.lib.cancel as AnyMutationRef, args) as Promise<boolean>;
+  }
+
+  retry(ctx: MutationCtx, args: { emailId: string }) {
+    return ctx.runMutation(this.component.lib.retry as AnyMutationRef, args) as Promise<boolean>;
   }
 
   setConfig(ctx: MutationCtx, config: ConvexEmailConfig) {
@@ -215,6 +221,11 @@ export class ConvexEmail {
         args: vCancelEmailArgs,
         returns: v.boolean(),
         handler: async (ctx, args) => await this.cancel(ctx, args),
+      }),
+      retry: mutationGeneric({
+        args: vRetryEmailArgs,
+        returns: v.boolean(),
+        handler: async (ctx, args) => await this.retry(ctx, args),
       }),
     };
 

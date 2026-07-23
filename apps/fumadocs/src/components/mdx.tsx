@@ -6,7 +6,9 @@ import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
+import { AdapterCapabilitySupport, AdapterFieldSupport } from "./adapter-support";
 import { CommunityPluginRegistry } from "./community-plugin-registry";
+import { EmailExample, EmailExampleGallery } from "./email-examples";
 import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
 import { SponsorSpotlight } from "./sponsors";
@@ -37,12 +39,17 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     Card: (props) => (
       <defaultMdxComponents.Card
         {...props}
+        className={["docs-card", props.className].filter(Boolean).join(" ")}
         href={versionDocsHref(props.href, docsBasePath) as string}
       />
     ),
     Accordion,
     Accordions,
+    AdapterCapabilitySupport,
+    AdapterFieldSupport,
     CommunityPluginRegistry,
+    EmailExample,
+    EmailExampleGallery,
     File,
     Files,
     Folder,

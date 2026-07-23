@@ -1,20 +1,48 @@
 import { readFile } from "node:fs/promises";
 
-import { EmailProviderError, EmailValidationError } from "./errors.js";
+import {
+  EmailAbortError,
+  EmailAdapterError,
+  EmailSdkError,
+  EmailValidationError,
+} from "./errors.js";
 import type {
   EmailAddress,
+  EmailAdapter,
+  EmailAdapterCapabilities,
   EmailAttachment,
   EmailHeader,
   EmailMessage,
+  EmailSendResult,
   OneOrMany,
+  RecipientVariables,
 } from "./types.js";
+
+type LegacyEmailSendResult = Omit<EmailSendResult, "adapter"> & {
+  adapter?: string;
+  provider?: string;
+  messageId?: string;
+};
+
+export function normalizeAdapterResult<Name extends string>(
+  adapter: Name,
+  result: LegacyEmailSendResult,
+): EmailSendResult<Name> {
+  return {
+    adapter: (result.adapter || result.provider || adapter) as Name,
+    id: result.id ?? result.messageId,
+    accepted: result.accepted,
+    rejected: result.rejected,
+    raw: result.raw,
+  };
+}
 
 export function arrayify<T>(value: OneOrMany<T> | undefined): T[] {
   if (value === undefined) {
     return [];
   }
 
-  return Array.isArray(value) ? value : [value];
+  return Array.isArray(value) ? [...value] : [value as T];
 }
 
 export function formatAddress(address: EmailAddress): string {
@@ -49,11 +77,10 @@ export function headersToObject(
     return undefined;
   }
 
-  if (Array.isArray(headers)) {
-    return Object.fromEntries(headers.map((header) => [header.name, header.value]));
+  if (!Array.isArray(headers)) {
+    return headers as unknown as Record<string, string>;
   }
-
-  return headers;
+  return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
 export function headersToArray(headers: EmailMessage["headers"]): EmailHeader[] | undefined {
@@ -61,11 +88,13 @@ export function headersToArray(headers: EmailMessage["headers"]): EmailHeader[] 
     return undefined;
   }
 
-  if (Array.isArray(headers)) {
-    return headers;
+  if (!Array.isArray(headers)) {
+    return Object.entries(headers as unknown as Record<string, string>).map(([name, value]) => ({
+      name,
+      value,
+    }));
   }
-
-  return Object.entries(headers).map(([name, value]) => ({ name, value }));
+  return [...headers];
 }
 
 export function assertMessage(message: EmailMessage) {
@@ -86,9 +115,12 @@ export function assertMessage(message: EmailMessage) {
   }
 
   for (const attachment of message.attachments ?? []) {
-    if (attachment.content === undefined && !attachment.path) {
+    const hasContent = attachment.content !== undefined;
+    const hasPath = typeof attachment.path === "string" && attachment.path.length > 0;
+
+    if (hasContent === hasPath) {
       throw new EmailValidationError(
-        `Attachment "${attachment.filename}" requires content or path.`,
+        `Attachment "${attachment.filename}" requires exactly one of content or path.`,
       );
     }
   }
@@ -101,6 +133,16 @@ export function assertMessage(message: EmailMessage) {
 // Past sendAt values are intentionally allowed: providers either send immediately or reject
 // with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
 export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
+  if (
+    typeof sendAt === "string" &&
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(sendAt)
+  ) {
+    throw new EmailValidationError(
+      `Email message sendAt must be an RFC 3339 timestamp with Z or an explicit offset: "${sendAt}".`,
+      { sendAt },
+    );
+  }
+
   const date = sendAt instanceof Date ? sendAt : new Date(sendAt);
 
   if (Number.isNaN(date.getTime())) {
@@ -113,11 +155,17 @@ export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date 
   return date;
 }
 
+type LegacyRecipientMessage = EmailMessage & {
+  recipientVariables?: RecipientVariables;
+};
+
 export function hasRecipientVariables(message: EmailMessage): boolean {
-  return Boolean(message.recipientVariables && Object.keys(message.recipientVariables).length > 0);
+  const recipientVariables = (message as LegacyRecipientMessage).recipientVariables;
+  return Boolean(recipientVariables && Object.keys(recipientVariables).length > 0);
 }
 
 export function assertRecipientVariables(message: EmailMessage) {
+  const recipientVariables = (message as LegacyRecipientMessage).recipientVariables;
   if (!hasRecipientVariables(message)) {
     return;
   }
@@ -143,7 +191,7 @@ export function assertRecipientVariables(message: EmailMessage) {
     recipients.add(normalized);
   }
 
-  const unknown = Object.keys(message.recipientVariables ?? {}).filter(
+  const unknown = Object.keys(recipientVariables ?? {}).filter(
     (address) => !recipients.has(address.toLowerCase()),
   );
 
@@ -157,7 +205,7 @@ export function assertRecipientVariables(message: EmailMessage) {
   // 2026-07-06: variable keys must match the fallback substitution token `%recipient.<key>%`
   // (regex [\w-]+). Keys like "user.name" would personalize on native provider routes but
   // silently stay literal in the client-side fallback, so reject them everywhere instead.
-  for (const [address, variables] of Object.entries(message.recipientVariables ?? {})) {
+  for (const [address, variables] of Object.entries(recipientVariables ?? {})) {
     for (const key of Object.keys(variables)) {
       if (!/^[\w-]+$/.test(key)) {
         throw new EmailValidationError(
@@ -211,22 +259,37 @@ export function isRetryableStatus(status: number) {
 }
 
 export function toProviderError(provider: string, error: unknown) {
-  if (error instanceof EmailProviderError) {
+  if (error instanceof EmailAbortError || error instanceof EmailValidationError) {
     return error;
   }
 
-  if (error instanceof Error) {
-    return new EmailProviderError(error.message, {
-      provider,
-      retryable: isRetryableRuntimeError(error),
+  if (error instanceof EmailAdapterError) {
+    return error;
+  }
+
+  if (error instanceof EmailSdkError) {
+    return new EmailAdapterError(error.message, {
+      adapter: provider,
+      retryable: error.retryable,
+      delivery: "unknown",
       cause: error,
     });
   }
 
-  return new EmailProviderError(`${provider} failed with an unknown error.`, {
-    provider,
+  if (error instanceof Error) {
+    return new EmailAdapterError(error.message, {
+      adapter: provider,
+      retryable: isRetryableRuntimeError(error),
+      delivery: "unknown",
+      cause: error,
+    });
+  }
+
+  return new EmailAdapterError(`${provider} failed with an unknown error.`, {
+    adapter: provider,
     retryable: false,
-    details: error,
+    delivery: "unknown",
+    cause: error,
   });
 }
 
@@ -422,6 +485,148 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   smtp: { cc: true, bcc: true, replyTo: true, headers: true },
 } satisfies Record<string, MessageFieldSupport>;
 
+const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive"]);
+const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp"]);
+const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
+
+export const BUILT_IN_ADAPTER_CAPABILITIES = Object.fromEntries(
+  Object.entries(SUPPORTED_MESSAGE_FIELDS).map(([name, fields]) => [
+    name,
+    {
+      repeatedHeaders: REPEATED_HEADERS.has(name),
+      idempotency: NATIVE_IDEMPOTENCY.has(name)
+        ? "native"
+        : name === "smtp"
+          ? "message_id"
+          : "none",
+      scheduling: "sendAt" in fields && fields.sendAt === true,
+      personalized: NATIVE_PERSONALIZED.has(name) ? "native" : "expanded",
+    } satisfies EmailAdapterCapabilities,
+  ]),
+) as Record<keyof typeof SUPPORTED_MESSAGE_FIELDS, EmailAdapterCapabilities>;
+
+export function builtInAdapterDefinition<Name extends keyof typeof SUPPORTED_MESSAGE_FIELDS>(
+  name: Name,
+): Pick<EmailAdapter<Name>, "capabilities" | "validate"> {
+  return {
+    capabilities: BUILT_IN_ADAPTER_CAPABILITIES[name],
+    validate(message) {
+      validateBuiltInAdapter(name, message);
+    },
+  };
+}
+
+export function validateBuiltInAdapter(
+  adapter: keyof typeof SUPPORTED_MESSAGE_FIELDS,
+  message: EmailMessage,
+) {
+  assertMessage(message);
+  assertSupportedMessageFields(adapter, message, SUPPORTED_MESSAGE_FIELDS[adapter]);
+
+  const capabilities = BUILT_IN_ADAPTER_CAPABILITIES[adapter];
+  const headerNames = new Set<string>();
+
+	for (const header of headersToArray(message.headers) ?? []) {
+    const normalized = header.name.toLowerCase();
+    if (!capabilities.repeatedHeaders && headerNames.has(normalized)) {
+      throw new EmailValidationError(
+        `${adapter} does not support repeated email header names: ${header.name}.`,
+      );
+    }
+    headerNames.add(normalized);
+  }
+
+  const to = arrayify(message.to);
+  const replyTo = arrayify(message.replyTo);
+
+  if (adapter === "loops" || adapter === "iterable" || adapter === "primitive") {
+    assertMaxItems(adapter, "recipient", to, 1);
+  }
+  if (adapter === "jetemail") {
+    if (!formatAddress(message.from).includes("<")) {
+      const from = emailAddressOf(message.from);
+      throw new EmailValidationError(
+        `jetemail requires a from address with a display name, for example "Acme <${from}>".`,
+      );
+    }
+    assertMaxItems(adapter, "recipient", to, 50);
+    assertMaxItems(adapter, "cc", arrayify(message.cc), 50);
+    assertMaxItems(adapter, "bcc", arrayify(message.bcc), 50);
+    assertMaxItems(adapter, "replyTo", replyTo, 50);
+  }
+	if (adapter === "cloudflare") {
+    assertMaxItems(
+      adapter,
+      "recipient",
+      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
+      50,
+    );
+    assertMaxItems(adapter, "replyTo", replyTo, 1);
+		for (const recipient of [...to, ...arrayify(message.cc), ...arrayify(message.bcc)]) {
+			if (typeof recipient === "string" ? recipient.includes("<") : Boolean(recipient.name)) {
+				throw new EmailValidationError(
+					"cloudflare recipient fields only support plain email addresses.",
+				);
+			}
+		}
+	}
+	if (
+		adapter === "brevo" ||
+		adapter === "mailersend" ||
+		adapter === "mailtrap" ||
+		adapter === "plunk" ||
+		adapter === "unosend" ||
+		adapter === "sequenzy"
+	) {
+		assertMaxItems(adapter, "replyTo", replyTo, 1);
+	}
+  if (adapter === "sequenzy") {
+    assertMaxItems(adapter, "recipient", to, 50);
+  }
+  if (adapter === "postmark" || adapter === "lettermint" || adapter === "mailtrap") {
+    assertMaxItems(adapter, "tag", [...(message.tags ?? [])], 1);
+  }
+  if (adapter === "scaleway" && replyTo.length > 0) {
+		const hasReplyHeader = (headersToArray(message.headers) ?? []).some(
+			(header) => header.name.toLowerCase() === "reply-to",
+		);
+    if (hasReplyHeader) {
+      throw new EmailValidationError(
+        "scaleway cannot set replyTo when headers already include Reply-To.",
+      );
+    }
+  }
+  if (adapter === "smtp") {
+    for (const address of [
+      message.from,
+      ...to,
+      ...arrayify(message.cc),
+      ...arrayify(message.bcc),
+    ]) {
+      const envelope = emailAddressOf(address);
+      const hasInvalidCharacter = [...envelope].some((character) => {
+        const codePoint = character.codePointAt(0) ?? 0;
+        return codePoint <= 0x20 || codePoint >= 0x7f || character === "<" || character === ">";
+      });
+      if (!envelope || hasInvalidCharacter) {
+        throw new EmailValidationError(
+          `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
+        );
+      }
+    }
+		for (const header of headersToArray(message.headers) ?? []) {
+			if (header.name.toLowerCase() === "bcc") {
+				throw new EmailValidationError("SMTP does not allow Bcc in message headers.");
+			}
+			if (!/^[!-9;-~]+$/.test(header.name)) {
+				throw new EmailValidationError(
+					`SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
+				);
+			}
+		}
+  }
+}
+
 export function assertSupportedMessageFields(
   adapter: string,
   message: EmailMessage,
@@ -429,9 +634,9 @@ export function assertSupportedMessageFields(
 ) {
   const unsupported: string[] = [];
 
-  if (message.cc && !supported.cc) unsupported.push("cc");
-  if (message.bcc && !supported.bcc) unsupported.push("bcc");
-  if (message.replyTo && !supported.replyTo) unsupported.push("replyTo");
+  if (hasOptionalRecipients(message.cc) && !supported.cc) unsupported.push("cc");
+  if (hasOptionalRecipients(message.bcc) && !supported.bcc) unsupported.push("bcc");
+  if (hasOptionalRecipients(message.replyTo) && !supported.replyTo) unsupported.push("replyTo");
   if (hasValues(message.headers) && !supported.headers) unsupported.push("headers");
   if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
   if (message.tags?.length && !supported.tags) unsupported.push("tags");
@@ -446,7 +651,12 @@ export function assertSupportedMessageFields(
   }
 }
 
-export function assertMaxItems(adapter: string, field: string, values: unknown[], max: number) {
+export function assertMaxItems(
+  adapter: string,
+  field: string,
+  values: readonly unknown[],
+  max: number,
+) {
   if (values.length <= max) {
     return;
   }
@@ -467,4 +677,10 @@ function hasValues(value: EmailMessage["headers"] | EmailMessage["metadata"] | u
   }
 
   return Object.keys(value).length > 0;
+}
+
+function hasOptionalRecipients(
+  value: EmailMessage["cc"] | EmailMessage["bcc"] | EmailMessage["replyTo"] | undefined,
+) {
+  return Array.isArray(value) ? value.length > 0 : value !== undefined;
 }

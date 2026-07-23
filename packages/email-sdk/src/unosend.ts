@@ -1,4 +1,4 @@
-import { EmailProviderError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import {
   base64Attachments,
@@ -8,10 +8,10 @@ import {
   optionalSingleApiAddress,
   optionalStringAddresses,
 } from "./payloads.js";
-import type { EmailMessage, EmailProvider } from "./types.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
-export type UnosendProviderOptions = {
+export type UnosendAdapterOptions = {
   apiKey: string;
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -36,8 +36,10 @@ type UnosendSendResponse = {
   status?: string;
 };
 
-export function unosend(options: UnosendProviderOptions): EmailProvider<{ baseUrl: string }> {
-  return jsonProvider<UnosendSendResponse>({
+export function unosend(
+  options: UnosendAdapterOptions,
+): EmailAdapter<"unosend", { baseUrl: string }> {
+  return jsonProvider<"unosend", UnosendSendResponse>({
     name: "unosend",
     baseUrl: options.baseUrl ?? "https://api.unosend.co",
     endpoint: "/emails",
@@ -69,10 +71,9 @@ export function unosend(options: UnosendProviderOptions): EmailProvider<{ baseUr
     },
     parseResponse(body) {
       if (body.success !== true) {
-        throw new EmailProviderError(unosendErrorMessage(body), {
-          provider: "unosend",
+        throw new EmailAdapterError(unosendErrorMessage(body), {
+          adapter: "unosend",
           retryable: false,
-          details: body,
         });
       }
 
@@ -80,7 +81,7 @@ export function unosend(options: UnosendProviderOptions): EmailProvider<{ baseUr
       const id = firstString(record, ["id"]);
 
       return {
-        provider: "unosend",
+        adapter: "unosend",
         id,
         messageId: id,
         raw: body,
