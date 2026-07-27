@@ -3,6 +3,7 @@
   "icon": "MailAtSign",
   "pages": [
     "index",
+    "pricing",
     "resend",
     "sequenzy",
     "jetemail",
