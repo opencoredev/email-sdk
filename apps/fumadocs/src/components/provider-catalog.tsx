@@ -184,7 +184,7 @@ function isVerified(key: string): key is VerifiedProvider {
   return Object.prototype.hasOwnProperty.call(verification.liveChecks, key);
 }
 
-function ProviderMark({ provider }: { provider: Provider }) {
+export function ProviderMark({ provider }: { provider: Provider }) {
   if (!provider.logo) {
     return (
       <span className="grid size-8 shrink-0 place-items-center text-[9px] font-semibold text-fd-muted-foreground">
