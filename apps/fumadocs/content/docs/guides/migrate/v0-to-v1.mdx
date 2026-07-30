@@ -218,9 +218,9 @@ v1 has a closed error-code union: `validation_error`, `adapter_not_found`, `adap
 
 `EmailRouteError.failures` replaces arbitrary route details. Middleware exceptions become `EmailMiddlewareError`.
 
-## 14. Confirm ESM and telemetry
+## 14. Confirm runtime and telemetry
 
-v1 is ESM-only on Node.js 20+ or Bun 1.1+. Telemetry remains enabled by default with the existing opt-outs: `telemetry: false`, `EMAIL_SDK_TELEMETRY=0`, or `DO_NOT_TRACK=1`.
+v1 supports ESM imports on Node.js 20+ or Bun 1.1+, plus `require()` on Node.js 20.19+. Telemetry remains enabled by default with the existing opt-outs: `telemetry: false`, `EMAIL_SDK_TELEMETRY=0`, or `DO_NOT_TRACK=1`.
 
 ## 15. Use the compat bridge only temporarily
 

@@ -43,139 +43,139 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./resend": {
       "types": "./dist/resend.d.ts",
-      "import": "./dist/resend.js"
+      "default": "./dist/resend.js"
     },
     "./postmark": {
       "types": "./dist/postmark.d.ts",
-      "import": "./dist/postmark.js"
+      "default": "./dist/postmark.js"
     },
     "./sendgrid": {
       "types": "./dist/sendgrid.d.ts",
-      "import": "./dist/sendgrid.js"
+      "default": "./dist/sendgrid.js"
     },
     "./cloudflare": {
       "types": "./dist/cloudflare.d.ts",
-      "import": "./dist/cloudflare.js"
+      "default": "./dist/cloudflare.js"
     },
     "./unosend": {
       "types": "./dist/unosend.d.ts",
-      "import": "./dist/unosend.js"
+      "default": "./dist/unosend.js"
     },
     "./iterable": {
       "types": "./dist/iterable.d.ts",
-      "import": "./dist/iterable.js"
+      "default": "./dist/iterable.js"
     },
     "./ses": {
       "types": "./dist/ses.d.ts",
-      "import": "./dist/ses.js"
+      "default": "./dist/ses.js"
     },
     "./mailgun": {
       "types": "./dist/mailgun.d.ts",
-      "import": "./dist/mailgun.js"
+      "default": "./dist/mailgun.js"
     },
     "./mailersend": {
       "types": "./dist/mailersend.d.ts",
-      "import": "./dist/mailersend.js"
+      "default": "./dist/mailersend.js"
     },
     "./brevo": {
       "types": "./dist/brevo.d.ts",
-      "import": "./dist/brevo.js"
+      "default": "./dist/brevo.js"
     },
     "./mailchimp": {
       "types": "./dist/mailchimp.d.ts",
-      "import": "./dist/mailchimp.js"
+      "default": "./dist/mailchimp.js"
     },
     "./sparkpost": {
       "types": "./dist/sparkpost.d.ts",
-      "import": "./dist/sparkpost.js"
+      "default": "./dist/sparkpost.js"
     },
     "./loops": {
       "types": "./dist/loops.d.ts",
-      "import": "./dist/loops.js"
+      "default": "./dist/loops.js"
     },
     "./sequenzy": {
       "types": "./dist/sequenzy.d.ts",
-      "import": "./dist/sequenzy.js"
+      "default": "./dist/sequenzy.js"
     },
     "./jetemail": {
       "types": "./dist/jetemail.d.ts",
-      "import": "./dist/jetemail.js"
+      "default": "./dist/jetemail.js"
     },
     "./lettermint": {
       "types": "./dist/lettermint.d.ts",
-      "import": "./dist/lettermint.js"
+      "default": "./dist/lettermint.js"
     },
     "./primitive": {
       "types": "./dist/primitive.d.ts",
-      "import": "./dist/primitive.js"
+      "default": "./dist/primitive.js"
     },
     "./plunk": {
       "types": "./dist/plunk.d.ts",
-      "import": "./dist/plunk.js"
+      "default": "./dist/plunk.js"
     },
     "./mailtrap": {
       "types": "./dist/mailtrap.d.ts",
-      "import": "./dist/mailtrap.js"
+      "default": "./dist/mailtrap.js"
     },
     "./scaleway": {
       "types": "./dist/scaleway.d.ts",
-      "import": "./dist/scaleway.js"
+      "default": "./dist/scaleway.js"
     },
     "./zeptomail": {
       "types": "./dist/zeptomail.d.ts",
-      "import": "./dist/zeptomail.js"
+      "default": "./dist/zeptomail.js"
     },
     "./mailpace": {
       "types": "./dist/mailpace.d.ts",
-      "import": "./dist/mailpace.js"
+      "default": "./dist/mailpace.js"
     },
     "./smtp": {
       "types": "./dist/smtp.d.ts",
-      "import": "./dist/smtp.js"
+      "default": "./dist/smtp.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",
-      "import": "./dist/testing.js"
+      "default": "./dist/testing.js"
     },
     "./compat": {
       "types": "./dist/compat.d.ts",
-      "import": "./dist/compat.js"
+      "default": "./dist/compat.js"
     },
     "./agent-tools": {
       "types": "./dist/agent-tools.d.ts",
-      "import": "./dist/agent-tools.js"
+      "default": "./dist/agent-tools.js"
     },
     "./ai": {
       "types": "./dist/ai.d.ts",
-      "import": "./dist/ai.js"
+      "default": "./dist/ai.js"
     },
     "./react": {
       "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
+      "default": "./dist/react.js"
     },
     "./plugins/defaults": {
       "types": "./dist/plugins-defaults.d.ts",
-      "import": "./dist/plugins-defaults.js"
+      "default": "./dist/plugins-defaults.js"
     },
     "./plugins/observability": {
       "types": "./dist/plugins-observability.d.ts",
-      "import": "./dist/plugins-observability.js"
+      "default": "./dist/plugins-observability.js"
     },
     "./plugins/capture": {
       "types": "./dist/plugins-capture.d.ts",
-      "import": "./dist/plugins-capture.js"
+      "default": "./dist/plugins-capture.js"
     },
     "./plugins/routing": {
       "types": "./dist/plugins-routing.d.ts",
-      "import": "./dist/plugins-routing.js"
+      "default": "./dist/plugins-routing.js"
     },
     "./plugins/timeout": {
       "types": "./dist/plugins-timeout.d.ts",
-      "import": "./dist/plugins-timeout.js"
+      "default": "./dist/plugins-timeout.js"
     }
   },
   "publishConfig": {

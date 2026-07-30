@@ -49,11 +49,15 @@ try {
 
   const smoke = join(install, "smoke.mjs");
   await writeFile(smoke, smokeProgram());
+  const commonJsSmoke = join(install, "smoke.cjs");
+  await writeFile(commonJsSmoke, commonJsSmokeProgram());
 
   console.log("Running installed-package smoke tests under Node...");
   await run(["node", smoke], install);
+  await run(["node", commonJsSmoke], install);
   console.log("Running installed-package smoke tests under Bun...");
   await run(["bun", smoke], install);
+  await run(["bun", commonJsSmoke], install);
   console.log("Installed package smoke tests passed.");
 } finally {
   await rm(scratch, { recursive: true, force: true });
@@ -193,6 +197,20 @@ async function declarationMaps(directory) {
     else if (!entry.name.startsWith("._") && entry.name.endsWith(".d.ts.map")) paths.push(path);
   }
   return paths;
+}
+`;
+}
+
+function commonJsSmokeProgram(): string {
+  return String.raw`
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
+
+const coreDir = join(__dirname, "node_modules/@opencoredev/email-sdk");
+const manifest = JSON.parse(readFileSync(join(coreDir, "package.json"), "utf8"));
+
+for (const subpath of Object.keys(manifest.exports ?? {})) {
+  require(subpath === "." ? manifest.name : manifest.name + subpath.slice(1));
 }
 `;
 }
