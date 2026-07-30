@@ -204,9 +204,11 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     id: "smtp",
     label: "SMTP",
     setupHref: "/docs/adapters/smtp",
-    fields: { cc: true, bcc: true, replyTo: true, headers: true },
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
     capabilities: { repeatedHeaders: true, idempotency: "message_id", scheduling: false, personalized: "expanded" },
-    limits: ["Validates ASCII envelope addresses and header names before opening a connection."],
+    limits: [
+      "Validates ASCII envelope addresses, header names, and attachment MIME fields before opening a connection.",
+    ],
   },
 ] as const satisfies readonly AdapterSupportEntry[];
 

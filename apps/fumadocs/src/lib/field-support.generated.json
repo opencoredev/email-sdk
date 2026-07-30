@@ -164,6 +164,7 @@
     "cc": true,
     "bcc": true,
     "replyTo": true,
-    "headers": true
+    "headers": true,
+    "attachments": true
   }
 }

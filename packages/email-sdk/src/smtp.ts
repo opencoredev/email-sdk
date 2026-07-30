@@ -3,9 +3,10 @@ import net from "node:net";
 import tls from "node:tls";
 
 import { EmailAdapterError } from "./errors.js";
-import type { EmailAddress, EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailAddress, EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
 	BUILT_IN_ADAPTER_CAPABILITIES,
+	attachmentToBytes,
 	formatAddress,
 	formatAddresses,
 	headersToArray,
@@ -52,10 +53,11 @@ export function smtp<const Name extends string = "smtp">(
 		},
 		async send(message, context) {
 			validateBuiltInAdapter("smtp", message);
+			const raw = await buildMimeMessage(message, options.defaults, context.idempotencyKey);
 			const client = new SmtpClient(options, port, context.idempotencyKey);
 
       try {
-        const response = await client.send(message);
+        const response = await client.send(message, raw);
 
         return {
           adapter: name,
@@ -88,7 +90,7 @@ class SmtpClient {
     private readonly idempotencyKey?: string,
   ) {}
 
-  async send(message: EmailMessage) {
+  async send(message: EmailMessage, raw: string) {
     await this.connect();
     await this.expect([220]);
     await this.command(`EHLO ${this.options.heloName ?? "localhost"}`, [250]);
@@ -133,7 +135,6 @@ class SmtpClient {
     }
 
     await this.command("DATA", [354]);
-    const raw = buildMimeMessage(message, this.options.defaults, this.idempotencyKey);
     const response = await this.command(`${escapeData(raw)}\r\n.`, [250]);
     await this.command("QUIT", [221]).catch(() => undefined);
 
@@ -281,7 +282,7 @@ class SmtpClient {
   }
 }
 
-function buildMimeMessage(
+async function buildMimeMessage(
   message: EmailMessage,
   defaults: SmtpAdapterOptions["defaults"],
   idempotencyKey?: string,
@@ -307,20 +308,51 @@ function buildMimeMessage(
 	const headerText = headers
 		.filter(([, value]) => value)
 		.map(([key, value]) => `${key}: ${foldHeader(value)}`)
+		.join("\r\n");
+
+  const bodyPart = buildBodyPart(message);
+
+  if (!message.attachments?.length) {
+    return `${headerText}\r\n${bodyPart}`;
+  }
+
+  const boundary = `email-sdk-mixed-${randomUUID()}`;
+  const attachmentParts = await Promise.all(message.attachments.map(buildAttachmentPart));
+  const parts = [bodyPart, ...attachmentParts]
+    .map((part) => `--${boundary}\r\n${part}`)
     .join("\r\n");
 
-  if (message.html && message.text) {
-    const boundary = `email-sdk-${randomUUID()}`;
+  return `${headerText}\r\nContent-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n${parts}\r\n--${boundary}--`;
+}
 
-    return `${headerText}\r\nContent-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${message.text}\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${message.html}\r\n--${boundary}--`;
+function buildBodyPart(message: EmailMessage) {
+  if (message.html && message.text) {
+    const boundary = `email-sdk-alt-${randomUUID()}`;
+
+    return `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${message.text}\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${message.html}\r\n--${boundary}--`;
   }
 
   const contentType = message.html ? "text/html" : "text/plain";
   const body = message.html ?? message.text ?? "";
 
-  return `${headerText}\r\nContent-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
+  return `Content-Type: ${contentType}; charset=utf-8\r\n\r\n${body}`;
 }
 
+async function buildAttachmentPart(attachment: EmailAttachment) {
+  const headers = [
+    `Content-Type: ${attachment.contentType ?? "application/octet-stream"}; name="${attachment.filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: ${attachment.disposition ?? "attachment"}; filename="${attachment.filename}"`,
+  ];
+
+  if (attachment.contentId) {
+    headers.push(`Content-ID: <${attachment.contentId}>`);
+  }
+
+  const encoded = (await attachmentToBytes(attachment)).toString("base64");
+
+  return `${headers.join("\r\n")}\r\n\r\n${wrapBase64(encoded)}`;
+}
 function envelopeAddress(address: EmailAddress) {
   return parseEmailAddress(formatAddress(address));
 }
@@ -336,6 +368,10 @@ function escapeData(value: string) {
 
 function foldHeader(value: string) {
   return value.replace(/\r\n|[\r\n]/g, " ");
+}
+
+function wrapBase64(value: string) {
+  return value.match(/.{1,76}/g)?.join("\r\n") ?? "";
 }
 
 function extractSmtpMessageId(response: string) {

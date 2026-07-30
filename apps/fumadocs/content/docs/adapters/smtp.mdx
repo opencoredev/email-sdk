@@ -89,7 +89,8 @@ export const email = createEmailClient({
       default: '"localhost"',
     },
     timeoutMs: {
-      description: "Timeout for the connection and each SMTP command.",
+      description:
+        "Timeout for the connection and each SMTP command. Large attachments on slow links may need a higher value.",
       type: "number",
       default: "15000",
     },
@@ -102,9 +103,11 @@ With `secure: true` the whole session is TLS. Otherwise the adapter connects in 
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when send options include an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
+SMTP maps `cc`, `bcc`, `replyTo`, `headers`, and `attachments`. It sends attachments as Base64 MIME parts inside `multipart/mixed`. If the message also has text and HTML bodies, those bodies stay together in a nested `multipart/alternative` part.
 
-```ts
+The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when send options include an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
+
+```ts title="src/send-alert.ts"
 const result = await email.send({
   from: "Acme <alerts@acme.com>",
   to: "ops@example.com",
@@ -113,6 +116,13 @@ const result = await email.send({
   text: "db-1 is at 92% disk usage.",
   html: "<p><strong>db-1</strong> is at 92% disk usage.</p>",
   headers: [{ name: "X-Alert-ID", value: "alert_481" }],
+  attachments: [
+    {
+      filename: "disk-report.txt",
+      content: "db-1: 92%",
+      contentType: "text/plain",
+    },
+  ],
 });
 
 console.log(result.accepted); // every recipient the server accepted
@@ -121,10 +131,9 @@ console.log(result.id); // parsed from the server's "queued as ..." reply, else 
 
 `rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Retryable transport failures surface as `EmailAdapterError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
-<Callout type="warn" title="No attachments, tags, or metadata">
-  The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
-  concept. Any of these fields throws an `EmailValidationError` before connecting. See the
-  [field support matrix](/docs/adapters/field-support).
+<Callout type="warn" title="No tags or metadata">
+  SMTP has no provider-side tag or metadata concept. Either field throws an `EmailValidationError`
+  before connecting. See the [field support matrix](/docs/adapters/field-support).
 </Callout>
 
 ## Multiple SMTP routes
@@ -170,7 +179,8 @@ npx email-sdk send \
   --to user@example.com \
   --subject "SMTP smoke test" \
   --text "It works" \
+  --attachment ./report.txt:text/plain \
   --dry-run
 ```
 
-Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send to prove the host, TLS mode, and credentials actually deliver.
+Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. A dry run includes the attachment path and MIME metadata without reading or sending the file. Drop `--dry-run` for one real send to prove the host, TLS mode, credentials, and attachment delivery.

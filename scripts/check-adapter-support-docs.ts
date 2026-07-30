@@ -99,7 +99,7 @@ requireIncludes(entry("postmark"), "one tag");
 requireIncludes(entry("lettermint"), "one tag");
 requireIncludes(entry("mailtrap"), "one tag");
 requireIncludes(entry("scaleway"), "headers already include Reply-To");
-requireIncludes(entry("smtp"), "ASCII envelope addresses and header names");
+requireIncludes(entry("smtp"), "ASCII envelope addresses, header names, and attachment MIME fields");
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 requireIncludes(entry("mailgun"), "1,000 recipients");
 requireIncludes(entry("sendgrid"), "Tag names are discarded");
