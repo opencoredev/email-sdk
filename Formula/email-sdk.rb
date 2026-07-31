@@ -3,7 +3,7 @@ class EmailSdk < Formula
   homepage "https://github.com/opencoredev/email-sdk"
   url "https://registry.npmjs.org/@opencoredev/email-sdk/-/email-sdk-1.0.0.tgz"
   sha256 "126b7b9525976d586b31c56a3ec49db2f373016946a3b417a2574bc04b6c7d8f"
-  license "AGPL-3.0-only"
+  license "MIT"
 
   depends_on "node"
 
