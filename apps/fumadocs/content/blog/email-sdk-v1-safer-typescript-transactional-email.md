@@ -275,7 +275,7 @@ bun add @opencoredev/email-sdk
 
 Start with the [quickstart](https://email-sdk.dev/docs/getting-started/quickstart), choose an adapter from the [adapter directory](https://email-sdk.dev/docs/adapters), and read the [production send pipeline guide](https://email-sdk.dev/docs/guides/production-send-pipeline) before enabling retries or fallback for critical messages.
 
-Email SDK is open source under AGPL-3.0. The source, issues, and contribution guides are available on [GitHub](https://github.com/opencoredev/email-sdk). Companies that want an official adapter can open an issue or contact the project.
+Email SDK is open source under MIT. The source, issues, and contribution guides are available on [GitHub](https://github.com/opencoredev/email-sdk). Companies that want an official adapter can open an issue or contact the project.
 
 This release was made possible by the project's sponsors: [Resend](https://go.resend.com/email-sdk), [Sequenzy](https://www.sequenzy.com/?ref=emailsdk), [JetEmail](https://jetemail.com), [Primitive](https://www.primitive.dev), [Lettermint](https://lettermint.co/?ref=emailsdk), [Instatus](https://instatus.com/?ref=emailsdk), and [Notra](https://usenotra.com).
 
