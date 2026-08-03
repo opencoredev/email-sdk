@@ -1,0 +1,5 @@
+{
+  "title": "Convex",
+  "icon": "Convex",
+  "pages": ["index", "setup", "sending-and-status", "webhooks", "testing-and-recovery"]
+}
