@@ -1,0 +1,50 @@
+---
+title: Delivery capabilities
+sidebarTitle: Capabilities
+description: Decide when an adapter can preserve repeated headers, idempotency, scheduled delivery, or personalized fanout.
+---
+
+Field support answers whether an adapter can represent a message field. Capabilities answer how delivery behaves when retries, duplicate risk, timing, or recipient fanout matter.
+
+## Choose by delivery requirement
+
+- Preserve repeated header names with adapters whose `repeatedHeaders` capability is `true`; duplicate names survive instead of failing validation.
+- Use provider-side idempotency when `idempotency` is `native`; `message_id` means SMTP derives a stable `Message-ID`, but the SMTP server still decides deduplication.
+- Use provider-side scheduled delivery when `scheduling` is `true`; `sendAt` is translated to the provider, and the SDK never waits or queues.
+- Use one native personalized request when `personalized` is `native`; every other built-in adapter expands personalized delivery into deterministic sequential one-recipient sends.
+
+<AdapterCapabilitySupport />
+
+Every fallback candidate must preserve the message's fields and required delivery capabilities. No built-in adapter silently ignores an unsupported capability.
+
+## Scheduling is not a queue
+
+Use `sendAt` for a simple future send when the selected provider supports the required time window. Use a durable scheduler or workflow when you need provider independence, long horizons, cancellation, rescheduling, persisted state, or recovery after process failure.
+
+A cron job is only a polling implementation. If an application uses one, store due jobs in a database, claim them with a lease or transaction, and pass a stable idempotency key to `email.send`. Do not keep timers or a cron loop inside Email SDK.
+
+## Idempotency does not make fallback exactly once
+
+One key cannot guarantee exactly-once delivery across different providers. When a provider returns `delivery: "unknown"`, v1 stops fallback by default because a second provider may create a duplicate.
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [primary, backup],
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
+  },
+});
+```
+
+## Validate the complete route
+
+Validate before a durable queue accepts the job:
+
+```ts title="src/jobs/enqueue-email.ts"
+await email.validate(message, {
+  fallback: { adapters: ["backup"] },
+});
+```
+
+Use [Field support](/docs/adapters/field-support) for address, attachment, tag, metadata, and scheduling field compatibility, and [Production pipeline](/docs/guides/production-send-pipeline) for queueing and recovery boundaries.

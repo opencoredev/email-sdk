@@ -26,6 +26,16 @@ export const docsVersions = [
     external: false,
   },
   {
+    label: "v1.0.0",
+    version: "v1.0.0",
+    description: "Docs for the v1.0.0 release",
+    href: "/docs/v/1.0.0",
+    collection: "docsV100",
+    contentPath: "content/docs-v/1.0.0",
+    current: false,
+    external: false,
+  },
+  {
     label: "v0.6.5",
     version: "v0.6.5",
     description: "Docs for the v0.6.5 patch release",

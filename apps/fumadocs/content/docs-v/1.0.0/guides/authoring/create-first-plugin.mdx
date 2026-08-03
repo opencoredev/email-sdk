@@ -1,0 +1,60 @@
+---
+title: Create your first plugin
+description: Add typed middleware and a client extension without changing adapter behavior.
+---
+
+This plugin records successful receipt ids and exposes them through `email.receipts`.
+
+## Define the extension
+
+```ts title="src/receipt-plugin.ts"
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export function receiptPlugin(): EmailPlugin<{
+  receipts: readonly { adapter: string; id?: string }[];
+}> {
+  const receipts: { adapter: string; id?: string }[] = [];
+
+  return {
+    id: "receipts",
+    middleware: [
+      {
+        afterSend(event) {
+          receipts.push({
+            adapter: event.response.adapter,
+            id: event.response.id,
+          });
+        },
+      },
+    ],
+    extendClient() {
+      return { receipts };
+    },
+  };
+}
+```
+
+## Mount the plugin
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [adapter],
+  plugins: [receiptPlugin()],
+});
+
+await email.send(message);
+console.log(email.receipts);
+```
+
+`extendClient` must not reuse `adapters`, `defaultAdapter`, `validate`, `send`, `sendMany`, `sendPersonalized`, `adapter`, `withAdapter`, or another extension key.
+
+## Choose hooks or middleware
+
+Use hooks for best-effort observation because hook exceptions are swallowed. Use middleware when failure should be visible as `EmailMiddlewareError` or when you need to replace the message or send options before validation.
+
+## Keep setup synchronous
+
+Plugin adapter registration and `extendClient` run during synchronous client construction. Do asynchronous credential or remote configuration work before calling `createEmailClient`.
+
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="See exact plugin, hook, middleware, and extension types." />
+<Card title="Publish a plugin" href="/docs/guides/authoring/publish-community-plugin" description="Package and document the extension for external users." />
