@@ -1,5 +1,13 @@
 import type { EmailAddress, EmailHeader, EmailTag } from "@opencoredev/email-sdk";
 
+import type {
+  ConvexAdapterField,
+  ConvexEmailAdapterKind,
+  ConvexEmailAdapterRegistry,
+} from "./adapters.js";
+
+export type { ConvexEmailAdapterKind } from "./adapters.js";
+
 export type ConvexEmailAttachment = {
   filename: string;
   content?: string;
@@ -26,157 +34,44 @@ export type ConvexEmailMessage = {
   idempotencyKey?: string;
 };
 
-export type ConvexEmailAdapterConfig =
-  | {
-      kind: "memory";
-      name?: string;
-    }
-  | {
-      kind: "brevo";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "cloudflare";
-      name?: string;
-      apiTokenEnv?: string;
-      accountIdEnv?: string;
-      accountId?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "iterable";
-      name?: string;
-      apiKeyEnv?: string;
-      campaignIdEnv?: string;
-      campaignId?: number;
-      allowRepeatMarketingSends?: boolean;
-      dataFields?: Record<string, string | number | boolean | null>;
-      sendAt?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "loops";
-      name?: string;
-      apiKeyEnv?: string;
-      transactionalIdEnv?: string;
-      transactionalId?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "mailchimp";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "mailersend";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "mailgun";
-      name?: string;
-      apiKeyEnv?: string;
-      domainEnv?: string;
-      domain?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "mailpace";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "mailtrap";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "plunk";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "resend";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "postmark";
-      name?: string;
-      serverTokenEnv?: string;
-      messageStream?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "sendgrid";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "ses";
-      name?: string;
-      accessKeyIdEnv?: string;
-      secretAccessKeyEnv?: string;
-      sessionTokenEnv?: string;
-      regionEnv?: string;
-      region?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "scaleway";
-      name?: string;
-      secretKeyEnv?: string;
-      projectIdEnv?: string;
-      projectId?: string;
-      regionEnv?: string;
-      region?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "sequenzy";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "smtp";
-      name?: string;
-      hostEnv?: string;
-      portEnv?: string;
-      secureEnv?: string;
-      userEnv?: string;
-      passEnv?: string;
-      host?: string;
-      port?: number;
-      secure?: boolean;
-    }
-  | {
-      kind: "sparkpost";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "unosend";
-      name?: string;
-      apiKeyEnv?: string;
-      baseUrl?: string;
-    }
-  | {
-      kind: "zeptomail";
-      name?: string;
-      tokenEnv?: string;
-      baseUrl?: string;
-    };
+export type ConvexEmailMetadataValue = string | number | boolean | null;
+
+type ConvexAdapterFieldValue<TField extends ConvexAdapterField> = TField extends {
+  type: "number";
+}
+  ? number
+  : TField extends { type: "boolean" }
+    ? boolean
+    : TField extends { type: "record" }
+      ? Record<string, ConvexEmailMetadataValue>
+      : string;
+
+/** `<field>Env` keys for every field that can be sourced from the component environment. */
+type ConvexAdapterEnvKeys<TFields> = {
+  [K in keyof TFields as TFields[K] extends { env: string } ? `${K & string}Env` : never]?: string;
+};
+
+/** Literal value keys for every field that is safe to store inline in adapter config. */
+type ConvexAdapterInlineKeys<TFields> = {
+  [K in keyof TFields as TFields[K] extends { inline: true }
+    ? K
+    : never]?: TFields[K] extends ConvexAdapterField ? ConvexAdapterFieldValue<TFields[K]> : never;
+};
+
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
+
+type ConvexEmailAdapterConfigFor<TKind extends ConvexEmailAdapterKind> = Simplify<
+  { kind: TKind; name?: string } & ConvexAdapterEnvKeys<ConvexEmailAdapterRegistry[TKind]> &
+    ConvexAdapterInlineKeys<ConvexEmailAdapterRegistry[TKind]>
+>;
+
+/**
+ * Discriminated union of every adapter configuration accepted by the component, derived from
+ * `CONVEX_EMAIL_ADAPTERS`. Adding an adapter to that registry adds it here automatically.
+ */
+export type ConvexEmailAdapterConfig = {
+  [TKind in ConvexEmailAdapterKind]: ConvexEmailAdapterConfigFor<TKind>;
+}[ConvexEmailAdapterKind];
 
 export type ConvexEmailSendArgs = Omit<ConvexEmailMessage, "from"> & {
   from?: EmailAddress;

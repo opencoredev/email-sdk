@@ -122,6 +122,38 @@ Start with test mode enabled. Move to production by replacing the config with `t
 
 </Steps>
 
+## Adapter coverage
+
+Every built-in Email SDK adapter is configurable through the component: `brevo`, `cloudflare`, `iterable`, `jetemail`, `lettermint`, `loops`, `mailchimp`, `mailersend`, `mailgun`, `mailpace`, `mailtrap`, `plunk`, `postmark`, `primitive`, `resend`, `scaleway`, `sendgrid`, `sequenzy`, `ses`, `smtp`, `sparkpost`, `unosend`, and `zeptomail`, plus `memory` for tests.
+
+Credentials always come from the component environment, so adapter config never holds a secret. Fields that identify a resource rather than authenticate one can be written inline:
+
+```ts title="convex/email.ts"
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [
+    // Reads LETTERMINT_API_TOKEN; `route` is not a secret, so it lives in config.
+    { kind: "lettermint", route: "transactional" },
+    { kind: "lettermint", name: "lettermint-broadcast", route: "broadcast" },
+  ],
+  defaultAdapter: "lettermint",
+  fallbackAdapters: ["lettermint-broadcast"],
+});
+```
+
+Each adapter's default variable follows its provider name: `RESEND_API_KEY`, `LETTERMINT_API_TOKEN`, `POSTMARK_SERVER_TOKEN`, `ZEPTOMAIL_TOKEN`, `MAILGUN_API_KEY` with `MAILGUN_DOMAIN`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` for SES, and so on. The [component README](https://github.com/opencoredev/email-sdk/tree/main/packages/convex-email) lists the full set.
+
+<Callout type="warn" title="Credentials come from the component contract">
+A Convex component only receives the environment variables its own contract declares, so the component reads a fixed set of names. To feed an adapter a differently named secret, map it onto the declared name when you mount the component:
+
+```ts title="convex/convex.config.ts"
+app.use(convexEmail, {
+  env: { LETTERMINT_API_TOKEN: app.env.LETTERMINT_BROADCAST_TOKEN },
+});
+```
+
+`apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, and the other `Env` suffixes repoint a field at a *different declared* variable. Naming a variable the component does not declare fails at send time with an explicit error rather than silently resolving to nothing.
+</Callout>
+
 <Callout type="info" title="Serializable adapter options">
 Custom `fetch` functions, SMTP TLS objects, and function-valued provider options cannot cross the component boundary. Use the equivalent serializable option or keep that specialized send in an application Node action.
 </Callout>

@@ -10,6 +10,8 @@ import {
 import { brevo } from "@opencoredev/email-sdk/brevo";
 import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
 import { iterable } from "@opencoredev/email-sdk/iterable";
+import { jetemail } from "@opencoredev/email-sdk/jetemail";
+import { lettermint } from "@opencoredev/email-sdk/lettermint";
 import { loops } from "@opencoredev/email-sdk/loops";
 import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
 import { mailersend } from "@opencoredev/email-sdk/mailersend";
@@ -21,6 +23,7 @@ import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
 import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
 import { postmark } from "@opencoredev/email-sdk/postmark";
+import { primitive } from "@opencoredev/email-sdk/primitive";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
 import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
@@ -31,9 +34,16 @@ import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
 import { unosend } from "@opencoredev/email-sdk/unosend";
 import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 
-import { env } from "./_generated/server.js";
+import { env, type Env } from "./_generated/server.js";
+import {
+  adapterFields,
+  isDeclaredEnvVar,
+  type ConvexAdapterField,
+  type ConvexEmailEnvVar,
+} from "../shared/adapters.js";
 import type {
   ConvexEmailAdapterConfig,
+  ConvexEmailAdapterKind,
   ConvexEmailAttachment,
   ConvexEmailMessage,
 } from "../shared/types.js";
@@ -78,208 +88,156 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
   });
 }
 
-function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
-  switch (config.kind) {
-    case "memory": {
-      return memoryAdapter(config.name ?? "memory");
-    }
-    case "brevo": {
-      return withName(
-        brevo({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "BREVO_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "cloudflare": {
-      return withName(
-        cloudflare({
-          apiToken: requiredEnv(config.apiTokenEnv ?? "CLOUDFLARE_API_TOKEN"),
-          accountId: config.accountId ?? requiredEnv(config.accountIdEnv ?? "CLOUDFLARE_ACCOUNT_ID"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "iterable": {
-      return withName(
-        iterable({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "ITERABLE_API_KEY"),
-          campaignId: config.campaignId ?? requiredNumberEnv(config.campaignIdEnv ?? "ITERABLE_CAMPAIGN_ID"),
-          allowRepeatMarketingSends: config.allowRepeatMarketingSends,
-          dataFields: config.dataFields,
-          sendAt: config.sendAt,
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "loops": {
-      return withName(
-        loops({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "LOOPS_API_KEY"),
-          transactionalId:
-            config.transactionalId ?? requiredEnv(config.transactionalIdEnv ?? "LOOPS_TRANSACTIONAL_ID"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "mailchimp": {
-      return withName(
-        mailchimp({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "MAILCHIMP_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "mailersend": {
-      return withName(
-        mailersend({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "MAILERSEND_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "mailgun": {
-      return withName(
-        mailgun({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "MAILGUN_API_KEY"),
-          domain: config.domain ?? requiredEnv(config.domainEnv ?? "MAILGUN_DOMAIN"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "mailpace": {
-      return withName(
-        mailpace({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "MAILPACE_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "mailtrap": {
-      return withName(
-        mailtrap({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "MAILTRAP_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "plunk": {
-      return withName(
-        plunk({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "PLUNK_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "resend": {
-      return withName(
-        resend({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "RESEND_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "postmark": {
-      return withName(
-        postmark({
-          serverToken: requiredEnv(config.serverTokenEnv ?? "POSTMARK_SERVER_TOKEN"),
-          messageStream: config.messageStream,
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "sendgrid": {
-      return withName(
-        sendgrid({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "SENDGRID_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "ses": {
-      return withName(
-        ses({
-          accessKeyId: requiredEnv(config.accessKeyIdEnv ?? "AWS_ACCESS_KEY_ID"),
-          secretAccessKey: requiredEnv(config.secretAccessKeyEnv ?? "AWS_SECRET_ACCESS_KEY"),
-          sessionToken: optionalEnv(config.sessionTokenEnv ?? "AWS_SESSION_TOKEN"),
-          region: config.region ?? requiredEnv(config.regionEnv ?? "AWS_REGION"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "scaleway": {
-      return withName(
-        scaleway({
-          secretKey: requiredEnv(config.secretKeyEnv ?? "SCALEWAY_SECRET_KEY"),
-          projectId: config.projectId ?? requiredEnv(config.projectIdEnv ?? "SCALEWAY_PROJECT_ID"),
-          region: config.region ?? optionalEnv(config.regionEnv ?? "SCALEWAY_REGION"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "sequenzy": {
-      return withName(
-        sequenzy({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "SEQUENZY_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "smtp": {
-      const user = optionalEnv(config.userEnv ?? "SMTP_USER");
-      const pass = optionalEnv(config.passEnv ?? "SMTP_PASS");
+type ResolvedAdapterOptions = Record<string, unknown>;
 
-      return smtp({
-        name: config.name,
-        host: config.host ?? requiredEnv(config.hostEnv ?? "SMTP_HOST"),
-        port: config.port ?? numberEnv(config.portEnv ?? "SMTP_PORT"),
-        secure: config.secure ?? booleanEnv(config.secureEnv ?? "SMTP_SECURE"),
-        auth: user && pass ? { user, pass } : undefined,
-      });
+type AdapterFactory = (
+  options: ResolvedAdapterOptions,
+  config: ConvexEmailAdapterConfig,
+) => EmailAdapter;
+
+/**
+ * Wraps an Email SDK adapter whose option keys match its registry field names one-to-one, which
+ * is every adapter that does not need option reshaping.
+ */
+function fromOptions<TOptions>(create: (options: TOptions) => EmailAdapter): AdapterFactory {
+  return (options) => create(options as TOptions);
+}
+
+/**
+ * The only place an adapter constructor is named. Field names, defaults, and the wire format all
+ * come from `CONVEX_EMAIL_ADAPTERS`; this map just says which factory receives them.
+ */
+const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
+  memory: (_options, config) => memoryAdapter(config.name ?? "memory"),
+  brevo: fromOptions(brevo),
+  cloudflare: fromOptions(cloudflare),
+  iterable: fromOptions(iterable),
+  jetemail: fromOptions(jetemail),
+  lettermint: fromOptions(lettermint),
+  loops: fromOptions(loops),
+  mailchimp: fromOptions(mailchimp),
+  mailersend: fromOptions(mailersend),
+  mailgun: fromOptions(mailgun),
+  mailpace: fromOptions(mailpace),
+  mailtrap: fromOptions(mailtrap),
+  plunk: fromOptions(plunk),
+  postmark: fromOptions(postmark),
+  primitive: fromOptions(primitive),
+  resend: fromOptions(resend),
+  scaleway: fromOptions(scaleway),
+  sendgrid: fromOptions(sendgrid),
+  sequenzy: fromOptions(sequenzy),
+  ses: fromOptions(ses),
+  // SMTP is the one reshaped adapter: credentials resolve as flat fields but nest under `auth`.
+  smtp: (options, config) => {
+    const resolved = options as {
+      host: string;
+      port?: number;
+      secure?: boolean;
+      user?: string;
+      pass?: string;
+    };
+
+    return smtp({
+      name: config.name,
+      host: resolved.host,
+      port: resolved.port,
+      secure: resolved.secure,
+      auth:
+        resolved.user && resolved.pass ? { user: resolved.user, pass: resolved.pass } : undefined,
+    });
+  },
+  sparkpost: fromOptions(sparkpost),
+  unosend: fromOptions(unosend),
+  zeptomail: fromOptions(zeptomail),
+};
+
+function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
+  const factory = ADAPTER_FACTORIES[config.kind];
+
+  if (!factory) {
+    throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
+  }
+
+  return withName(factory(resolveAdapterOptions(config), config), config.name);
+}
+
+/**
+ * Turns stored adapter config into Email SDK options: inline values win, otherwise the field is
+ * read from the component environment under its configured or default variable name.
+ */
+export function resolveAdapterOptions(config: ConvexEmailAdapterConfig): ResolvedAdapterOptions {
+  const fields = adapterFields(config.kind);
+
+  if (!fields) {
+    throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
+  }
+
+  const values = config as unknown as Record<string, unknown>;
+  const options: ResolvedAdapterOptions = {};
+
+  for (const [key, field] of Object.entries(fields)) {
+    const inline = field.inline ? values[key] : undefined;
+    if (inline !== undefined) {
+      options[key] = inline;
+      continue;
     }
-    case "sparkpost": {
-      return withName(
-        sparkpost({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "SPARKPOST_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
+
+    const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
+    const fromEnv = name ? readEnvField(name, field) : undefined;
+    if (fromEnv !== undefined) {
+      options[key] = fromEnv;
+      continue;
+    }
+
+    if (field.required) {
+      throw new Error(
+        name
+          ? `Missing Convex Email component environment variable ${name}.`
+          : `Convex Email adapter "${config.kind}" requires "${key}".`,
       );
     }
-    case "unosend": {
-      return withName(
-        unosend({
-          apiKey: requiredEnv(config.apiKeyEnv ?? "UNOSEND_API_KEY"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
-    case "zeptomail": {
-      return withName(
-        zeptomail({
-          token: requiredEnv(config.tokenEnv ?? "ZEPTOMAIL_TOKEN"),
-          baseUrl: config.baseUrl,
-        }),
-        config.name,
-      );
-    }
+  }
+
+  return options;
+}
+
+function envNameFor(kind: string, values: Record<string, unknown>, key: string, fallback: string) {
+  const override = values[`${key}Env`];
+
+  if (typeof override !== "string" || !override) {
+    return fallback;
+  }
+
+  // A deployed component only receives the variables its contract declares, so an override
+  // naming anything else would resolve to nothing. Fail with the mapping that does work.
+  if (!isDeclaredEnvVar(override)) {
+    throw new Error(
+      `Convex Email adapter "${kind}" cannot read environment variable ${override}: a Convex ` +
+        `component only receives the variables declared in its contract, so ${key}Env must name ` +
+        `one of them (default ${fallback}). To use a different secret, map it onto ${fallback} ` +
+        `in app.use(convexEmail, { env }).`,
+    );
+  }
+
+  return override;
+}
+
+function readEnvField(name: string, field: ConvexAdapterField) {
+  const value = componentEnv[name];
+  if (!value) {
+    return undefined;
+  }
+
+  switch (field.type) {
+    case "number":
+      return parseNumberEnv(name, value);
+    case "boolean":
+      return value === "1" || value.toLowerCase() === "true";
+    case "record":
+      throw new Error(`Convex environment variable ${name} cannot supply a record value.`);
+    default:
+      return value;
   }
 }
 
@@ -377,31 +335,6 @@ function withName<TAdapter extends EmailAdapter>(adapter: TAdapter, name: string
   return { ...adapter, name };
 }
 
-function requiredEnv(name: string) {
-  const value = componentEnv[name];
-  if (!value) {
-    throw new Error(`Missing Convex Email component environment variable ${name}.`);
-  }
-  return value;
-}
-
-function optionalEnv(name: string) {
-  return componentEnv[name] || undefined;
-}
-
-function numberEnv(name: string) {
-  const value = componentEnv[name];
-  if (!value) {
-    return undefined;
-  }
-
-  return parseNumberEnv(name, value);
-}
-
-function requiredNumberEnv(name: string) {
-  return parseNumberEnv(name, requiredEnv(name));
-}
-
 function parseNumberEnv(name: string, value: string) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -410,12 +343,10 @@ function parseNumberEnv(name: string, value: string) {
   return parsed;
 }
 
-function booleanEnv(name: string) {
-  const value = componentEnv[name];
-  if (!value) {
-    return undefined;
-  }
-  return value === "1" || value.toLowerCase() === "true";
-}
-
 const componentEnv: Record<string, string | undefined> = env;
+
+// Compile-time assertion that the component's declared environment (`convex.config.ts`, and the
+// `Env` type generated from it) covers every credential the adapter registry can read. Adding an
+// adapter without declaring its variables fails the build here instead of at send time.
+type AssertNever<T extends never> = T;
+export type DeclaredEnvCoversRegistry = AssertNever<Exclude<ConvexEmailEnvVar, keyof Env>>;
