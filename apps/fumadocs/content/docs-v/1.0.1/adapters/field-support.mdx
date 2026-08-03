@@ -1,0 +1,49 @@
+---
+title: Field support
+description: Source-derived support for normalized message fields across all built-in adapters.
+---
+
+Use this page to eliminate incompatible routes before sending. A primary adapter and every fallback must support every normalized field your message uses; Email SDK validates the complete route before the first request, so an incompatible backup fails early instead of dropping data.
+
+Field support answers whether an adapter can represent a message field. Use [Delivery capabilities](/docs/adapters/capability-groups) when retries, idempotency, scheduled delivery, repeated headers, or personalized fanout matter.
+
+## Normalized message fields
+
+<AdapterFieldSupport />
+
+The comparison is source-derived from `SUPPORTED_MESSAGE_FIELDS` and adapter validation rules. Unsupported values are rejected by both `validate` and `send` before a provider call.
+
+## Route selection
+
+Pick the narrowest route that preserves the message you are actually sending. If a fallback cannot support one of the fields, remove that fallback for this send or normalize the message before it enters the route.
+
+For provider-specific option fields, payload notes, and credentials, open the linked adapter setup page from the comparison above.
+
+## Headers
+
+`headers` is a lossless array in v1, so repeated names stay visible to adapters that support repeated headers.
+
+```ts title="src/message.ts"
+const headers = [
+  { name: "X-Trace", value: "first" },
+  { name: "X-Trace", value: "second" },
+] as const;
+```
+
+Repeated names require every candidate adapter to advertise repeated-header support in [Delivery capabilities](/docs/adapters/capability-groups). Otherwise validation fails before the primary sends.
+
+## Attachments
+
+Each attachment has exactly one source: `content` or `path`. A string `content` value is raw by default; set `contentEncoding: "base64"` only when the string is already encoded.
+
+```ts title="src/message.ts"
+const attachments = [
+  {
+    filename: "receipt.txt",
+    content: "Order 123",
+    contentType: "text/plain",
+  },
+] as const;
+```
+
+See the [message reference](/docs/reference/message) for the exact v1 message and attachment types.

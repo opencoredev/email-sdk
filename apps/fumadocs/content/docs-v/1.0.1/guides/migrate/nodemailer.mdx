@@ -1,0 +1,66 @@
+---
+title: Migrate from Nodemailer
+description: Replace a Nodemailer transporter with Email SDK's dependency-free SMTP adapter.
+---
+
+Email SDK includes its own SMTP transport. You do not need Nodemailer for basic address fields, text/HTML bodies, headers, TLS upgrade, and SMTP auth.
+
+## Replace the transporter
+
+```ts title="after.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    smtp({
+      host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+});
+```
+
+On a non-secure port, SMTP auth upgrades with STARTTLS by default. `allowInsecureAuth` exists only for trusted local test servers.
+
+## Replace `sendMail`
+
+```ts title="after.ts"
+const result = await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Welcome",
+    text: "Your account is ready.",
+    html: "<p>Your account is ready.</p>",
+    headers: [{ name: "X-App", value: "acme" }],
+  },
+  { idempotencyKey: "welcome:user_123" },
+);
+```
+
+The transport creates `multipart/alternative` for text plus HTML and derives `Message-ID` from the idempotency key.
+
+## Account for unsupported features
+
+The built-in SMTP adapter rejects attachments, tags, metadata, and schedules. Keep Nodemailer or build a custom adapter if your SMTP workflow depends on MIME attachments or advanced transport plugins.
+
+## Verify
+
+```bash
+SMTP_HOST=smtp.example.com npx email-sdk doctor --adapter smtp
+npx email-sdk send \
+  --adapter smtp \
+  --host smtp.example.com \
+  --from hello@example.com \
+  --to user@example.com \
+  --subject "Migration smoke test" \
+  --text "Dry run only." \
+  --dry-run
+```
+
+<Card title="SMTP adapter" href="/docs/adapters/smtp" description="See TLS, auth, custom names, and transport limits." />

@@ -1,0 +1,129 @@
+---
+title: Client reference
+description: Exact construction options, methods, routing helpers, validation results, and send results for the v1 client.
+---
+
+## `createEmailClient(options)`
+
+Construction is synchronous and requires at least one adapter after plugins register their routes.
+
+```ts title="types.ts"
+type EmailClientOptions<Adapters, Plugins> = {
+  adapters?: Adapters;
+  defaultAdapter?: Adapters[number]["name"];
+  fallback?: EmailFallbackConfig<Adapters[number]["name"]>;
+  retry?: EmailRetryConfig;
+  hooks?: EmailHooks;
+  plugins?: Plugins;
+  telemetry?: boolean;
+};
+```
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `adapters` | `[]` | Literal-named adapter routes. Plugins may add routes. |
+| `defaultAdapter` | First registered adapter | Primary route for operations without an override. |
+| `fallback` | No fallback | Candidate adapters and unknown-delivery policy. |
+| `retry` | `{ maxAttempts: 1 }` | Client-level retry policy. |
+| `hooks` | None | Best-effort lifecycle observers. |
+| `plugins` | `[]` | Synchronous route, hook, middleware, and extension composition. |
+| `telemetry` | `true` | Anonymous SDK analytics unless an environment opt-out applies. |
+
+Duplicate adapter names, duplicate plugin ids, unknown default/fallback names, `maxAttempts < 1`, async plugin adapters, and extension-key collisions throw during construction.
+
+## Client properties
+
+```ts title="types.ts"
+readonly adapters: ReadonlyMap<RouteName, EmailAdapter>;
+readonly defaultAdapter: RouteName;
+```
+
+## `validate(message, options?)`
+
+Runs common message, route, capability, adapter-specific, schedule, and personalized checks without calling an adapter's send method.
+
+```ts title="types.ts"
+type EmailValidationResult<Name extends string> = {
+  adapter: Name;
+  warnings: readonly { code: string; message: string }[];
+};
+```
+
+Built-in validation currently returns an empty warnings array on success.
+
+## `send(message, options?)`
+
+```ts title="types.ts"
+type EmailSendOptions<Name extends string> = {
+  adapter?: Name;
+  fallback?: {
+    adapters: readonly Name[];
+    onUnknownDelivery?: "stop" | "continue";
+  };
+  retry?: {
+    maxAttempts?: number;
+    delay?: (attempt: number, error: EmailSdkError) => number;
+    shouldRetry?: (error: EmailSdkError, attempt: number) => boolean;
+  };
+  signal?: AbortSignal;
+  idempotencyKey?: string;
+  metadata?: Readonly<Record<string, unknown>>;
+};
+```
+
+Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`.
+
+```ts title="types.ts"
+type EmailSendResult<Name extends string = string, Raw = unknown> = {
+  adapter: Name;
+  id?: string;
+  accepted?: readonly string[];
+  rejected?: readonly string[];
+  raw?: Raw;
+};
+```
+
+## `sendMany(items, options?)`
+
+```ts title="types.ts"
+type EmailSendItem<Name extends string> = {
+  message: EmailMessage;
+  options?: EmailSendOptions<Name>;
+};
+
+type EmailSendSettledResult<Name extends string> =
+  | { ok: true; index: number; result: EmailSendResult<Name> }
+  | { ok: false; index: number; error: EmailSdkError };
+```
+
+Items run sequentially in input order. Item options shallowly override method options. The method always returns one settled result per item.
+
+## `sendPersonalized(input, options?)`
+
+```ts title="types.ts"
+type EmailPersonalizedInput = {
+  message: Omit<EmailMessage, "to" | "cc" | "bcc">;
+  recipients: readonly {
+    to: EmailAddress;
+    variables: Readonly<Record<string, string | number | boolean>>;
+  }[];
+};
+```
+
+At least one accepted recipient resolves with `accepted` and `rejected`. Zero accepted recipients throws `EmailAllRecipientsFailedError`.
+
+## `adapter(name)`
+
+Returns the exact adapter type for a registered literal name. Unknown runtime names throw `EmailAdapterNotFoundError`.
+
+## `withAdapter(name)`
+
+Returns `validate`, `send`, `sendMany`, and `sendPersonalized` bound to one adapter.
+
+```ts title="src/email.ts"
+const backup = email.withAdapter("backup");
+await backup.send(message);
+```
+
+<Card title="Message reference" href="/docs/reference/message" description="Look up every normalized message field." />
+<Card title="Error reference" href="/docs/reference/errors" description="Handle the closed v1 error union." />

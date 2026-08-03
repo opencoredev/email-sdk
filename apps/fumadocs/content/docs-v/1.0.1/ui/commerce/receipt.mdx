@@ -1,0 +1,54 @@
+---
+title: Receipt
+description: A compact payment confirmation and receipt link.
+---
+
+<EmailExample id="receipt" />
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+<Tab value="CLI">
+
+```bash
+npx shadcn@latest add https://email-sdk.dev/r/receipt.json
+```
+
+</Tab>
+<Tab value="Manual">
+
+Copy this template into your app and customize its props, words, and links.
+
+```tsx title="src/ui/email/receipt.tsx"
+import {
+  EmailButton,
+  EmailCard,
+  EmailHeading,
+  EmailSeparator,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+export function ReceiptEmail({ amount, receiptUrl }: {
+  amount: string;
+  receiptUrl: string;
+}) {
+  return (
+    <ShadcnEmail preview="Payment received for order #1842">
+      <EmailCard>
+        <EmailHeading>Payment received</EmailHeading>
+        <EmailText>Thanks for your payment. Here’s a summary for order #1842.</EmailText>
+        <EmailSeparator />
+        <EmailText>Acme Pro · July <strong>{amount}</strong></EmailText>
+        <EmailText>Tax <strong>$0.00</strong></EmailText>
+        <EmailSeparator />
+        <EmailText style={{ fontSize: 18, fontWeight: 700 }}>Total {amount}</EmailText>
+        <EmailButton href={receiptUrl}>View receipt</EmailButton>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+</Tab>
+</Tabs>
