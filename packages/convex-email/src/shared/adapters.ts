@@ -187,3 +187,14 @@ export const CONVEX_EMAIL_ENV_VARS = [
 export function adapterFields(kind: string): ConvexAdapterFields | undefined {
   return (CONVEX_EMAIL_ADAPTERS as Record<string, ConvexAdapterFields>)[kind];
 }
+
+const declaredEnvVars = new Set<string>(CONVEX_EMAIL_ENV_VARS);
+
+/**
+ * A Convex component only receives the environment variables its contract declares, so a
+ * `<field>Env` override can only name one of them. Pointing at any other name would silently
+ * resolve to nothing once deployed.
+ */
+export function isDeclaredEnvVar(name: string) {
+  return declaredEnvVars.has(name);
+}

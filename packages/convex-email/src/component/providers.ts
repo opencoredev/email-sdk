@@ -37,6 +37,7 @@ import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 import { env, type Env } from "./_generated/server.js";
 import {
   adapterFields,
+  isDeclaredEnvVar,
   type ConvexAdapterField,
   type ConvexEmailEnvVar,
 } from "../shared/adapters.js";
@@ -182,7 +183,7 @@ export function resolveAdapterOptions(config: ConvexEmailAdapterConfig): Resolve
       continue;
     }
 
-    const name = field.env ? envNameFor(values, key, field.env) : undefined;
+    const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
     const fromEnv = name ? readEnvField(name, field) : undefined;
     if (fromEnv !== undefined) {
       options[key] = fromEnv;
@@ -201,9 +202,25 @@ export function resolveAdapterOptions(config: ConvexEmailAdapterConfig): Resolve
   return options;
 }
 
-function envNameFor(values: Record<string, unknown>, key: string, fallback: string) {
+function envNameFor(kind: string, values: Record<string, unknown>, key: string, fallback: string) {
   const override = values[`${key}Env`];
-  return typeof override === "string" && override ? override : fallback;
+
+  if (typeof override !== "string" || !override) {
+    return fallback;
+  }
+
+  // A deployed component only receives the variables its contract declares, so an override
+  // naming anything else would resolve to nothing. Fail with the mapping that does work.
+  if (!isDeclaredEnvVar(override)) {
+    throw new Error(
+      `Convex Email adapter "${kind}" cannot read environment variable ${override}: a Convex ` +
+        `component only receives the variables declared in its contract, so ${key}Env must name ` +
+        `one of them (default ${fallback}). To use a different secret, map it onto ${fallback} ` +
+        `in app.use(convexEmail, { env }).`,
+    );
+  }
+
+  return override;
 }
 
 function readEnvField(name: string, field: ConvexAdapterField) {

@@ -117,19 +117,35 @@ describe("adapter option resolution", () => {
     );
   });
 
-  test("honours a per-adapter environment variable override", () => {
-    process.env.LETTERMINT_API_TOKEN = "default-token";
-    process.env.LETTERMINT_MARKETING_TOKEN = "marketing-token";
+  test("honours an override that names another declared variable", () => {
+    process.env.LETTERMINT_API_TOKEN = "lettermint-token";
+    process.env.JETEMAIL_API_KEY = "jetemail-token";
 
     expect(
       resolveAdapterOptions({
         kind: "lettermint",
-        name: "lettermint-marketing",
-        apiTokenEnv: "LETTERMINT_MARKETING_TOKEN",
+        name: "lettermint-secondary",
+        apiTokenEnv: "JETEMAIL_API_KEY",
       }),
-    ).toEqual({ apiToken: "marketing-token" });
+    ).toEqual({ apiToken: "jetemail-token" });
+  });
 
-    delete process.env.LETTERMINT_MARKETING_TOKEN;
+  test("rejects an override naming a variable the component never receives", () => {
+    process.env.LETTERMINT_API_TOKEN = "lettermint-token";
+    process.env.LETTERMINT_BROADCAST_TOKEN = "broadcast-token";
+
+    // The variable exists in this process, but a deployed component would never see it, so
+    // resolving it here would hide a configuration that cannot work in production.
+    expect(() =>
+      resolveAdapterOptions({
+        kind: "lettermint",
+        apiTokenEnv: "LETTERMINT_BROADCAST_TOKEN",
+      }),
+    ).toThrow(
+      'Convex Email adapter "lettermint" cannot read environment variable LETTERMINT_BROADCAST_TOKEN',
+    );
+
+    delete process.env.LETTERMINT_BROADCAST_TOKEN;
   });
 
   test("prefers an inline value over the environment", () => {
@@ -191,7 +207,7 @@ describe("adapter config wire format", () => {
       ...message,
       adapters: [
         { kind: "lettermint", name: "lettermint-transactional", route: "transactional" },
-        { kind: "jetemail", apiKeyEnv: "JETEMAIL_BACKUP_KEY" },
+        { kind: "jetemail", apiKeyEnv: "PLUNK_API_KEY" },
         { kind: "primitive", baseUrl: "https://primitive.example.test" },
       ],
       adapter: "lettermint-transactional",
@@ -202,7 +218,7 @@ describe("adapter config wire format", () => {
 
     expect(status?.adapters).toEqual([
       { kind: "lettermint", name: "lettermint-transactional", route: "transactional" },
-      { kind: "jetemail", apiKeyEnv: "JETEMAIL_BACKUP_KEY" },
+      { kind: "jetemail", apiKeyEnv: "PLUNK_API_KEY" },
       { kind: "primitive", baseUrl: "https://primitive.example.test" },
     ]);
   });

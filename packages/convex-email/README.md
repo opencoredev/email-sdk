@@ -186,18 +186,23 @@ Credentials are always read from the environment, so adapter config never stores
 export const email = new ConvexEmail(components.convexEmail, {
   adapters: [
     { kind: "lettermint", route: "transactional" },
-    {
-      kind: "lettermint",
-      name: "lettermint-broadcast",
-      apiTokenEnv: "LETTERMINT_BROADCAST_TOKEN",
-      route: "broadcast",
-    },
+    { kind: "lettermint", name: "lettermint-broadcast", route: "broadcast" },
   ],
   defaultAdapter: "lettermint",
 });
 ```
 
-Any environment-backed field also accepts an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which is how two named adapters of the same kind use different credentials. Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
+A Convex component only receives the environment variables its own contract declares, so the component reads exactly the names listed above. To feed an adapter a differently named secret, map it onto the declared name when you mount the component:
+
+```ts
+app.use(convexEmail, {
+  env: { LETTERMINT_API_TOKEN: app.env.LETTERMINT_BROADCAST_TOKEN },
+});
+```
+
+Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at a different *declared* variable. Naming a variable the component does not declare throws an explicit error instead of silently resolving to nothing once deployed.
+
+Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
 
 ## Webhooks
 
