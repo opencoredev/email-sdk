@@ -107,18 +107,15 @@ export const sendWelcomeEmail = mutation({
 
 ## Provider Coverage
 
-Supported adapter configs:
+Every built-in Email SDK adapter is configurable, plus the in-memory adapter for tests:
 
 ```txt
 memory
-resend
-postmark
-sendgrid
-ses
-smtp
 brevo
 cloudflare
 iterable
+jetemail
+lettermint
 loops
 mailchimp
 mailersend
@@ -126,34 +123,38 @@ mailgun
 mailpace
 mailtrap
 plunk
+postmark
+primitive
+resend
 scaleway
+sendgrid
 sequenzy
+ses
+smtp
 sparkpost
 unosend
 zeptomail
 ```
 
+Adapter configuration is data, not code. `src/shared/adapters.ts` declares each adapter's options, and the wire validators, config types, declared component environment, and runtime option resolution are all derived from it. A new Email SDK adapter becomes available here through one registry entry plus one factory line, and the build fails if its credentials are not declared in the component environment.
+
 Default environment variables:
 
 ```txt
-RESEND_API_KEY
-POSTMARK_SERVER_TOKEN
-SENDGRID_API_KEY
 AWS_ACCESS_KEY_ID
+AWS_REGION
 AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN
-AWS_REGION
-SMTP_HOST
-SMTP_PORT
-SMTP_SECURE
-SMTP_USER
-SMTP_PASS
 BREVO_API_KEY
-CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
 ITERABLE_API_KEY
 ITERABLE_CAMPAIGN_ID
+JETEMAIL_API_KEY
+LETTERMINT_API_TOKEN
+LETTERMINT_ROUTE
 LOOPS_API_KEY
+LOOPS_TRANSACTIONAL_ID
 MAILCHIMP_API_KEY
 MAILERSEND_API_KEY
 MAILGUN_API_KEY
@@ -161,16 +162,42 @@ MAILGUN_DOMAIN
 MAILPACE_API_KEY
 MAILTRAP_API_KEY
 PLUNK_API_KEY
-SCALEWAY_SECRET_KEY
+POSTMARK_SERVER_TOKEN
+PRIMITIVE_API_KEY
+RESEND_API_KEY
 SCALEWAY_PROJECT_ID
 SCALEWAY_REGION
+SCALEWAY_SECRET_KEY
+SENDGRID_API_KEY
 SEQUENZY_API_KEY
+SMTP_HOST
+SMTP_PASS
+SMTP_PORT
+SMTP_SECURE
+SMTP_USER
 SPARKPOST_API_KEY
 UNOSEND_API_KEY
 ZEPTOMAIL_TOKEN
 ```
 
-Each adapter can override env names with fields such as `apiKeyEnv`, `tokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, or `regionEnv`. Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
+Credentials are always read from the environment, so adapter config never stores a secret. Fields that identify a resource rather than authenticate one — `route`, `domain`, `accountId`, `campaignId`, `transactionalId`, `projectId`, `region`, `host`, `port`, `secure`, `baseUrl` — can be written inline instead:
+
+```ts
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [
+    { kind: "lettermint", route: "transactional" },
+    {
+      kind: "lettermint",
+      name: "lettermint-broadcast",
+      apiTokenEnv: "LETTERMINT_BROADCAST_TOKEN",
+      route: "broadcast",
+    },
+  ],
+  defaultAdapter: "lettermint",
+});
+```
+
+Any environment-backed field also accepts an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which is how two named adapters of the same kind use different credentials. Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
 
 ## Webhooks
 

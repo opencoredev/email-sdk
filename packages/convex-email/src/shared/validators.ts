@@ -1,4 +1,12 @@
 import { v } from "convex/values";
+import type { GenericValidator, Validator } from "convex/values";
+
+import {
+  CONVEX_EMAIL_ADAPTERS,
+  type ConvexAdapterField,
+  type ConvexAdapterFields,
+} from "./adapters.js";
+import type { ConvexEmailAdapterConfig } from "./types.js";
 
 export const vEmailAddress = v.union(
   v.string(),
@@ -35,18 +43,6 @@ export const vEmailMetadata = v.record(
   v.union(v.string(), v.number(), v.boolean(), v.null()),
 );
 
-const vOptionalName = {
-  name: v.optional(v.string()),
-};
-
-const vApiKeyEnvAdapter = <TKind extends string>(kind: TKind) =>
-  v.object({
-    kind: v.literal(kind),
-    ...vOptionalName,
-    apiKeyEnv: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  });
-
 export const vEmailMessage = {
   from: vEmailAddress,
   to: vOneOrManyEmailAddress,
@@ -63,113 +59,47 @@ export const vEmailMessage = {
   idempotencyKey: v.optional(v.string()),
 };
 
+/**
+ * Wire validator for adapter configuration, generated from `CONVEX_EMAIL_ADAPTERS`. Each field
+ * contributes an optional `<field>Env` key when it can be read from the component environment and
+ * an optional literal key when it is safe to store inline.
+ */
 export const vAdapterConfig = v.union(
-  v.object({
-    kind: v.literal("memory"),
+  ...(Object.entries(CONVEX_EMAIL_ADAPTERS as Record<string, ConvexAdapterFields>).map(
+    ([kind, fields]) => v.object(adapterConfigShape(kind, fields)),
+  ) as [GenericValidator, GenericValidator, ...GenericValidator[]]),
+) as unknown as Validator<ConvexEmailAdapterConfig, "required", never>;
+
+function adapterConfigShape(kind: string, fields: ConvexAdapterFields) {
+  const shape: Record<string, GenericValidator> = {
+    kind: v.literal(kind),
     name: v.optional(v.string()),
-  }),
-  vApiKeyEnvAdapter("brevo"),
-  v.object({
-    kind: v.literal("cloudflare"),
-    ...vOptionalName,
-    apiTokenEnv: v.optional(v.string()),
-    accountIdEnv: v.optional(v.string()),
-    accountId: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("iterable"),
-    ...vOptionalName,
-    apiKeyEnv: v.optional(v.string()),
-    campaignIdEnv: v.optional(v.string()),
-    campaignId: v.optional(v.number()),
-    allowRepeatMarketingSends: v.optional(v.boolean()),
-    dataFields: v.optional(vEmailMetadata),
-    sendAt: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("loops"),
-    ...vOptionalName,
-    apiKeyEnv: v.optional(v.string()),
-    transactionalIdEnv: v.optional(v.string()),
-    transactionalId: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  vApiKeyEnvAdapter("mailchimp"),
-  vApiKeyEnvAdapter("mailersend"),
-  v.object({
-    kind: v.literal("mailgun"),
-    ...vOptionalName,
-    apiKeyEnv: v.optional(v.string()),
-    domainEnv: v.optional(v.string()),
-    domain: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  vApiKeyEnvAdapter("mailpace"),
-  vApiKeyEnvAdapter("mailtrap"),
-  vApiKeyEnvAdapter("plunk"),
-  v.object({
-    kind: v.literal("resend"),
-    name: v.optional(v.string()),
-    apiKeyEnv: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("postmark"),
-    name: v.optional(v.string()),
-    serverTokenEnv: v.optional(v.string()),
-    messageStream: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("sendgrid"),
-    name: v.optional(v.string()),
-    apiKeyEnv: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("ses"),
-    name: v.optional(v.string()),
-    accessKeyIdEnv: v.optional(v.string()),
-    secretAccessKeyEnv: v.optional(v.string()),
-    sessionTokenEnv: v.optional(v.string()),
-    regionEnv: v.optional(v.string()),
-    region: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  v.object({
-    kind: v.literal("scaleway"),
-    ...vOptionalName,
-    secretKeyEnv: v.optional(v.string()),
-    projectIdEnv: v.optional(v.string()),
-    projectId: v.optional(v.string()),
-    regionEnv: v.optional(v.string()),
-    region: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-  vApiKeyEnvAdapter("sequenzy"),
-  v.object({
-    kind: v.literal("smtp"),
-    name: v.optional(v.string()),
-    hostEnv: v.optional(v.string()),
-    portEnv: v.optional(v.string()),
-    secureEnv: v.optional(v.string()),
-    userEnv: v.optional(v.string()),
-    passEnv: v.optional(v.string()),
-    host: v.optional(v.string()),
-    port: v.optional(v.number()),
-    secure: v.optional(v.boolean()),
-  }),
-  vApiKeyEnvAdapter("sparkpost"),
-  vApiKeyEnvAdapter("unosend"),
-  v.object({
-    kind: v.literal("zeptomail"),
-    ...vOptionalName,
-    tokenEnv: v.optional(v.string()),
-    baseUrl: v.optional(v.string()),
-  }),
-);
+  };
+
+  for (const [key, field] of Object.entries(fields)) {
+    if (field.env) {
+      shape[`${key}Env`] = v.optional(v.string());
+    }
+    if (field.inline) {
+      shape[key] = v.optional(vAdapterFieldValue(field));
+    }
+  }
+
+  return shape;
+}
+
+function vAdapterFieldValue(field: ConvexAdapterField): GenericValidator {
+  switch (field.type) {
+    case "number":
+      return v.number();
+    case "boolean":
+      return v.boolean();
+    case "record":
+      return vEmailMetadata;
+    default:
+      return v.string();
+  }
+}
 
 export const vSendEmailArgs = {
   ...vEmailMessage,
