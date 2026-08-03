@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { createEmailClient } from "./core.js";
 import {
@@ -11,7 +14,7 @@ import {
 } from "./errors.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import type { Telemetry, TelemetryEventName, TelemetryProperties } from "./telemetry.js";
-import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
+import { createTelemetry, resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 
 const message: EmailMessage = {
   from: "hello@example.com",
@@ -53,7 +56,11 @@ function telemetryCapture() {
 }
 
 function emailAddressOfTest(value: EmailMessage["to"]): string {
-  return typeof value === "string" ? value : Array.isArray(value) ? emailAddressOfTest(value[0]) : value.email;
+  return typeof value === "string"
+    ? value
+    : Array.isArray(value)
+      ? emailAddressOfTest(value[0])
+      : value.email;
 }
 
 describe("createEmailClient v1", () => {
@@ -476,7 +483,11 @@ describe("createEmailClient v1", () => {
     });
 
     await expandedClient.sendPersonalized({
-      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      message: {
+        from: message.from,
+        subject: "Hi %recipient.name%",
+        text: "Hello %recipient.name%",
+      },
       recipients: [
         { to: "ada@example.com", variables: { name: "Ada" } },
         { to: "linus@example.com", variables: { name: "Linus" } },
@@ -529,7 +540,11 @@ describe("createEmailClient v1", () => {
     });
 
     await nativeClient.sendPersonalized({
-      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      message: {
+        from: message.from,
+        subject: "Hi %recipient.name%",
+        text: "Hello %recipient.name%",
+      },
       recipients: [{ to: "ada@example.com", variables: { name: "Ada" } }],
     });
 
@@ -600,11 +615,7 @@ describe("createEmailClient v1", () => {
         ],
       }),
     ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
-    expect(middlewareErrors).toEqual([
-      "bad@example.com",
-      "bad@example.com",
-      "worse@example.com",
-    ]);
+    expect(middlewareErrors).toEqual(["bad@example.com", "bad@example.com", "worse@example.com"]);
     expect(hookErrors).toEqual(["bad@example.com", "bad@example.com", "worse@example.com"]);
   });
 
@@ -720,7 +731,11 @@ describe("createEmailClient v1", () => {
       });
 
       await nativeClient.sendPersonalized({
-        message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+        message: {
+          from: message.from,
+          subject: "Hi %recipient.name%",
+          text: "Hello %recipient.name%",
+        },
         recipients: [
           { to: "ada@example.com", variables: { name: "Ada" } },
           { to: "linus@example.com", variables: { name: "Linus" } },
@@ -787,6 +802,120 @@ describe("createEmailClient v1", () => {
     } finally {
       resetTelemetry();
     }
+  });
+
+  test("delivered_count sums to real message volume across delivery paths", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+
+    try {
+      const client = createEmailClient({
+        adapters: [
+          adapter("resend", (value) => {
+            if (value.to === "bad@example.com") {
+              throw new EmailAdapterError("bad", { adapter: "resend", delivery: "not_sent" });
+            }
+            return { adapter: "resend", id: "ok" };
+          }),
+        ],
+      });
+
+      // One message shared by three addresses is one email, not three.
+      await client.send({
+        ...message,
+        to: ["a@example.com", "b@example.com"],
+        cc: "c@example.com",
+      });
+
+      // Personalized fans out to one message per recipient; one fails.
+      await client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [
+          { to: "good@example.com", variables: {} },
+          { to: "bad@example.com", variables: {} },
+        ],
+      });
+
+      await expect(client.send({ ...message, to: "bad@example.com" })).rejects.toBeDefined();
+
+      const sends = capture.events.filter((item) => item.event === "email sent");
+      expect(sends.map((item) => item.properties?.message_count)).toEqual([1, 2, 1]);
+      expect(sends.map((item) => item.properties?.delivered_count)).toEqual([1, 1, 0]);
+
+      const delivered = sends.reduce(
+        (total, item) => total + Number(item.properties?.delivered_count ?? 0),
+        0,
+      );
+      expect(delivered).toBe(2);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("sendMany counts every item once on 'email sent'", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+
+    try {
+      const client = createEmailClient({ adapters: [adapter("resend")] });
+      await client.sendMany([{ message }, { message }, { message }]);
+
+      const delivered = capture.events
+        .filter((item) => item.event === "email sent")
+        .reduce((total, item) => total + Number(item.properties?.delivered_count ?? 0), 0);
+
+      // The batch rollup carries no delivered_count, so summing every event that has
+      // one still gives real volume rather than counting each batch item twice.
+      const batch = capture.events.find((item) => item.event === "email batch sent");
+      expect(delivered).toBe(3);
+      expect(batch?.properties).toMatchObject({ message_count: 3, succeeded: 3 });
+      expect(batch?.properties).not.toHaveProperty("delivered_count");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("client.flush() waits for the telemetry request to actually land", async () => {
+    let releaseResponse: (() => void) | undefined;
+    const responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const delivered: string[] = [];
+
+    const fetchFn = (async (_url: URL | RequestInfo, init?: RequestInit) => {
+      await responseGate;
+      delivered.push(JSON.parse(String(init?.body)).event);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+
+    setSharedTelemetry(
+      createTelemetry({
+        env: {},
+        fetch: fetchFn,
+        configDir: join(mkdtempSync(join(tmpdir(), "email-sdk-flush-")), "email-sdk"),
+        notify: () => {},
+      }),
+    );
+
+    try {
+      const client = createEmailClient({ adapters: [adapter("resend")] });
+      await client.send(message);
+
+      // send() resolves while the POST is still open — on serverless the runtime
+      // freezes here and the event is lost. flush() is what closes that window.
+      expect(delivered).toHaveLength(0);
+
+      releaseResponse?.();
+      await client.flush();
+      expect(delivered).toContain("email sent");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("client.flush() resolves when telemetry is disabled", async () => {
+    const client = createEmailClient({ adapters: [adapter("resend")], telemetry: false });
+    await expect(client.flush()).resolves.toBeUndefined();
   });
 
   test("sendPersonalized throws when every recipient fails", async () => {
