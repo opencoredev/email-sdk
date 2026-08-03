@@ -149,7 +149,15 @@ export function createEmailClient<
             hooks,
             middleware,
           });
-          captureSendTelemetry(telemetry, telemetrySource, startedAt, facts, result.adapter, true);
+          captureSendTelemetry({
+            telemetry,
+            source: telemetrySource,
+            startedAt,
+            facts,
+            adapter: result.adapter,
+            success: true,
+            messageCount: 1,
+          });
           return result;
         } catch (error) {
           if (
@@ -186,15 +194,16 @@ export function createEmailClient<
     } catch (error) {
       const normalized = normalizeOwnedError(error);
       const attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
-      captureSendTelemetry(
+      captureSendTelemetry({
         telemetry,
-        telemetrySource,
+        source: telemetrySource,
         startedAt,
         facts,
-        attemptedAdapter,
-        false,
-        normalized.code,
-      );
+        adapter: attemptedAdapter,
+        success: false,
+        messageCount: 1,
+        errorCode: normalized.code,
+      });
       if (telemetry && isReportableSendError(normalized)) {
         void telemetry.captureException(normalized, {
           source: telemetrySource,
@@ -240,6 +249,9 @@ export function createEmailClient<
 
     void telemetry?.capture("email batch sent", {
       message_count: items.length,
+      // Deliberately no delivered_count: each item already emits its own "email sent"
+      // carrying one, so a naive sum across both events would double count. This event
+      // describes batch shape; "email sent" is the volume series.
       succeeded: items.length - failed,
       failed,
       recipients: items.reduce(
@@ -314,19 +326,19 @@ export function createEmailClient<
             );
 
         if (result.accepted.length > 0) {
-          captureSendTelemetry(
+          captureSendTelemetry({
             telemetry,
-            telemetrySource,
+            source: telemetrySource,
             startedAt,
             facts,
-            result.adapter,
-            true,
-            undefined,
+            adapter: result.adapter,
+            success: true,
+            messageCount: facts.recipients,
             deliveryPath,
-            result.accepted.length,
-            result.rejected.length,
-            result.failures.length,
-          );
+            acceptedRecipientCount: result.accepted.length,
+            rejectedRecipientCount: result.rejected.length,
+            failureCount: result.failures.length,
+          });
           return result;
         }
 
@@ -342,19 +354,23 @@ export function createEmailClient<
       throw new EmailAllRecipientsFailedError(routeFailures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      captureSendTelemetry(
+      captureSendTelemetry({
         telemetry,
-        telemetrySource,
+        source: telemetrySource,
         startedAt,
         facts,
-        attemptedAdapter,
-        false,
-        normalized.code,
+        adapter: attemptedAdapter,
+        success: false,
+        messageCount: facts.recipients,
+        errorCode: normalized.code,
         deliveryPath,
-        0,
-        facts.recipients,
-        normalized instanceof EmailAllRecipientsFailedError ? normalized.failures.length : undefined,
-      );
+        acceptedRecipientCount: 0,
+        rejectedRecipientCount: facts.recipients,
+        failureCount:
+          normalized instanceof EmailAllRecipientsFailedError
+            ? normalized.failures.length
+            : undefined,
+      });
       if (telemetry && isReportableSendError(normalized)) {
         void telemetry.captureException(normalized, {
           source: telemetrySource,
@@ -377,6 +393,9 @@ export function createEmailClient<
     sendPersonalized,
     adapter(name: string) {
       return requireAdapter(adapters, name);
+    },
+    flush() {
+      return telemetry?.flush() ?? Promise.resolve();
     },
     withAdapter(name: string) {
       requireAdapter(adapters, name);
@@ -981,19 +1000,40 @@ function personalizedFacts(input: EmailPersonalizedInput) {
   };
 }
 
-function captureSendTelemetry(
-  telemetry: ReturnType<typeof getTelemetry> | undefined,
-  source: string,
-  startedAt: number,
-  facts: ReturnType<typeof messageFacts> | ReturnType<typeof personalizedFacts>,
-  adapter: string,
-  success: boolean,
-  errorCode?: string,
+type SendTelemetryInput = {
+  telemetry: ReturnType<typeof getTelemetry> | undefined;
+  source: string;
+  startedAt: number;
+  facts: ReturnType<typeof messageFacts> | ReturnType<typeof personalizedFacts>;
+  adapter: string;
+  success: boolean;
+  /**
+   * Individual messages this call represents: 1 for send() regardless of how many
+   * to/cc/bcc addresses share it, one per recipient for sendPersonalized(). Counting
+   * events instead would undercount a personalized send to 500 people as 1.
+   */
+  messageCount: number;
+  errorCode?: string;
+  deliveryPath?: string;
+  acceptedRecipientCount?: number;
+  rejectedRecipientCount?: number;
+  failureCount?: number;
+};
+
+function captureSendTelemetry({
+  telemetry,
+  source,
+  startedAt,
+  facts,
+  adapter,
+  success,
+  messageCount,
+  errorCode,
   deliveryPath = "single",
-  acceptedRecipientCount?: number,
-  rejectedRecipientCount?: number,
-  failureCount?: number,
-) {
+  acceptedRecipientCount,
+  rejectedRecipientCount,
+  failureCount,
+}: SendTelemetryInput) {
   void telemetry?.capture("email sent", {
     ...facts,
     adapter: normalizeAdapterName(adapter),
@@ -1001,6 +1041,10 @@ function captureSendTelemetry(
     success,
     duration_ms: Date.now() - startedAt,
     error_code: errorCode,
+    message_count: messageCount,
+    // Summing this across every "email sent" event gives exact delivered volume.
+    // Partial personalized sends report accepted recipients, not all-or-nothing.
+    delivered_count: acceptedRecipientCount ?? (success ? messageCount : 0),
     accepted_recipient_count: acceptedRecipientCount,
     rejected_recipient_count: rejectedRecipientCount,
     failure_count: failureCount,

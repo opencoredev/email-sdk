@@ -125,5 +125,14 @@ const backup = email.withAdapter("backup");
 await backup.send(message);
 ```
 
+## `flush()`
+
+Waits for in-flight anonymous telemetry and never rejects. Serverless runtimes freeze the process on response and drop those requests, so await this (or pass it to `waitUntil`) before a handler returns. Long-running servers do not need it, and it resolves immediately when telemetry is disabled.
+
+```ts title="app/api/send/route.ts"
+await email.send(message);
+waitUntil(email.flush());
+```
+
 <Card title="Message reference" href="/docs/reference/message" description="Look up every normalized message field." />
 <Card title="Error reference" href="/docs/reference/errors" description="Handle the closed v1 error union." />
