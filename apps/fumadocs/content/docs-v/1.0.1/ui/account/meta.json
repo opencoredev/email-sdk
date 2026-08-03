@@ -1,0 +1,5 @@
+{
+  "title": "Account",
+  "icon": "KeyRound",
+  "pages": ["verification-code", "password-reset", "team-invite"]
+}
