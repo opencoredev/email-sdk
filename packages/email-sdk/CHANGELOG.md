@@ -1,5 +1,11 @@
 # @opencoredev/email-sdk
 
+## 1.0.1
+
+### Patch Changes
+
+- 1eaa029: License the SDK packages under MIT. Future cloud application code remains AGPL-3.0-only.
+
 ## 1.0.0
 
 ### Major Changes
