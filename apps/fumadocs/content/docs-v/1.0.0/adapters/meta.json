@@ -1,0 +1,33 @@
+{
+  "title": "Adapters",
+  "icon": "MailAtSign",
+  "pages": [
+    "index",
+    "resend",
+    "sequenzy",
+    "jetemail",
+    "primitive",
+    "lettermint",
+    "postmark",
+    "sendgrid",
+    "cloudflare",
+    "unosend",
+    "ses",
+    "mailgun",
+    "mailersend",
+    "brevo",
+    "mailchimp",
+    "sparkpost",
+    "iterable",
+    "loops",
+    "plunk",
+    "mailtrap",
+    "scaleway",
+    "zeptomail",
+    "mailpace",
+    "smtp",
+    "field-support",
+    "capability-groups",
+    "verification"
+  ]
+}

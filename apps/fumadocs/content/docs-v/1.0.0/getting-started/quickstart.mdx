@@ -1,0 +1,63 @@
+---
+title: Quickstart
+description: Create a Resend client and send your first email.
+---
+
+Set a server-only Resend key:
+
+```bash title=".env.local"
+RESEND_API_KEY=re_xxx
+```
+
+Then create the client and send:
+
+```ts title="src/send-welcome.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+
+console.log(result.adapter, result.id);
+```
+
+That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.
+
+## Check a message without sending
+
+Use `validate` when you want the same message and routing checks without a provider send request:
+
+```ts
+await email.validate({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+```
+
+## Check from the CLI
+
+`--dry-run` runs the same validation without sending email.
+
+```bash
+EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Welcome" \
+  --text "Your account is ready." \
+  --dry-run
+```
+
+<Card title="Add retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="Choose retry counts and unknown-delivery policy deliberately." />
+<Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use provider scheduling now, or an app-owned queue when you need more control." />
+<Card title="Test without a provider" href="/docs/guides/test-email-behavior" description="Capture sends with the memory adapter and capture plugin." />
