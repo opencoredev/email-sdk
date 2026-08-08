@@ -325,6 +325,56 @@ describe("provider payloads", () => {
     ).rejects.toThrow("cloudflare failed.");
   });
 
+  test("Cloudflare sends via Worker binding", async () => {
+    let sentPayload: any;
+    const binding = {
+      async send(payload: any) {
+        sentPayload = payload;
+        return { id: "msg_123" };
+      },
+    };
+
+    const adapter = cloudflare({ binding });
+    expect(adapter.raw).toEqual({ binding });
+
+    const response = await adapter.send(
+      {
+        ...cloudflareMessage,
+        to: "ada@example.com",
+        cc: "cc@example.com",
+        bcc: "bcc@example.com",
+      },
+      context,
+    );
+
+    expect(response.id).toBe("msg_123");
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
+    expect(sentPayload).toMatchObject({
+      from: { address: "hello@example.com", name: "Acme" },
+      to: ["ada@example.com"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      replyTo: "reply@example.com",
+      reply_to: "reply@example.com",
+      subject: "Welcome",
+      text: "Hello",
+      html: "<p>Hello</p>",
+      headers: { "X-Test": "yes" },
+    });
+  });
+
+  test("Cloudflare binding surfaces send errors", async () => {
+    const binding = {
+      async send() {
+        throw new Error("Binding send failed");
+      },
+    };
+
+    await expect(cloudflare({ binding }).send(cloudflareMessage, context)).rejects.toThrow(
+      "cloudflare failed: Binding send failed",
+    );
+  });
+
   test("Cloudflare exposes a safe HTTP error without the raw response body", async () => {
     const error = await cloudflare({
       apiToken: "cf_token",
