@@ -10,8 +10,8 @@ import { extname, join } from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 
 import { providers } from "../../src/lib/providers";
-import { sponsorRowGeometry, sponsorRowLayout } from "../../src/lib/sponsor-row";
 import { sponsors } from "../../src/lib/sponsors";
+import { sponsorLabelFontFile, sponsorRowGeometry, sponsorRowLayout } from "./sponsor-row";
 
 const ogDir = import.meta.dirname;
 const publicDir = join(ogDir, "../../public");
@@ -189,7 +189,7 @@ function render(svg: string): Buffer {
     font: {
       fontFiles: [
         join(ogDir, "fonts/LiberationSans-Regular.ttf"),
-        join(ogDir, "fonts/LiberationSans-Bold.ttf"),
+        sponsorLabelFontFile,
         join(ogDir, "fonts/LiberationMono-Regular.ttf"),
         join(ogDir, "fonts/LiberationMono-Bold.ttf"),
       ],

@@ -4,8 +4,12 @@
 // measured from its own name, and the whole row scales down until it fits,
 // which keeps the logo, the label and the spacing in proportion.
 //
-// The layout lives here, apart from scripts/og/generate-og-image.ts, so the
-// fit can be tested without rendering the image.
+// The layout lives apart from generate-og-image.ts so the fit can be tested
+// without rendering the image.
+import { join } from "node:path";
+
+import { loadFontMetrics } from "./font-metrics";
+
 export const sponsorRowGeometry = {
   startX: 168,
   rightEdge: 1170,
@@ -13,13 +17,22 @@ export const sponsorRowGeometry = {
   radius: 22,
   labelOffset: 32,
   fontSize: 13,
-  /** Liberation Sans Bold at 13px averages about 7.6px per character. */
-  charWidth: 7.6,
   /** Blank space kept between a label and the next logo. */
   minClearance: 14,
   /** Below this the labels get too small to read, so the build must fail. */
   minScale: 0.7,
 } as const;
+
+// The row labels are drawn in Liberation Sans Bold. generate-og-image.ts hands
+// this same file to resvg, so the width measured here is the width the renderer
+// draws and the two cannot drift onto different fonts.
+export const sponsorLabelFontFile = join(import.meta.dirname, "fonts/LiberationSans-Bold.ttf");
+
+const labelFont = loadFontMetrics(sponsorLabelFontFile);
+
+export function measureSponsorLabel(name: string, fontSize = sponsorRowGeometry.fontSize): number {
+  return labelFont.measure(name, fontSize);
+}
 
 export type SponsorRowSlot = {
   name: string;
@@ -37,10 +50,11 @@ export function sponsorRowLayout(names: readonly string[]): {
   scale: number;
   slots: SponsorRowSlot[];
 } {
-  const { startX, rightEdge, radius, labelOffset, fontSize, charWidth, minClearance, minScale } =
+  const { startX, rightEdge, radius, labelOffset, fontSize, minClearance, minScale } =
     sponsorRowGeometry;
 
-  const slotWidths = names.map((name) => labelOffset + name.length * charWidth);
+  const labelWidths = names.map((name) => measureSponsorLabel(name));
+  const slotWidths = labelWidths.map((label) => labelOffset + label);
   const slotsWidth = slotWidths.reduce((total, slot) => total + slot, 0);
   const gapCount = Math.max(0, names.length - 1);
   // Widths that scale: the slots plus the part of each gap the logo covers.
@@ -63,7 +77,7 @@ export function sponsorRowLayout(names: readonly string[]): {
       x,
       radius: radius * scale,
       labelX,
-      labelEndX: labelX + name.length * charWidth * scale,
+      labelEndX: labelX + labelWidths[index]! * scale,
       fontSize: fontSize * scale,
     };
   });
