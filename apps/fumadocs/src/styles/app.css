@@ -642,7 +642,8 @@ html > body[data-scroll-locked] {
 }
 
 .landing-sponsor[data-sponsor="sequenzy"] .landing-sponsor-mark img,
-.landing-sponsor[data-sponsor="lettermint"] .landing-sponsor-mark img {
+.landing-sponsor[data-sponsor="lettermint"] .landing-sponsor-mark img,
+.landing-sponsor[data-sponsor="zernio"] .landing-sponsor-mark img {
   padding: 0;
 }
 
