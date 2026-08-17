@@ -30,7 +30,10 @@ export const sponsorLabelFontFile = join(import.meta.dirname, "fonts/LiberationS
 
 const labelFont = loadFontMetrics(sponsorLabelFontFile);
 
-export function measureSponsorLabel(name: string, fontSize = sponsorRowGeometry.fontSize): number {
+export function measureSponsorLabel(
+  name: string,
+  fontSize: number = sponsorRowGeometry.fontSize,
+): number {
   return labelFont.measure(name, fontSize);
 }
 
