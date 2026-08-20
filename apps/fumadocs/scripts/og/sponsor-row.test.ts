@@ -36,10 +36,21 @@ describe("og sponsor row", () => {
   });
 
   test("shrinks the row as sponsors are added instead of overflowing", () => {
-    const short = sponsorRowLayout(names.slice(0, -1));
-    const long = sponsorRowLayout(names);
+    const fittingNames = [
+      "Resend",
+      "Sequenzy",
+      "JetEmail",
+      "Primitive",
+      "Lettermint",
+      "Instatus",
+      "Neon",
+      "Notra",
+    ];
+    const short = sponsorRowLayout(fittingNames);
+    const long = sponsorRowLayout([...fittingNames, "Zernio"]);
 
-    expect(long.scale).toBeLessThan(short.scale);
+    expect(short.scale).toBe(1);
+    expect(long.scale).toBeLessThan(1);
     expect(long.slots.at(-1)!.labelEndX).toBeLessThanOrEqual(sponsorRowGeometry.rightEdge + 0.001);
   });
 
