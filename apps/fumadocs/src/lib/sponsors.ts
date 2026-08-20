@@ -57,9 +57,19 @@ export const sponsors: readonly Sponsor[] = [
     href: "https://zernio.com",
     logo: "/landing/sponsors/zernio.svg",
   },
+  {
+    name: "Customer.io",
+    href: "https://github.com/customerio",
+    logo: "/landing/sponsors/customerio.svg",
+  },
+  {
+    name: "Context.dev",
+    href: "https://context.dev",
+    logo: "/landing/sponsors/context-dev.svg",
+  },
 ];
 
 // Keep the sponsor count plus the open slots a multiple of the five-column
 // landing grid, so the last row stays full instead of leaving one orphan tile.
-export const openSponsorSlots = [1] as const;
+export const openSponsorSlots = [1, 2, 3, 4] as const;
 export const sponsorHref = "https://github.com/sponsors/opencoredev";
