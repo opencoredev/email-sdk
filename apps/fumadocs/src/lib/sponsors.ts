@@ -59,7 +59,7 @@ export const sponsors: readonly Sponsor[] = [
   },
   {
     name: "Customer.io",
-    href: "https://github.com/customerio",
+    href: "https://customer.io",
     logo: "/landing/sponsors/customerio.svg",
   },
   {
