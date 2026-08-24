@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
   type ErrorComponentProps,
+  type NotFoundRouteProps,
 } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
@@ -56,10 +57,10 @@ function RootErrorComponent(props: ErrorComponentProps) {
   );
 }
 
-function RootNotFoundComponent() {
+function RootNotFoundComponent(props: NotFoundRouteProps) {
   return (
     <RootRecoveryShell stylesheetHref={appCss}>
-      <NotFoundPage />
+      <NotFoundPage {...props} />
       <Scripts />
     </RootRecoveryShell>
   );
