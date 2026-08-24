@@ -85,6 +85,72 @@ export const siteMeta = [
   },
 ] satisfies MetaDescriptor[];
 
+export function buildDocsStructuredData({
+  canonicalUrl,
+  dateModified,
+  description,
+  title,
+}: {
+  canonicalUrl: string;
+  dateModified: string;
+  description: string;
+  title: string;
+}) {
+  const breadcrumbItems = [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: appName,
+      item: siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Documentation",
+      item: `${siteUrl}/docs`,
+    },
+  ];
+
+  if (canonicalUrl !== `${siteUrl}/docs`) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: 3,
+      name: title,
+      item: canonicalUrl,
+    });
+  }
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        "@id": `${canonicalUrl}#article`,
+        headline: title,
+        description,
+        dateModified,
+        url: canonicalUrl,
+        mainEntityOfPage: canonicalUrl,
+        inLanguage: "en",
+        author: {
+          "@id": `${siteUrl}/#organization`,
+        },
+        publisher: {
+          "@id": `${siteUrl}/#organization`,
+        },
+        isPartOf: {
+          "@id": `${siteUrl}/#website`,
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        itemListElement: breadcrumbItems,
+      },
+    ],
+  };
+}
+
 export const homeStructuredData = {
   "@context": "https://schema.org",
   "@graph": [
