@@ -1,8 +1,15 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+  type ErrorComponentProps,
+} from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
+import { AppErrorPage, NotFoundPage, RootRecoveryShell } from "@/components/recovery-page";
 import SearchDialog from "@/components/search";
 import { StaleBuildNotice } from "@/components/stale-build-notice";
 import { chunkLoadGuardScript } from "@/lib/chunk-load-guard";
@@ -13,6 +20,8 @@ import { initPostHog } from "@/lib/posthog";
 import appCss from "@/styles/app.css?url";
 
 export const Route = createRootRoute({
+  errorComponent: RootErrorComponent,
+  notFoundComponent: RootNotFoundComponent,
   head: () => ({
     meta: siteMeta,
     links: [
@@ -37,6 +46,24 @@ export const Route = createRootRoute({
   }),
   component: RootComponent,
 });
+
+function RootErrorComponent(props: ErrorComponentProps) {
+  return (
+    <RootRecoveryShell stylesheetHref={appCss}>
+      <AppErrorPage {...props} />
+      <Scripts />
+    </RootRecoveryShell>
+  );
+}
+
+function RootNotFoundComponent() {
+  return (
+    <RootRecoveryShell stylesheetHref={appCss}>
+      <NotFoundPage />
+      <Scripts />
+    </RootRecoveryShell>
+  );
+}
 
 function RootComponent() {
   React.useEffect(() => {
