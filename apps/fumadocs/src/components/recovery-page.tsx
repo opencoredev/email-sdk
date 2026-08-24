@@ -1,5 +1,6 @@
 import type { ErrorComponentProps, NotFoundRouteProps } from "@tanstack/react-router";
-import { HomeLayout } from "fumadocs-ui/layouts/home";
+import type { ReactNode } from "react";
+
 import {
   ArrowRight,
   BookOpen,
@@ -11,9 +12,7 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "@/components/icon";
-import type { ReactNode } from "react";
-
-import { baseOptions } from "@/lib/layout.shared";
+import { appDescription, appName } from "@/lib/shared";
 
 type RecoveryKind = "chunk" | "dom" | "not-found" | "runtime";
 
@@ -23,6 +22,8 @@ type RecoveryCopy = {
   description: string;
   note: string;
 };
+
+export const recoveryRobots = "noindex, follow";
 
 const helpLinks = [
   {
@@ -68,6 +69,31 @@ export function AppErrorPage({ error, reset }: ErrorComponentProps) {
       onRetry={kind === "chunk" ? undefined : reset}
       status={kind === "chunk" ? "Reload needed" : "Runtime error"}
     />
+  );
+}
+
+export function RootRecoveryShell({
+  children,
+  stylesheetHref,
+}: {
+  children: ReactNode;
+  stylesheetHref: string;
+}) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta content="width=device-width, initial-scale=1" name="viewport" />
+        <title>{appName}</title>
+        <meta content={recoveryRobots} name="robots" />
+        <meta content={appDescription} name="description" />
+        <link href={stylesheetHref} rel="stylesheet" />
+        <link href="/favicon.ico" rel="icon" sizes="any" />
+      </head>
+      <body className="flex min-h-screen flex-col bg-fd-background text-fd-foreground">
+        {children}
+      </body>
+    </html>
   );
 }
 
@@ -144,6 +170,16 @@ function getRecoveryCopy(kind: RecoveryKind): RecoveryCopy {
   };
 }
 
+function RecoveryHead() {
+  return (
+    <>
+      <title>{appName}</title>
+      <meta content={recoveryRobots} name="robots" />
+      <meta content={appDescription} name="description" />
+    </>
+  );
+}
+
 function RecoveryLayout({
   copy,
   details,
@@ -158,8 +194,22 @@ function RecoveryLayout({
   status: string;
 }) {
   return (
-    <HomeLayout {...baseOptions()}>
-      <main className="min-h-[calc(100vh-4rem)] border-b border-fd-border bg-fd-background text-fd-foreground">
+    <div className="flex min-h-screen flex-col bg-fd-background text-fd-foreground">
+      <RecoveryHead />
+      <header className="border-b border-fd-border">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-6 py-4 md:px-10">
+          <img
+            alt=""
+            aria-hidden="true"
+            className="size-8 shrink-0 object-contain"
+            src="/logo.png"
+          />
+          <a className="text-sm font-medium" href="/">
+            {appName}
+          </a>
+        </div>
+      </header>
+      <main className="min-h-[calc(100vh-4rem)] border-b border-fd-border">
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-14 md:px-10 md:py-20">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-md border border-fd-border bg-fd-muted px-2.5 py-1 text-xs font-medium text-fd-muted-foreground">
@@ -245,6 +295,6 @@ function RecoveryLayout({
           </a>
         </section>
       </main>
-    </HomeLayout>
+    </div>
   );
 }
