@@ -42,7 +42,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: { retries: 1 },
+  retry: { maxAttempts: 2 },
 });
 
 await email.send({

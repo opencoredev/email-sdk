@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { siteUrl } from "@/lib/shared";
 import { source } from "@/lib/source";
 
@@ -10,16 +11,23 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
   server: {
     handlers: {
       GET() {
+        const lastmodByPath: Record<string, string> = docsLastmod;
         const lines = source.getPages().map((page) => {
+          const url = `${siteUrl}${page.url}`;
           const entity = {
             "@context": "https://schema.org",
             "@type": "TechArticle",
-            "@id": `${siteUrl}${page.url}`,
-            url: `${siteUrl}${page.url}`,
+            "@id": `${url}#article`,
+            url,
+            mainEntityOfPage: url,
+            headline: page.data.title,
             name: page.data.title,
             description: page.data.description,
+            dateModified: lastmodByPath[page.path] ?? "2026-06-01",
             inLanguage: "en",
             isPartOf: { "@id": `${siteUrl}/#website` },
+            author: { "@id": `${siteUrl}/#organization` },
+            publisher: { "@id": `${siteUrl}/#organization` },
             encoding: {
               "@type": "MediaObject",
               encodingFormat: "text/markdown",

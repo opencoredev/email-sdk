@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { siteImageAlt, siteMeta } from "@/lib/metadata";
+import { buildDocsStructuredData, siteImageAlt, siteMeta } from "@/lib/metadata";
 import { siteOgImageUrl } from "@/lib/shared";
 
 const findByName = (name: string) =>
@@ -35,5 +35,34 @@ describe("site social metadata", () => {
 
     expect(twitterCards).toHaveLength(1);
     expect(twitterCards[0]?.content).toBe("summary_large_image");
+  });
+});
+
+describe("documentation structured data", () => {
+  test("describes current docs as a canonical TechArticle with breadcrumbs", () => {
+    const canonicalUrl = "https://email-sdk.dev/docs/adapters/resend";
+    const structuredData = buildDocsStructuredData({
+      canonicalUrl,
+      dateModified: "2026-07-22",
+      description: "Configure the Resend adapter for Email SDK.",
+      title: "Resend",
+    });
+
+    expect(structuredData["@graph"][0]).toMatchObject({
+      "@type": "TechArticle",
+      "@id": `${canonicalUrl}#article`,
+      headline: "Resend",
+      dateModified: "2026-07-22",
+      url: canonicalUrl,
+      mainEntityOfPage: canonicalUrl,
+    });
+    expect(structuredData["@graph"][1]).toMatchObject({
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { position: 1, name: "Email SDK", item: "https://email-sdk.dev" },
+        { position: 2, name: "Documentation", item: "https://email-sdk.dev/docs" },
+        { position: 3, name: "Resend", item: canonicalUrl },
+      ],
+    });
   });
 });
