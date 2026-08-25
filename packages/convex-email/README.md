@@ -257,7 +257,21 @@ export const email = new ConvexEmail(components.convexEmail, {
 
 The package exports Convex test helpers from `@opencoredev/convex-email/test`.
 
-`exposeApi()` intentionally omits `setConfig` and `getConfig` by default. Pass `{ includeConfigApi: true }` only from a module protected by your own server-side auth checks.
+`exposeApi()` requires an authenticated Convex identity by default and stamps its `subject` as the email owner. Public status, events, cancellation, and retries only work for that owner; records queued through server-only `email.send()` are not exposed. Pass `authorize` to use a tenant id or operation-specific policy instead. It returns an owner id, or `null` to deny the request:
+
+```ts
+export const { send, status, listEvents, cancel, retry } = email.exposeApi({
+  authorize: async (ctx, operation) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || (operation === "send" && !identity.tokenIdentifier.startsWith("my-app|"))) {
+      return null;
+    }
+    return identity.subject;
+  },
+});
+```
+
+This is intentionally a security boundary, not recipient policy: use explicit app wrappers when sending must be restricted to particular recipients or roles. `setConfig` and `getConfig` stay excluded by default. If they are needed, pass both `includeConfigApi: true` and an explicit `authorizeConfig` admin check.
 
 ## Cleanup
 

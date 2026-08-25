@@ -73,7 +73,9 @@ Use an idempotency key on the original message. Automatic recovery refuses to re
 
 ## Expose only authorized operations
 
-`exposeApi()` can generate app function definitions for send, batch, status, events, cancellation, and retry. Configuration functions stay excluded unless `includeConfigApi: true`.
+`exposeApi()` can generate app function definitions for send, batch, status, events, cancellation, and retry. It requires an authenticated Convex identity by default, records its `subject` as the email owner, and only returns or changes emails owned by that identity. Unauthenticated callers are rejected, and emails queued through server-only APIs remain private.
+
+Use `authorize` when your app needs tenant ownership or an operation-specific policy. It receives the Convex auth context and operation name, and must return a stable owner id or `null` to deny the request. Configuration functions stay excluded unless both `includeConfigApi: true` and an explicit `authorizeConfig` admin check are provided.
 
 Most applications should write explicit wrappers instead. That keeps authentication, tenant checks, recipient policy, and administrator-only recovery visible in application code.
 

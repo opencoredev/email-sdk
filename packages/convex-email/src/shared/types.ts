@@ -102,6 +102,8 @@ export type ConvexEmailDoc = {
   _creationTime: number;
   status: ConvexEmailStatus;
   message: ConvexEmailMessage;
+  /** Server-controlled owner recorded by exposeApi(). */
+  ownerId?: string;
   adapter?: string;
   attemptedAdapters: string[];
   fallbackAdapters: string[];

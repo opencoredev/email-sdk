@@ -148,6 +148,24 @@ describe("convex-email component", () => {
     expect(secondId).toBe(firstId);
   });
 
+  test("scopes public API idempotency keys to their stamped owner", async () => {
+    const t = createTest();
+    const enqueueOwned = (api.lib as any).enqueueOwned;
+    const email = {
+      ...message,
+      idempotencyKey: "welcome",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    };
+
+    const firstId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const sameOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const anotherOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_2" });
+
+    expect(sameOwnerId).toBe(firstId);
+    expect(anotherOwnerId).not.toBe(firstId);
+  });
+
   test("enqueues a batch, applies config defaults, and returns ids in order", async () => {
     const t = createTest();
 
