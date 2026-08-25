@@ -44,8 +44,8 @@ export function jetemail(
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",
-          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
           ...options.headers,
+          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
         },
         body: JSON.stringify(await toJetemailPayload(message)),
       });
