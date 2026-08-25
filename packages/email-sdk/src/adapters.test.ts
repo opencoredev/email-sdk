@@ -118,7 +118,7 @@ describe("provider payloads", () => {
 
     await resend({
       apiKey: "key",
-      headers: { "Idempotency-Key": "static-key" },
+      headers: { "idempotency-key": "static-key" },
       fetch: capture.fetch,
     }).send(messageWithoutMetadata, context);
 
@@ -1249,7 +1249,7 @@ describe("provider payloads", () => {
 
     await jetemail({
       apiKey: "key",
-      headers: { "Idempotency-Key": "static-key" },
+      headers: { "idempotency-key": "static-key" },
       fetch: capture.fetch,
     }).send(messageWithoutTagsOrMetadata, context);
 

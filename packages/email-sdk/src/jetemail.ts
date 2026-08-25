@@ -38,15 +38,20 @@ export function jetemail(
     ...builtInAdapterDefinition("jetemail"),
     raw: { baseUrl },
     async send(message, context) {
+      const headers = new Headers({
+        Authorization: `Bearer ${options.apiKey}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      });
+
+      if (context.idempotencyKey) {
+        headers.set("Idempotency-Key", context.idempotencyKey);
+      }
+
       const response = await fetcher(`${baseUrl}/email`, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          "Content-Type": "application/json",
-          ...options.headers,
-          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
-        },
+        headers,
         body: JSON.stringify(await toJetemailPayload(message)),
       });
 
