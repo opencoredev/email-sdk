@@ -273,6 +273,22 @@ export const { send, status, listEvents, cancel, retry } = email.exposeApi({
 
 This is intentionally a security boundary, not recipient policy: use explicit app wrappers when sending must be restricted to particular recipients or roles. `setConfig` and `getConfig` stay excluded by default. If they are needed, pass both `includeConfigApi: true` and an explicit `authorizeConfig` admin check.
 
+### Migrating `exposeApi()` in v3
+
+Before v3, this exposed unauthenticated operations:
+
+```ts
+export const emailApi = email.exposeApi();
+```
+
+The same call now requires your app to configure Convex authentication; authenticated callers are automatically scoped to their identity `subject`:
+
+```ts
+export const emailApi = email.exposeApi();
+```
+
+Use the `authorize` example above when ownership should be a tenant or when individual operations need different access rules. Existing email rows have no trusted public owner, so records queued before this upgrade remain unavailable through `exposeApi()` rather than being guessed or backfilled. Server-side `email.status()`, `email.listEvents()`, and other application wrappers remain available for authorized operational migrations.
+
 ## Cleanup
 
 The component ships a five-minute cron sweep for missed queue work, stale `processing` recovery, and cleanup.

@@ -77,6 +77,10 @@ Use an idempotency key on the original message. Automatic recovery refuses to re
 
 Use `authorize` when your app needs tenant ownership or an operation-specific policy. It receives the Convex auth context and operation name, and must return a stable owner id or `null` to deny the request. Configuration functions stay excluded unless both `includeConfigApi: true` and an explicit `authorizeConfig` admin check are provided.
 
+### Upgrade existing public APIs
+
+`exposeApi()` now requires Convex authentication. Configure your app's Convex auth provider before upgrading callers that use it. Existing queued emails do not have a trusted public owner, so they remain private to server-side application wrappers instead of being backfilled with guessed ownership.
+
 Most applications should write explicit wrappers instead. That keeps authentication, tenant checks, recipient policy, and administrator-only recovery visible in application code.
 
 <Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Understand queue state and event history." />
