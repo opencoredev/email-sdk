@@ -22,6 +22,7 @@ export default defineSchema({
     idempotencyKey: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),
+    processingLease: v.optional(v.number()),
     maxAttempts: v.number(),
     retryBaseMs: v.number(),
     nextAttemptAt: v.optional(v.number()),
