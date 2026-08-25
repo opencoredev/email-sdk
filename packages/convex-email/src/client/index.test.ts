@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ConvexEmail } from "./index.js";
+import { ConvexEmail, type ConvexEmailPublicAuthorizer } from "./index.js";
 
 const message = {
   from: "Acme <hello@example.com>",
@@ -14,6 +14,7 @@ function createEmail() {
     lib: {
       enqueue: {},
       enqueueOwned: {},
+      enqueueOwnedBatch: {},
       enqueueBatch: {},
       status: {},
       listEvents: {},
@@ -63,6 +64,43 @@ describe("ConvexEmail.exposeApi", () => {
     expect(queuedArgs).toMatchObject({ email: message, ownerId: "user_123" });
   });
 
+  test("queues public batches through one owner-stamped component mutation", async () => {
+    const api = createEmail().exposeApi();
+    const sendBatch = handler<(ctx: unknown, args: { messages: typeof message[] }) => Promise<string[]>>(
+      api.sendBatch,
+    );
+    let mutationCalls = 0;
+    let queuedArgs: unknown;
+
+    const ids = await sendBatch(
+      {
+        auth: { getUserIdentity: async () => ({ subject: "user_123", tokenIdentifier: "app|user_123" }) },
+        runMutation: async (_reference: unknown, args: unknown) => {
+          mutationCalls += 1;
+          queuedArgs = args;
+          return ["email_1", "email_2"];
+        },
+      },
+      { messages: [message, { ...message, to: "grace@example.com" }] },
+    );
+
+    expect(ids).toEqual(["email_1", "email_2"]);
+    expect(mutationCalls).toBe(1);
+    expect(queuedArgs).toMatchObject({
+      ownerId: "user_123",
+      messages: [
+        { ...message, adapter: undefined, adapters: undefined, fallbackAdapters: undefined },
+        {
+          ...message,
+          to: "grace@example.com",
+          adapter: undefined,
+          adapters: undefined,
+          fallbackAdapters: undefined,
+        },
+      ],
+    });
+  });
+
   test("hides emails and events from a different authenticated owner", async () => {
     const api = createEmail().exposeApi();
     const status = handler<(ctx: unknown, args: { emailId: string }) => Promise<unknown>>(api.status);
@@ -84,5 +122,14 @@ describe("ConvexEmail.exposeApi", () => {
 
   test("requires an explicit admin authorizer before exposing configuration", () => {
     expect(() => createEmail().exposeApi({ includeConfigApi: true })).toThrow("authorizeConfig");
+  });
+
+  test("exposes the Convex token identifier to custom authorizers", async () => {
+    const authorize: ConvexEmailPublicAuthorizer = async (ctx) => {
+      const identity = await ctx.auth.getUserIdentity();
+      return identity?.tokenIdentifier.startsWith("app|") ? identity.subject : null;
+    };
+
+    expect(await authorize({ auth: { getUserIdentity: async () => ({ subject: "user_123", tokenIdentifier: "app|user_123" }) } }, "send")).toBe("user_123");
   });
 });

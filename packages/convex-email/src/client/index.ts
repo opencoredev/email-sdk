@@ -33,6 +33,7 @@ type ComponentApi = {
   lib: {
     enqueue: unknown;
     enqueueOwned: unknown;
+    enqueueOwnedBatch: unknown;
     enqueueBatch: unknown;
     status: unknown;
     listEvents: unknown;
@@ -107,7 +108,7 @@ export type ConvexEmailPublicOperation =
 
 export type ConvexEmailPublicAuthContext = {
   auth: {
-    getUserIdentity(): Promise<{ subject: string } | null>;
+    getUserIdentity(): Promise<{ subject: string; tokenIdentifier: string } | null>;
   };
 };
 
@@ -249,7 +250,7 @@ export class ConvexEmail {
         returns: v.array(v.string()),
         handler: async (ctx, args) => {
           const ownerId = await this.authorizePublic(ctx, "sendBatch", options.authorize);
-          return await Promise.all(args.messages.map((message) => this.sendForOwner(ctx, message, ownerId)));
+          return await this.sendBatchForOwner(ctx, args.messages, ownerId);
         },
       }),
       status: queryGeneric({
@@ -337,6 +338,17 @@ export class ConvexEmail {
       email: this.withDefaults(args),
       ownerId,
     })) as string;
+  }
+
+  private async sendBatchForOwner(
+    ctx: Pick<GenericMutationCtx<GenericDataModel>, "runMutation">,
+    messages: ConvexEmailSendArgs[],
+    ownerId: string,
+  ) {
+    return (await ctx.runMutation(this.component.lib.enqueueOwnedBatch as AnyMutationRef, {
+      messages: messages.map((message) => this.withDefaults(message)),
+      ownerId,
+    })) as string[];
   }
 
   private async ownedEmail(ctx: QueryCtx, emailId: string, ownerId: string) {

@@ -48,6 +48,27 @@ export const enqueueOwned = mutation({
   },
 });
 
+/** Only app-side wrappers should call this; it atomically stamps ownership for public batch sends. */
+export const enqueueOwnedBatch = mutation({
+  args: { messages: v.array(v.object(vSendEmailArgs)), ownerId: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    if (args.messages.length > maxBatchSize) {
+      throw new ConvexError({
+        code: "BATCH_TOO_LARGE",
+        message: `sendBatch accepts at most ${maxBatchSize} messages per mutation. Split larger batches client-side.`,
+      });
+    }
+
+    const config = await readConfig(ctx);
+    const ids: string[] = [];
+    for (const message of args.messages) {
+      ids.push(await enqueueEmail(ctx, message, config, args.ownerId));
+    }
+    return ids;
+  },
+});
+
 export const enqueueBatch = mutation({
   args: vSendBatchEmailsArgs,
   returns: v.array(v.string()),
