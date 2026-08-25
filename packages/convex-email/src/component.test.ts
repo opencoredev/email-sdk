@@ -5,6 +5,8 @@ import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
 import { buildEmailClient, hydrateAttachments } from "./component/providers.js";
 
+const originalFetch = globalThis.fetch;
+
 const modules = {
   "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
   "./component/_generated/server.ts": () => import("./component/_generated/server.js"),
@@ -52,6 +54,7 @@ describe("convex-email component", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
+    globalThis.fetch = originalFetch;
   });
 
   test("queues a memory-adapter email and records sent status", async () => {
@@ -639,6 +642,66 @@ describe("convex-email component", () => {
         attachments: [{ filename: "loopback.txt", url: "https://127.0.0.1/private" }],
       }),
     ).rejects.toThrow('Attachment "loopback.txt" URL host is not allowed.');
+  });
+
+  test("validates every redirect before fetching a remote attachment", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = async (input, init) => {
+      requests.push({ url: String(input), init });
+      if (requests.length === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://cdn.example.test/attachment.txt" },
+        });
+      }
+      return new Response("attachment");
+    };
+
+    const hydrated = await hydrateAttachments({
+      ...message,
+      attachments: [{ filename: "attachment.txt", url: "https://files.example.test/attachment.txt" }],
+    });
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://files.example.test/attachment.txt",
+      "https://cdn.example.test/attachment.txt",
+    ]);
+    expect(requests.every((request) => request.init?.redirect === "manual")).toBe(true);
+    expect(requests.every((request) => request.init?.signal instanceof AbortSignal)).toBe(true);
+    expect(new TextDecoder().decode(hydrated.attachments?.[0]?.content as ArrayBuffer)).toBe(
+      "attachment",
+    );
+  });
+
+  test("rejects unsafe redirect targets without requesting them", async () => {
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://127.0.0.1/private" },
+      });
+    };
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "private.txt", url: "https://files.example.test/private.txt" }],
+      }),
+    ).rejects.toThrow('Attachment "private.txt" URL host is not allowed.');
+    expect(calls).toBe(1);
+  });
+
+  test("rejects remote attachments that exceed the size limit", async () => {
+    globalThis.fetch = async () =>
+      new Response(new Uint8Array(10 * 1024 * 1024 + 1), { headers: { "content-type": "text/plain" } });
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "large.txt", url: "https://files.example.test/large.txt" }],
+      }),
+    ).rejects.toThrow('Attachment "large.txt" exceeds the 10485760-byte size limit.');
   });
 
   test("recovers emails stuck in processing", async () => {
