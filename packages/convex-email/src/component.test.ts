@@ -6,6 +6,7 @@ import schema from "./component/schema.js";
 import { buildEmailClient, hydrateAttachments } from "./component/providers.js";
 
 const originalFetch = globalThis.fetch;
+const originalSetTimeout = globalThis.setTimeout;
 
 const modules = {
   "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
@@ -55,6 +56,7 @@ describe("convex-email component", () => {
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
     globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
   });
 
   test("queues a memory-adapter email and records sent status", async () => {
@@ -702,6 +704,27 @@ describe("convex-email component", () => {
         attachments: [{ filename: "large.txt", url: "https://files.example.test/large.txt" }],
       }),
     ).rejects.toThrow('Attachment "large.txt" exceeds the 10485760-byte size limit.');
+  });
+
+  test("times out when a remote attachment body stalls after response headers", async () => {
+    globalThis.setTimeout = ((callback: (...args: never[]) => void, _delay?: number, ...args: never[]) =>
+      originalSetTimeout(callback, 0, ...args)) as typeof setTimeout;
+    globalThis.fetch = async (_input, init) => {
+      const signal = init?.signal as AbortSignal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal.addEventListener("abort", () => controller.error(new Error("aborted")));
+        },
+      });
+      return new Response(body);
+    };
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "stalled.txt", url: "https://files.example.test/stalled.txt" }],
+      }),
+    ).rejects.toThrow('Fetching email attachment "stalled.txt" timed out.');
   });
 
   test("recovers emails stuck in processing", async () => {

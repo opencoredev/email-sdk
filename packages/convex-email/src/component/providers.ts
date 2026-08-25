@@ -303,7 +303,8 @@ async function fetchAttachment(value: string, filename: string): Promise<ArrayBu
         throw new Error(`Failed to fetch email attachment "${filename}" from ${value}.`);
       }
 
-      return readAttachmentBody(response, filename);
+      const content = await readAttachmentBody(response, filename);
+      return content;
     }
   } catch (error) {
     if (controller.signal.aborted) {
