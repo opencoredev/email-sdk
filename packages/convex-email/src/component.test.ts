@@ -348,6 +348,15 @@ describe("convex-email component", () => {
       status: "failed",
       attemptCount: 1,
       lastError: "All configured email adapters failed.",
+      providerMessageId: "lttr_partial",
+      providerFailure: {
+        adapter: "lettr",
+        requestId: "lttr_partial",
+        retryable: false,
+        delivery: "unknown",
+        acceptedCount: 1,
+        rejectedCount: 1,
+      },
     });
     expect(events.map((event) => event.type)).toEqual([
       "queued",
@@ -355,6 +364,16 @@ describe("convex-email component", () => {
       "provider_attempt",
       "failed",
     ]);
+    expect(events.at(-1)).toMatchObject({
+      adapter: "lettr",
+      providerMessageId: "lttr_partial",
+      payload: {
+        providerFailure: {
+          acceptedCount: 1,
+          rejectedCount: 1,
+        },
+      },
+    });
   });
 
   test("retries a retryable provider failure", async () => {

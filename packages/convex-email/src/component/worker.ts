@@ -1,6 +1,6 @@
 "use node";
 
-import { EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
+import { EmailAdapterError, EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -73,10 +73,12 @@ export const processEmail = internalAction({
         response,
       });
     } catch (error) {
+      const providerFailure = providerFailureMetadata(error);
       await ctx.runMutation(markFailedOrRetryRef, {
         emailId: args.emailId,
         error: stringifyError(error),
-        retryable: isRetryableFailure(error),
+        retryable: providerFailure?.retryable ?? isRetryableFailure(error),
+        ...(providerFailure ? { providerFailure } : {}),
       });
     }
 
@@ -109,11 +111,33 @@ function stringifyError(error: unknown) {
 }
 
 function isRetryableFailure(error: unknown) {
-  if (error instanceof EmailRouteError) {
-    return error.failures.at(-1)?.retryable ?? false;
+  return error instanceof EmailSdkError ? error.retryable : true;
+}
+
+function providerFailureMetadata(error: unknown) {
+  const failure =
+    error instanceof EmailRouteError
+      ? error.failures.at(-1)
+      : error instanceof EmailAdapterError
+        ? error
+        : undefined;
+
+  if (!failure) {
+    return undefined;
   }
 
-  return error instanceof EmailSdkError ? error.retryable : true;
+  return {
+    adapter: failure.adapter,
+    retryable: failure.retryable,
+    delivery: failure.delivery,
+    ...(failure.requestId ? { requestId: failure.requestId } : {}),
+    ...(failure.acceptedCount !== undefined
+      ? { acceptedCount: failure.acceptedCount }
+      : {}),
+    ...(failure.rejectedCount !== undefined
+      ? { rejectedCount: failure.rejectedCount }
+      : {}),
+  };
 }
 
 function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {

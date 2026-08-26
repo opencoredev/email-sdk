@@ -1490,6 +1490,8 @@ describe("provider payloads", () => {
       requestId: "lttr_partial",
       delivery: "unknown",
       retryable: false,
+      acceptedCount: 2,
+      rejectedCount: 1,
     });
   });
 

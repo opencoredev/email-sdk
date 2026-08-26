@@ -118,6 +118,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
             requestId,
             retryable: false,
             delivery: "unknown",
+            acceptedCount: accepted,
+            rejectedCount: rejected,
             cause: body,
           },
         );
@@ -133,6 +135,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
             requestId,
             retryable: false,
             delivery: "not_sent",
+            acceptedCount: accepted,
+            rejectedCount: rejected,
           },
         );
       }
@@ -145,6 +149,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
             requestId,
             retryable: false,
             delivery: "unknown",
+            acceptedCount: accepted,
+            rejectedCount: rejected,
           },
         );
       }
