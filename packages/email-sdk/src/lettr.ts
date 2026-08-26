@@ -69,6 +69,11 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
       definition.validate?.(message, context);
       assertLettrMessage(message);
       const scheduledAt = sendAtIso(message);
+      const recipients = [
+        ...arrayify(message.to),
+        ...arrayify(message.cc),
+        ...arrayify(message.bcc),
+      ].map(emailAddressOf);
       const response = await fetcher(
         `${baseUrl}${scheduledAt ? "/emails/scheduled" : "/emails"}`,
         {
@@ -105,6 +110,19 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
       }
 
       const { request_id: requestId, accepted, rejected } = body.data;
+      if (accepted + rejected !== recipients.length) {
+        throw new EmailAdapterError(
+          "Lettr returned recipient counts that did not match the request.",
+          {
+            adapter: "lettr",
+            requestId,
+            retryable: false,
+            delivery: "unknown",
+            cause: body,
+          },
+        );
+      }
+
       if (accepted === 0) {
         throw new EmailAdapterError(
           rejected
@@ -119,9 +137,23 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
         );
       }
 
+      if (rejected > 0) {
+        throw new EmailAdapterError(
+          `Lettr accepted ${accepted} recipients and rejected ${rejected}, but did not identify which recipients were rejected.`,
+          {
+            adapter: "lettr",
+            requestId,
+            retryable: false,
+            delivery: "unknown",
+          },
+        );
+      }
+
       return {
         adapter: "lettr",
         id: requestId,
+        accepted: recipients,
+        rejected: [],
         raw: body,
       };
     },

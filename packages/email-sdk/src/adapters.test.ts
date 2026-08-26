@@ -591,7 +591,7 @@ describe("provider payloads", () => {
         name: "lettr",
         provider: lettr({
           apiKey: "token",
-          fetch: jsonCapture({ data: { request_id: "lttr_123", accepted: 1, rejected: 0 } }).fetch,
+          fetch: jsonCapture({ data: { request_id: "lttr_123", accepted: 3, rejected: 0 } }).fetch,
         }),
         message: {
           ...message,
@@ -1414,7 +1414,7 @@ describe("provider payloads", () => {
   });
 
   test("Lettr maps normalized fields and encodes attachments", async () => {
-    const capture = jsonCapture({ data: { request_id: "lttr_123", accepted: 1, rejected: 0 } });
+    const capture = jsonCapture({ data: { request_id: "lttr_123", accepted: 3, rejected: 0 } });
 
     const response = await lettr({ apiKey: "lttr_key", fetch: capture.fetch }).send(
       { ...message, to: "ada@example.com" },
@@ -1422,6 +1422,8 @@ describe("provider payloads", () => {
     );
 
     expect(response.id).toBe("lttr_123");
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
+    expect(response.rejected).toEqual([]);
     expect(capture.calls[0]?.url).toBe("https://app.lettr.com/api/emails");
     expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer lttr_key");
     expect(capture.calls[0]?.json).toMatchObject({
@@ -1466,12 +1468,27 @@ describe("provider payloads", () => {
     await expect(
       lettr({
         apiKey: "lttr_key",
-        fetch: jsonCapture({ data: { request_id: "lttr_0", accepted: 0, rejected: 2 } }).fetch,
+        fetch: jsonCapture({ data: { request_id: "lttr_0", accepted: 0, rejected: 3 } }).fetch,
       }).send({ ...message, to: "ada@example.com" }, context),
     ).rejects.toMatchObject({
       adapter: "lettr",
       requestId: "lttr_0",
       delivery: "not_sent",
+      retryable: false,
+    });
+  });
+
+  test("Lettr treats partial recipient acceptance as unknown delivery", async () => {
+    await expect(
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture({ data: { request_id: "lttr_partial", accepted: 2, rejected: 1 } })
+          .fetch,
+      }).send({ ...message, to: "ada@example.com" }, context),
+    ).rejects.toMatchObject({
+      adapter: "lettr",
+      requestId: "lttr_partial",
+      delivery: "unknown",
       retryable: false,
     });
   });
@@ -1499,6 +1516,12 @@ describe("provider payloads", () => {
       lettr({
         apiKey: "lttr_key",
         fetch: jsonCapture({ data: { request_id: "lttr_missing_counts" } }).fetch,
+      }),
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture({
+          data: { request_id: "lttr_mismatched_counts", accepted: 1, rejected: 0 },
+        }).fetch,
       }),
     ];
 
@@ -1563,7 +1586,7 @@ describe("provider payloads", () => {
     expect(mailchimpCapture.calls[0]?.json.send_at).toBe("2026-07-10 12:30:00");
 
     const lettrCapture = jsonCapture(
-      { data: { request_id: "lttr_sched", accepted: 1, rejected: 0 } },
+      { data: { request_id: "lttr_sched", accepted: 3, rejected: 0 } },
       { status: 201 },
     );
     await lettr({ apiKey: "lttr_key", fetch: lettrCapture.fetch }).send(
