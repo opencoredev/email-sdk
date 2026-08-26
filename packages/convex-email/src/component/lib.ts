@@ -286,12 +286,13 @@ export const markFailedOrRetry = internalMutation({
   args: {
     emailId: v.id("emails"),
     error: v.string(),
+    retryable: v.boolean(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
-    await markEmailFailedOrRetry(ctx, email, args.error);
+    await markEmailFailedOrRetry(ctx, email, args.error, { retryable: args.retryable });
 
     return null;
   },
@@ -525,7 +526,7 @@ async function markEmailFailedOrRetry(
   ctx: any,
   email: any,
   error: string,
-  options: { immediate?: boolean } = {},
+  options: { immediate?: boolean; retryable?: boolean } = {},
 ) {
   if (!email || email.status === "sent" || email.status === "canceled") {
     return;
@@ -533,7 +534,7 @@ async function markEmailFailedOrRetry(
 
   const now = Date.now();
 
-  if (email.attemptCount < email.maxAttempts) {
+  if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate
       ? 0
       : Math.min(email.retryBaseMs * 2 ** Math.max(email.attemptCount - 1, 0), 60_000);

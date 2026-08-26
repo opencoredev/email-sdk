@@ -22,6 +22,8 @@ async function flushScheduled(t: TestConvex<typeof schema>) {
   await t.finishInProgressScheduledFunctions();
 }
 
+const nativeFetch = globalThis.fetch;
+
 const message = {
   from: "Acme <hello@example.com>",
   to: "ada@example.com",
@@ -49,6 +51,8 @@ async function sendToSent(t: TestConvex<typeof schema>) {
 
 describe("convex-email component", () => {
   afterEach(() => {
+    globalThis.fetch = nativeFetch;
+    delete process.env.LETTR_API_KEY;
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
@@ -312,6 +316,81 @@ describe("convex-email component", () => {
       lastError: expect.stringContaining("RESEND_API_KEY"),
     });
     expect(types).toEqual(["queued", "processing", "retry_scheduled", "processing", "failed"]);
+  });
+
+  test("does not retry a non-retryable partial provider failure", async () => {
+    const t = createTest();
+    let requests = 0;
+    process.env.LETTR_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+      return Response.json({
+        data: { request_id: "lttr_partial", accepted: 1, rejected: 1 },
+      });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      to: ["ada@example.com", "linus@example.com"],
+      adapters: [{ kind: "lettr" }],
+      adapter: "lettr",
+      maxAttempts: 3,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(requests).toBe(1);
+    expect(status).toMatchObject({
+      status: "failed",
+      attemptCount: 1,
+      lastError: "All configured email adapters failed.",
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      "queued",
+      "processing",
+      "provider_attempt",
+      "failed",
+    ]);
+  });
+
+  test("retries a retryable provider failure", async () => {
+    const t = createTest();
+    let requests = 0;
+    process.env.LETTR_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+      return Response.json({ message: "Email transmission failed." }, { status: 502 });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "lettr" }],
+      adapter: "lettr",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+    const events = await t.query(api.lib.listEvents, { emailId });
+
+    expect(requests).toBe(2);
+    expect(status).toMatchObject({ status: "failed", attemptCount: 2 });
+    expect(events.map((event) => event.type)).toEqual([
+      "queued",
+      "processing",
+      "provider_attempt",
+      "retry_scheduled",
+      "processing",
+      "provider_attempt",
+      "failed",
+    ]);
   });
 
   test("setConfig replaces the stored config instead of merging", async () => {

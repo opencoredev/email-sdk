@@ -1,5 +1,6 @@
 "use node";
 
+import { EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -75,6 +76,7 @@ export const processEmail = internalAction({
       await ctx.runMutation(markFailedOrRetryRef, {
         emailId: args.emailId,
         error: stringifyError(error),
+        retryable: isRetryableFailure(error),
       });
     }
 
@@ -104,6 +106,14 @@ export const handleWebhook = internalAction({
 
 function stringifyError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isRetryableFailure(error: unknown) {
+  if (error instanceof EmailRouteError) {
+    return error.failures.at(-1)?.retryable ?? false;
+  }
+
+  return error instanceof EmailSdkError ? error.retryable : true;
 }
 
 function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
