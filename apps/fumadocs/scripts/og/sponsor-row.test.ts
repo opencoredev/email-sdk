@@ -47,7 +47,7 @@ describe("og sponsor row", () => {
       "Notra",
     ];
     const short = sponsorRowLayout(fittingNames);
-    const long = sponsorRowLayout([...fittingNames, "Zernio"]);
+    const long = sponsorRowLayout([...fittingNames, "Zernio", "Customer.io"]);
 
     expect(short.scale).toBe(1);
     expect(long.scale).toBeLessThan(1);
