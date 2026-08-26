@@ -19,6 +19,7 @@ import {
 } from "@opencoredev/email-sdk/plugins/observability";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
+import { lettr } from "@opencoredev/email-sdk/lettr";
 import { loops } from "@opencoredev/email-sdk/loops";
 import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
 import { mailersend } from "@opencoredev/email-sdk/mailersend";
@@ -294,6 +295,15 @@ describe("documented adapter entry points", () => {
       }),
       richMessage,
       { message_id: "lettermint_1" },
+    ],
+    [
+      "lettr",
+      lettr({
+        apiKey: "test",
+        fetch: fetchOk({ data: { request_id: "lettr_1", accepted: 1, rejected: 0 } }).fetcher,
+      }),
+      { ...richMessage, to: "user@example.com" },
+      { data: { request_id: "lettr_1" } },
     ],
     [
       "primitive",

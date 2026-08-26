@@ -109,6 +109,10 @@
       "types": "./dist/lettermint.d.ts",
       "import": "./dist/lettermint.js"
     },
+    "./lettr": {
+      "types": "./dist/lettr.d.ts",
+      "import": "./dist/lettr.js"
+    },
     "./primitive": {
       "types": "./dist/primitive.d.ts",
       "import": "./dist/primitive.js"

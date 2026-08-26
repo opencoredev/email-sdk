@@ -17,6 +17,7 @@ Every adapter has tests for request building, validation, errors, and secret han
 - JetEmail
 - Primitive
 - Lettermint
+- Lettr
 
 ## How the release check works
 
@@ -34,6 +35,7 @@ Missing or invalid credentials fail the job.
 bun run live:resend
 bun run live:sequenzy
 bun run live:lettermint
+bun run live:lettr
 bun scripts/check-jetemail-account.ts
 bun scripts/check-primitive-account.ts
 ```

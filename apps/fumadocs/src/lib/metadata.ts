@@ -4,7 +4,7 @@ import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const siteTitle = `${appName} - Transactional email for TypeScript`;
 export const siteImageAlt =
-  "Email SDK: Transactional email across 23 adapters in one typed SDK";
+  "Email SDK: Transactional email across 24 adapters in one typed SDK";
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 
@@ -211,7 +211,7 @@ export const homeStructuredData = {
       name: "Email SDK transactional email integration",
       serviceType: "Transactional email integration",
       description:
-        "Send transactional email through 22 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
+        "Send transactional email through 23 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
       provider: {
         "@id": `${siteUrl}/#organization`,
       },

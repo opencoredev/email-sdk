@@ -9,6 +9,9 @@ const environment = { ...process.env };
 for (const key of Object.keys(environment)) {
   if (key.endsWith("_LIVE_SEND")) delete environment[key];
 }
+for (const adapter of known) {
+  environment[`${adapter.toUpperCase().replaceAll("-", "_")}_LIVE_SEND`] = "false";
+}
 
 for (const adapter of requested) {
   if (!known.has(adapter)) {

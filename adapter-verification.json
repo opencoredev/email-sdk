@@ -29,6 +29,11 @@
       "command": "bun run live:lettermint",
       "secret": "LETTERMINT_API_TOKEN",
       "evidence": "Authenticated validation-only request; sending is separately opt-in."
+    },
+    "lettr": {
+      "command": "bun run live:lettr",
+      "secret": "LETTR_API_KEY",
+      "evidence": "Authenticated validation-only send request; sending is separately opt-in."
     }
   }
 }

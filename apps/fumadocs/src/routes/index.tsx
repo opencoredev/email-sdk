@@ -103,7 +103,7 @@ function Hero() {
         </h1>
         <p>
           An open-source TypeScript SDK for transactional email.
-          <span className="landing-hero-brand-line">23 adapters. One typed SDK.</span>
+          <span className="landing-hero-brand-line">24 adapters. One typed SDK.</span>
         </p>
         <div className="landing-hero-actions">
           <DocsVersionLink className="landing-button landing-button-primary" docsPath="/docs/getting-started/quickstart">
@@ -268,7 +268,7 @@ function Adapters() {
           <h2 id="landing-adapters-heading">Adapters</h2>
           <div>
             <p>Use the provider account you already have. Your send calls stay the same.</p>
-            <DocsVersionLink docsPath="/docs/adapters">Explore all 23 →</DocsVersionLink>
+            <DocsVersionLink docsPath="/docs/adapters">Explore all 24 →</DocsVersionLink>
           </div>
         </div>
         <div className="landing-mobile-adapters-heading">
@@ -291,7 +291,7 @@ function Adapters() {
               {adapter.name}
             </DocsVersionLink>
           ))}
-          <DocsVersionLink docsPath="/docs/adapters">+ 18 more</DocsVersionLink>
+          <DocsVersionLink docsPath="/docs/adapters">+ 19 more</DocsVersionLink>
         </div>
       </div>
     </section>

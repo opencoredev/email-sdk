@@ -1,6 +1,6 @@
 ---
 title: Email SDK
-description: Send transactional email through 23 adapters with one typed TypeScript SDK.
+description: Send transactional email through 24 adapters with one typed TypeScript SDK.
 ---
 
 Install the SDK, add the adapter for your provider, and call `email.send()`. The message shape stays the same if you switch providers later.
@@ -22,7 +22,7 @@ Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugi
 
 ## Included
 
-- 22 provider API adapters plus SMTP, 23 adapters total
+- 23 provider API adapters plus SMTP, 24 adapters total
 - Typed adapter names in `send`, `validate`, `adapter`, and `withAdapter`
 - Retries on the current adapter, then fallback only when delivery is known to have failed
 - Independent `sendMany` calls and personalized `sendPersonalized` delivery

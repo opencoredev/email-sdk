@@ -34,6 +34,7 @@ export type Env = {
   JETEMAIL_API_KEY?: string;
   LETTERMINT_API_TOKEN?: string;
   LETTERMINT_ROUTE?: string;
+  LETTR_API_KEY?: string;
   LOOPS_API_KEY?: string;
   LOOPS_TRANSACTIONAL_ID?: string;
   MAILCHIMP_API_KEY?: string;

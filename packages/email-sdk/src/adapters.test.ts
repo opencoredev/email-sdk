@@ -6,6 +6,7 @@ import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
 import { lettermint } from "./lettermint.js";
+import { lettr } from "./lettr.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
 import { mailersend } from "./mailersend.js";
@@ -585,6 +586,17 @@ describe("provider payloads", () => {
           apiToken: "token",
           fetch: jsonCapture({ message_id: "lm_123", status: "pending" }).fetch,
         }),
+      },
+      {
+        name: "lettr",
+        provider: lettr({
+          apiKey: "token",
+          fetch: jsonCapture({ data: { request_id: "lttr_123", accepted: 1, rejected: 0 } }).fetch,
+        }),
+        message: {
+          ...message,
+          to: "ada@example.com",
+        },
       },
     ];
 
@@ -1401,6 +1413,106 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
+  test("Lettr maps normalized fields and encodes attachments", async () => {
+    const capture = jsonCapture({ data: { request_id: "lttr_123", accepted: 1, rejected: 0 } });
+
+    const response = await lettr({ apiKey: "lttr_key", fetch: capture.fetch }).send(
+      { ...message, to: "ada@example.com" },
+      context,
+    );
+
+    expect(response.id).toBe("lttr_123");
+    expect(capture.calls[0]?.url).toBe("https://app.lettr.com/api/emails");
+    expect(capture.calls[0]?.headers.get("authorization")).toBe("Bearer lttr_key");
+    expect(capture.calls[0]?.json).toMatchObject({
+      from: "hello@example.com",
+      from_name: "Acme",
+      to: ["ada@example.com"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      reply_to: "reply@example.com",
+      subject: "Welcome",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      tag: "welcome",
+      headers: { "X-Test": "yes" },
+      metadata: { userId: "user_123" },
+    });
+    expect(capture.calls[0]?.json.attachments[0]).toEqual({
+      name: "hello.txt",
+      type: "text/plain",
+      data: base64("hello"),
+    });
+  });
+
+  test("Lettr treats 4xx failures as not sent", async () => {
+    await expect(
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture(
+          { message: "The sender domain is not configured or approved for sending.", error_code: "unconfigured_domain" },
+          { status: 400 },
+        ).fetch,
+      }).send({ ...message, to: "ada@example.com" }, context),
+    ).rejects.toMatchObject({
+      adapter: "lettr",
+      status: 400,
+      delivery: "not_sent",
+      retryable: false,
+    });
+  });
+
+  test("Lettr treats a zero-accept response as not sent", async () => {
+    await expect(
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture({ data: { request_id: "lttr_0", accepted: 0, rejected: 2 } }).fetch,
+      }).send({ ...message, to: "ada@example.com" }, context),
+    ).rejects.toMatchObject({
+      adapter: "lettr",
+      requestId: "lttr_0",
+      delivery: "not_sent",
+      retryable: false,
+    });
+  });
+
+  test("Lettr treats 5xx failures as retryable with unknown delivery", async () => {
+    await expect(
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture({ message: "Email transmission failed." }, { status: 502 }).fetch,
+      }).send({ ...message, to: "ada@example.com" }, context),
+    ).rejects.toMatchObject({
+      adapter: "lettr",
+      status: 502,
+      delivery: "unknown",
+      retryable: true,
+    });
+  });
+
+  test("Lettr rejects malformed success responses", async () => {
+    const adapters = [
+      lettr({
+        apiKey: "lttr_key",
+        fetch: async () => new Response("not json", { status: 200 }),
+      }),
+      lettr({
+        apiKey: "lttr_key",
+        fetch: jsonCapture({ data: { request_id: "lttr_missing_counts" } }).fetch,
+      }),
+    ];
+
+    for (const adapter of adapters) {
+      await expect(
+        adapter.send({ ...message, to: "ada@example.com" }, context),
+      ).rejects.toMatchObject({
+        adapter: "lettr",
+        delivery: "unknown",
+        retryable: false,
+      });
+    }
+  });
+
   test("adapters map sendAt to their native scheduling parameters", async () => {
     const sendAt = new Date("2026-07-10T12:30:00.000Z");
     const scheduledMessage: EmailMessage = { ...messageWithoutMetadata, sendAt };
@@ -1449,6 +1561,17 @@ describe("provider payloads", () => {
       context,
     );
     expect(mailchimpCapture.calls[0]?.json.send_at).toBe("2026-07-10 12:30:00");
+
+    const lettrCapture = jsonCapture(
+      { data: { request_id: "lttr_sched", accepted: 1, rejected: 0 } },
+      { status: 201 },
+    );
+    await lettr({ apiKey: "lttr_key", fetch: lettrCapture.fetch }).send(
+      { ...scheduledMessage, to: "ada@example.com" },
+      context,
+    );
+    expect(lettrCapture.calls[0]?.url).toBe("https://app.lettr.com/api/emails/scheduled");
+    expect(lettrCapture.calls[0]?.json.scheduled_at).toBe("2026-07-10T12:30:00.000Z");
   });
 
   test("native batch sends carry sendAt in the same scheduled call", async () => {
@@ -1734,6 +1857,81 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toThrow("lettermint only supports 1 tag per message");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        {
+          ...message,
+          to: "ada@example.com",
+          tags: [
+            { name: "kind", value: "welcome" },
+            { name: "plan", value: "pro" },
+          ],
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettr only supports 1 tag per message");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        { ...message, to: "ada@example.com", replyTo: ["reply@example.com", "support@example.com"] },
+        context,
+      ),
+    ).rejects.toThrow("lettr only supports 1 replyTo per message");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        message,
+        context,
+      ),
+    ).rejects.toThrow("lettr recipient fields only support plain email addresses");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        {
+          ...message,
+          to: Array.from({ length: 51 }, (_, index) => `user${index}@example.com`),
+          cc: undefined,
+          bcc: undefined,
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettr only supports 50 recipients per message");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        {
+          ...message,
+          to: "ada@example.com",
+          attachments: [{ filename: "logo.png", content: "x", contentType: "image/png", contentId: "logo" }],
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettr does not support inline attachments");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        {
+          ...message,
+          to: "ada@example.com",
+          headers: { "List-Unsubscribe": "<mailto:unsub@example.com>" },
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettr does not allow setting the List-Unsubscribe header");
+
+    await expect(
+      lettr({ apiKey: "lttr", fetch: jsonCapture({ data: { request_id: "lttr_123" } }).fetch }).send(
+        {
+          ...message,
+          to: "ada@example.com",
+          headers: Object.fromEntries(
+            Array.from({ length: 11 }, (_, index) => [`X-Test-${index}`, "value"]),
+          ),
+        },
+        context,
+      ),
+    ).rejects.toThrow("lettr only supports 10 headers per message");
 
     await expect(
       brevo({ apiKey: "key", fetch: jsonCapture({ messageId: "brevo_123" }).fetch }).send(

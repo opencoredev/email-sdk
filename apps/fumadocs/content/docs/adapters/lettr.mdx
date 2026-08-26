@@ -1,0 +1,113 @@
+---
+title: Lettr
+description: Send through Lettr's SaaS email API with CC, BCC, reply-to, headers, metadata, a single tag, attachments, and scheduled delivery.
+icon: lettr
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `none` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Lettr adapter calls Lettr's `POST /emails` endpoint with plain `fetch`. Scheduled messages use `POST /emails/scheduled` instead. [Lettr](https://lettr.com/?utm_source=email-sdk.dev&utm_medium=referral&utm_campaign=sponsor) is a European email platform for SaaS products. It authenticates with a Bearer API key.
+
+<ProviderBadge adapter="lettr" />
+
+## Configure
+
+Create a Lettr API key (prefixed `lttr_` or `lttr_sandbox_`) and verify the sending domain for live keys. Sandbox keys rewrite the sender domain to `dev.uselettr.com` and deliver to the key owner's inbox.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { lettr } from "@opencoredev/email-sdk/lettr";
+
+export const email = createEmailClient({
+  adapters: [lettr({ apiKey: process.env.LETTR_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Lettr API key, sent in the Authorization Bearer header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API origin, e.g. for a proxy.",
+      type: "string",
+      default: '"https://app.lettr.com/api"',
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+    headers: {
+      description: "Extra headers merged into every request.",
+      type: "Record<string, string>",
+    },
+  }}
+/>
+
+## Send
+
+Lettr accepts multiple recipients, CC, BCC, one reply-to, custom headers, metadata, one tag, and base64 attachments. Display names on `from` and `replyTo` map to `from_name` and `reply_to_name`. Recipient addresses are sent as bare emails.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome to Acme",
+  html: "<p>Thanks for joining Acme.</p>",
+  text: "Thanks for joining Acme.",
+});
+
+console.log(result.id); // Lettr request_id
+```
+
+<Callout type="warn" title="One tag, one reply-to, no inline images">
+  Lettr stores a single `tag` string per email. The adapter sends the first tag's value and
+  throws if a message has more than one tag, more than one reply-to, more than 10 custom
+  headers, an inline attachment, or a recipient display name. Combined `to`, `cc`, and `bcc`
+  cannot exceed 50 addresses.
+</Callout>
+
+<Callout title="From a verified sending domain">
+  Live keys require a verified sender domain. Sandbox keys skip that check and rewrite the
+  domain to `dev.uselettr.com`.
+</Callout>
+
+## Schedule a send
+
+Pass `sendAt` to use Lettr's scheduled endpoint. Lettr requires the time to be at least five minutes in the future and within three days.
+
+```ts
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Reminder",
+  text: "Don't forget.",
+  sendAt: new Date("2026-09-01T09:00:00.000Z"),
+});
+```
+
+## Verify from the CLI
+
+```bash
+LETTR_API_KEY="lttr_..." npx email-sdk doctor --adapter lettr
+```
+
+```bash
+LETTR_API_KEY="lttr_..." npx email-sdk send \
+  --adapter lettr \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Lettr smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. Use a sandbox key when you want the message delivered to your own inbox.

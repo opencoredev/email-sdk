@@ -8,9 +8,9 @@ import { appName, siteUrl } from "@/lib/shared";
 // instead of marketing HTML. Kept in sync by hand with the homepage hero copy.
 const body = `# ${appName}
 
-> An open-source TypeScript SDK for transactional email. 23 adapters. One typed SDK.
+> An open-source TypeScript SDK for transactional email. 24 adapters. One typed SDK.
 
-${appName} is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 22 provider APIs plus SMTP — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
+${appName} is an open-source TypeScript SDK (npm: \`@opencoredev/email-sdk\`) for sending transactional email through 23 provider APIs plus SMTP — Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more — behind one typed \`send()\` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
 
 ## Install
 
