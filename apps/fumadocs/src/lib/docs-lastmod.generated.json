@@ -1,7 +1,7 @@
 {
   "adapters/brevo.mdx": "2026-07-22",
   "adapters/capability-groups.mdx": "2026-07-22",
-  "adapters/cloudflare.mdx": "2026-07-22",
+  "adapters/cloudflare.mdx": "2026-08-08",
   "adapters/field-support.mdx": "2026-07-22",
   "adapters/index.mdx": "2026-07-27",
   "adapters/iterable.mdx": "2026-07-22",
@@ -54,7 +54,7 @@
   "integrations/chat-sdk.mdx": "2026-07-22",
   "integrations/convex/index.mdx": "2026-07-22",
   "integrations/convex/sending-and-status.mdx": "2026-07-22",
-  "integrations/convex/setup.mdx": "2026-07-22",
+  "integrations/convex/setup.mdx": "2026-08-03",
   "integrations/convex/testing-and-recovery.mdx": "2026-07-22",
   "integrations/convex/webhooks.mdx": "2026-07-22",
   "plugins/built-in/capture.mdx": "2026-07-22",

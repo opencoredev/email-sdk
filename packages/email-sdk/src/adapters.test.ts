@@ -326,6 +326,105 @@ describe("provider payloads", () => {
     ).rejects.toThrow("cloudflare failed.");
   });
 
+  test("Cloudflare sends via Worker binding", async () => {
+    let sentPayload: any;
+    const binding = {
+      async send(payload: any) {
+        sentPayload = payload;
+        return { messageId: "msg_123" };
+      },
+    };
+
+    const adapter = cloudflare({ binding });
+    expect(adapter.raw).toEqual({ binding });
+
+    const response = await adapter.send(
+      {
+        ...cloudflareMessage,
+        to: "ada@example.com",
+        cc: "cc@example.com",
+        bcc: "bcc@example.com",
+        replyTo: { email: "reply@example.com", name: "Support" },
+        attachments: [
+          {
+            filename: "hello.txt",
+            content: "hello",
+            contentType: "text/plain",
+            contentId: "hello-file",
+          },
+        ],
+      },
+      context,
+    );
+
+    expect(response.id).toBe("msg_123");
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
+    expect(sentPayload).toEqual({
+      from: { email: "hello@example.com", name: "Acme" },
+      to: ["ada@example.com"],
+      cc: ["cc@example.com"],
+      bcc: ["bcc@example.com"],
+      replyTo: { email: "reply@example.com", name: "Support" },
+      subject: "Welcome",
+      text: "Hello",
+      html: "<p>Hello</p>",
+      headers: { "X-Test": "yes" },
+      attachments: [
+        {
+          content: base64("hello"),
+          filename: "hello.txt",
+          type: "text/plain",
+          disposition: "inline",
+          contentId: "hello-file",
+        },
+      ],
+    });
+  });
+
+  test("Cloudflare binding accepts a successful send without a result", async () => {
+    const binding = {
+      async send() {},
+    };
+
+    const response = await cloudflare({ binding }).send(cloudflareMessage, context);
+
+    expect(response).toEqual({
+      adapter: "cloudflare",
+      id: undefined,
+      accepted: ["ada@example.com", "cc@example.com", "bcc@example.com"],
+      raw: undefined,
+    });
+  });
+
+  test("Cloudflare binding surfaces send errors", async () => {
+    const binding = {
+      async send() {
+        throw new Error("Binding send failed");
+      },
+    };
+
+    await expect(cloudflare({ binding }).send(cloudflareMessage, context)).rejects.toThrow(
+      "cloudflare failed: Binding send failed",
+    );
+  });
+
+  test("Cloudflare binding marks transient service errors as retryable", async () => {
+    const binding = {
+      async send() {
+        throw Object.assign(new Error("Rate limit exceeded"), {
+          code: "E_RATE_LIMIT_EXCEEDED",
+        });
+      },
+    };
+
+    const error = await cloudflare({ binding })
+      .send(cloudflareMessage, context)
+      .catch((failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(EmailAdapterError);
+    expect((error as EmailAdapterError).retryable).toBe(true);
+  });
+
   test("Cloudflare exposes a safe HTTP error without the raw response body", async () => {
     const error = await cloudflare({
       apiToken: "cf_token",
