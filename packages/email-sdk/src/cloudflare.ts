@@ -14,27 +14,35 @@ export type CloudflareSendEmailAddress =
   | string
   | {
       email: string;
-      name?: string;
+      name: string;
     };
 
-export type CloudflareSendEmailAttachment = {
-  content: string;
-  filename: string;
-  type: string;
-  disposition: "attachment" | "inline";
-  contentId?: string;
-};
+export type CloudflareSendEmailAttachment =
+  | {
+      content: string | ArrayBuffer | ArrayBufferView;
+      filename: string;
+      type: string;
+      disposition: "inline";
+      contentId: string;
+    }
+  | {
+      content: string | ArrayBuffer | ArrayBufferView;
+      filename: string;
+      type: string;
+      disposition: "attachment";
+      contentId?: undefined;
+    };
 
 export type CloudflareSendEmailMessage = {
   from: CloudflareSendEmailAddress;
-  to: CloudflareSendEmailAddress | readonly CloudflareSendEmailAddress[];
+  to: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
   subject: string;
   html?: string;
   text?: string;
-  cc?: CloudflareSendEmailAddress | readonly CloudflareSendEmailAddress[];
-  bcc?: CloudflareSendEmailAddress | readonly CloudflareSendEmailAddress[];
+  cc?: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
+  bcc?: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
   replyTo?: CloudflareSendEmailAddress;
-  attachments?: readonly CloudflareSendEmailAttachment[];
+  attachments?: CloudflareSendEmailAttachment[];
   headers?: Record<string, string>;
 };
 
@@ -113,13 +121,22 @@ function fromBinding(
         html: message.html,
         text: message.text,
         headers: commonHeadersObject(message),
-        attachments: attachments?.map((attachment) => ({
-          content: attachment.content!,
-          filename: attachment.filename,
-          type: attachment.contentType ?? "application/octet-stream",
-          disposition: attachment.disposition ?? "attachment",
-          contentId: attachment.contentId,
-        })),
+        attachments: attachments?.map((attachment) =>
+          attachment.contentId
+            ? {
+                content: attachment.content!,
+                filename: attachment.filename,
+                type: attachment.contentType ?? "application/octet-stream",
+                disposition: "inline" as const,
+                contentId: attachment.contentId,
+              }
+            : {
+                content: attachment.content!,
+                filename: attachment.filename,
+                type: attachment.contentType ?? "application/octet-stream",
+                disposition: "attachment" as const,
+              },
+        ),
       };
 
       try {
@@ -145,7 +162,7 @@ function fromBinding(
         throw new EmailAdapterError(`cloudflare failed: ${errorMessage}`, {
           adapter: "cloudflare",
           cause: error,
-          retryable: false,
+          retryable: isRetryableCloudflareBindingError(error),
         });
       }
     },
@@ -299,6 +316,14 @@ function assertCloudflareLimits(message: EmailMessage) {
   const recipients = [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)];
 
   assertMaxItems("cloudflare", "recipient", recipients, 50);
+}
+
+function isRetryableCloudflareBindingError(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return false;
+  }
+
+  return ["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR"].includes(String(error.code));
 }
 
 function cloudflareErrorMessage(body: CloudflareSendResponse) {

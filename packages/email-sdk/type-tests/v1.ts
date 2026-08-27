@@ -1,3 +1,4 @@
+import { cloudflare } from "../src/cloudflare.js";
 import { createEmailClient } from "../src/index.js";
 import type { EmailAdapter, EmailHookEvent, EmailMessage } from "../src/index.js";
 import { smtp } from "../src/smtp.js";
@@ -95,6 +96,41 @@ const hookEvent: EmailHookEvent = {
   message: validAttachment,
 };
 void hookEvent;
+
+type GeneratedCloudflareEmailAddress = string | { email: string; name: string };
+type GeneratedCloudflareAttachment =
+  | {
+      disposition: "inline";
+      contentId: string;
+      filename: string;
+      type: string;
+      content: string | ArrayBuffer | ArrayBufferView;
+    }
+  | {
+      disposition: "attachment";
+      contentId?: undefined;
+      filename: string;
+      type: string;
+      content: string | ArrayBuffer | ArrayBufferView;
+    };
+type GeneratedCloudflareMessage = {
+  from: GeneratedCloudflareEmailAddress;
+  to: GeneratedCloudflareEmailAddress | GeneratedCloudflareEmailAddress[];
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: GeneratedCloudflareEmailAddress | GeneratedCloudflareEmailAddress[];
+  bcc?: GeneratedCloudflareEmailAddress | GeneratedCloudflareEmailAddress[];
+  replyTo?: GeneratedCloudflareEmailAddress;
+  attachments?: GeneratedCloudflareAttachment[];
+  headers?: Record<string, string>;
+};
+type GeneratedCloudflareSendEmail = {
+  send(message: { readonly from: string; readonly to: string }): Promise<{ messageId: string }>;
+  send(message: GeneratedCloudflareMessage): Promise<{ messageId: string }>;
+};
+declare const generatedCloudflareBinding: GeneratedCloudflareSendEmail;
+cloudflare({ binding: generatedCloudflareBinding });
 
 // @ts-expect-error the v1 root does not export legacy provider types
 import type { EmailProvider } from "../src/index.js";

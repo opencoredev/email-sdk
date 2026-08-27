@@ -373,7 +373,7 @@ describe("provider payloads", () => {
           content: base64("hello"),
           filename: "hello.txt",
           type: "text/plain",
-          disposition: "attachment",
+          disposition: "inline",
           contentId: "hello-file",
         },
       ],
@@ -405,6 +405,23 @@ describe("provider payloads", () => {
     await expect(cloudflare({ binding }).send(cloudflareMessage, context)).rejects.toThrow(
       "cloudflare failed: Binding send failed",
     );
+  });
+
+  test("Cloudflare binding marks transient service errors as retryable", async () => {
+    const binding = {
+      async send() {
+        throw Object.assign(new Error("Rate limit exceeded"), {
+          code: "E_RATE_LIMIT_EXCEEDED",
+        });
+      },
+    };
+
+    const error = await cloudflare({ binding })
+      .send(cloudflareMessage, context)
+      .catch((failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(EmailAdapterError);
+    expect((error as EmailAdapterError).retryable).toBe(true);
   });
 
   test("Cloudflare exposes a safe HTTP error without the raw response body", async () => {
