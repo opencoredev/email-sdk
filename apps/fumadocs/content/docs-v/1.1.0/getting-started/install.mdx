@@ -1,0 +1,63 @@
+---
+title: Install
+description: Install the ESM-only SDK for Node.js 20+ or Bun 1.1+.
+---
+
+<Steps>
+
+<Step>
+
+### Install the package
+
+<PackageInstallTabs />
+
+The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package is unrelated.
+
+</Step>
+
+<Step>
+
+### Confirm your runtime
+
+Use Node.js 20+ or Bun 1.1+. The package is ESM-only, so use `import` syntax or dynamic `import()` from a CommonJS application.
+
+```json title="package.json"
+{
+  "type": "module"
+}
+```
+
+</Step>
+
+<Step>
+
+### Import one adapter
+
+Adapters use separate package entry points, so your application imports only the integrations it uses.
+
+```ts title="email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+```
+
+</Step>
+
+<Step>
+
+### Verify the CLI
+
+A project install exposes the `email-sdk` binary. The built CLI uses a Node shebang and also runs under Bun.
+
+```bash
+npx email-sdk version
+npx email-sdk adapters
+```
+
+For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` after the formula points at a published release.
+
+</Step>
+
+</Steps>
+
+<Card title="Quickstart" href="/docs/getting-started/quickstart" description="Create a client and send a validated message." />
+<Card title="Provider credentials" href="/docs/getting-started/credentials" description="Set the environment variables required by your adapter." />

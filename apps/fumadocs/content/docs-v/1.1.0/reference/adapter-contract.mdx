@@ -1,0 +1,74 @@
+---
+title: Adapter contract
+description: Exact v1 adapter capabilities, validation context, send context, personalized operation, and result contract.
+---
+
+```ts title="types.ts"
+type EmailAdapter<Name extends string = string, RawClient = unknown, RawResult = unknown> = {
+  readonly name: Name;
+  readonly capabilities: EmailAdapterCapabilities;
+  readonly raw?: RawClient;
+  validate?(message: EmailMessage, context: EmailAdapterValidationContext): MaybePromise<void>;
+  send(
+    message: EmailMessage,
+    context: EmailAdapterContext,
+  ): MaybePromise<EmailSendResult<Name, RawResult>>;
+  sendPersonalized?(
+    input: EmailPersonalizedInput,
+    context: EmailAdapterContext,
+  ): MaybePromise<EmailPersonalizedResult<Name>>;
+};
+```
+
+## Capabilities
+
+```ts title="types.ts"
+type EmailAdapterCapabilities = {
+  repeatedHeaders: boolean;
+  idempotency: "native" | "message_id" | "none";
+  scheduling: boolean;
+  personalized: "native" | "expanded" | "unsupported";
+};
+```
+
+Capabilities are enforced by the client. They do not replace adapter-specific field and limit validation.
+
+## Validation context
+
+```ts title="types.ts"
+type EmailAdapterValidationContext = {
+  adapter: string;
+  operation: "send" | "personalized";
+};
+```
+
+`validate` must be deterministic and no-network. It runs for every candidate route before the first adapter send.
+
+## Send context
+
+```ts title="types.ts"
+type EmailAdapterContext = EmailAdapterValidationContext & {
+  attempt: number;
+  signal?: AbortSignal;
+  idempotencyKey?: string;
+  metadata?: Readonly<Record<string, unknown>>;
+};
+```
+
+Forward `signal` to network work. Honor idempotency only when the provider or transport supports the declared capability.
+
+## Results
+
+Return the adapter routing name and normalized receipt fields. `raw` may keep an adapter-specific typed response for application code, but AI integrations intentionally project it away.
+
+## Failures
+
+Throw `EmailValidationError` for caller input the adapter can reject before dispatch. Throw `EmailAdapterError` for provider or transport failures.
+
+`delivery: "not_sent"` requires proof that the provider did not accept the message. Use `unknown` for timeouts and failures after possible dispatch.
+
+## Personalized operation
+
+Implement `sendPersonalized` only for a native bulk/personalization API. Adapters with `personalized: "expanded"` can omit it; the client renders and sends recipients sequentially.
+
+<Card title="Create an adapter" href="/docs/guides/authoring/create-adapter" description="Build and test a complete implementation." />
