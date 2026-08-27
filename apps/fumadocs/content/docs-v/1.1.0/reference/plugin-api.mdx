@@ -1,0 +1,69 @@
+---
+title: Plugin API
+description: Exact plugin context, hooks, middleware, adapter registration, and typed client extension contracts.
+---
+
+## `EmailPlugin`
+
+```ts title="types.ts"
+type EmailPlugin<Extension extends object = object> = {
+  id: string;
+  adapters?: EmailAdapter[] | ((ctx: EmailPluginContext) => EmailAdapter[]);
+  hooks?: EmailHooks;
+  middleware?: EmailSendMiddleware[];
+  extendClient?: (ctx: EmailPluginContext) => Extension;
+};
+```
+
+Plugin ids are unique. Adapter registration and client extensions run synchronously during construction.
+
+## Plugin context
+
+```ts title="types.ts"
+type EmailPluginContext = {
+  adapters: ReadonlyMap<string, EmailAdapter>;
+  defaultAdapter: string;
+  addAdapter(adapter: EmailAdapter): void;
+};
+```
+
+`addAdapter` rejects duplicate route names.
+
+## Hooks
+
+```ts title="types.ts"
+type EmailHooks = {
+  beforeSend?(event: EmailHookEvent): MaybePromise<void>;
+  afterSend?(event: EmailAfterSendEvent): MaybePromise<void>;
+  onError?(event: EmailErrorEvent): MaybePromise<void>;
+  onRetry?(event: EmailHookEvent & {
+    error: EmailSdkError;
+    nextAttempt: number;
+    delayMs: number;
+  }): MaybePromise<void>;
+};
+```
+
+Hook exceptions are swallowed. Use them only for best-effort observation.
+
+## Middleware
+
+```ts title="types.ts"
+type EmailSendMiddleware = {
+  beforeSend?(event: EmailBeforeSendEvent): MaybePromise<EmailBeforeSendResult | void>;
+  afterSend?(event: EmailAfterSendEvent): MaybePromise<void>;
+  onError?(event: EmailErrorEvent): MaybePromise<void>;
+};
+```
+
+`beforeSend` may replace the message and/or send options. Middleware exceptions become `EmailMiddlewareError` with a phase.
+
+Multiple `beforeSend` middleware entries run in order. Replacement options shallowly merge into the current options.
+
+## Client extensions
+
+`extendClient` returns an object merged into the client. The resulting extension type is the intersection of every plugin extension.
+
+Reserved-key collisions throw `EmailValidationError` during construction.
+
+<Card title="Create a plugin" href="/docs/guides/authoring/create-first-plugin" description="Build a typed middleware and extension example." />
