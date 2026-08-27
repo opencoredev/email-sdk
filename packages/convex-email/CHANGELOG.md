@@ -1,5 +1,17 @@
 # @opencoredev/convex-email
 
+## 3.0.0
+
+### Minor Changes
+
+- 92d4fb6: Add a Lettr adapter for transactional sends through Lettr's REST API. Convex Email now preserves normalized provider failure metadata and does not retry non-retryable delivery failures.
+
+### Patch Changes
+
+- Updated dependencies [3b46d04]
+- Updated dependencies [92d4fb6]
+  - @opencoredev/email-sdk@1.2.0
+
 ## 2.0.0
 
 ### Minor Changes
