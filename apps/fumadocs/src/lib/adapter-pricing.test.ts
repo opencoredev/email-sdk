@@ -48,6 +48,38 @@ describe("adapter pricing", () => {
     });
   });
 
+  test("Lettr uses published volume tiers", () => {
+    const row = adapterPricing.find((entry) => entry.provider.key === "lettr");
+
+    expect(row).toBeDefined();
+    expect(getPrice(row!, 1_000)).toMatchObject({ kind: "money", currency: "USD", cents: 0 });
+    expect(getPrice(row!, 50_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 1_500,
+    });
+    expect(getPrice(row!, 100_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 3_000,
+    });
+    expect(getPrice(row!, 250_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 25_000,
+    });
+    expect(getPrice(row!, 500_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 25_000,
+    });
+    expect(getPrice(row!, 1_000_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 45_000,
+    });
+  });
+
   test("searches by provider name and filters selected-volume status", () => {
     expect(
       getAdapterPricingRows({ query: "SeQuEnZy" }).map((row) => row.provider.key),
