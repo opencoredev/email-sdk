@@ -16,8 +16,10 @@ import {
 import { useMDXComponents } from "@/components/mdx";
 import { VersionPicker } from "@/components/version-picker";
 import { getLatestDocsRedirect } from "@/lib/docs-redirects";
+import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { baseOptions } from "@/lib/layout.shared";
-import { appName, gitConfig, siteUrl } from "@/lib/shared";
+import { buildDocsStructuredData, siteImageAlt } from "@/lib/metadata";
+import { appName, gitConfig, siteOgImageUrl, siteUrl } from "@/lib/shared";
 import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
 import {
   type DocsVersionCollection,
@@ -58,6 +60,9 @@ export const Route = createFileRoute("/docs/$")({
     // Old-version docs stay reachable (version picker, inbound links) but must
     // not compete with current docs in search; "follow" preserves link equity.
     const isCurrentVersion = !data || data.docsBasePath === "/docs";
+    const dateModified = data
+      ? ((docsLastmod as Record<string, string>)[data.path] ?? "2026-06-01")
+      : "2026-06-01";
 
     return {
       meta: [
@@ -68,6 +73,23 @@ export const Route = createFileRoute("/docs/$")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:url", content: canonicalUrl },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: description },
+        { name: "twitter:image", content: siteOgImageUrl },
+        { name: "twitter:image:alt", content: siteImageAlt },
+        ...(data && isCurrentVersion
+          ? [
+              {
+                "script:ld+json": buildDocsStructuredData({
+                  canonicalUrl,
+                  dateModified,
+                  description,
+                  title: data.title,
+                }),
+              },
+            ]
+          : []),
       ],
       links: [{ rel: "canonical", href: canonicalUrl }],
     };
