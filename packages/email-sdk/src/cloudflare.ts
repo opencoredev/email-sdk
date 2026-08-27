@@ -39,11 +39,11 @@ export type CloudflareSendEmailMessage = {
 };
 
 export type CloudflareSendEmailResult = {
-  messageId: string;
+  messageId?: string;
 };
 
 export type CloudflareSendEmailBinding = {
-  send(message: CloudflareSendEmailMessage): Promise<CloudflareSendEmailResult>;
+  send(message: CloudflareSendEmailMessage): Promise<CloudflareSendEmailResult | void>;
 };
 
 export type CloudflareHttpAdapterOptions = {
@@ -133,7 +133,7 @@ function fromBinding(
 
         return {
           adapter: "cloudflare",
-          id: result.messageId,
+          id: result?.messageId,
           accepted,
           raw: result ?? undefined,
         };

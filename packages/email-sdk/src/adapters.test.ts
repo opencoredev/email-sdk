@@ -380,6 +380,21 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Cloudflare binding accepts a successful send without a result", async () => {
+    const binding = {
+      async send() {},
+    };
+
+    const response = await cloudflare({ binding }).send(cloudflareMessage, context);
+
+    expect(response).toEqual({
+      adapter: "cloudflare",
+      id: undefined,
+      accepted: ["ada@example.com", "cc@example.com", "bcc@example.com"],
+      raw: undefined,
+    });
+  });
+
   test("Cloudflare binding surfaces send errors", async () => {
     const binding = {
       async send() {
