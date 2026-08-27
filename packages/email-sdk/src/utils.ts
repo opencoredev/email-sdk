@@ -492,7 +492,7 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   scaleway: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
   mailpace: { cc: true, bcc: true, replyTo: true },
-  smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+  smtp: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
 } satisfies Record<string, MessageFieldSupport>;
 
 const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive"]);
@@ -634,7 +634,47 @@ export function validateBuiltInAdapter(
 					`SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
 				);
 			}
-		}
+    }
+    for (const attachment of message.attachments ?? []) {
+      if (
+        typeof attachment.filename !== "string" ||
+        !/^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/.test(attachment.filename)
+      ) {
+        throw new EmailValidationError(
+          `SMTP attachment filename ${JSON.stringify(attachment.filename)} contains invalid characters.`,
+        );
+      }
+      if (
+        attachment.contentType !== undefined &&
+        (typeof attachment.contentType !== "string" ||
+          !/^[A-Za-z0-9!#$%&'*+.^_`{|}~-]+\/[A-Za-z0-9!#$%&'*+.^_`{|}~-]+$/.test(
+            attachment.contentType,
+          ))
+      ) {
+        throw new EmailValidationError(
+          `SMTP attachment content type ${JSON.stringify(attachment.contentType)} contains invalid characters.`,
+        );
+      }
+      if (
+        attachment.contentId !== undefined &&
+        (typeof attachment.contentId !== "string" ||
+          !/^[\x21-\x7e]+$/.test(attachment.contentId) ||
+          /[\s<>]/.test(attachment.contentId))
+      ) {
+        throw new EmailValidationError(
+          `SMTP attachment content ID ${JSON.stringify(attachment.contentId)} contains invalid characters.`,
+        );
+      }
+      if (
+        attachment.disposition !== undefined &&
+        attachment.disposition !== "attachment" &&
+        attachment.disposition !== "inline"
+      ) {
+        throw new EmailValidationError(
+          `SMTP attachment disposition ${JSON.stringify(attachment.disposition)} contains invalid characters.`,
+        );
+      }
+    }
   }
 }
 

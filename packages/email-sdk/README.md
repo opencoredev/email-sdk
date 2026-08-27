@@ -46,7 +46,7 @@ console.log(result.adapter, result.id);
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
 - Retries inside one adapter, then fallback only when your fallback policy allows it.
 - Sequential `sendMany` for independent sends and `sendPersonalized` for recipient variables.
-- Built-in SMTP transport with no Nodemailer dependency.
+- Built-in SMTP transport with attachment support and no Nodemailer dependency.
 - Hooks and middleware for logs, metrics, traces, defaults, and capture stores.
 - Test adapters that never call a real provider.
 - A bundled CLI for adapter discovery, setup checks, and dry-run validation.
