@@ -330,7 +330,7 @@ describe("provider payloads", () => {
     const binding = {
       async send(payload: any) {
         sentPayload = payload;
-        return { id: "msg_123" };
+        return { messageId: "msg_123" };
       },
     };
 
@@ -343,23 +343,40 @@ describe("provider payloads", () => {
         to: "ada@example.com",
         cc: "cc@example.com",
         bcc: "bcc@example.com",
+        replyTo: { email: "reply@example.com", name: "Support" },
+        attachments: [
+          {
+            filename: "hello.txt",
+            content: "hello",
+            contentType: "text/plain",
+            contentId: "hello-file",
+          },
+        ],
       },
       context,
     );
 
     expect(response.id).toBe("msg_123");
     expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
-    expect(sentPayload).toMatchObject({
-      from: { address: "hello@example.com", name: "Acme" },
+    expect(sentPayload).toEqual({
+      from: { email: "hello@example.com", name: "Acme" },
       to: ["ada@example.com"],
       cc: ["cc@example.com"],
       bcc: ["bcc@example.com"],
-      replyTo: "reply@example.com",
-      reply_to: "reply@example.com",
+      replyTo: { email: "reply@example.com", name: "Support" },
       subject: "Welcome",
       text: "Hello",
       html: "<p>Hello</p>",
       headers: { "X-Test": "yes" },
+      attachments: [
+        {
+          content: base64("hello"),
+          filename: "hello.txt",
+          type: "text/plain",
+          disposition: "attachment",
+          contentId: "hello-file",
+        },
+      ],
     });
   });
 

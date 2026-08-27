@@ -24,10 +24,13 @@ In a Cloudflare Worker, bind Email Sending in your `wrangler.json` (or `wrangler
 
 ```ts title="src/index.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
-import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+import {
+  cloudflare,
+  type CloudflareSendEmailBinding,
+} from "@opencoredev/email-sdk/cloudflare";
 
 export interface Env {
-  SEB: { send(message: any): Promise<unknown> };
+  SEB: CloudflareSendEmailBinding;
 }
 
 export default {
