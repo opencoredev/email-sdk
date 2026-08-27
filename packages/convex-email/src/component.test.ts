@@ -674,6 +674,102 @@ describe("convex-email component", () => {
     }
   });
 
+  test("ignores stale worker completion after a processing lease is recovered", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+
+    Date.now = () => startedAt;
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        idempotencyKey: "stale-lease:ada@example.com",
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 2,
+      });
+      const staleWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+      await t.mutation(api.lib.processDueEmails, { limit: 25 });
+      const currentWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+      expect(staleWorker?.processingLease).toBe(1);
+      expect(currentWorker?.processingLease).toBe(2);
+
+      expect(
+        await t.mutation(api.lib.markSent, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          response: { id: "stale-provider-id", adapter: "memory" },
+        }),
+      ).toBe(false);
+      expect(
+        await t.mutation(api.lib.markFailedOrRetry, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          error: "late stale worker failure",
+        }),
+      ).toBe(false);
+      expect(
+        await t.mutation(api.lib.recordProviderAttempt, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          adapter: "memory",
+          attempt: 1,
+        }),
+      ).toBe(false);
+
+      const statusBeforeCurrentCompletion = await t.query(api.lib.status, { emailId });
+      expect(statusBeforeCurrentCompletion).toMatchObject({
+        status: "processing",
+        processingLease: currentWorker?.processingLease,
+      });
+
+      expect(
+        await t.mutation(api.lib.markSent, {
+          emailId,
+          processingLease: currentWorker!.processingLease,
+          response: { id: "current-provider-id", adapter: "memory" },
+        }),
+      ).toBe(true);
+
+      const status = await t.query(api.lib.status, { emailId });
+      const events = await t.query(api.lib.listEvents, { emailId });
+      expect(status).toMatchObject({
+        status: "sent",
+        providerMessageId: "current-provider-id",
+      });
+      expect(events.filter((event) => event.type === "sent")).toHaveLength(1);
+      expect(events.some((event) => event.error === "late stale worker failure")).toBe(false);
+      expect(events.some((event) => event.adapter === "memory" && event.type === "provider_attempt")).toBe(false);
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("keeps processing leases monotonic across manual retries", async () => {
+    const t = createTest();
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+    const firstWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+    await t.mutation(api.lib.markFailedOrRetry, {
+      emailId,
+      processingLease: firstWorker!.processingLease,
+      error: "first attempt failed",
+    });
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+
+    const retriedWorker = await t.mutation(api.lib.markProcessing, { emailId });
+    expect(firstWorker?.processingLease).toBe(1);
+    expect(retriedWorker?.processingLease).toBe(2);
+  });
+
   test("does not auto-retry stale processing emails without an idempotency key", async () => {
     const t = createTest();
     const originalNow = Date.now;
