@@ -28,6 +28,7 @@
         "@tanstack/react-router-devtools": "1.167.0",
         "@tanstack/react-start": "1.168.13",
         "@tanstack/start-static-server-functions": "1.167.9",
+        "@usenotra/geo": "^0.2.0",
         "@usenotra/sdk": "^1.3.1",
         "@vercel/analytics": "^2.0.1",
         "clsx": "^2.1.1",
@@ -71,7 +72,7 @@
     },
     "packages/convex-email": {
       "name": "@opencoredev/convex-email",
-      "version": "0.1.0",
+      "version": "2.0.0",
       "devDependencies": {
         "@opencoredev/email-sdk": "workspace:*",
         "@types/bun": "^1.3.4",
@@ -79,13 +80,13 @@
         "convex-test": "0.0.53",
       },
       "peerDependencies": {
-        "@opencoredev/email-sdk": "^0.6.5",
+        "@opencoredev/email-sdk": "^1.1.0",
         "convex": "^1.36.1",
       },
     },
     "packages/email-sdk": {
       "name": "@opencoredev/email-sdk",
-      "version": "0.6.5",
+      "version": "1.1.0",
       "bin": {
         "email-sdk": "dist/cli.js",
       },
@@ -670,6 +671,8 @@
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
 
     "@ungap/structured-clone": ["@ungap/structured-clone@1.3.1", "", {}, "sha512-mUFwbeTqrVgDQxFveS+df2yfap6iuP20NAKAsBt5jDEoOTDew+zwLAOilHCeQJOVSvmgCX4ogqIrA0mnyr08yQ=="],
+
+    "@usenotra/geo": ["@usenotra/geo@0.2.0", "", { "peerDependencies": { "zod": "^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-Kf6JdNPNkQeCtzyYyIg7BRHu9DQITTjk5upVZlt1OJY9MOnnsPuxgJXqCyzZpk/VQTtsm1bYpPqqJe1BhwIatA=="],
 
     "@usenotra/sdk": ["@usenotra/sdk@1.3.1", "", { "dependencies": { "zod": "^3.25.65 || ^4.0.0" } }, "sha512-6vjXaiP2J+dE8WKFsY/UTnACHbgvJArriu2VfToLIJK2OBuMfqPAsNKOYvFucVeYtx2gk6bb6aLzFDrSa4xJAQ=="],
 
