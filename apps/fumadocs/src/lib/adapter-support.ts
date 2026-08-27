@@ -155,6 +155,14 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     limits: ["Accepts one tag."],
   },
   {
+    id: "lettr",
+    label: "Lettr",
+    setupHref: "/docs/adapters/lettr",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true, metadata: true, sendAt: true },
+    capabilities: { repeatedHeaders: false, idempotency: "none", scheduling: true, personalized: "expanded" },
+    limits: ["Accepts at most 50 combined to, cc, and bcc recipients.", "Recipient display names are not supported; plain strings and {email} objects are valid.", "Accepts one reply-to address.", "Accepts one tag.", "Rejects inline attachments.", "Accepts at most 10 custom headers."],
+  },
+  {
     id: "primitive",
     label: "Primitive",
     setupHref: "/docs/adapters/primitive",
@@ -210,7 +218,7 @@ export const ADAPTER_SUPPORT_ENTRIES = [
   },
 ] as const satisfies readonly AdapterSupportEntry[];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "22 provider APIs plus SMTP, 23 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "23 provider APIs plus SMTP, 24 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

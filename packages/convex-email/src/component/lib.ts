@@ -5,10 +5,15 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
-import type { ConvexEmailConfig, ConvexEmailSendArgs } from "../shared/types.js";
+import type {
+  ConvexEmailConfig,
+  ConvexEmailProviderFailure,
+  ConvexEmailSendArgs,
+} from "../shared/types.js";
 import {
   vCancelEmailArgs,
   vEmailConfig,
+  vEmailProviderFailure,
   vListEmailEventsArgs,
   vRetryEmailArgs,
   vSendBatchEmailsArgs,
@@ -122,6 +127,8 @@ export const retry = mutation({
       attemptCount: 0,
       nextAttemptAt: now,
       lastError: undefined,
+      providerFailure: undefined,
+      providerMessageId: undefined,
       terminalAt: undefined,
       updatedAt: now,
     });
@@ -265,6 +272,7 @@ export const markSent = internalMutation({
       sentAt: now,
       terminalAt: now,
       lastError: undefined,
+      providerFailure: undefined,
     });
     await insertEvent(ctx, {
       emailId: args.emailId,
@@ -286,12 +294,17 @@ export const markFailedOrRetry = internalMutation({
   args: {
     emailId: v.id("emails"),
     error: v.string(),
+    retryable: v.boolean(),
+    providerFailure: v.optional(vEmailProviderFailure),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
-    await markEmailFailedOrRetry(ctx, email, args.error);
+    await markEmailFailedOrRetry(ctx, email, args.error, {
+      retryable: args.retryable,
+      providerFailure: args.providerFailure,
+    });
 
     return null;
   },
@@ -525,7 +538,11 @@ async function markEmailFailedOrRetry(
   ctx: any,
   email: any,
   error: string,
-  options: { immediate?: boolean } = {},
+  options: {
+    immediate?: boolean;
+    retryable?: boolean;
+    providerFailure?: ConvexEmailProviderFailure;
+  } = {},
 ) {
   if (!email || email.status === "sent" || email.status === "canceled") {
     return;
@@ -533,7 +550,7 @@ async function markEmailFailedOrRetry(
 
   const now = Date.now();
 
-  if (email.attemptCount < email.maxAttempts) {
+  if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate
       ? 0
       : Math.min(email.retryBaseMs * 2 ** Math.max(email.attemptCount - 1, 0), 60_000);
@@ -550,7 +567,11 @@ async function markEmailFailedOrRetry(
       type: "retry_scheduled",
       attempt: email.attemptCount,
       error,
-      payload: { delayMs, nextAttemptAt },
+      payload: {
+        delayMs,
+        nextAttemptAt,
+        ...(options.providerFailure ? { providerFailure: options.providerFailure } : {}),
+      },
     });
 
     if (options.immediate) {
@@ -565,14 +586,23 @@ async function markEmailFailedOrRetry(
   await ctx.db.patch(email._id, {
     status: "failed",
     lastError: error,
+    ...(options.providerFailure
+      ? {
+          providerFailure: options.providerFailure,
+          providerMessageId: options.providerFailure.requestId,
+        }
+      : {}),
     updatedAt: now,
     terminalAt: now,
   });
   await insertEvent(ctx, {
     emailId: email._id,
     type: "failed",
+    adapter: options.providerFailure?.adapter,
     attempt: email.attemptCount,
+    providerMessageId: options.providerFailure?.requestId,
     error,
+    payload: options.providerFailure ? { providerFailure: options.providerFailure } : undefined,
   });
 }
 

@@ -31,6 +31,7 @@ const providerDescriptions: Record<Provider["key"], string> = {
   jetemail: "A focused transactional email API for product teams.",
   primitive: "Use when your product already sends through Primitive.",
   lettermint: "Straightforward transactional email with a simple API.",
+  lettr: "Transactional and marketing email for SaaS, with a REST API and editor.",
   plunk: "An open-source-friendly option for product email.",
   smtp: "Connect any existing SMTP server or self-hosted mail system.",
 };

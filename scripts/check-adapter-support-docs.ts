@@ -32,8 +32,8 @@ const sdkIds = Object.keys(SUPPORTED_MESSAGE_FIELDS);
 const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 23) {
-  fail(`Expected 23 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 24) {
+  fail(`Expected 24 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -84,7 +84,7 @@ for (const docsEntry of ADAPTER_SUPPORT_ENTRIES) {
   }
 }
 
-const oneReplyTo = ["brevo", "cloudflare", "unosend", "sequenzy", "mailersend", "plunk", "mailtrap"];
+const oneReplyTo = ["brevo", "cloudflare", "unosend", "sequenzy", "mailersend", "plunk", "mailtrap", "lettr"];
 for (const id of oneReplyTo) requireIncludes(entry(id), "one reply-to");
 
 const oneNormalRecipient = ["iterable", "loops", "primitive"];
@@ -97,6 +97,10 @@ requireIncludes(entry("cloudflare"), "plain strings and {email} objects are vali
 requireIncludes(entry("sequenzy"), "50 to recipients");
 requireIncludes(entry("postmark"), "one tag");
 requireIncludes(entry("lettermint"), "one tag");
+requireIncludes(entry("lettr"), "one tag");
+requireIncludes(entry("lettr"), "50 combined to, cc, and bcc");
+requireIncludes(entry("lettr"), "plain strings and {email} objects are valid");
+requireIncludes(entry("lettr"), "inline attachments");
 requireIncludes(entry("mailtrap"), "one tag");
 requireIncludes(entry("scaleway"), "headers already include Reply-To");
 requireIncludes(entry("smtp"), "ASCII envelope addresses and header names");

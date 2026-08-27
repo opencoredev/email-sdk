@@ -31,6 +31,8 @@ export type EmailAdapterErrorOptions = {
   requestId?: string;
   retryable?: boolean;
   delivery?: "not_sent" | "unknown";
+  acceptedCount?: number;
+  rejectedCount?: number;
   cause?: unknown;
 };
 
@@ -39,6 +41,8 @@ export class EmailAdapterError extends EmailSdkError {
   readonly status?: number;
   readonly requestId?: string;
   readonly delivery: "not_sent" | "unknown";
+  readonly acceptedCount?: number;
+  readonly rejectedCount?: number;
 
   constructor(message: string, options: EmailAdapterErrorOptions) {
     super(message, {
@@ -51,6 +55,8 @@ export class EmailAdapterError extends EmailSdkError {
     this.status = options.status;
     this.requestId = options.requestId;
     this.delivery = options.delivery ?? "unknown";
+    this.acceptedCount = options.acceptedCount;
+    this.rejectedCount = options.rejectedCount;
   }
 }
 
@@ -140,6 +146,8 @@ export class EmailProviderError extends EmailAdapterError {
       requestId?: string;
       retryable?: boolean;
       delivery?: "not_sent" | "unknown";
+      acceptedCount?: number;
+      rejectedCount?: number;
       details?: unknown;
       cause?: unknown;
       code?: string;
@@ -151,6 +159,8 @@ export class EmailProviderError extends EmailAdapterError {
       requestId: options.requestId,
       retryable: options.retryable,
       delivery: options.delivery,
+      acceptedCount: options.acceptedCount,
+      rejectedCount: options.rejectedCount,
       cause: options.cause,
     });
     this.name = "EmailAdapterError";

@@ -74,6 +74,12 @@ const pricingByProvider = {
     note: "Developer usage credits cover through 215K; Power costs $13 and covers 250K. The published 10K/day account cap makes 500K and 1M unavailable in a calendar month.",
     prices: [usd(0), usd(0), usd(0), usd(13), unavailable, unavailable],
   },
+  lettr: {
+    model: "Plan + volume tiers",
+    sources: [{ label: "Lettr pricing", href: "https://lettr.com/pricing" }],
+    note: "Free includes 3K. Pro is $15 through 100K. Business is $110 through 200K. Higher published volumes are custom.",
+    prices: [usd(0), usd(15), usd(15), custom, custom, custom],
+  },
   lettermint: {
     model: "Plan + overage · EUR",
     sources: [{ label: "Lettermint pricing", href: "https://lettermint.co/pricing" }],

@@ -97,6 +97,15 @@ export type ConvexEmailStatus = "queued" | "processing" | "sent" | "failed" | "c
 
 export type ConvexEmailDeliveryStatus = "delivered" | "bounced" | "complained";
 
+export type ConvexEmailProviderFailure = {
+  adapter: string;
+  requestId?: string;
+  retryable: boolean;
+  delivery: "not_sent" | "unknown";
+  acceptedCount?: number;
+  rejectedCount?: number;
+};
+
 export type ConvexEmailDoc = {
   _id: string;
   _creationTime: number;
@@ -107,6 +116,7 @@ export type ConvexEmailDoc = {
   fallbackAdapters: string[];
   adapters: ConvexEmailAdapterConfig[];
   providerMessageId?: string;
+  providerFailure?: ConvexEmailProviderFailure;
   idempotencyKey?: string;
   sendMetadata?: Record<string, string | number | boolean | null>;
   attemptCount: number;
