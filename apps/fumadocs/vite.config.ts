@@ -64,6 +64,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
     },
+    // server/middleware/geo.ts sends page requests to Notra GEO analytics.
+    nitro: {
+      serverDir: "./server",
+    },
     define: {
       "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),
       "import.meta.env.VITE_EMAIL_SDK_BUILD_ID": JSON.stringify(buildId),
