@@ -64,10 +64,11 @@ revoke.
 ## Per-provider credentials
 
 Each provider's required credential and environment variable is listed in one
-place at https://email-sdk.dev/docs/authentication (append `.md` for markdown:
-https://email-sdk.dev/docs/authentication.md). For example: Resend uses
-`apiKey` from `RESEND_API_KEY`, AWS SES uses `accessKeyId` / `secretAccessKey` /
-`region`, and SMTP uses `host` / `port` / `auth.user` / `auth.pass`.
+place at https://email-sdk.dev/docs/getting-started/credentials (append `.md` for
+markdown: https://email-sdk.dev/docs/getting-started/credentials.md). For example:
+Resend uses `apiKey` from `RESEND_API_KEY`, AWS SES uses `accessKeyId` /
+`secretAccessKey` / `region`, and SMTP uses `host` / `port` / `auth.user` /
+`auth.pass`.
 
 See also: the agent guide at https://email-sdk.dev/agents.md and the machine
 index at https://email-sdk.dev/llms.txt.

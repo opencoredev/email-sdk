@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildDocsStructuredData, siteImageAlt, siteMeta } from "@/lib/metadata";
+import { buildDocsStructuredData, homeStructuredData, siteImageAlt, siteMeta } from "@/lib/metadata";
+import { providers } from "@/lib/providers";
 import { siteOgImageUrl } from "@/lib/shared";
 
 const findByName = (name: string) =>
@@ -64,5 +65,27 @@ describe("documentation structured data", () => {
         { position: 3, name: "Resend", item: canonicalUrl },
       ],
     });
+  });
+});
+
+describe("supported provider structured data", () => {
+  const providerNames = providers.map((provider) => provider.name);
+
+  test("lists every registered adapter in the supported providers ItemList", () => {
+    const itemList = homeStructuredData["@graph"].find((node) => node["@type"] === "ItemList");
+
+    expect(itemList?.itemListElement.map((item) => item.name)).toEqual(providerNames);
+    expect(itemList?.numberOfItems).toBe(providerNames.length);
+  });
+
+  test("names every registered adapter in the supported providers FAQ answer", () => {
+    const faq = homeStructuredData["@graph"].find((node) => node["@type"] === "FAQPage");
+    const answer = faq?.mainEntity.find((question) =>
+      question.name.includes("Which email providers"),
+    )?.acceptedAnswer.text;
+
+    for (const name of providerNames) {
+      expect(answer).toContain(name);
+    }
   });
 });
