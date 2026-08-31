@@ -18,11 +18,13 @@ try {
 
   console.log("Packing public packages and Convex component...");
   const core = await pack(join(root, "packages/email-sdk"), packed);
-  await pack(join(root, "packages/convex-email"), packed);
+  const convex = await pack(join(root, "packages/convex-email"), packed);
 
   assertCoreTarball(core);
+  assertConvexTarball(convex);
 
   const coreTarball = join(packed, core.filename);
+  const convexTarball = join(packed, convex.filename);
   const install = join(scratch, "install");
   await mkdir(install);
   await writeFile(
@@ -41,8 +43,10 @@ try {
       coreTarball,
       "ai@^7.0.0",
       "@react-email/render@^2.1.0",
+      "convex@^1.42.1",
       "react@^19.0.0",
       "react-dom@^19.0.0",
+      convexTarball,
     ],
     install,
   );
@@ -105,6 +109,37 @@ function assertCoreTarball(report: PackReport) {
   }
 }
 
+function assertConvexTarball(report: PackReport) {
+  const paths = new Set(report.files.map((file) => file.path));
+
+  for (const required of [
+    "README.md",
+    "package.json",
+    "dist/client/index.d.ts",
+    "dist/client/index.js",
+    "dist/testing.d.ts",
+    "dist/testing.js",
+    "dist/component/convex.config.d.ts",
+    "dist/component/convex.config.js",
+    "dist/component/_generated/component.d.ts",
+    "dist/component/_generated/component.js",
+    "src/client/index.ts",
+    "src/testing.ts",
+  ]) {
+    if (!paths.has(required)) {
+      throw new Error(`Convex Email tarball is missing ${required}.`);
+    }
+  }
+
+  if (
+    [...paths].some(
+      (path) => path.endsWith(".test.ts") || path === "src/email-sdk-shim.d.ts",
+    )
+  ) {
+    throw new Error("Convex Email tarball contains test-only source files.");
+  }
+}
+
 async function run(command: string[], cwd: string): Promise<string> {
   const child = Bun.spawn(command, {
     cwd,
@@ -136,12 +171,17 @@ import { spawnSync } from "node:child_process";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const coreDir = join(root, "node_modules/@opencoredev/email-sdk");
+const convexDir = join(root, "node_modules/@opencoredev/convex-email");
 
 await importAllExports(coreDir, "@opencoredev/email-sdk");
+await importAllExports(convexDir, "@opencoredev/convex-email");
 
 const core = await import("@opencoredev/email-sdk");
 const resend = await import("@opencoredev/email-sdk/resend");
 const react = await import("@opencoredev/email-sdk/react");
+const convex = await import("@opencoredev/convex-email");
+const convexConfig = await import("@opencoredev/convex-email/convex.config.js");
+const convexTesting = await import("@opencoredev/convex-email/test");
 
 if (
   typeof core.createEmailClient !== "function" ||
@@ -153,7 +193,18 @@ if (
   throw new Error("Installed Email SDK exports are incomplete.");
 }
 
+if (
+  typeof convex.ConvexEmail !== "function" ||
+  typeof convexConfig.default !== "object" ||
+  typeof convexTesting.memoryAdapter !== "function" ||
+  typeof convexTesting.registerConvexEmail !== "function" ||
+  convexTesting.memoryAdapter("mailbox").kind !== "memory"
+) {
+  throw new Error("Installed Convex Email documented exports are incomplete.");
+}
+
 await verifyDeclarationMaps(coreDir);
+await verifyDeclarationMaps(convexDir);
 
 const coreCli = join(coreDir, "dist/cli.js");
 const coreManifest = JSON.parse(await readFile(join(coreDir, "package.json"), "utf8"));
@@ -181,6 +232,7 @@ async function verifyDeclarationMaps(packageDir) {
 async function importAllExports(packageDir, packageName) {
   const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
   for (const subpath of Object.keys(manifest.exports ?? {})) {
+    if (subpath === "./package.json") continue;
     await import(subpath === "." ? packageName : packageName + subpath.slice(1));
   }
 }
