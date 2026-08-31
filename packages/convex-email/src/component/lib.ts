@@ -44,6 +44,36 @@ export const enqueue = mutation({
   },
 });
 
+/** Only app-side wrappers should call this; it stamps ownership for public API access. */
+export const enqueueOwned = mutation({
+  args: { email: v.object(vSendEmailArgs), ownerId: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await enqueueEmail(ctx, args.email, undefined, args.ownerId);
+  },
+});
+
+/** Only app-side wrappers should call this; it atomically stamps ownership for public batch sends. */
+export const enqueueOwnedBatch = mutation({
+  args: { messages: v.array(v.object(vSendEmailArgs)), ownerId: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    if (args.messages.length > maxBatchSize) {
+      throw new ConvexError({
+        code: "BATCH_TOO_LARGE",
+        message: `sendBatch accepts at most ${maxBatchSize} messages per mutation. Split larger batches client-side.`,
+      });
+    }
+
+    const config = await readConfig(ctx);
+    const ids: string[] = [];
+    for (const message of args.messages) {
+      ids.push(await enqueueEmail(ctx, message, config, args.ownerId));
+    }
+    return ids;
+  },
+});
+
 export const enqueueBatch = mutation({
   args: vSendBatchEmailsArgs,
   returns: v.array(v.string()),
@@ -420,14 +450,22 @@ async function enqueueEmail(
   ctx: any,
   args: ConvexEmailSendArgs,
   preloadedConfig?: ConvexEmailConfig,
+  ownerId?: string,
 ) {
   const idempotencyKey = args.idempotencyKey;
 
   if (idempotencyKey) {
-    const existing = await ctx.db
-      .query("emails")
-      .withIndex("by_idempotencyKey", (q: any) => q.eq("idempotencyKey", idempotencyKey))
-      .first();
+    const existing = ownerId
+      ? await ctx.db
+          .query("emails")
+          .withIndex("by_ownerId_and_idempotencyKey", (q: any) =>
+            q.eq("ownerId", ownerId).eq("idempotencyKey", idempotencyKey),
+          )
+          .first()
+      : await ctx.db
+          .query("emails")
+          .withIndex("by_idempotencyKey", (q: any) => q.eq("idempotencyKey", idempotencyKey))
+          .first();
 
     if (existing) {
       return existing._id as string;
@@ -440,6 +478,7 @@ async function enqueueEmail(
   const emailId = await ctx.db.insert("emails", {
     status: "queued",
     message,
+    ownerId,
     adapter: args.adapter,
     attemptedAdapters: [],
     fallbackAdapters: args.fallbackAdapters ?? [],

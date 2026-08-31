@@ -152,6 +152,48 @@ describe("convex-email component", () => {
     expect(secondId).toBe(firstId);
   });
 
+  test("scopes public API idempotency keys to their stamped owner", async () => {
+    const t = createTest();
+    const enqueueOwned = (api.lib as any).enqueueOwned;
+    const email = {
+      ...message,
+      idempotencyKey: "welcome",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    };
+
+    const firstId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const sameOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const anotherOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_2" });
+
+    expect(sameOwnerId).toBe(firstId);
+    expect(anotherOwnerId).not.toBe(firstId);
+  });
+
+  test("enqueues owner-stamped batches atomically and preserves the batch limit", async () => {
+    const t = createTest();
+    const enqueueOwnedBatch = (api.lib as any).enqueueOwnedBatch;
+    const email = {
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    };
+
+    await expect(
+      t.mutation(enqueueOwnedBatch, {
+        ownerId: "user_1",
+        messages: Array.from({ length: 101 }, () => email),
+      }),
+    ).rejects.toThrow("at most 100");
+
+    const ids = await t.mutation(enqueueOwnedBatch, {
+      ownerId: "user_1",
+      messages: [email, { ...email, to: "grace@example.com" }],
+    });
+    expect(ids).toHaveLength(2);
+    expect((await t.query(api.lib.status, { emailId: ids[0] }))?.ownerId).toBe("user_1");
+  });
+
   test("enqueues a batch, applies config defaults, and returns ids in order", async () => {
     const t = createTest();
 

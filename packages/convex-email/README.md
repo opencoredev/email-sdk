@@ -259,7 +259,37 @@ export const email = new ConvexEmail(components.convexEmail, {
 
 The package exports Convex test helpers from `@opencoredev/convex-email/test`.
 
-`exposeApi()` intentionally omits `setConfig` and `getConfig` by default. Pass `{ includeConfigApi: true }` only from a module protected by your own server-side auth checks.
+`exposeApi()` requires an authenticated Convex identity by default and stamps its `subject` as the email owner. Public status, events, cancellation, and retries only work for that owner; records queued through server-only `email.send()` are not exposed. Pass `authorize` to use a tenant id or operation-specific policy instead. It returns an owner id, or `null` to deny the request:
+
+```ts
+export const { send, status, listEvents, cancel, retry } = email.exposeApi({
+  authorize: async (ctx, operation) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || (operation === "send" && !identity.tokenIdentifier.startsWith("my-app|"))) {
+      return null;
+    }
+    return identity.subject;
+  },
+});
+```
+
+This is intentionally a security boundary, not recipient policy: use explicit app wrappers when sending must be restricted to particular recipients or roles. `setConfig` and `getConfig` stay excluded by default. If they are needed, pass both `includeConfigApi: true` and an explicit `authorizeConfig` admin check.
+
+### Migrating `exposeApi()` in v3
+
+Before v3, this exposed unauthenticated operations:
+
+```ts
+export const emailApi = email.exposeApi();
+```
+
+The same call now requires your app to configure Convex authentication; authenticated callers are automatically scoped to their identity `subject`:
+
+```ts
+export const emailApi = email.exposeApi();
+```
+
+Use the `authorize` example above when ownership should be a tenant or when individual operations need different access rules. Existing email rows have no trusted public owner, so records queued before this upgrade remain unavailable through `exposeApi()` rather than being guessed or backfilled. Server-side `email.status()`, `email.listEvents()`, and other application wrappers remain available for authorized operational migrations.
 
 ## Cleanup
 
