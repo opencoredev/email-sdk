@@ -271,13 +271,109 @@ async function hydrateAttachment(attachment: ConvexEmailAttachment): Promise<Ema
     throw new Error(`Attachment "${attachment.filename}" requires \`content\` or \`url\`.`);
   }
 
-  const safeUrl = safeAttachmentUrl(url, attachment.filename);
-  const response = await fetch(safeUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch email attachment "${attachment.filename}" from ${url}.`);
+  return { ...base, content: await fetchAttachment(url, attachment.filename) };
+}
+
+const MAX_ATTACHMENT_REDIRECTS = 3;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ATTACHMENT_FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchAttachment(value: string, filename: string): Promise<ArrayBuffer> {
+  let url = safeAttachmentUrl(value, filename);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ATTACHMENT_FETCH_TIMEOUT_MS);
+
+  try {
+    for (let redirects = 0; redirects <= MAX_ATTACHMENT_REDIRECTS; redirects += 1) {
+      const response = await fetch(url, { redirect: "manual", signal: controller.signal });
+
+      if (isRedirect(response.status)) {
+        if (redirects === MAX_ATTACHMENT_REDIRECTS) {
+          throw new Error(`Attachment "${filename}" exceeded the redirect limit.`);
+        }
+
+        const location = response.headers.get("location");
+        if (!location) {
+          throw new Error(`Attachment "${filename}" redirect is missing a location.`);
+        }
+
+        url = safeRedirectTarget(location, url, filename);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch email attachment "${filename}" from ${value}.`);
+      }
+
+      const content = await readAttachmentBody(response, filename);
+      return content;
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Fetching email attachment "${filename}" timed out.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 
-  return { ...base, content: await response.arrayBuffer() };
+  throw new Error(`Attachment "${filename}" exceeded the redirect limit.`);
+}
+
+function isRedirect(status: number) {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function safeRedirectTarget(location: string, base: URL, filename: string) {
+  try {
+    return safeAttachmentUrl(new URL(location, base).toString(), filename);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Attachment "${filename}" redirect has an invalid URL.`);
+    }
+    throw error;
+  }
+}
+
+async function readAttachmentBody(response: Response, filename: string): Promise<ArrayBuffer> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`Attachment "${filename}" exceeds the ${MAX_ATTACHMENT_BYTES}-byte size limit.`);
+  }
+
+  if (!response.body) {
+    return new ArrayBuffer(0);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      size += value.byteLength;
+      if (size > MAX_ATTACHMENT_BYTES) {
+        await reader.cancel();
+        throw new Error(`Attachment "${filename}" exceeds the ${MAX_ATTACHMENT_BYTES}-byte size limit.`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const content = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    content.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return content.buffer;
 }
 
 function normalizeHeaders(
