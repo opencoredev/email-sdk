@@ -2,6 +2,12 @@ export const appName = "Email SDK";
 export const appDescription =
   "A TypeScript email SDK for unified email sending with Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, fallbacks, plugins, and a local CLI.";
 
+export const docsRoute = "/docs";
+export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev").replace(
+  /\/$/,
+  "",
+);
+
 // Shared description + agent constraints prepended to llms.txt / llms-full.txt so the
 // machine indexes lead with what the project is and the rules for using it safely.
 export const llmsOverview = `> ${appDescription}
@@ -25,21 +31,16 @@ Reach for it when a TypeScript/JavaScript (Node, Bun, or edge/Workers) app needs
 
 ## How AI agents should use it
 
-Install the package, import the adapter for the provider whose credentials the app already holds, and call \`send()\`. There is nothing to authenticate against at email-sdk.dev — per-provider credentials live in /docs/authentication. Give models the \`send_email\` tool from \`@opencoredev/email-sdk/agent-tools\`, and follow the constraints below.
+Install the package, import the adapter for the provider whose credentials the app already holds, and call \`send()\`. There is nothing to authenticate against at email-sdk.dev — per-provider credentials live at ${siteUrl}/docs/getting-started/credentials. Give models the \`send_email\` tool from \`@opencoredev/email-sdk/agent-tools\`, and follow the constraints below.
 
 ## Constraints
 
 - TypeScript/JavaScript runtimes only (Node, Bun, edge/Workers), for transactional email rather than marketing campaigns.
 - Bring your own provider credentials and keep them in environment variables. Never hardcode or log API keys, passwords, tokens, full message bodies, or recipient lists.
 - Import each adapter from its own entry point (\`@opencoredev/email-sdk/resend\`, \`/smtp\`, …); do not add Nodemailer — the SDK ships its own SMTP transport.
-- Configure a fallback only between adapters that support the same fields (see /docs/adapters/field-support). Use idempotency keys for externally visible sends that may retry.
+- Configure a fallback only between adapters that support the same fields (see ${siteUrl}/docs/adapters/field-support). Use idempotency keys for externally visible sends that may retry.
 - Gate agent-initiated sends behind explicit human approval. Run the CLI \`doctor\` and \`send --dry-run\` before any live send.`;
 
-export const docsRoute = "/docs";
-export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev").replace(
-  /\/$/,
-  "",
-);
 export const siteOgImagePath = "/og/email-sdk.png";
 export const siteOgImageVersion = import.meta.env.VITE_OG_IMAGE_VERSION || "dev";
 export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}?v=${encodeURIComponent(

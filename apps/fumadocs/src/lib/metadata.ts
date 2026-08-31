@@ -1,6 +1,16 @@
 import type { MetaDescriptor } from "@tanstack/react-router";
 
+import { providers } from "@/lib/providers";
 import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
+
+// Both the FAQ answer and the ItemList below used to spell the adapters out by
+// hand, so each new adapter left the structured data one provider short of the
+// code. Derive them from the adapter registry instead.
+const supportedProviderNames = providers.map((provider) => provider.name);
+const supportedProviderSentence = new Intl.ListFormat("en", {
+  style: "long",
+  type: "conjunction",
+}).format(supportedProviderNames);
 
 export const siteTitle = `${appName} - Transactional email for TypeScript`;
 export const siteImageAlt =
@@ -262,7 +272,7 @@ export const homeStructuredData = {
           name: "Which email providers does Email SDK support?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Iterable, Loops, Sequenzy, JetEmail, Primitive, Lettermint, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
+            text: `Email SDK supports adapters for ${supportedProviderSentence}.`,
           },
         },
         {
@@ -281,31 +291,8 @@ export const homeStructuredData = {
       "@type": "ItemList",
       "@id": `${siteUrl}/#supported-providers`,
       name: "Email providers supported by Email SDK",
-      itemListElement: [
-        "Resend",
-        "SMTP",
-        "Postmark",
-        "SendGrid",
-        "Mailgun",
-        "Cloudflare Email Sending",
-        "Unosend",
-        "AWS SES",
-        "MailerSend",
-        "Brevo",
-        "Mailchimp Transactional",
-        "SparkPost",
-        "Iterable",
-        "Loops",
-        "Sequenzy",
-        "JetEmail",
-        "Primitive",
-        "Lettermint",
-        "Plunk",
-        "Mailtrap",
-        "Scaleway",
-        "ZeptoMail",
-        "MailPace",
-      ].map((name, index) => ({
+      numberOfItems: supportedProviderNames.length,
+      itemListElement: supportedProviderNames.map((name, index) => ({
         "@type": "ListItem",
         position: index + 1,
         name,
