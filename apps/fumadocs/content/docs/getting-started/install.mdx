@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install the ESM-only SDK for Node.js 20+ or Bun 1.1+.
+description: Install Email SDK for Node.js or Bun using ESM imports or CommonJS require.
 ---
 
 <Steps>
@@ -19,12 +19,11 @@ The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package
 
 ### Confirm your runtime
 
-Use Node.js 20+ or Bun 1.1+. The package is ESM-only, so use `import` syntax or dynamic `import()` from a CommonJS application.
+Use Node.js 20+ or Bun 1.1+. ESM imports work across the supported range. CommonJS applications running Node.js 20.19+ can use `require()` for the main package and every adapter entry point.
 
-```json title="package.json"
-{
-  "type": "module"
-}
+```js title="email.cjs"
+const { createEmailClient } = require("@opencoredev/email-sdk");
+const { resend } = require("@opencoredev/email-sdk/resend");
 ```
 
 </Step>
