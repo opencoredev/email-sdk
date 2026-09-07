@@ -90,11 +90,11 @@ console.log(result.id); // Postmark MessageID
 ## Verify from the CLI
 
 ```bash
-POSTMARK_SERVER_TOKEN="..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter postmark
+POSTMARK_SERVER_TOKEN="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter postmark
 ```
 
 ```bash
-POSTMARK_SERVER_TOKEN="..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+POSTMARK_SERVER_TOKEN="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter postmark \
   --message-stream outbound \
   --from "Acme <hello@acme.com>" \

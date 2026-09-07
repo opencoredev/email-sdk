@@ -1,157 +1,76 @@
 ---
 title: Build a production send pipeline
-description: Run a PostgreSQL outbox with durable claims, explicit retry ownership, verified webhooks, and operator reconciliation.
+description: Validate before queueing, preserve durable state, and use retries and fallback without hiding delivery uncertainty.
 ---
 
-The SDK performs process-local sends; it does not persist jobs or promise exactly-once delivery. The runnable [durable PostgreSQL example](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/durable-postgres) shows the application-owned boundary: business transactions, deduplication, worker claims, provider receipts, webhook replay protection, and suppression.
+The core SDK owns one process-local delivery attempt. Your application owns durable queueing, persisted idempotency, and recovery after process failure.
 
-This is a reference implementation, not a managed queue. It deliberately supports bare addresses and plain-text messages, one pinned provider/account per job, and no automatic provider fallback. Review its operational limits below before adapting it.
+## Construct explicit routes
 
-## Run the safe local pipeline
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
 
-Use Node 20+, npm, and Docker Compose. The [standalone manifest](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/package.json) targets `@opencoredev/email-sdk: ^1.3.0`, the anticipated minor release introducing `/webhooks`. SDK 1.2.0 does not export that entry point. Until 1.3.0 is published, use the packed-checkout path below rather than installing 1.2.0 from npm.
-
-After a compatible release is published, copy the example into its own directory and install there:
-
-```bash
-cd packages/email-sdk/examples/durable-postgres
-npm install --workspaces=false --ignore-scripts
-```
-
-For an unreleased checkout, use the [packed installation](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/README.md#before-the-introducing-release-install-a-packed-sdk). From the repository root, first ensure the SDK artifacts are current (`bun install --frozen-lockfile`, then `bun run --cwd packages/email-sdk build` if needed). Packing with `--ignore-scripts` does not build. Copy the example outside the workspace and install the actual tarball:
-
-```bash
-REPO="$PWD"
-STANDALONE="$(mktemp -d)"
-mkdir -p "$STANDALONE/example" "$STANDALONE/packs"
-tar -C "$REPO/packages/email-sdk/examples/durable-postgres" \
-  --exclude=node_modules --exclude=.env --exclude=.env.local \
-  --exclude=package-lock.json --exclude=bun.lock -cf - . \
-  | tar -C "$STANDALONE/example" -xf -
-(cd "$REPO/packages/email-sdk" && npm pack --ignore-scripts --pack-destination "$STANDALONE/packs")
-cd "$STANDALONE/example"
-npm install --workspaces=false --ignore-scripts --no-save --package-lock=false "$STANDALONE"/packs/*.tgz
-```
-
-The tarball can still carry the checkout's pre-release `1.2.0` version label; its newly built contents must include `/webhooks`. This is a local test override, not evidence that the published 1.2.0 package supports webhooks. `--no-save --package-lock=false` preserves the intended published dependency without fabricating a release lockfile. Do not run a subsequent plain install before testing: it would resolve the future registry range again. No lockfile is committed while that release is unavailable; generate and retain one for deployment after selecting the actual SDK artifact.
-
-Then run the same safe fixture pipeline for either installation:
-
-```bash
-cp .env.example .env
-docker compose up -d --wait
-npm run setup
-npm run enqueue -- welcome:fixture-user:v1
-npm run worker
-npm run status
-```
-
-The default `EMAIL_MODE=memory` uses an in-process adapter and sends no real email. PostgreSQL persists jobs across command invocations; the memory adapter itself does not persist provider state. Compose exposes its trust-authenticated database only on loopback; never use that configuration for production.
-
-The [CLI](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/src/cli.ts) exposes real `setup`, `enqueue`, `worker`, `status`, `reconcile`, and `webhook` commands. `worker` drains currently due jobs and exits, so a supervisor or scheduler must invoke it again for delayed retries. `setup` creates the example schema; it is not a production migration system.
-
-Live Resend construction requires `EMAIL_MODE=resend`, the exact authorization `EMAIL_LIVE_SEND=I_AUTHORIZE_REAL_EMAIL`, a `RESEND_API_KEY`, and a non-fixture `EMAIL_ACCOUNT`. The CLI enqueue fixture still uses `sender@example.test`: integrate `enqueue` with your own verified sender and authorized recipients instead of treating the fixture as a ready-to-send production template.
-
-## Commit business state and the outbox together
-
-Read [`enqueue` and `transaction`](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/src/durable.ts) alongside the [SQL schema](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/src/schema.sql).
-
-- Validate the message through `email.validate` before inserting the job. Validation makes no provider request and does not prove sender readiness.
-- Write the business change and outbox job in the same PostgreSQL transaction. The CLI demonstrates this with `business_records`; either both writes commit or neither does.
-- Persist a unique business key plus a fingerprint of the normalized message, provider, account, and attempt policy. Repeated identical enqueues return the same job ID; reuse with conflicting input fails.
-- Retain this business-level deduplication even when the provider supports idempotency. The worker passes the stable job ID as `idempotencyKey`, but provider support and retention windows vary.
-
-## Let the durable worker own retries
-
-The example's `runOne` uses these exact per-send controls:
-
-```ts
-await route.email.send(job.message, {
-  adapter: route.provider,
-  idempotencyKey: job.id,
-  fallback: { adapters: [], onUnknownDelivery: "stop" },
-  retry: { maxAttempts: 1 },
-  signal: AbortSignal.timeout(20000),
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      name: "backup",
+      host: process.env.SMTP_HOST!,
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+    }),
+  ],
+  defaultAdapter: "resend",
+  retry: { maxAttempts: 2 },
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
+  },
 });
 ```
 
-**`retry.maxAttempts: 1` is essential here.** It prevents the SDK from retrying inside one durable attempt. `onUnknownDelivery: "stop"` controls only advancement to a fallback adapter; it does **not** disable same-adapter retries. A retryable error with unknown delivery can otherwise be retried according to the SDK retry policy before fallback is considered. An empty fallback list also keeps the stored provider/account route stable.
+Choose the backup from the [field support](/docs/adapters/field-support) and [capability](/docs/adapters/capability-groups) tables. SMTP is not a universal backup because it rejects attachments, tags, metadata, and schedules.
 
-The worker claims due jobs with `FOR UPDATE SKIP LOCKED`, records an attempt, and installs a claim token with a 30-second lease. Completion checks that token and the unexpired lease. The send timeout is 20 seconds, but cancellation or an expired lease cannot prove that a provider did not accept the request. Recovery therefore quarantines expired in-flight jobs rather than automatically sending them again.
+## Validate before accepting work
 
-The durable policy is deliberately conservative:
+Use the same public no-network boundary as `send` before committing a job to your queue.
 
-| Observation | Durable action |
-| --- | --- |
-| Typed, retryable `not_sent` failure with no positive acceptance evidence | Requeue with persisted exponential backoff, bounded by the job's attempt limit (default three). |
-| Terminal `not_sent` failure | Mark failed. |
-| Success with a provider message ID and no partial-recipient evidence | Record provider acceptance and correlate the receipt. This is not inbox delivery. |
-| Timeout, unknown error, partial acceptance/rejection, missing message ID, or expired claim | Move to `needs_reconciliation`; do not blindly resend. |
-| Any suppressed To/Cc/Bcc recipient immediately before sending | Suppress the entire job. |
+```ts title="src/jobs/enqueue-email.ts"
+await email.validate(message, {
+  fallback: { adapters: ["backup"] },
+});
 
-Backoff starts at one second and caps at 60 seconds; this example does not add jitter. Production operators must choose concurrency, provider rate limits, queue polling, and alert thresholds. Database fencing prevents stale workers from completing a job, not external provider side effects.
-
-## Verify, persist, then acknowledge webhooks
-
-The [Resend HTTP handler](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/src/webhook.ts) uses the separate [webhook API](/docs/reference/webhooks), available in the SDK's upcoming 1.3.0 release. Normalization is not authentication.
-
-Configure `RESEND_WEBHOOK_SECRET` and a fixed `WEBHOOK_ACCOUNT` matching the sending route's `EMAIL_ACCOUNT`, then run:
-
-```bash
-npm run webhook
+await queue.add("send-email", { message, idempotencyKey });
 ```
 
-The CLI listens on loopback port 8787 by default at `/webhooks/resend`. Production deployment needs an authenticated provider configuration and a correctly configured HTTPS ingress; this command does not publish an endpoint. The request reader caps bodies at 256 KiB. Verification uses the original body and headers, rejects stale/future signatures (default five-minute tolerance), and supports secret rotation through the helper's secret-array API; the CLI accepts one environment secret.
+## Send with a stable idempotency key
 
-After verification, `ingest` atomically inserts a unique `(provider, account, deliveryId)` event and applies correlated state before returning 200. Duplicate authenticated deliveries are acknowledged without applying them again. Persistence failures return 503 so the provider can retry. Signature freshness alone is not replay protection: retain durable event IDs for the provider's retry/replay window. Where normalization must fall back to a raw-body hash, deduplication only covers byte-identical retries.
-
-Receipts use `(provider, account, providerMessageId)`, never an unscoped provider ID. Events arriving before send completion remain stored; recording the receipt later applies them under the same correlation lock. Delivery state has conservative precedence: complaint over bounce over delivered, so late delivered events cannot clear an adverse result. Unknown or temporary event types do not establish delivery. The example persists IDs and normalized status, not raw webhook payloads.
-
-For other providers, use the verification/authentication requirements in the [webhook reference](/docs/reference/webhooks). In particular, Postmark needs application-level HTTP authentication, and Mailgun's signature authenticates timestamp/token rather than all event data. Do not simply switch the normalizer's provider and assume the Resend handler authenticates it.
-
-## Suppression is application state
-
-A correlated bounce or complaint inserts suppression records. Because the normalized event does not identify which recipient failed, the example conservatively suppresses **all** recipients on that job, including Cc and Bcc. Suppression is global by normalized address within the example database schema, not tenant-scoped. Adapt this intentionally for your consent and tenancy model.
-
-The worker rechecks every recipient immediately before its send. This narrows, but cannot eliminate, a race with a later webhook or an already in-flight request. Do not delete suppression records as routine job cleanup. A production system needs reviewed removal/re-consent procedures and appropriate recipient-level classification if broad suppression is unsuitable.
-
-## Reconcile uncertain sends with evidence
-
-List quarantined work (also recovering expired claims):
-
-```bash
-npm run reconcile
+```ts title="src/jobs/send-email.ts"
+await email.send(job.message, {
+  idempotencyKey: job.idempotencyKey,
+  metadata: { jobId: job.id },
+  signal: job.signal,
+});
 ```
 
-First stop or fence the old worker and establish that its provider request cannot still complete. Consult provider records outside this example, allowing for eventual consistency, then apply one explicit decision with a short, non-sensitive external evidence reference:
+The key is effective only where the selected adapter supports it. Persist your own business-level deduplication before invoking the SDK.
 
-```bash
-npm run reconcile -- JOB_ID accepted provider-audit-ticket-123 PROVIDER_MESSAGE_ID
-npm run reconcile -- JOB_ID not_sent provider-audit-ticket-124
-npm run reconcile -- JOB_ID abandon incident-ticket-125
-```
+## Handle delivery certainty
 
-These are alternatives, not a sequence. `accepted` records the receipt and applies any early webhook events. `not_sent` requeues with persisted backoff only while attempts remain; it never resets the attempt count and rejects jobs with an existing receipt or delivery fact. Partial results retain available receipts for correlation while remaining quarantined: never use `not_sent` for a partial result or blindly resend the whole job. `abandon` marks the job failed. The command requires evidence but cannot validate its truth; it does not query provider APIs. Do not use a missing webhook or an empty inbox as proof of non-acceptance. Keep unresolved jobs quarantined when certainty is unavailable.
+- Retry `not_sent` failures when `retryable` is true.
+- Let configured fallback advance after terminal `not_sent` failures.
+- Stop on `unknown` by default and reconcile provider state before retrying. `onUnknownDelivery: "stop"` only controls fallback to the next adapter; same-adapter retries follow `retry`, so set `retry: { maxAttempts: 1 }` when a durable worker owns retries.
+- Opt into `onUnknownDelivery: "continue"` only when a duplicate is safer than a missed message.
 
-## Define retention before deployment
+## Record safe facts
 
-There is **no automatic retention or purge command** in this example. Jobs retain message bodies and recipient addresses, and reconciliation records retain the supplied evidence reference. Use database access controls, encryption, backups, and a documented retention policy; log only operational IDs, states, counts, and safe error codes rather than message content or credentials.
+Use hooks or `observabilityPlugin` for adapter, attempt, stable error code, duration, and redacted message facts. Avoid bodies, addresses, credentials, idempotency keys, provider response bodies, URLs, and filesystem paths.
 
-Choose separate retention windows for message content, business-key deduplication, provider receipts, webhook delivery IDs, attempts, reconciliation audit, and suppressions. Keep deduplication/correlation records long enough for your business replay horizon and provider retries; purging them early can permit duplicate sends or leave late events uncorrelated. Keep unresolved work and unmatched events visible to operators. Implement redaction and referentially safe cleanup deliberately: deleting job rows also affects the receipt/attempt/audit foreign keys, and deleting suppression rows can permit unwanted email again.
+## Use a durable integration when needed
 
-## Check the standalone project
+The [durable PostgreSQL example](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/durable-postgres) is a runnable version of this guide: idempotent enqueue, leased worker claims, a `needs_reconciliation` state for unknown outcomes, verified [webhook](/docs/reference/webhooks) ingestion with replay protection, and a suppression table.
 
-The durable example is a private Node/PostgreSQL project with its own dependencies, [TypeScript config](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/tsconfig.json), and [integration suite](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/examples/durable-postgres/integration/postgres.integration.ts). The SDK's [`tsconfig.type-tests.json`](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/tsconfig.type-tests.json) excludes only `examples/durable-postgres` from its example coverage, so private `pg` and runner dependencies do not leak into the SDK's typecheck. Its existing `type-tests/**/*.ts` and other TypeScript/TSX examples, including the advanced `examples/v1-server` example, remain included. No example dependency is added to the SDK package.
-
-After either installation above, run these checks from the example directory:
-
-```bash
-npm run check-types
-DURABLE_TEST_DATABASE_URL=postgres://email_sdk_test@127.0.0.1:5438/email_sdk_adoption npm run test:integration
-```
-
-Use only the dedicated local fixture database: integration tests create and drop a randomly named schema. Without `DURABLE_TEST_DATABASE_URL`, PostgreSQL tests are skipped, which is not a database validation pass. Tests exercise real PostgreSQL concurrency, lease recovery, retries, webhook correlation/replay, suppression, and reconciliation with fake adapters; they send no real email. These independent example checks are not implicitly run by the root SDK typecheck or release gate. Run them explicitly when changing the example.
-
-[Convex Email](/docs/integrations/convex) is the alternative for Convex applications needing a component-owned queue, attempts, cancellation, test-mode redirection, and webhook history.
+[Convex Email](/docs/integrations/convex) provides queue state, attempts, cancellation, test-mode redirection, and webhook history for Convex applications.
 
 <Card title="Troubleshoot failures" href="/docs/guides/troubleshoot-failed-sends" description="Inspect typed errors and delivery classification." />

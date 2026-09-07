@@ -6,7 +6,7 @@ description: Build one message from flags or JSON, validate it with the selected
 ## Safe dry run
 
 ```bash
-EMAIL_SDK_TELEMETRY=0 npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+EMAIL_SDK_TELEMETRY=0 email-sdk send \
   --adapter resend \
   --from "Acme <hello@example.com>" \
   --to user@example.com \
@@ -44,22 +44,6 @@ Run `email-sdk help` for the current list.
 
 Without `--dry-run`, the command constructs one adapter, calls `client.send`, and prints the normalized result as JSON. There is no CLI fallback route or retry flag.
 
-**Unlike the first-send starter, the CLI sends by default.** Keep `--dry-run` until you have approved the sender, recipient, and real server credential. The CLI does not accept the starter's `--send` flag and does not load `.env`; export credentials into the server process. Never expose keys in browser code or public environment variables.
-
-Using the starter's variables:
-
-```bash
-set -a; . ./.env; set +a   # RESEND_API_KEY, EMAIL_FROM, EMAIL_TO
-npm exec --package=@opencoredev/email-sdk -- email-sdk send \
-  --adapter resend --from "$EMAIL_FROM" --to "$EMAIL_TO" \
-  --subject "Your first Email SDK message" --text "Hello from the CLI." \
-  --dry-run            # remove to send for real
-```
-
-`./node_modules/.bin/email-sdk` runs the same binary inside an installed project. For Resend, `--from` must use a verified domain; the shared `onboarding@resend.dev` sender can only reach the account owner's address ([Resend](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain)). Run [doctor](/docs/reference/cli/doctor) for configuration and optional non-sending authentication/sender checks before an approved send. The printed `id` is a provider receipt for acceptance, not inbox delivery; check provider events/[webhooks](/docs/reference/webhooks) for delivered or bounced outcomes. Do not blindly retry ambiguous timeouts.
-
-The CLI awaits telemetry flush before exiting. Anonymous telemetry is on by default; `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` opts out. A dry run makes no provider send request but can send telemetry unless opted out.
-
-For a runnable project that validates by default and requires an explicit `--send`, copy the [first-send starter](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send).
+Do not run a live command against an external recipient without approval.
 
 <Card title="Adapter pages" href="/docs/adapters" description="See provider-specific environment and field rules." />

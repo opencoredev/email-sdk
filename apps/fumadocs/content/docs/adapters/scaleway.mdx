@@ -92,11 +92,11 @@ console.log(result.id); // Scaleway email id (`id` or `email_id` in the response
 ## Verify from the CLI
 
 ```bash
-SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter scaleway
+SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter scaleway
 ```
 
 ```bash
-SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+SCALEWAY_SECRET_KEY="..." SCALEWAY_PROJECT_ID="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter scaleway \
   --region fr-par \
   --from "Acme <hello@acme.com>" \

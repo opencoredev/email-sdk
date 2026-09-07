@@ -79,11 +79,11 @@ console.log(result.id); // first entry of Mailtrap's message_ids
 ## Verify from the CLI
 
 ```bash
-MAILTRAP_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter mailtrap
+MAILTRAP_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter mailtrap
 ```
 
 ```bash
-MAILTRAP_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+MAILTRAP_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter mailtrap \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

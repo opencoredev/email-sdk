@@ -93,11 +93,11 @@ await email.send(message, { idempotencyKey: "receipt:order_123" });
 ## Verify from the CLI
 
 ```bash
-JETEMAIL_API_KEY="transactional_..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter jetemail
+JETEMAIL_API_KEY="transactional_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter jetemail
 ```
 
 ```bash
-JETEMAIL_API_KEY="transactional_..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+JETEMAIL_API_KEY="transactional_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter jetemail \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

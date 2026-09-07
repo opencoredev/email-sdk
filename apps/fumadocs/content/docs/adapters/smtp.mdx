@@ -155,11 +155,11 @@ export const email = createEmailClient({
 `doctor` only checks `SMTP_HOST`; the other settings are optional.
 
 ```bash
-SMTP_HOST=smtp.purelymail.com npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter smtp
+SMTP_HOST=smtp.purelymail.com npx --package @opencoredev/email-sdk email-sdk doctor --adapter smtp
 ```
 
 ```bash
-npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+npx --package @opencoredev/email-sdk email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --port 587 \

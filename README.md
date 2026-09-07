@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Email SDK alpine landscape" src="./Background.png" width="820" />
+  <img alt="Email SDK — Send email without provider lock-in" src="./Background-with-text.png" width="820" />
 </p>
 
 <p align="center">
@@ -8,11 +8,7 @@
   <a href="https://x.com/leodev"><img alt="Follow @leodev on X" src="https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark" /></a>
 </p>
 
-# Email for TypeScript apps.
-
-Email SDK is an open-source, server-side TypeScript library for transactional email. Send with your existing provider account, validate message fields before sending, test without calling a provider, and inspect failures through common error types.
-
-It runs in your app, not as a hosted email service. Keep your provider credentials and billing. Use a direct provider SDK if you only need its send API or provider-specific features and already have tests and error handling. Email SDK is useful when you want those checks and test tools in one place, with the option to change adapters later.
+Email for TypeScript apps. One client for transactional email with your existing provider account. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
 - Adapters for 23 provider APIs plus SMTP, 24 adapters total, behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
@@ -28,7 +24,7 @@ It runs in your app, not as a hosted email service. Keep your provider credentia
 npm install @opencoredev/email-sdk
 ```
 
-The SDK is server-side only and needs Node.js 20+ or Bun 1.1+. Keep provider API keys out of client code.
+The SDK is server-side only and needs Node 20+ or Bun. Keep provider API keys out of client code.
 
 ## Usage
 
@@ -38,7 +34,6 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
-  retry: { maxAttempts: 1 },
 });
 
 await email.send({
@@ -49,23 +44,17 @@ await email.send({
 });
 ```
 
-Use a sender verified with your provider and a recipient you control. Follow the [runnable quickstart](https://email-sdk.dev/docs/getting-started/quickstart) for setup and a first send. A successful result records provider acceptance, not inbox delivery.
-
-Before sending live, [check your configuration](https://email-sdk.dev/docs/reference/cli/doctor) and [test with the memory adapter](https://email-sdk.dev/docs/guides/test-email-behavior). If a send fails, [inspect its delivery state](https://email-sdk.dev/docs/guides/troubleshoot-failed-sends) before trying again. The example disables retries explicitly. If you enable them, retryable errors can retry even when acceptance is unknown; fallback stopping on unknown delivery does not prevent retries within an adapter.
-
 ## Adapters
 
-Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SMTP, and a testing adapter, each imported from its own entry point. Use the adapter for your existing account; the quickstart demonstrates Resend.
+Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 
 ```bash
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
-Default doctor checks local configuration without contacting the provider. Explicit `--live` checks authentication for supported adapters; Resend also supports a sender-domain check with `--from`. Neither proves delivery. The CLI does not load `.env` files, so export credentials into your server process. See the [doctor guide](https://email-sdk.dev/docs/reference/cli/doctor) for key-scope limits and results.
-
-Use `email-sdk send --dry-run` to validate a message without sending it. Unlike the standalone quickstart, the CLI sends by default if you omit `--dry-run`. Diagnostics and dry runs can send anonymous telemetry unless you opt out below.
+Discover adapters, validate setup (`doctor --live` authenticates without sending), and run dry-run smoke sends from any environment.
 
 ## Documentation
 
@@ -74,7 +63,6 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 - [Production send pipeline](https://email-sdk.dev/docs/guides/production-send-pipeline)
 - [Fallbacks and retries](https://email-sdk.dev/docs/concepts/fallbacks-and-retries)
 - [Field support](https://email-sdk.dev/docs/adapters/field-support)
-- [How adapters are tested](https://email-sdk.dev/docs/adapters/verification): contract tests and configured auth probes are listed separately from dated run evidence; a configured check is not a passing result
 
 ## Telemetry
 
@@ -89,7 +77,7 @@ What gets collected:
 - SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
 - Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
 
-Provider acceptance is not proof of delivery. Provider-volume counters exclude built-in test adapters, CI, and injected telemetry transports. Custom and renamed provider routes retain their counts while their names are anonymized. Retries are measured separately from logical send operations, and batch summaries do not add volume again. Telemetry is best-effort and can be disabled or blocked, so these measurements describe observed SDK usage, not every email sent through the package. See [telemetry measurement definitions](https://email-sdk.dev/docs/reference/telemetry) for counting rules and limitations.
+Provider acceptance is not proof of delivery, and telemetry is best-effort, so these counts describe observed SDK usage, not every email sent. See [telemetry](https://email-sdk.dev/docs/reference/telemetry) for counting rules.
 
 Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
 

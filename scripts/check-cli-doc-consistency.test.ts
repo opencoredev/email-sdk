@@ -54,7 +54,7 @@ test("scanner preserves warning prose, comments, scoped runners, and installed l
     "Do not use `npx email-sdk` in an uninstalled directory.",
     "```bash",
     "# Do not use npx email-sdk",
-    "npm exec --package=@opencoredev/email-sdk -- email-sdk adapters",
+    "npx --package @opencoredev/email-sdk email-sdk adapters",
     "bunx --package @opencoredev/email-sdk email-sdk adapters",
     "email-sdk adapters",
     "```",

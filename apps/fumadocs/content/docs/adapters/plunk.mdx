@@ -78,11 +78,11 @@ console.log(result.id); // Plunk email id from data.emails[0], falling back to i
 ## Verify from the CLI
 
 ```bash
-PLUNK_API_KEY="sk_..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter plunk
+PLUNK_API_KEY="sk_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter plunk
 ```
 
 ```bash
-PLUNK_API_KEY="sk_..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+PLUNK_API_KEY="sk_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter plunk \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

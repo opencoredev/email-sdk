@@ -81,11 +81,11 @@ The response `id` is the transmission id from `results.id` (or `results.transmis
 ## Verify from the CLI
 
 ```bash
-SPARKPOST_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter sparkpost
+SPARKPOST_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter sparkpost
 ```
 
 ```bash
-SPARKPOST_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+SPARKPOST_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter sparkpost \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -63,10 +63,10 @@ The CLI does not load `.env`. Export the values into your shell first (for examp
 
 ```bash
 # Configuration only: confirms RESEND_API_KEY is present. No network.
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 
 # Live: authenticates the key and checks the EMAIL_FROM domain in Resend. Still no email.
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
 ```
 
 The scoped package name matters: the unscoped `email-sdk` package on npm is unrelated. Because `npm install` already put the binary in `node_modules/.bin`, `./node_modules/.bin/email-sdk doctor --adapter resend` is equivalent. With Bun: `bunx --package @opencoredev/email-sdk email-sdk doctor --adapter resend`.

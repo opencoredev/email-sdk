@@ -46,8 +46,8 @@ A simple SMTP backup cannot carry Resend attachments, tags, or scheduling. Valid
 ## Verify
 
 ```bash
-RESEND_API_KEY=re_xxx npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
-RESEND_API_KEY=re_xxx npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+RESEND_API_KEY=re_xxx npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
+RESEND_API_KEY=re_xxx npx --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from hello@example.com \
   --to user@example.com \

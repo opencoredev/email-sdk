@@ -77,11 +77,11 @@ The response `id` is Brevo's `messageId` (falling back to the provider's `id` fi
 ## Verify from the CLI
 
 ```bash
-BREVO_API_KEY="xkeysib-..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter brevo
+BREVO_API_KEY="xkeysib-..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter brevo
 ```
 
 ```bash
-BREVO_API_KEY="xkeysib-..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+BREVO_API_KEY="xkeysib-..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter brevo \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

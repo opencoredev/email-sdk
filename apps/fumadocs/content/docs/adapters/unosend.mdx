@@ -76,11 +76,11 @@ The adapter checks `success` in the response body and throws an `EmailAdapterErr
 ## Verify from the CLI
 
 ```bash
-UNOSEND_API_KEY="un_..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter unosend
+UNOSEND_API_KEY="un_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter unosend
 ```
 
 ```bash
-UNOSEND_API_KEY="un_..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
+UNOSEND_API_KEY="un_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter unosend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

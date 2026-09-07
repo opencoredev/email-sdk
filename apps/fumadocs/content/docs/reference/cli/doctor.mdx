@@ -8,7 +8,7 @@ description: Check configuration safely by default; explicitly authenticate and 
 After exporting server credentials:
 
 ```bash
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 # Bun equivalent:
 bunx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
@@ -18,8 +18,8 @@ Success prints `resend looks configured.`. Default doctor checks required config
 ## Explicit non-sending live checks
 
 ```bash
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live
-npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend --live
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
 ```
 
 `--live` contacts the provider to check authentication, never to send an email. Supported providers: **Resend, Sequenzy, JetEmail, Primitive, Lettermint, and Lettr**. Other adapters report an `unsupported` live check rather than pretending success.
@@ -76,7 +76,7 @@ Provider response bodies, raw network errors, credentials, sender addresses, and
 
 No other exit codes are used. A sending-only Resend key may lack domain-list access: do not broaden a production key merely to turn a diagnostic green.
 
-Usage errors include unsupported adapter, missing required environment, and no explicit/detectable adapter. Check the installed version with `npm exec --package=@opencoredev/email-sdk -- email-sdk version` if flags are unrecognized.
+Usage errors include unsupported adapter, missing required environment, and no explicit/detectable adapter. Check the installed version with `npx --package @opencoredev/email-sdk email-sdk version` if flags are unrecognized.
 
 Use `send --dry-run` next to validate the exact message. A subsequent live send requires separate approval of sender and recipient; its provider receipt is not inbox delivery.
 
