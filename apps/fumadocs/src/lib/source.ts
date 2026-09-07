@@ -17,6 +17,7 @@ import {
 } from "collections/server";
 import { loader } from "fumadocs-core/source";
 
+import { buildAdapterFaq, getAdapterSupportEntry } from "./adapter-faq";
 import { resolveDocsIcon } from "./docs-icons";
 import { absolutizeSiteLinks } from "./markdown-links";
 import { docsRoute, siteUrl } from "./shared";
@@ -229,7 +230,19 @@ export async function getLLMText(
       .replaceAll('href="/docs/', `href="${docsBasePath}/`),
   );
 
+  const adapterEntry = version.current ? getAdapterSupportEntry(page.path) : undefined;
+  const faq = adapterEntry ? renderFaqMarkdown(buildAdapterFaq(adapterEntry)) : "";
+
   return `# ${page.data.title} (${siteUrl}${page.url})
 
-${processed}`;
+${processed}${faq}`;
+}
+
+function renderFaqMarkdown(items: { question: string; answer: string }[]) {
+  return `
+
+## Frequently asked questions
+
+${items.map((item) => `### ${item.question}\n\n${item.answer}`).join("\n\n")}
+`;
 }

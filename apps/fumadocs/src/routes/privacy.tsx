@@ -3,25 +3,17 @@ import { HomeLayout } from "fumadocs-ui/layouts/home";
 import type { ReactNode } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
-    meta: [
-      { title: `Privacy Policy - ${appName}` },
-      {
-        name: "description",
-        content:
-          "Privacy policy for Email SDK, including website analytics, documentation usage, and support communications.",
-      },
-      { property: "og:title", content: `Privacy Policy - ${appName}` },
-      {
-        property: "og:description",
-        content:
-          "How Email SDK handles website analytics, documentation usage, support communications, and package data.",
-      },
-      { property: "og:url", content: `${siteUrl}/privacy` },
-    ],
+    meta: buildPageMeta({
+      title: `Privacy Policy - ${appName}`,
+      description:
+        "Privacy policy for Email SDK, including website analytics, documentation usage, and support communications.",
+      url: `${siteUrl}/privacy`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/privacy` }],
   }),
   component: Privacy,

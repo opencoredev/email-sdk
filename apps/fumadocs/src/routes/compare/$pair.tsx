@@ -35,15 +35,32 @@ export const Route = createFileRoute("/compare/$pair")({
         { property: "og:title", content: pageTitle },
         { property: "og:description", content: description },
         { property: "og:url", content: canonicalUrl },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: pageTitle },
+        { name: "twitter:description", content: description },
         {
           "script:ld+json": {
             "@context": "https://schema.org",
-            "@type": "FAQPage",
-            mainEntity: buildFaq(pair).map((entry) => ({
-              "@type": "Question",
-              name: entry.question,
-              acceptedAnswer: { "@type": "Answer", text: entry.answer },
-            })),
+            "@graph": [
+              {
+                "@type": "FAQPage",
+                "@id": `${canonicalUrl}#faq`,
+                mainEntity: buildFaq(pair).map((entry) => ({
+                  "@type": "Question",
+                  name: entry.question,
+                  acceptedAnswer: { "@type": "Answer", text: entry.answer },
+                })),
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": `${canonicalUrl}#breadcrumb`,
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: appName, item: siteUrl },
+                  { "@type": "ListItem", position: 2, name: "Compare", item: `${siteUrl}/compare` },
+                  { "@type": "ListItem", position: 3, name: title, item: canonicalUrl },
+                ],
+              },
+            ],
           },
         },
       ],
@@ -76,7 +93,7 @@ function buildFaq(pair: ComparePair) {
 
   const fallbackAnswer =
     gapsBtoA.length === 0 && gapsAtoB.length === 0
-      ? `Yes — ${a.name} and ${b.name} support the same message fields, so Email SDK can fail over between them in either direction without dropping data.`
+      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK can fail over between them in either direction without dropping data.`
       : `Partially. Email SDK checks field support before every send: a fallback from ${a.name} to ${b.name} is rejected for messages using ${
           gapsAtoB.length > 0 ? listFields(gapsAtoB) : "no fields"
         }${

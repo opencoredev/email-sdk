@@ -95,15 +95,46 @@ export const siteMeta = [
   },
 ] satisfies MetaDescriptor[];
 
+type PageMetaTag =
+  | { title: string }
+  | { name: string; content: string }
+  | { property: string; content: string };
+
+export function buildPageMeta({
+  description,
+  title,
+  type = "website",
+  url,
+}: {
+  description: string;
+  title: string;
+  type?: "article" | "website";
+  url: string;
+}): PageMetaTag[] {
+  return [
+    { title },
+    { name: "description", content: description },
+    { property: "og:type", content: type },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+  ];
+}
+
 export function buildDocsStructuredData({
   canonicalUrl,
   dateModified,
   description,
+  faq,
   title,
 }: {
   canonicalUrl: string;
   dateModified: string;
   description: string;
+  faq?: { question: string; answer: string }[];
   title: string;
 }) {
   const breadcrumbItems = [
@@ -157,6 +188,19 @@ export function buildDocsStructuredData({
         "@id": `${canonicalUrl}#breadcrumb`,
         itemListElement: breadcrumbItems,
       },
+      ...(faq && faq.length > 0
+        ? [
+            {
+              "@type": "FAQPage",
+              "@id": `${canonicalUrl}#faq`,
+              mainEntity: faq.map((entry) => ({
+                "@type": "Question",
+                name: entry.question,
+                acceptedAnswer: { "@type": "Answer", text: entry.answer },
+              })),
+            },
+          ]
+        : []),
     ],
   };
 }

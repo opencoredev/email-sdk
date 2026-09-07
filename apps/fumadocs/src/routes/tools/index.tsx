@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 
 const pageTitle = `Free email tools - ${appName}`;
@@ -10,13 +11,11 @@ const pageDescription =
 
 export const Route = createFileRoute("/tools/")({
   head: () => ({
-    meta: [
-      { title: pageTitle },
-      { name: "description", content: pageDescription },
-      { property: "og:title", content: pageTitle },
-      { property: "og:description", content: pageDescription },
-      { property: "og:url", content: `${siteUrl}/tools` },
-    ],
+    meta: buildPageMeta({
+      title: pageTitle,
+      description: pageDescription,
+      url: `${siteUrl}/tools`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/tools` }],
   }),
   component: ToolsIndex,

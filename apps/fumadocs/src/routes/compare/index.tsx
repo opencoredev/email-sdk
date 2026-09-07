@@ -5,6 +5,7 @@ import { FullCompareTable } from "@/components/compare-table";
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { comparePairs, getComparePairTitle } from "@/lib/compare";
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 import { providers } from "@/lib/providers";
 
@@ -14,13 +15,11 @@ const pageDescription =
 
 export const Route = createFileRoute("/compare/")({
   head: () => ({
-    meta: [
-      { title: pageTitle },
-      { name: "description", content: pageDescription },
-      { property: "og:title", content: pageTitle },
-      { property: "og:description", content: pageDescription },
-      { property: "og:url", content: `${siteUrl}/compare` },
-    ],
+    meta: buildPageMeta({
+      title: pageTitle,
+      description: pageDescription,
+      url: `${siteUrl}/compare`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/compare` }],
   }),
   component: CompareIndex,

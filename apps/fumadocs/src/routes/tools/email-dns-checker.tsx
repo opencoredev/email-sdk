@@ -26,6 +26,9 @@ export const Route = createFileRoute("/tools/email-dns-checker")({
       { property: "og:title", content: pageTitle },
       { property: "og:description", content: pageDescription },
       { property: "og:url", content: canonicalUrl },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: pageTitle },
+      { name: "twitter:description", content: pageDescription },
       {
         "script:ld+json": {
           "@context": "https://schema.org",

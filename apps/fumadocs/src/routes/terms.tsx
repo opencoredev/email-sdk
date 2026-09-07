@@ -3,25 +3,17 @@ import { HomeLayout } from "fumadocs-ui/layouts/home";
 import type { ReactNode } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
-    meta: [
-      { title: `Terms of Service - ${appName}` },
-      {
-        name: "description",
-        content:
-          "Terms for using the Email SDK documentation site, examples, and open-source package resources.",
-      },
-      { property: "og:title", content: `Terms of Service - ${appName}` },
-      {
-        property: "og:description",
-        content:
-          "Terms for using the Email SDK documentation site, examples, and open-source package resources.",
-      },
-      { property: "og:url", content: `${siteUrl}/terms` },
-    ],
+    meta: buildPageMeta({
+      title: `Terms of Service - ${appName}`,
+      description:
+        "Terms for using the Email SDK documentation site, examples, and open-source package resources.",
+      url: `${siteUrl}/terms`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/terms` }],
   }),
   component: Terms,

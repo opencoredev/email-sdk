@@ -9,24 +9,17 @@ import {
   WeekdayRadar,
 } from "@/components/stats-charts";
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 import { getStatsServerFn, statsPackageName } from "@/lib/stats-runtime";
 
 export const Route = createFileRoute("/stats")({
   head: () => ({
-    meta: [
-      { title: `Stats - ${appName}` },
-      {
-        name: "description",
-        content: `Live npm download numbers for ${statsPackageName}, updated hourly.`,
-      },
-      { property: "og:title", content: `Stats - ${appName}` },
-      {
-        property: "og:description",
-        content: `Live npm download numbers for ${statsPackageName}, updated hourly.`,
-      },
-      { property: "og:url", content: `${siteUrl}/stats` },
-    ],
+    meta: buildPageMeta({
+      title: `Stats - ${appName}`,
+      description: `Live npm download numbers for ${statsPackageName}, updated hourly.`,
+      url: `${siteUrl}/stats`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/stats` }],
   }),
   loader: () => getStatsServerFn(),
@@ -105,8 +98,8 @@ function Stats() {
               target="_blank"
             >
               dither-kit
-            </a>
-            {" "}by{" "}
+            </a>{" "}
+            by{" "}
             <a
               className="text-fd-primary underline-offset-4 hover:underline"
               href="https://x.com/grimcodes"

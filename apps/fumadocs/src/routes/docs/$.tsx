@@ -15,6 +15,7 @@ import {
 
 import { useMDXComponents } from "@/components/mdx";
 import { VersionPicker } from "@/components/version-picker";
+import { buildAdapterFaq, getAdapterSupportEntry } from "@/lib/adapter-faq";
 import { getLatestDocsRedirect } from "@/lib/docs-redirects";
 import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { baseOptions } from "@/lib/layout.shared";
@@ -63,6 +64,7 @@ export const Route = createFileRoute("/docs/$")({
     const dateModified = data
       ? ((docsLastmod as Record<string, string>)[data.path] ?? "2026-06-01")
       : "2026-06-01";
+    const adapterEntry = data ? getAdapterSupportEntry(data.path) : undefined;
 
     return {
       meta: [
@@ -85,6 +87,7 @@ export const Route = createFileRoute("/docs/$")({
                   canonicalUrl,
                   dateModified,
                   description,
+                  faq: adapterEntry ? buildAdapterFaq(adapterEntry) : undefined,
                   title: data.title,
                 }),
               },
@@ -184,6 +187,7 @@ function createDocsClientLoader(collection: (typeof browserCollections)[DocsVers
           </div>
           <DocsBody>
             <MDX components={useMDXComponents(undefined, { docsBasePath })} />
+            {docsBasePath === "/docs" ? <AdapterFaq path={path} /> : null}
           </DocsBody>
         </DocsPage>
       );
@@ -211,6 +215,23 @@ const clientLoaders = {
 
 function getClientLoader(collection: DocsVersionCollection) {
   return clientLoaders[collection];
+}
+
+function AdapterFaq({ path }: { path: string }) {
+  const entry = getAdapterSupportEntry(path);
+  if (!entry) return null;
+
+  return (
+    <section aria-labelledby="adapter-faq">
+      <h2 id="adapter-faq">Frequently asked questions</h2>
+      {buildAdapterFaq(entry).map((item) => (
+        <div key={item.question}>
+          <h3>{item.question}</h3>
+          <p>{item.answer}</p>
+        </div>
+      ))}
+    </section>
+  );
 }
 
 function Page() {
