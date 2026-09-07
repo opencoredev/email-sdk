@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: email_sdk_test
+      POSTGRES_DB: email_sdk_adoption
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5438:5432"
+    volumes:
+      - durable_email_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U email_sdk_test -d email_sdk_adoption"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+volumes:
+  durable_email_data:

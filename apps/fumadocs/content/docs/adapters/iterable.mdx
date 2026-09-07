@@ -98,11 +98,11 @@ console.log(result.raw); // Iterable returns no message id; inspect the raw resp
 ## Verify from the CLI
 
 ```bash
-ITERABLE_API_KEY="..." ITERABLE_CAMPAIGN_ID="12345" npx email-sdk doctor --adapter iterable
+ITERABLE_API_KEY="..." ITERABLE_CAMPAIGN_ID="12345" npx --package @opencoredev/email-sdk email-sdk doctor --adapter iterable
 ```
 
 ```bash
-ITERABLE_API_KEY="..." npx email-sdk send \
+ITERABLE_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter iterable \
   --campaign-id 12345 \
   --from "Acme <hello@acme.com>" \

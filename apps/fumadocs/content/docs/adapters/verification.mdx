@@ -3,30 +3,39 @@ title: How adapters are tested
 sidebarTitle: Verification
 heading: How adapters are tested
 sidebar: true
-description: See what Verified means and how adapter checks run.
+description: Separate contract tests and configured authentication probes from dated auth, send, and delivery evidence for all 24 adapters.
 ---
 
-Every adapter has tests for request building, validation, errors, and secret handling.
+A configured check is not a passing result. **Live check available** means a non-sending authentication probe is registered for that adapter, not that the adapter was recently verified or that a message reached an inbox.
 
-**Verified** means the adapter also has a safe real-account check in release CI. The check signs in to the provider but does not send an email. A failed check blocks the release.
+## Evidence by adapter
 
-## Verified adapters
+The table covers all 24 current adapters: 23 provider APIs and SMTP. **No published run evidence** means this repository has no dated public result for that column. It does not mean a check failed or that the provider is unsupported. No passing dates, run links, or refresh dates are inferred from registry membership or from the existence of a test file.
 
-- Resend
-- Sequenzy
-- JetEmail
-- Primitive
-- Lettermint
+<AdapterVerification />
 
-## How the release check works
+## What each column means
 
-When adapter code changes on `main`, Depot checks that provider. A shared sending change checks every verified adapter.
+- **Contract tests:** the listed `packages/email-sdk/src/*.test.ts` files import that adapter and exercise request mapping, validation, and error projection without calling a provider account. The list is derived from the test files on disk at build time; `bun run verification:check` fails if it drifts. A test file existing does not prove a particular run passed or that every field was covered.
+- **Configured auth probe:** a registered account/domain lookup or intentionally incomplete validation-only POST that checks credentials against a provider. Read from `adapter-verification.json`, which stores only the command, secret variable name, and probe description. JetEmail uses a validation-only POST, not an account lookup; its validation responses are inconclusive, not proof of authentication. The shared doctor probes use GET `/account` for Primitive, GET `/ping` for Lettermint, and GET `/auth/check` for Lettr.
+- **Dated auth check:** a published `auth-check` record with an outcome and UTC timestamp. It never fills the send or delivery columns.
+- **Verified send:** a published `send-verified` record: a separately authorized send was accepted by the provider for that test. It does not establish delivery.
+- **Verified delivery:** a published `delivery-verified` record: a separately observed delivery result for the tested message. It is not a universal inbox-placement or future-deliverability guarantee.
+
+Published records show the outcome (`pass`, `fail`, or `inconclusive`), UTC timestamp, scope, sanitized summary, source commit, and an attributable source (a maintainer handle or a public repository Actions run). Records older than 30 days are marked **Stale**, including old failures; a newer record supersedes an older one within the same column. There are currently no published records, so every run column shows the empty state.
+
+## What CI actually gates
+
+The [Depot CI workflow](https://github.com/opencoredev/email-sdk/blob/main/.depot/workflows/ci.yml) runs the deterministic `release:ci` checks on pull requests and `main`. Its separate `live-adapters` job runs only on `main` pushes or manual dispatch, selects the registered probes affected by the diff (manual dispatch selects all six), and fails if a selected probe cannot authenticate or its credential is missing.
+
+The [publishing workflow](https://github.com/opencoredev/email-sdk/blob/main/.github/workflows/release.yml) is a separate GitHub Actions workflow. It runs `bun run release:ci` and then the Changesets action. `release:ci` includes `verification:check`, which validates the evidence file structure, registry metadata, contract-test membership, and registry/evidence consistency; it makes no network requests and does not run provider probes. The publishing workflow has no `needs`, `workflow_run`, or status-check dependency on the Depot `live-adapters` job. **A failed live probe therefore does not block publishing** in these workflow files. Any additional gate would have to come from repository branch protection, which is not visible in the repository and is not claimed here.
 
 ```bash
 bun run live:plan <base-sha> <head-sha>
+bun run verification:check
 ```
 
-Missing or invalid credentials fail the job.
+The evidence validator does not verify that a linked public run exists. Maintainers must inspect the source before publishing a record. Empty evidence is valid and stays visibly unpublished.
 
 ## Run the same checks locally
 
@@ -34,16 +43,19 @@ Missing or invalid credentials fail the job.
 bun run live:resend
 bun run live:sequenzy
 bun run live:lettermint
+bun run live:lettr
 bun scripts/check-jetemail-account.ts
 bun scripts/check-primitive-account.ts
 ```
 
-The scripts read `.env.local`, then `.env`, then your shell. Keep those files out of Git and do not paste keys into commands or chat.
+Effective credential precedence is **existing shell environment > `.env.local` > `.env`**. The scripts load `.env.local` first, then `.env`, without overriding existing values. Keep credential files out of Git and never paste keys into commands or chat.
 
-## Add another provider check
+These probes do not send by default. Some scripts have a separate `*_LIVE_SEND=true` opt-in; do not enable it for authentication-only checks. `bun run live:run -- <adapter list>` forces registered send flags off. No local result is automatically published as evidence.
 
-1. Find an endpoint that checks the account without sending an email. Account, domain, identity, and settings endpoints usually work well.
-2. Add `scripts/check-<adapter>-account.ts`. Only print safe fields.
-3. Add the command and secret name to `adapter-verification.json`.
-4. Test a bad key and a good key. Neither run should create an email.
-5. Update the adapter page with what the check actually does.
+## Add a check or publish evidence
+
+1. Implement a safe, non-sending probe with redacted output. Prefer an account or domain endpoint; use a validation-only POST only when the expected response establishes authentication without creating mail.
+2. Register the `command`, `secret` variable name, and a precise `probe` description in `adapter-verification.json`. The validator rejects any other field, and rejects descriptions that state a result or date. Registry membership means only that the check is available.
+3. With authorization, test both bad and good credentials without sending.
+4. To publish an actual result, add a record to `adapter-verification-evidence.json` with `adapter`, `kind` (`contract-test`, `auth-probe-configured`, `auth-check`, `send-verified`, or `delivery-verified`), `outcome` (`pass`, `fail`, or `inconclusive`), `timestamp` (UTC ISO), `sourceCommit` (full 40-character SHA), `scope` (what was exercised), `source` (`maintainer:<github-handle>` or a public repository Actions run URL), and a short sanitized `summary`. Probe-backed kinds require a configured probe for that adapter. Never include credentials, recipients, message bodies, URLs, or raw provider responses; the validator rejects them.
+5. Run `bun run verification:check`. Failed, inconclusive, and stale records remain visible; do not replace missing evidence with a fabricated date or source.

@@ -22,6 +22,7 @@ const env = {
   JETEMAIL_API_KEY: v.optional(v.string()),
   LETTERMINT_API_TOKEN: v.optional(v.string()),
   LETTERMINT_ROUTE: v.optional(v.string()),
+  LETTR_API_KEY: v.optional(v.string()),
   LOOPS_API_KEY: v.optional(v.string()),
   LOOPS_TRANSACTIONAL_ID: v.optional(v.string()),
   MAILCHIMP_API_KEY: v.optional(v.string()),

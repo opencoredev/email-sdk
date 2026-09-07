@@ -103,7 +103,7 @@ export const sendWelcomeEmail = mutation({
 });
 ```
 
-`email.send()` returns the Convex document id for the queued email. Query `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions when you need delivery state, attempted adapters, provider message ids, or errors. Once webhooks are wired up, the stored email also carries a `deliveryStatus` (`delivered`, `bounced`, or `complained`) and a `deliveredAt` timestamp. The returns are typed: `status` resolves to `ConvexEmailDoc | null` and `listEvents` to `ConvexEmailEventDoc[]`, both exported from the package root along with `ConvexEmailDeliveryStatus`.
+`email.send()` returns the Convex document id for the queued email. Query `email.status(ctx, { emailId })` and `email.listEvents(ctx, { emailId })` from app functions when you need delivery state, attempted adapters, provider message ids, or errors. Once webhooks are wired up, the stored email also carries a `deliveryStatus` (`delivered`, `bounced`, or `complained`) and a `deliveredAt` timestamp. The returns are typed: `status` resolves to `ConvexEmailDoc | null` and `listEvents` to `ConvexEmailEventDoc[]`, both exported from the package root along with `ConvexEmailDeliveryStatus` and `ConvexEmailProviderFailure`.
 
 ## Provider Coverage
 
@@ -116,6 +116,7 @@ cloudflare
 iterable
 jetemail
 lettermint
+lettr
 loops
 mailchimp
 mailersend
@@ -153,6 +154,7 @@ ITERABLE_CAMPAIGN_ID
 JETEMAIL_API_KEY
 LETTERMINT_API_TOKEN
 LETTERMINT_ROUTE
+LETTR_API_KEY
 LOOPS_API_KEY
 LOOPS_TRANSACTIONAL_ID
 MAILCHIMP_API_KEY

@@ -167,6 +167,15 @@ export const vEmailEventType = v.union(
   v.literal("webhook"),
 );
 
+export const vEmailProviderFailure = v.object({
+  adapter: v.string(),
+  requestId: v.optional(v.string()),
+  retryable: v.boolean(),
+  delivery: v.union(v.literal("not_sent"), v.literal("unknown")),
+  acceptedCount: v.optional(v.number()),
+  rejectedCount: v.optional(v.number()),
+});
+
 export const vStoredEmail = v.object({
   _id: v.id("emails"),
   _creationTime: v.number(),
@@ -177,6 +186,7 @@ export const vStoredEmail = v.object({
   fallbackAdapters: v.array(v.string()),
   adapters: v.array(vAdapterConfig),
   providerMessageId: v.optional(v.string()),
+  providerFailure: v.optional(vEmailProviderFailure),
   idempotencyKey: v.optional(v.string()),
   sendMetadata: v.optional(vEmailMetadata),
   attemptCount: v.number(),

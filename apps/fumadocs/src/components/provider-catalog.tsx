@@ -1,12 +1,12 @@
 import verification from "../../../../adapter-verification.json";
 
-import { ExternalLink, Heart, VerifiedShield } from "@/components/icon";
+import { ExternalLink, Heart } from "@/components/icon";
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { useSelectedDocsVersion } from "@/lib/docs-version-state";
 import { providers, type Provider } from "@/lib/providers";
 import { sponsors } from "@/lib/sponsors";
 
-type VerifiedProvider = keyof typeof verification.liveChecks;
+type LiveCheckProvider = keyof typeof verification.liveChecks;
 
 const sponsorNames = new Set(sponsors.map((sponsor) => sponsor.name));
 const providerDescriptions: Record<Provider["key"], string> = {
@@ -31,6 +31,7 @@ const providerDescriptions: Record<Provider["key"], string> = {
   jetemail: "A focused transactional email API for product teams.",
   primitive: "Use when your product already sends through Primitive.",
   lettermint: "Straightforward transactional email with a simple API.",
+  lettr: "Transactional and marketing email for SaaS, with a REST API and editor.",
   plunk: "An open-source-friendly option for product email.",
   smtp: "Connect any existing SMTP server or self-hosted mail system.",
 };
@@ -50,12 +51,12 @@ export function ProviderGrid() {
           Sponsor
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <VerifiedShield
+          <ExternalLink
             aria-hidden="true"
-            className="size-4 fill-emerald-500 text-emerald-500 [&_path:last-child]:stroke-white"
+            className="size-3.5 text-fd-muted-foreground"
             strokeWidth={2.25}
           />
-          Verified
+          Live check available
         </span>
       </div>
       <div className="divide-y divide-fd-border">
@@ -138,9 +139,9 @@ function ProviderRow({ provider }: { provider: Provider }) {
 
 function ProviderStatus({ provider }: { provider: Provider }) {
   const sponsored = sponsorNames.has(provider.name);
-  const verified = isVerified(provider.key);
+  const liveCheckAvailable = hasLiveCheck(provider.key);
 
-  if (!sponsored && !verified) {
+  if (!sponsored && !liveCheckAvailable) {
     return null;
   }
 
@@ -151,14 +152,15 @@ function ProviderStatus({ provider }: { provider: Provider }) {
           <Heart aria-hidden="true" className="size-4 fill-rose-500 text-rose-500" />
         </span>
       ) : null}
-      {verified ? (
-        <span aria-label="Verified" className="inline-flex" role="img" title="Verified">
-          <VerifiedShield
+      {liveCheckAvailable ? (
+        <a href="/docs/adapters/verification" aria-label="Live check available — view current evidence" className="inline-flex items-center gap-1 text-xs text-fd-muted-foreground" title="A configured non-sending probe, not a published passing run">
+          <ExternalLink
             aria-hidden="true"
-            className="size-4 fill-emerald-500 text-emerald-500 [&_path:last-child]:stroke-white"
+            className="size-3.5 text-fd-muted-foreground"
             strokeWidth={2.25}
           />
-        </span>
+          Live check available
+        </a>
       ) : null}
     </span>
   );
@@ -173,14 +175,14 @@ function providerPriority(provider: Provider) {
     return 0;
   }
 
-  if (isVerified(provider.key)) {
+  if (hasLiveCheck(provider.key)) {
     return 1;
   }
 
   return 2;
 }
 
-function isVerified(key: string): key is VerifiedProvider {
+function hasLiveCheck(key: string): key is LiveCheckProvider {
   return Object.prototype.hasOwnProperty.call(verification.liveChecks, key);
 }
 

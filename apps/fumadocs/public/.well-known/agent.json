@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "name": "Email SDK",
-  "description": "Open-source TypeScript SDK that sends transactional email through 20+ providers (Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks. It is a library you install into an app, not a hosted API.",
+  "description": "Open-source TypeScript SDK that sends transactional email through 23 provider APIs plus SMTP (Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks. It is a library you install into an app, not a hosted API.",
   "productType": "sdk",
   "homepage": "https://email-sdk.dev",
   "documentation": "https://email-sdk.dev/docs",
@@ -25,7 +25,7 @@
     "cli": "email-sdk"
   },
   "capabilities": [
-    "Send transactional email through one typed client across 20+ providers",
+    "Send transactional email through one typed client across 24 adapters",
     "Retry transient failures and fall back across compatible adapters",
     "Expose a guarded send_email tool to LLM agents",
     "Run local configuration checks and dry-run sends via the email-sdk CLI"
@@ -44,7 +44,7 @@
       "description": "Send a transactional email through the app's configured Email SDK client. Requires from, to, and subject; optional html, text, adapter, and provider. Runs the full validate/retry/fallback pipeline.",
       "package": "@opencoredev/email-sdk/agent-tools",
       "factory": "createEmailAgentTools",
-      "documentation": "https://email-sdk.dev/docs/agents/skill",
+      "documentation": "https://email-sdk.dev/docs/getting-started/agent-skill",
       "requiresApproval": true
     }
   ],

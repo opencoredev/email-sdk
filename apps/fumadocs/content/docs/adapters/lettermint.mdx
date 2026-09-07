@@ -105,11 +105,11 @@ const email = createEmailClient({
 ## Verify from the CLI
 
 ```bash
-LETTERMINT_API_TOKEN="lm_..." npx email-sdk doctor --adapter lettermint
+LETTERMINT_API_TOKEN="lm_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter lettermint
 ```
 
 ```bash
-LETTERMINT_API_TOKEN="lm_..." npx email-sdk send \
+LETTERMINT_API_TOKEN="lm_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter lettermint \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

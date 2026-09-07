@@ -7,6 +7,7 @@ import {
   vEmailEventType,
   vEmailMessage,
   vEmailMetadata,
+  vEmailProviderFailure,
   vEmailStatusValue,
 } from "../shared/validators.js";
 
@@ -19,6 +20,7 @@ export default defineSchema({
     fallbackAdapters: v.array(v.string()),
     adapters: v.array(vAdapterConfig),
     providerMessageId: v.optional(v.string()),
+    providerFailure: v.optional(vEmailProviderFailure),
     idempotencyKey: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),

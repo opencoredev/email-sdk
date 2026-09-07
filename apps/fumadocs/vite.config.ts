@@ -8,6 +8,8 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
+import { devJsonImports } from "./scripts/dev-json-imports";
+
 import { comparePairs } from "./src/lib/compare";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
@@ -64,11 +66,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
     },
+    // server/middleware/geo.ts sends page requests to Notra GEO analytics.
+    nitro: {
+      serverDir: "./server",
+    },
     define: {
       "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),
       "import.meta.env.VITE_EMAIL_SDK_BUILD_ID": JSON.stringify(buildId),
     },
     plugins: [
+      devJsonImports(),
       mdx(),
       tailwindcss(),
       tanstackStart({

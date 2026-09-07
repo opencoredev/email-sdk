@@ -84,6 +84,330 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("resend looks configured.");
   });
 
+  test("doctor JSON defaults to configuration-only without provider traffic", async () => {
+    let calls = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        calls++;
+        return Response.json({});
+      },
+    });
+    try {
+      const result = await runCli([
+        "doctor",
+        "--adapter",
+        "resend",
+        "--api-key",
+        "private-key",
+        "--base-url",
+        server.url.origin,
+        "--json",
+      ]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(calls).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({
+        ok: true,
+        adapter: "resend",
+        checks: {
+          configuration: { status: "passed", message: expect.any(String) },
+          authentication: { status: "not_requested", message: expect.any(String) },
+          sender: { status: "not_requested", message: expect.any(String) },
+        },
+      });
+      expect(result.stdout).not.toContain("private-key");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test.each([
+    { override: ["--base-url"] },
+    { override: ["--base-url", ""] },
+    { override: ["--base-url="] },
+  ])(
+    "doctor rejects a valueless base URL override without falling back",
+    async ({ override }) => {
+      let calls = 0;
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch() {
+          calls++;
+          return Response.json({ data: [], has_more: false });
+        },
+      });
+      try {
+        const result = await runCli(
+          [
+            "doctor",
+            "--adapter",
+            "resend",
+            "--api-key",
+            "fixture-key",
+            "--live",
+            "--json",
+            ...override,
+          ],
+          { RESEND_BASE_URL: server.url.origin },
+        );
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toBe("");
+        expect(JSON.parse(result.stdout).checks.configuration.status).toBe("failed");
+        expect(calls).toBe(0);
+      } finally {
+        server.stop(true);
+      }
+    },
+  );
+
+  test("doctor live JSON uses flag credentials over environment and verifies Resend sender", async () => {
+    let calls = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        calls++;
+        expect(request.method).toBe("GET");
+        expect(await request.text()).toBe("");
+        expect(request.headers.get("Authorization")).toBe("Bearer flag-private-key");
+        return Response.json({
+          has_more: false,
+          data: [
+            {
+              id: "private-id",
+              name: "example.com",
+              status: "verified",
+              capabilities: { sending: "enabled" },
+            },
+          ],
+        });
+      },
+    });
+    try {
+      const result = await runCli(
+        [
+          "doctor",
+          "--adapter",
+          "resend",
+          "--api-key",
+          "flag-private-key",
+          "--base-url",
+          server.url.origin,
+          "--live",
+          "--from",
+          "Sender <hello@example.com>",
+          "--json",
+        ],
+        { RESEND_API_KEY: "env-private-key", RESEND_BASE_URL: "https://must-not-request.example" },
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(calls).toBe(1);
+      const body = JSON.parse(result.stdout);
+      expect(body.ok).toBe(true);
+      expect(body.checks.sender.status).toBe("passed");
+      for (const privateValue of [
+        "flag-private-key",
+        "env-private-key",
+        "private-id",
+        "hello@example.com",
+      ])
+        expect(result.stdout).not.toContain(privateValue);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test.each([
+    [401, "invalid_credentials"],
+    [403, "insufficient_permissions"],
+    [429, "rate_limited"],
+    [400, "inconclusive"],
+    [422, "inconclusive"],
+  ])("doctor JSON HTTP %s exits nonzero privately", async (status, expected) => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return Response.json(
+          { message: "private-key private-account-id" },
+          { status: Number(status) },
+        );
+      },
+    });
+    try {
+      const result = await runCli([
+        "doctor",
+        "--adapter",
+        "resend",
+        "--api-key",
+        "private-key",
+        "--base-url",
+        server.url.origin,
+        "--live",
+        "--json",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toBe("");
+      expect(JSON.parse(result.stdout).checks.authentication.status).toBe(expected);
+      expect(result.stdout).not.toContain("private-key");
+      expect(result.stdout).not.toContain("private-account-id");
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("doctor human output for an unverified sender exits nonzero and prints no private data", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return Response.json({
+          has_more: false,
+          data: [
+            {
+              id: "private-domain-id",
+              name: "example.com",
+              status: "pending",
+              capabilities: { sending: "disabled" },
+              fixture_marker: "FIXTURE-BODY-TEXT",
+            },
+          ],
+        });
+      },
+    });
+    try {
+      const result = await runCli([
+        "doctor",
+        "--adapter",
+        "resend",
+        "--api-key",
+        "re_private_key_000",
+        "--base-url",
+        server.url.origin,
+        "--live",
+        "--from",
+        "sender@example.com",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).toContain("configuration: passed");
+      expect(result.stdout).toContain("authentication: passed");
+      expect(result.stdout).toContain("sender: not_ready");
+      for (const privateValue of [
+        "re_private_key_000",
+        "private_key",
+        "private-domain-id",
+        "FIXTURE-BODY-TEXT",
+        "sender@example.com",
+        "example.com",
+        "has_more",
+      ])
+        expect(result.stdout + result.stderr).not.toContain(privateValue);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("doctor never follows a redirect to another local server", async () => {
+    let leaked = 0;
+    const destination = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        leaked++;
+        return Response.json({});
+      },
+    });
+    const redirect = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return Response.redirect(destination.url);
+      },
+    });
+    try {
+      const result = await runCli([
+        "doctor",
+        "--adapter",
+        "resend",
+        "--api-key",
+        "private-key",
+        "--base-url",
+        redirect.url.origin,
+        "--live",
+        "--json",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(JSON.parse(result.stdout).checks.authentication.status).toBe("network_failure");
+      expect(leaked).toBe(0);
+      expect(result.stdout + result.stderr).not.toContain("private-key");
+    } finally {
+      redirect.stop(true);
+      destination.stop(true);
+    }
+  });
+
+  test("doctor from without live is a structured usage failure", async () => {
+    const result = await runCli([
+      "doctor",
+      "--adapter",
+      "resend",
+      "--api-key",
+      "private-key",
+      "--from",
+      "hello@example.com",
+      "--json",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout).checks.configuration.message).toContain(
+      "--from requires --live",
+    );
+  });
+
+  test("doctor missing credentials JSON is parseable and does not make requests", async () => {
+    const result = await runCli(
+      ["doctor", "--adapter", "resend", "--api-key", "", "--live", "--json"],
+      { RESEND_API_KEY: "env-private-key" },
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout).checks.configuration.status).toBe("failed");
+    expect(JSON.parse(result.stdout).checks.authentication.status).toBe("blocked");
+  });
+
+  test("doctor unknown adapter JSON is private and structured", async () => {
+    const result = await runCli([
+      "doctor",
+      "--adapter",
+      "private-key-as-adapter",
+      "--live",
+      "--json",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout).adapter).toBe("unknown");
+    expect(JSON.parse(result.stdout).checks.configuration.status).toBe("failed");
+    expect(result.stdout).not.toContain("private-key-as-adapter");
+  });
+
+  test("doctor live unsupported adapter is not a pass", async () => {
+    const result = await runCli([
+      "doctor",
+      "--adapter",
+      "smtp",
+      "--host",
+      "localhost",
+      "--live",
+      "--json",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout).checks.authentication.status).toBe("unsupported");
+  });
+
   test("doctor accepts Cloudflare credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",
@@ -284,14 +608,14 @@ describe("email-sdk CLI", () => {
   });
 });
 
-async function runCli(args: string[]) {
+async function runCli(args: string[], env: Record<string, string | undefined> = {}) {
   const packageRoot = new URL("..", import.meta.url).pathname;
   const proc = Bun.spawn({
     cmd: ["bun", "src/cli.ts", ...args],
     cwd: packageRoot,
     // NODE_ENV=test already disables telemetry; the explicit opt-out keeps these
     // tests network-free even if env propagation changes.
-    env: { ...process.env, EMAIL_SDK_TELEMETRY: "0" },
+    env: { ...process.env, ...env, EMAIL_SDK_TELEMETRY: "0" },
     stderr: "pipe",
     stdout: "pipe",
   });

@@ -1,0 +1,59 @@
+---
+title: Migrate from the Resend SDK
+description: Replace direct Resend calls with a typed Email SDK client while keeping Resend as the delivery adapter.
+---
+
+Keep your Resend API key and verified sender. The migration changes the application boundary, not the provider account.
+
+## Replace construction
+
+```ts title="before.ts"
+import { Resend } from "resend";
+const resend = new Resend(process.env.RESEND_API_KEY);
+```
+
+```ts title="after.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+```
+
+## Replace sends
+
+```ts title="after.ts"
+const result = await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "user@example.com",
+    subject: "Welcome",
+    html: "<p>Your account is ready.</p>",
+  },
+  { idempotencyKey: "welcome:user_123" },
+);
+
+console.log(result.id);
+```
+
+Email SDK maps CC, BCC, reply-to, headers, attachments, tags, and `sendAt`. It rejects message metadata because the Resend adapter has no metadata mapping.
+
+## Add a backup only when compatible
+
+A simple SMTP backup cannot carry Resend attachments, tags, or scheduling. Validate the complete route before queueing and keep `onUnknownDelivery: "stop"` unless you explicitly accept duplicate risk.
+
+## Verify
+
+```bash
+RESEND_API_KEY=re_xxx npx email-sdk doctor --adapter resend
+RESEND_API_KEY=re_xxx npx email-sdk send \
+  --adapter resend \
+  --from hello@example.com \
+  --to user@example.com \
+  --subject "Migration smoke test" \
+  --text "Dry run only." \
+  --dry-run
+```
+
+<Card title="Resend adapter" href="/docs/adapters/resend" description="See all options and mapped fields." />

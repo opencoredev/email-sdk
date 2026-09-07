@@ -1,0 +1,49 @@
+---
+title: email-sdk send
+description: Build one message from flags or JSON, validate it with the selected adapter, and optionally send it.
+---
+
+## Safe dry run
+
+```bash
+EMAIL_SDK_TELEMETRY=0 email-sdk send \
+  --adapter resend \
+  --from "Acme <hello@example.com>" \
+  --to user@example.com \
+  --subject "Welcome" \
+  --text "Your account is ready." \
+  --dry-run
+```
+
+Dry run creates the real adapter with placeholder credentials where needed, calls `client.validate`, and prints `{ ok, adapter, message }`. It does not call the adapter send method. Attachment output includes paths and metadata, never file contents.
+
+## Message flags
+
+| Flag | Behavior |
+| --- | --- |
+| `--from` | Sender address |
+| `--to` | Comma-separated recipients |
+| `--subject` | Subject |
+| `--text`, `--html` | At least one body |
+| `--cc`, `--bcc`, `--reply-to` | Comma-separated addresses |
+| `--header "Name: value"` | Repeatable lossless headers |
+| `--tag name=value` | Repeatable tags |
+| `--metadata key=value` | Repeatable provider metadata, parsed as strings |
+| `--attachment path[:type]` | Repeatable server-side files; `--attach` also works |
+| `--message path` | Start from an `EmailMessage` JSON file; explicit flags override fields |
+| `--send-at` | RFC 3339 schedule for capable adapters |
+| `--dry-run` | Validate and print without sending |
+
+## Adapter flags
+
+Common credential flags include `--api-key`, `--server-token`, and `--base-url`. Cloudflare adds `--api-token` and `--account-id`. Iterable adds `--campaign-id`, `--iterable-send-at`, and `--allow-repeat-marketing-sends`. SMTP adds host, port, TLS, and auth flags.
+
+Run `email-sdk help` for the current list.
+
+## Live sends
+
+Without `--dry-run`, the command constructs one adapter, calls `client.send`, and prints the normalized result as JSON. There is no CLI fallback route or retry flag.
+
+Do not run a live command against an external recipient without approval.
+
+<Card title="Adapter pages" href="/docs/adapters" description="See provider-specific environment and field rules." />
