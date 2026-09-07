@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/convex-email",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Provider-portable transactional email for Convex with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
   "keywords": [
     "convex",
