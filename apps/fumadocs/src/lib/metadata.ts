@@ -12,9 +12,9 @@ const supportedProviderSentence = new Intl.ListFormat("en", {
   type: "conjunction",
 }).format(supportedProviderNames);
 
-export const siteTitle = `${appName} - Transactional email for TypeScript`;
+export const siteTitle = `${appName} - Email for TypeScript apps.`;
 export const siteImageAlt =
-  "Email SDK: Transactional email across 24 adapters in one typed SDK";
+  "Email SDK: Email for TypeScript apps. Alpine background with an illustrative send example.";
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 
@@ -212,7 +212,7 @@ export const homeStructuredData = {
       // text-to-speech readout (the hero heading and one-line summary).
       speakable: {
         "@type": "SpeakableSpecification",
-        cssSelector: ["#hero-heading", "#hero-summary"],
+        cssSelector: ["#landing-heading", "#landing-summary"],
       },
     },
     {
@@ -220,8 +220,7 @@ export const homeStructuredData = {
       "@id": `${siteUrl}/#service`,
       name: "Email SDK transactional email integration",
       serviceType: "Transactional email integration",
-      description:
-        "Send transactional email through 23 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
+      description: appDescription,
       provider: {
         "@id": `${siteUrl}/#organization`,
       },
@@ -238,7 +237,7 @@ export const homeStructuredData = {
       image: siteOgImageUrl,
       description: appDescription,
       programmingLanguage: "TypeScript",
-      runtimePlatform: ["Node.js", "Bun", "JavaScript"],
+      runtimePlatform: ["Node.js 20+", "Bun 1.1+"],
       softwareHelp: `${siteUrl}/docs`,
       codeRepository: "https://github.com/opencoredev/email-sdk",
       downloadUrl: "https://www.npmjs.com/package/@opencoredev/email-sdk",
@@ -248,9 +247,10 @@ export const homeStructuredData = {
         priceCurrency: "USD",
       },
       featureList: [
-        "Unified transactional email sending",
-        "Provider adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, and more",
-        "Fallback routes and retries",
+        "Transactional email through your existing provider account",
+        "23 provider API adapters plus SMTP, 24 adapters total, including Resend, Postmark, SendGrid, Mailgun, and AWS SES",
+        "Message validation, no-network test adapters, and common error types",
+        "Configurable fallback routes and retries",
         "Plugins for defaults, observability, capture, and community adapters",
         "CLI for local checks and smoke-test sends",
       ],
@@ -264,7 +264,7 @@ export const homeStructuredData = {
           name: "What is Email SDK?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK is a TypeScript email SDK that gives applications one typed client and one message shape for sending transactional email through providers such as Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, Cloudflare, and AWS SES.",
+            text: "Email for TypeScript apps. Email SDK is an open-source, server-side TypeScript library for sending transactional email with your existing provider account. It adds message validation, no-network test adapters, and common error types. Your provider still handles credentials, billing, and delivery.",
           },
         },
         {

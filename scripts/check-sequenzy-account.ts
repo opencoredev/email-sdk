@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { runDoctor } from "../packages/email-sdk/src/doctor.js";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { sequenzy } from "../packages/email-sdk/src/sequenzy.js";
@@ -13,30 +14,9 @@ if (!apiKey) {
   fail("Missing SEQUENZY_API_KEY. Set it in your shell or .env.local.");
 }
 
-const account = await fetchJson(`${baseUrl}/account`, {
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-  },
-});
-
-if (!account.success) {
-  fail(`Sequenzy account check failed: ${account.error ?? "Unknown error"}`);
-}
-
-const companyCount = Array.isArray(account.companies) ? account.companies.length : 0;
-console.log(
-  JSON.stringify(
-    {
-      ok: true,
-      provider: "sequenzy",
-      check: "account",
-      companyCount,
-      currentCompanyId: stringValue(account.currentCompanyId),
-    },
-    null,
-    2,
-  ),
-);
+const result = await runDoctor({ adapter: "sequenzy", credential: apiKey, live: true, baseUrl });
+console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exit(1);
 
 if (process.env.SEQUENZY_LIVE_SEND !== "true") {
   process.exit(0);
@@ -80,17 +60,6 @@ console.log(
   ),
 );
 
-async function fetchJson(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-
-  if (!response.ok) {
-    fail(`Sequenzy account check failed with HTTP ${response.status}: ${errorText(body)}`);
-  }
-
-  return body;
-}
-
 function requiredEnv(name: string) {
   const value = process.env[name];
 
@@ -99,14 +68,6 @@ function requiredEnv(name: string) {
   }
 
   return value;
-}
-
-function errorText(body: Record<string, unknown>) {
-  return stringValue(body.error) ?? stringValue(body.message) ?? "Unknown error";
-}
-
-function stringValue(value: unknown) {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function fail(message: string): never {

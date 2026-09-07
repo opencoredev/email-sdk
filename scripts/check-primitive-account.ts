@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { runDoctor } from "../packages/email-sdk/src/doctor.js";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { primitive } from "../packages/email-sdk/src/primitive.js";
@@ -13,52 +14,9 @@ if (!apiKey) {
   fail("Missing PRIMITIVE_API_KEY. Set it in your shell or .env.local.");
 }
 
-// Validate the key by confirming the send endpoint authenticates it: an empty
-// payload authenticates and then fails validation with a 400, never a 401.
-const authProbe = await fetch(`${baseUrl}/send-mail`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({}),
-});
-
-const authBody = await authProbe.text();
-
-if (authProbe.status === 401) {
-  fail(`Primitive rejected the API key (401 Unauthorized): ${truncate(authBody)}`);
-}
-
-// The empty probe payload should authenticate and then fail validation with a
-// 400 (verified live). Treat 400, 422 (some APIs use it for a structurally
-// valid but incomplete body), or any 2xx as proof the key passed auth; 401 is a
-// bad key, and 403, 5xx, and unexpected proxy/WAF bodies are inconclusive.
-const authenticated =
-  authProbe.status === 400 ||
-  authProbe.status === 422 ||
-  (authProbe.status >= 200 && authProbe.status < 300);
-
-console.log(
-  JSON.stringify(
-    {
-      ok: authenticated,
-      provider: "primitive",
-      check: "auth",
-      status: authProbe.status,
-      authenticated,
-      detail: truncate(authBody),
-    },
-    null,
-    2,
-  ),
-);
-
-if (!authenticated) {
-  fail(
-    `Primitive auth probe inconclusive (HTTP ${authProbe.status}); expected 400 or 422 for the empty probe payload.`,
-  );
-}
+const result = await runDoctor({ adapter: "primitive", credential: apiKey, live: true, baseUrl });
+console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exit(1);
 
 if (process.env.PRIMITIVE_LIVE_SEND !== "true") {
   process.exit(0);
@@ -109,11 +67,6 @@ function requiredEnv(name: string) {
   }
 
   return value;
-}
-
-function truncate(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
 }
 
 function fail(message: string): never {

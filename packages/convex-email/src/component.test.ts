@@ -429,6 +429,29 @@ describe("convex-email component", () => {
     expect(config?.cleanupAfterDays).toBeUndefined();
   });
 
+  test("rejects non-object webhook JSON for known providers", async () => {
+    const t = createTest();
+    for (const provider of ["resend", "postmark", "mailgun"]) {
+      for (const body of ["null", "[]", "true", "malformed"]) {
+        await expect(t.action(api.worker.handleWebhook, { provider, body, headers: {} })).rejects.toThrow();
+      }
+    }
+  });
+
+  test("deduplicates Resend delivery headers case-insensitively", async () => {
+    const t = createTest();
+    const args = { provider: "resend", headers: { "Svix-Id": "case-id" }, body: '{"type":"email.opened"}' };
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
+    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({ ok: true, duplicate: true });
+  });
+
+  test("retains generic provider compatibility", async () => {
+    const t = createTest();
+    const args = { provider: "custom", headers: {}, body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}' };
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true, duplicate: true });
+  });
+
   test("records duplicate webhook deliveries idempotently", async () => {
     const t = createTest();
     const args = {

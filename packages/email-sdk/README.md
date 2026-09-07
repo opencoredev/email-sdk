@@ -1,6 +1,6 @@
 # Email SDK
 
-A server-side TypeScript SDK for transactional email send pipelines. You get one typed client, literal adapter routes, field-support validation before providers drop data, delivery-aware retries and fallback, and plugins for defaults, observability, capture, or custom adapters.
+Email for TypeScript apps. A server-side SDK for transactional email with your existing provider account. You get one typed client, literal adapter routes, field-support validation before providers drop data, delivery-aware retries and fallback, and plugins for defaults, observability, capture, or custom adapters.
 
 Docs: https://email-sdk.dev/docs
 
@@ -40,7 +40,7 @@ console.log(result.adapter, result.id);
 
 ## Why use this
 
-- One `EmailMessage` shape across provider APIs.
+- One `EmailMessage` shape across 23 provider API adapters plus SMTP, 24 adapters total.
 - Adapter subpath imports, so apps load only the integrations they use.
 - Type-inferred route names across `send`, `validate`, `adapter`, and `withAdapter`.
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
