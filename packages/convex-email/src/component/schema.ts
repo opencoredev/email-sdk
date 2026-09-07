@@ -7,6 +7,7 @@ import {
   vEmailEventType,
   vEmailMessage,
   vEmailMetadata,
+  vEmailProviderFailure,
   vEmailStatusValue,
 } from "../shared/validators.js";
 
@@ -14,14 +15,18 @@ export default defineSchema({
   emails: defineTable({
     status: vEmailStatusValue,
     message: v.object(vEmailMessage),
+    // Public API wrappers stamp this server-controlled owner id for access checks.
+    ownerId: v.optional(v.string()),
     adapter: v.optional(v.string()),
     attemptedAdapters: v.array(v.string()),
     fallbackAdapters: v.array(v.string()),
     adapters: v.array(vAdapterConfig),
     providerMessageId: v.optional(v.string()),
+    providerFailure: v.optional(vEmailProviderFailure),
     idempotencyKey: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),
+    processingLease: v.optional(v.number()),
     maxAttempts: v.number(),
     retryBaseMs: v.number(),
     nextAttemptAt: v.optional(v.number()),
@@ -36,6 +41,7 @@ export default defineSchema({
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"])
     .index("by_status_and_updatedAt", ["status", "updatedAt"])
     .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_ownerId_and_idempotencyKey", ["ownerId", "idempotencyKey"])
     .index("by_createdAt", ["createdAt"])
     .index("by_terminalAt", ["terminalAt"])
     .index("by_providerMessageId", ["providerMessageId"]),

@@ -57,6 +57,13 @@ describe("adapter registry", () => {
     });
   });
 
+  test("includes Lettr with its documented environment variables", () => {
+    expect(CONVEX_EMAIL_ADAPTERS.lettr).toEqual({
+      apiKey: { type: "string", env: "LETTR_API_KEY", required: true },
+      baseUrl: { type: "string", inline: true },
+    });
+  });
+
   test("never allows a credential to be stored inline", () => {
     const credentials = /token|key|secret|pass/i;
     const inlineCredentials: string[] = [];

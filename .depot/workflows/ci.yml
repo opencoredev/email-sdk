@@ -56,6 +56,31 @@ jobs:
         run: bunx turbo run build --filter=@opencoredev/email-sdk
       - name: Run compatibility probe
         run: bash scripts/check-ai-compatibility.sh ${{ matrix.case }}
+  commonjs-compatibility:
+    name: CommonJS on Node ${{ matrix.node }}
+    runs-on: depot-ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20.19.0", "22.12.0"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build public packages
+        run: bunx turbo run build --filter=@opencoredev/email-sdk --filter=@opencoredev/convex-email
+      - name: Check installed runtime and typed consumers
+        run: bun run pack:check
   live-adapters:
     name: Live adapter verification
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
@@ -87,4 +112,5 @@ jobs:
           JETEMAIL_API_KEY: ${{ secrets.JETEMAIL_API_KEY }}
           PRIMITIVE_API_KEY: ${{ secrets.PRIMITIVE_API_KEY }}
           LETTERMINT_API_TOKEN: ${{ secrets.LETTERMINT_API_TOKEN }}
+          LETTR_API_KEY: ${{ secrets.LETTR_API_KEY }}
         run: bun run live:run -- "${{ steps.plan.outputs.adapters }}"

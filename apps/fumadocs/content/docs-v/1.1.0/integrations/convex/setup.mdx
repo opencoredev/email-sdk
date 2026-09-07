@@ -1,0 +1,161 @@
+---
+title: Install and configure
+description: Mount the Convex component, map provider secrets, create the server client, and set safe defaults.
+---
+
+<Steps>
+
+<Step>
+
+### Install the packages
+
+```bash
+bun add @opencoredev/convex-email @opencoredev/email-sdk
+```
+
+The component uses the same built-in adapters as Email SDK, but its configuration must be serializable across the Convex component boundary.
+
+</Step>
+
+<Step>
+
+### Mount the component
+
+Declare only the environment variables your routes need, then map them into the component instance.
+
+```ts title="convex/convex.config.ts"
+import convexEmail from "@opencoredev/convex-email/convex.config.js";
+import { defineApp } from "convex/server";
+import { v } from "convex/values";
+
+const app = defineApp({
+  env: {
+    RESEND_API_KEY: v.optional(v.string()),
+    SMTP_HOST: v.optional(v.string()),
+    SMTP_PORT: v.optional(v.string()),
+    SMTP_USER: v.optional(v.string()),
+    SMTP_PASS: v.optional(v.string()),
+  },
+});
+
+app.use(convexEmail, {
+  env: {
+    RESEND_API_KEY: app.env.RESEND_API_KEY,
+    SMTP_HOST: app.env.SMTP_HOST,
+    SMTP_PORT: app.env.SMTP_PORT,
+    SMTP_USER: app.env.SMTP_USER,
+    SMTP_PASS: app.env.SMTP_PASS,
+  },
+});
+
+export default app;
+```
+
+Run `bunx convex dev` after installing the component so Convex generates `components.convexEmail` in your app.
+
+</Step>
+
+<Step>
+
+### Set provider secrets
+
+```bash
+bunx convex env set RESEND_API_KEY re_xxx
+```
+
+Secrets stay in the Convex deployment. Adapter configuration stores environment-variable names, never raw credentials.
+
+</Step>
+
+<Step>
+
+### Create the server client
+
+```ts title="convex/email.ts"
+import { ConvexEmail } from "@opencoredev/convex-email";
+import { components } from "./_generated/api";
+
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [
+    { kind: "resend" },
+    { kind: "smtp", name: "backup-smtp" },
+  ],
+  defaultAdapter: "resend",
+  fallbackAdapters: ["backup-smtp"],
+  maxAttempts: 3,
+  retryBaseMs: 30_000,
+});
+```
+
+The client is server-only. Component functions are internal to your Convex backend, so expose app queries and mutations with your own authorization checks.
+
+</Step>
+
+<Step>
+
+### Store application defaults
+
+`setConfig` replaces the complete stored configuration. Put it behind an internal mutation or administrator-only action.
+
+```ts title="convex/emailAdmin.ts"
+import { internalMutation } from "./_generated/server";
+import { email } from "./email";
+
+export const configure = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await email.setConfig(ctx, {
+      defaultFrom: "Acme <hello@acme.com>",
+      testMode: true,
+      sandboxTo: ["email-preview@acme.com"],
+      maxAttempts: 3,
+      retryBaseMs: 30_000,
+      cleanupAfterDays: 30,
+    });
+  },
+});
+```
+
+Start with test mode enabled. Move to production by replacing the config with `testMode: false` after your provider domain, webhook verification, and monitoring are ready.
+
+</Step>
+
+</Steps>
+
+## Adapter coverage
+
+Every built-in Email SDK adapter is configurable through the component: `brevo`, `cloudflare`, `iterable`, `jetemail`, `lettermint`, `loops`, `mailchimp`, `mailersend`, `mailgun`, `mailpace`, `mailtrap`, `plunk`, `postmark`, `primitive`, `resend`, `scaleway`, `sendgrid`, `sequenzy`, `ses`, `smtp`, `sparkpost`, `unosend`, and `zeptomail`, plus `memory` for tests.
+
+Credentials always come from the component environment, so adapter config never holds a secret. Fields that identify a resource rather than authenticate one can be written inline:
+
+```ts title="convex/email.ts"
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [
+    // Reads LETTERMINT_API_TOKEN; `route` is not a secret, so it lives in config.
+    { kind: "lettermint", route: "transactional" },
+    { kind: "lettermint", name: "lettermint-broadcast", route: "broadcast" },
+  ],
+  defaultAdapter: "lettermint",
+  fallbackAdapters: ["lettermint-broadcast"],
+});
+```
+
+Each adapter's default variable follows its provider name: `RESEND_API_KEY`, `LETTERMINT_API_TOKEN`, `POSTMARK_SERVER_TOKEN`, `ZEPTOMAIL_TOKEN`, `MAILGUN_API_KEY` with `MAILGUN_DOMAIN`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` for SES, and so on. The [component README](https://github.com/opencoredev/email-sdk/tree/main/packages/convex-email) lists the full set.
+
+<Callout type="warn" title="Credentials come from the component contract">
+A Convex component only receives the environment variables its own contract declares, so the component reads a fixed set of names. To feed an adapter a differently named secret, map it onto the declared name when you mount the component:
+
+```ts title="convex/convex.config.ts"
+app.use(convexEmail, {
+  env: { LETTERMINT_API_TOKEN: app.env.LETTERMINT_BROADCAST_TOKEN },
+});
+```
+
+`apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, and the other `Env` suffixes repoint a field at a *different declared* variable. Naming a variable the component does not declare fails at send time with an explicit error rather than silently resolving to nothing.
+</Callout>
+
+<Callout type="info" title="Serializable adapter options">
+Custom `fetch` functions, SMTP TLS objects, and function-valued provider options cannot cross the component boundary. Use the equivalent serializable option or keep that specialized send in an application Node action.
+</Callout>
+
+<Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Queue messages and expose reactive state." />

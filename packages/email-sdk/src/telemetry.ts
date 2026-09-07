@@ -28,6 +28,7 @@ export type TelemetryEventName =
   | "client created"
   | "email sent"
   | "email batch sent"
+  | "email adapter attempted"
   | "cli command run";
 
 export type TelemetrySource = "sdk" | "cli";
@@ -55,6 +56,8 @@ export type TelemetryOptions = {
 
 export type Telemetry = {
   readonly enabled: boolean;
+  /** Only the non-injected runtime transport contributes to provider volume. */
+  readonly realProviderVolume?: boolean;
   /** Resolves once the event is delivered or dropped. Never rejects. */
   capture(event: TelemetryEventName, properties?: TelemetryProperties): Promise<void>;
   /** Reports a redacted error to PostHog error tracking. Never rejects. */
@@ -132,6 +135,8 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     // Derived from ci_vendor so CI systems that don't set CI=true (Jenkins) still count.
     ci: ciVendor !== undefined,
     ci_vendor: ciVendor,
+    measurement_schema_version: 2,
+    capture_mode: options.fetch ? "injected" : env.NODE_ENV === "test" ? "test" : "runtime",
   };
 
   const pending = new Set<Promise<void>>();
@@ -176,6 +181,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   return {
     enabled: true,
+    realProviderVolume: !options.fetch && env.NODE_ENV !== "test" && ciVendor === undefined,
     capture(event, properties) {
       return enqueue(deliver(event, properties));
     },

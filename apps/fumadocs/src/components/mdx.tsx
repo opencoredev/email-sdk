@@ -7,6 +7,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
 import { AdapterPricing } from "./adapter-pricing";
+import { AdapterVerification } from "./adapter-verification";
 import { AdapterCapabilitySupport, AdapterFieldSupport } from "./adapter-support";
 import { CommunityPluginRegistry } from "./community-plugin-registry";
 import { EmailExample, EmailExampleGallery } from "./email-examples";
@@ -47,6 +48,7 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     Accordion,
     Accordions,
     AdapterPricing,
+    AdapterVerification,
     AdapterCapabilitySupport,
     AdapterFieldSupport,
     CommunityPluginRegistry,

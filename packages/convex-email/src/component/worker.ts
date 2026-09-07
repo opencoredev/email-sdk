@@ -1,5 +1,7 @@
 "use node";
 
+import { EmailAdapterError, EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
+import { normalizeWebhookEvent as normalizeSdkWebhook } from "@opencoredev/email-sdk/webhooks";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -19,6 +21,7 @@ type QueuedEmail = {
   adapters: ConvexEmailAdapterConfig[];
   adapter?: string;
   fallbackAdapters: string[];
+  processingLease: number;
   message: ConvexEmailMessage;
   idempotencyKey?: string;
   sendMetadata?: Record<string, unknown>;
@@ -54,6 +57,7 @@ export const processEmail = internalAction({
         async recordAttempt(event) {
           await ctx.runMutation(recordProviderAttemptRef, {
             emailId: args.emailId,
+            processingLease: email.processingLease,
             adapter: event.adapter,
             attempt: event.attempt,
           });
@@ -69,12 +73,17 @@ export const processEmail = internalAction({
 
       await ctx.runMutation(markSentRef, {
         emailId: args.emailId,
+        processingLease: email.processingLease,
         response,
       });
     } catch (error) {
+      const providerFailure = providerFailureMetadata(error);
       await ctx.runMutation(markFailedOrRetryRef, {
         emailId: args.emailId,
+        processingLease: email.processingLease,
         error: stringifyError(error),
+        retryable: providerFailure?.retryable ?? isRetryableFailure(error),
+        ...(providerFailure ? { providerFailure } : {}),
       });
     }
 
@@ -90,7 +99,7 @@ export const handleWebhook = internalAction({
   },
   returns: v.object({ ok: v.boolean(), duplicate: v.optional(v.boolean()) }),
   handler: async (ctx, args) => {
-    const parsed = parseProviderWebhook(args.provider, args.body, args.headers);
+    const parsed = await parseProviderWebhook(args.provider, args.body, args.headers);
 
     return (await ctx.runMutation(recordWebhookRef, {
       provider: args.provider,
@@ -106,25 +115,51 @@ function stringifyError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
-  const payload = parseJson(body);
+function isRetryableFailure(error: unknown) {
+  return error instanceof EmailSdkError ? error.retryable : true;
+}
 
-  if (provider === "resend") {
-    const record = payload as Record<string, unknown>;
-    const data =
-      typeof record.data === "object" && record.data
-        ? (record.data as Record<string, unknown>)
-        : {};
-    const deliveryId =
-      stringValue(record.id) ??
-      headers["svix-id"] ??
-      headers["resend-signature"] ??
-      deterministicDeliveryId(provider, body);
-    const providerMessageId = stringValue(data.email_id) ?? stringValue(data.id);
-    const event = normalizeWebhookEvent(stringValue(record.type));
+function providerFailureMetadata(error: unknown) {
+  const failure =
+    error instanceof EmailRouteError
+      ? error.failures.at(-1)
+      : error instanceof EmailAdapterError
+        ? error
+        : undefined;
 
-    return { deliveryId, providerMessageId, event, payload };
+  if (!failure) {
+    return undefined;
   }
+
+  return {
+    adapter: failure.adapter,
+    retryable: failure.retryable,
+    delivery: failure.delivery,
+    ...(failure.requestId ? { requestId: failure.requestId } : {}),
+    ...(failure.acceptedCount !== undefined
+      ? { acceptedCount: failure.acceptedCount }
+      : {}),
+    ...(failure.rejectedCount !== undefined
+      ? { rejectedCount: failure.rejectedCount }
+      : {}),
+  };
+}
+
+async function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
+  if (provider === "resend" || provider === "postmark" || provider === "mailgun") {
+    const parsed = await normalizeSdkWebhook({ provider, body, headers });
+    return {
+      deliveryId: parsed.deliveryId,
+      providerMessageId: parsed.providerMessageId,
+      event: parsed.status ?? parsed.type,
+      payload: parsed.payload,
+    };
+  }
+  return parseGenericWebhook(provider, body);
+}
+
+function parseGenericWebhook(provider: string, body: string) {
+  const payload = parseJson(body);
 
   const record = payload as Record<string, unknown>;
   const eventData =

@@ -15,6 +15,7 @@ import type {
   ConvexEmailDoc,
   ConvexEmailEventDoc,
   ConvexEmailMessage,
+  ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
 } from "../shared/types.js";
 import {
@@ -32,6 +33,8 @@ import {
 type ComponentApi = {
   lib: {
     enqueue: unknown;
+    enqueueOwned: unknown;
+    enqueueOwnedBatch: unknown;
     enqueueBatch: unknown;
     status: unknown;
     listEvents: unknown;
@@ -48,6 +51,9 @@ type ComponentApi = {
 type MutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runMutation">;
 type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
 type ActionCtx = Pick<GenericActionCtx<GenericDataModel>, "runAction">;
+type PublicMutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runMutation" | "runQuery" | "auth">;
+type PublicQueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery" | "auth">;
+type PublicContext = PublicMutationCtx | PublicQueryCtx;
 type AnyMutationRef = FunctionReference<"mutation", "public", Record<string, unknown>, unknown>;
 type AnyQueryRef = FunctionReference<"query", "public", Record<string, unknown>, unknown>;
 type AnyActionRef = FunctionReference<
@@ -81,11 +87,40 @@ export type ConvexEmailOptions = {
 };
 export type ConvexEmailExposeApiOptions = {
   /**
-   * Exposes setConfig/getConfig as public Convex functions.
-   * Only enable this behind your own auth checks or for trusted server-only modules.
+   * Maps an authenticated caller to the stable owner id stored on emails created through this API.
+   * Return `null` to deny the request. Defaults to the Convex identity's `subject`.
+   */
+  authorize?: ConvexEmailPublicAuthorizer;
+  /**
+   * Exposes setConfig/getConfig as public Convex functions. This requires an explicit admin
+   * authorizer because configuration controls every sender using the component.
    */
   includeConfigApi?: boolean;
+  authorizeConfig?: ConvexEmailConfigAuthorizer;
 };
+
+export type ConvexEmailPublicOperation =
+  | "send"
+  | "sendBatch"
+  | "status"
+  | "listEvents"
+  | "cancel"
+  | "retry";
+
+export type ConvexEmailPublicAuthContext = {
+  auth: {
+    getUserIdentity(): Promise<{ subject: string; tokenIdentifier: string } | null>;
+  };
+};
+
+export type ConvexEmailPublicAuthorizer = (
+  ctx: ConvexEmailPublicAuthContext,
+  operation: ConvexEmailPublicOperation,
+) => Promise<string | null> | string | null;
+
+export type ConvexEmailConfigAuthorizer = (
+  ctx: ConvexEmailPublicAuthContext,
+) => Promise<boolean> | boolean;
 
 export class ConvexEmail {
   constructor(
@@ -196,36 +231,65 @@ export class ConvexEmail {
   }
 
   exposeApi(options: ConvexEmailExposeApiOptions = {}) {
+    if (options.includeConfigApi && !options.authorizeConfig) {
+      throw new Error(
+        "exposeApi({ includeConfigApi: true }) requires authorizeConfig to prevent public configuration access.",
+      );
+    }
+
     const publicApi = {
       send: mutationGeneric({
         args: vSendEmailArgs,
         returns: v.string(),
-        handler: async (ctx, args) => await this.send(ctx, args),
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "send", options.authorize);
+          return await this.sendForOwner(ctx, args, ownerId);
+        },
       }),
       sendBatch: mutationGeneric({
         args: vSendBatchEmailsArgs,
         returns: v.array(v.string()),
-        handler: async (ctx, args) => await this.sendBatch(ctx, args.messages),
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "sendBatch", options.authorize);
+          return await this.sendBatchForOwner(ctx, args.messages, ownerId);
+        },
       }),
       status: queryGeneric({
         args: vStatusArgs,
         returns: v.union(vStoredEmail, v.null()),
-        handler: async (ctx, args) => (await this.status(ctx, args)) as any,
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "status", options.authorize);
+          return (await this.ownedEmail(ctx, args.emailId, ownerId)) as any;
+        },
       }),
       listEvents: queryGeneric({
         args: vListEmailEventsArgs,
         returns: v.array(vStoredEmailEvent),
-        handler: async (ctx, args) => (await this.listEvents(ctx, args)) as any,
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "listEvents", options.authorize);
+          const email = await this.ownedEmail(ctx, args.emailId, ownerId);
+          return (email ? await this.listEvents(ctx, args) : []) as any;
+        },
       }),
       cancel: mutationGeneric({
         args: vCancelEmailArgs,
         returns: v.boolean(),
-        handler: async (ctx, args) => await this.cancel(ctx, args),
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "cancel", options.authorize);
+          return (await this.ownedEmail(ctx, args.emailId, ownerId))
+            ? await this.cancel(ctx, args)
+            : false;
+        },
       }),
       retry: mutationGeneric({
         args: vRetryEmailArgs,
         returns: v.boolean(),
-        handler: async (ctx, args) => await this.retry(ctx, args),
+        handler: async (ctx, args) => {
+          const ownerId = await this.authorizePublic(ctx, "retry", options.authorize);
+          return (await this.ownedEmail(ctx, args.emailId, ownerId))
+            ? await this.retry(ctx, args)
+            : false;
+        },
       }),
     };
 
@@ -238,12 +302,16 @@ export class ConvexEmail {
       getConfig: queryGeneric({
         args: {},
         returns: v.union(vEmailConfig, v.null()),
-        handler: async (ctx) => (await this.getConfig(ctx)) as any,
+        handler: async (ctx) => {
+          await this.authorizeConfig(ctx, options.authorizeConfig!);
+          return (await this.getConfig(ctx)) as any;
+        },
       }),
       setConfig: mutationGeneric({
         args: { config: vEmailConfig },
         returns: v.null(),
         handler: async (ctx, args) => {
+          await this.authorizeConfig(ctx, options.authorizeConfig!);
           await this.setConfig(ctx, args.config);
           return null;
         },
@@ -261,6 +329,53 @@ export class ConvexEmail {
       retryBaseMs: args.retryBaseMs ?? this.options.retryBaseMs,
     };
   }
+
+  private async sendForOwner(
+    ctx: Pick<GenericMutationCtx<GenericDataModel>, "runMutation">,
+    args: ConvexEmailSendArgs,
+    ownerId: string,
+  ) {
+    return (await ctx.runMutation(this.component.lib.enqueueOwned as AnyMutationRef, {
+      email: this.withDefaults(args),
+      ownerId,
+    })) as string;
+  }
+
+  private async sendBatchForOwner(
+    ctx: Pick<GenericMutationCtx<GenericDataModel>, "runMutation">,
+    messages: ConvexEmailSendArgs[],
+    ownerId: string,
+  ) {
+    return (await ctx.runMutation(this.component.lib.enqueueOwnedBatch as AnyMutationRef, {
+      messages: messages.map((message) => this.withDefaults(message)),
+      ownerId,
+    })) as string[];
+  }
+
+  private async ownedEmail(ctx: QueryCtx, emailId: string, ownerId: string) {
+    const email = await this.status(ctx, { emailId });
+    return email?.ownerId === ownerId ? email : null;
+  }
+
+  private async authorizePublic(
+    ctx: PublicContext,
+    operation: ConvexEmailPublicOperation,
+    authorize: ConvexEmailPublicAuthorizer | undefined,
+  ) {
+    const ownerId = authorize
+      ? await authorize(ctx, operation)
+      : (await ctx.auth.getUserIdentity())?.subject ?? null;
+    if (!ownerId) {
+      throw new Error("Unauthorized");
+    }
+    return ownerId;
+  }
+
+  private async authorizeConfig(ctx: PublicContext, authorize: ConvexEmailConfigAuthorizer) {
+    if (!(await authorize(ctx))) {
+      throw new Error("Unauthorized");
+    }
+  }
 }
 
 export type {
@@ -270,5 +385,6 @@ export type {
   ConvexEmailDoc,
   ConvexEmailEventDoc,
   ConvexEmailMessage,
+  ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
 };

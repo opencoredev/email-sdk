@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install the ESM-only SDK for Node.js 20+ or Bun 1.1+.
+description: Install Email SDK for Node.js or Bun using ESM imports or CommonJS require.
 ---
 
 <Steps>
@@ -19,12 +19,22 @@ The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package
 
 ### Confirm your runtime
 
-Use Node.js 20+ or Bun 1.1+. The package is ESM-only, so use `import` syntax or dynamic `import()` from a CommonJS application.
+Use Node.js 20+ or Bun 1.1+. ESM imports work across the supported range. CommonJS applications running Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) can use `require()` for the main package and every adapter entry point. On older supported runtimes, use dynamic `import()` or upgrade.
 
-```json title="package.json"
-{
-  "type": "module"
-}
+```js title="email.cjs"
+const { createEmailClient } = require("@opencoredev/email-sdk");
+const { resend } = require("@opencoredev/email-sdk/resend");
+```
+
+For typed CommonJS, use TypeScript 5.8+ with `module: nodenext`, or a compiler version supporting `module: node20`. The SDK remains ESM: legacy `node16`/`node18` modes do not model `require(esm)`. Use a `.cts` file with typed imports rather than an untyped bare `require()`:
+
+```ts title="email.cts"
+import sdk = require("@opencoredev/email-sdk");
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = sdk.createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
 ```
 
 </Step>
@@ -49,8 +59,8 @@ import { resend } from "@opencoredev/email-sdk/resend";
 A project install exposes the `email-sdk` binary. The built CLI uses a Node shebang and also runs under Bun.
 
 ```bash
-npx email-sdk version
-npx email-sdk adapters
+npx --package @opencoredev/email-sdk email-sdk version
+npx --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` after the formula points at a published release.

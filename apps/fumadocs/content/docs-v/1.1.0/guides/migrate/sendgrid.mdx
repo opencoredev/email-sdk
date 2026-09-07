@@ -1,0 +1,65 @@
+---
+title: Migrate from SendGrid
+description: Replace direct Mail Send payloads with normalized messages and explicit personalized sending.
+---
+
+Keep the SendGrid API key and verified sender. Email SDK calls the Mail Send API through the `sendgrid` adapter.
+
+## Create the client
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+
+export const email = createEmailClient({
+  adapters: [sendgrid({ apiKey: process.env.SENDGRID_API_KEY! })],
+});
+```
+
+## Send a normalized message
+
+```ts title="src/send.ts"
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+  metadata: { userId: "user_123" },
+  tags: [{ name: "type", value: "welcome" }],
+});
+```
+
+Metadata maps to `custom_args`, tag values map to SendGrid categories, and the adapter reads `id` from the `x-message-id` response header.
+
+## Replace personalized payloads
+
+```ts title="src/send-personalized.ts"
+await email.sendPersonalized({
+  message: {
+    from: "Acme <hello@acme.com>",
+    subject: "Hi %recipient.name%",
+    text: "Welcome, %recipient.name%.",
+  },
+  recipients: [
+    { to: "ada@example.com", variables: { name: "Ada" } },
+    { to: "linus@example.com", variables: { name: "Linus" } },
+  ],
+});
+```
+
+SendGrid has native personalized capability, so this stays one provider request.
+
+## Verify
+
+```bash
+SENDGRID_API_KEY=SG.x npx email-sdk doctor --adapter sendgrid
+SENDGRID_API_KEY=SG.x npx email-sdk send \
+  --adapter sendgrid \
+  --from hello@example.com \
+  --to user@example.com \
+  --subject "Migration smoke test" \
+  --text "Dry run only." \
+  --dry-run
+```
+
+<Card title="SendGrid adapter" href="/docs/adapters/sendgrid" description="See mapped fields, scheduling, and personalized delivery." />

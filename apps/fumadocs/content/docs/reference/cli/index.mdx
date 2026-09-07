@@ -3,7 +3,7 @@ title: CLI reference
 description: Commands, runtime, aliases, telemetry, adapter detection, and exit behavior for the email-sdk binary.
 ---
 
-The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node shebang. It supports Node.js 20+ and Bun 1.1+.
+The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node shebang. It supports Node.js 20+ and Bun 1.1+. Without a project install, run it as `npx --package @opencoredev/email-sdk email-sdk`; the unscoped `email-sdk` package on npm is unrelated.
 
 ## Commands
 
@@ -11,7 +11,7 @@ The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node
 | --- | --- |
 | `version` | Print package name and version; `--json` returns JSON. |
 | `adapters` | List bundled adapter names, required environment, and notes; `--json` returns JSON. |
-| `doctor` | Check whether required values are present for one adapter. |
+| `doctor` | Check whether required values are present for one adapter. `--live` authenticates without sending; `--json` returns structured checks. |
 | `send` | Build, validate, and optionally send one message. |
 
 `providers` aliases `adapters`. `--provider` aliases `--adapter` in CLI input, but new examples use adapter vocabulary.

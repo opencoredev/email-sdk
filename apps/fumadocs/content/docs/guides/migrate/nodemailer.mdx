@@ -52,8 +52,8 @@ The built-in SMTP adapter rejects attachments, tags, metadata, and schedules. Ke
 ## Verify
 
 ```bash
-SMTP_HOST=smtp.example.com npx email-sdk doctor --adapter smtp
-npx email-sdk send \
+SMTP_HOST=smtp.example.com npx --package @opencoredev/email-sdk email-sdk doctor --adapter smtp
+npx --package @opencoredev/email-sdk email-sdk send \
   --adapter smtp \
   --host smtp.example.com \
   --from hello@example.com \
