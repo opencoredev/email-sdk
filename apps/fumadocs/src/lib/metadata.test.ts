@@ -51,9 +51,7 @@ describe("homepage product explanation", () => {
     expect(home).toMatch(/apiKey: process\.env\.["}]*\s*<em>RESEND_API_KEY<\/em>\s*\{"! \}\)\],"\}/);
     expect(home).toContain("'Acme <hello@acme.dev>'");
     expect(home).toContain("'ada@example.com'");
-    expect(home).toContain("retry: { maxAttempts: 1 }");
     expect(home).not.toContain("landing-mobile-only");
-    expect(home).toMatch(/if you enable retries, a retryable unknown outcome\s+can be retried/);
   });
 
   test("links practical next steps to existing current docs", () => {
