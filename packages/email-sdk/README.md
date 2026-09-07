@@ -40,7 +40,7 @@ console.log(result.adapter, result.id);
 
 ## Why use this
 
-- One `EmailMessage` shape across provider APIs.
+- One `EmailMessage` shape across 23 provider API adapters plus SMTP, 24 adapters total.
 - Adapter subpath imports, so apps load only the integrations they use.
 - Type-inferred route names across `send`, `validate`, `adapter`, and `withAdapter`.
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
