@@ -1,0 +1,74 @@
+---
+title: Build a production send pipeline
+description: Validate before queueing, preserve durable state, and use retries and fallback without hiding delivery uncertainty.
+---
+
+The core SDK owns one process-local delivery attempt. Your application owns durable queueing, persisted idempotency, and recovery after process failure.
+
+## Construct explicit routes
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      name: "backup",
+      host: process.env.SMTP_HOST!,
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+    }),
+  ],
+  defaultAdapter: "resend",
+  retry: { maxAttempts: 2 },
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
+  },
+});
+```
+
+Choose the backup from the [field support](/docs/adapters/field-support) and [capability](/docs/adapters/capability-groups) tables. SMTP is not a universal backup because it rejects attachments, tags, metadata, and schedules.
+
+## Validate before accepting work
+
+Use the same public no-network boundary as `send` before committing a job to your queue.
+
+```ts title="src/jobs/enqueue-email.ts"
+await email.validate(message, {
+  fallback: { adapters: ["backup"] },
+});
+
+await queue.add("send-email", { message, idempotencyKey });
+```
+
+## Send with a stable idempotency key
+
+```ts title="src/jobs/send-email.ts"
+await email.send(job.message, {
+  idempotencyKey: job.idempotencyKey,
+  metadata: { jobId: job.id },
+  signal: job.signal,
+});
+```
+
+The key is effective only where the selected adapter supports it. Persist your own business-level deduplication before invoking the SDK.
+
+## Handle delivery certainty
+
+- Retry `not_sent` failures when `retryable` is true.
+- Let configured fallback advance after terminal `not_sent` failures.
+- Stop on `unknown` by default and reconcile provider state before retrying.
+- Opt into `onUnknownDelivery: "continue"` only when a duplicate is safer than a missed message.
+
+## Record safe facts
+
+Use hooks or `observabilityPlugin` for adapter, attempt, stable error code, duration, and redacted message facts. Avoid bodies, addresses, credentials, idempotency keys, provider response bodies, URLs, and filesystem paths.
+
+## Use a durable integration when needed
+
+[Convex Email](/docs/integrations/convex) provides queue state, attempts, cancellation, test-mode redirection, and webhook history for Convex applications.
+
+<Card title="Troubleshoot failures" href="/docs/guides/troubleshoot-failed-sends" description="Inspect typed errors and delivery classification." />

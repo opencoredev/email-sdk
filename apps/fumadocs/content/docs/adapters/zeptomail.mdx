@@ -75,11 +75,11 @@ console.log(result.id); // ZeptoMail request_id (falls back to messageId or id)
 ## Verify from the CLI
 
 ```bash
-ZEPTOMAIL_TOKEN="..." npx email-sdk doctor --adapter zeptomail
+ZEPTOMAIL_TOKEN="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter zeptomail
 ```
 
 ```bash
-ZEPTOMAIL_TOKEN="..." npx email-sdk send \
+ZEPTOMAIL_TOKEN="..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter zeptomail \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

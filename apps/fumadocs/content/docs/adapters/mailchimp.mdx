@@ -76,11 +76,11 @@ Mandrill responds with one result per recipient; the normalized `id` comes from 
 ## Verify from the CLI
 
 ```bash
-MAILCHIMP_API_KEY="md-..." npx email-sdk doctor --adapter mailchimp
+MAILCHIMP_API_KEY="md-..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter mailchimp
 ```
 
 ```bash
-MAILCHIMP_API_KEY="md-..." npx email-sdk send \
+MAILCHIMP_API_KEY="md-..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter mailchimp \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

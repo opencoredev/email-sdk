@@ -60,7 +60,7 @@ The key is effective only where the selected adapter supports it. Persist your o
 
 - Retry `not_sent` failures when `retryable` is true.
 - Let configured fallback advance after terminal `not_sent` failures.
-- Stop on `unknown` by default and reconcile provider state before retrying.
+- Stop on `unknown` by default and reconcile provider state before retrying. `onUnknownDelivery: "stop"` only controls fallback to the next adapter; same-adapter retries follow `retry`, so set `retry: { maxAttempts: 1 }` when a durable worker owns retries.
 - Opt into `onUnknownDelivery: "continue"` only when a duplicate is safer than a missed message.
 
 ## Record safe facts
@@ -68,6 +68,8 @@ The key is effective only where the selected adapter supports it. Persist your o
 Use hooks or `observabilityPlugin` for adapter, attempt, stable error code, duration, and redacted message facts. Avoid bodies, addresses, credentials, idempotency keys, provider response bodies, URLs, and filesystem paths.
 
 ## Use a durable integration when needed
+
+The [durable PostgreSQL example](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/durable-postgres) is a runnable version of this guide: idempotent enqueue, leased worker claims, a `needs_reconciliation` state for unknown outcomes, verified [webhook](/docs/reference/webhooks) ingestion with replay protection, and a suppression table.
 
 [Convex Email](/docs/integrations/convex) provides queue state, attempts, cancellation, test-mode redirection, and webhook history for Convex applications.
 

@@ -26,20 +26,49 @@ When disabled, telemetry does not write config, print the notice, or make networ
 
 ## Events
 
-The current event names are `client created`, `email sent`, `email batch sent`, and `cli command run`.
+The current event names are `client created`, `email sent`, `email adapter attempted`, `email batch sent`, and `cli command run`. Event names such as `email sent` describe an operation completing, including failure; they are not delivery receipts.
 
 Allowed facts include built-in adapter names, operation/command names, counts, success, durations, stable error codes, runtime and SDK versions, CI facts, and feature-presence booleans. Custom adapter names become `custom`.
 
 ### Counting messages
 
-`email sent` fires once per `send()` or `sendPersonalized()` call, not once per message, so counting events undercounts real volume. Two properties make the arithmetic exact:
+Use `measurement_schema_version = 2` when aggregating the current send measurements. Older events used `delivered_count` for a successful send outcome, not confirmed delivery, and cannot be converted into accurate historical delivery totals. New events omit that property.
 
-| Property | Meaning |
-| --- | --- |
-| `message_count` | Individual messages the call represents. `1` for `send()` no matter how many `to`/`cc`/`bcc` addresses share the message, one per recipient for `sendPersonalized()`. |
-| `delivered_count` | Messages the provider accepted. `0` on failure, and on a partially accepted personalized send it counts only the accepted recipients. |
+Keep these event series separate:
 
-Sum `delivered_count` for delivered volume and `message_count` for attempted volume. Each `sendMany()` item emits its own `email sent`, so `email batch sent` deliberately carries no `delivered_count` — it describes batch shape, while `email sent` is the volume series.
+| Event | Unit | Counting rule |
+| --- | --- | --- |
+| `email sent` | Logical send operation | One event per `send()` or `sendPersonalized()` call, regardless of retries or fallback. Each `sendMany()` item emits one. |
+| `email adapter attempted` | Adapter invocation | One event for each actual `send` or native `sendPersonalized` invocation, including retries and fallback attempts. |
+| `email batch sent` | Batch summary | Describes batch size and item outcomes; never add it to operation or provider-volume totals. |
+
+On logical operations, `message_count` is the requested number of individual messages: one for `send()` regardless of `to`/`cc`/`bcc` count, or one per personalized recipient. This includes operations that fail validation before contacting a provider. Use attempt events to measure work that reached an adapter.
+
+Attempt events count recipients on the message after middleware has run. Native personalization can represent many messages in one invocation; expanded personalization produces an invocation for each recipient, plus any retries. Validation and CLI dry runs produce no attempt events.
+
+### Acceptance and uncertainty
+
+Provider acceptance is not inbox delivery. Acceptance is recorded at the adapter-call boundary, before after-send middleware, hooks, or a subsequent cancellation can fail the logical operation. A partial provider response and a failed application operation can therefore coexist.
+
+Use these properties to build reports. Filter to `measurement_schema_version = 2` and the event named in each row.
+
+| Report | Event | Sum |
+| --- | --- | --- |
+| Logical operations | `email sent` | `logical_operation_count` |
+| Successful / failed operations | `email sent` | `operation_success_count` / `operation_failure_count` |
+| Provider attempts | `email adapter attempted` | `provider_attempt_count` |
+| Submitted messages | `email adapter attempted` | `provider_submitted_message_count` |
+| Submitted recipients | `email adapter attempted` | `provider_submitted_recipient_count` |
+| Explicitly accepted messages / recipients | `email adapter attempted` | `provider_accepted_message_count` / `provider_accepted_recipient_count` |
+| Uncertain provider failures | `email adapter attempted`, with `provider_volume_eligible = true` | `uncertain_attempt_count` |
+
+Submitted volume includes explicit acceptance and successful submissions where the adapter returns no recipient lists, as Resend does. `acceptance_basis` distinguishes `explicit`, `inferred_from_success`, and `unknown`. An explicitly empty acceptance list never implies acceptance. Explicit acceptance is a subset of submitted volume; adding these counters together would double count.
+
+The generic `accepted_recipient_count`, `rejected_recipient_count`, and `unknown_recipient_count` describe recipient-level evidence, including test and custom adapters. A successful submission without recipient lists can still have unknown recipient-level acceptance. A timeout is not a confirmed rejection. `not_sent_attempt_count` tracks failures known not to have sent, separately from uncertain failures.
+
+Provider-volume counters include runtime submissions through built-in and custom adapters. Built-in memory and failing adapters remain excluded even when renamed, as do CI and injected telemetry transports. `adapter_kind` identifies `provider`, `test`, or `custom`; custom and renamed route names are reported only as `custom`, without losing their submission counts. Adapter invocations remain observable in the generic counters. The SDK cannot detect every user-written mock or provider sandbox behind an otherwise normal adapter.
+
+Acceptance totals describe observed submissions, not unique emails across separate SDK calls. The SDK does not collect message identifiers or idempotency keys, so it cannot deduplicate application retries across processes or prove that a provider delivered only one copy. Opt-outs, blocked requests, and processes exiting before telemetry flushes also make these measurements incomplete. Label aggregate numbers as **observed SDK usage**, not all emails sent or delivered.
 
 ## Flushing on serverless
 

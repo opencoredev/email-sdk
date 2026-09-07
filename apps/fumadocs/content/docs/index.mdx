@@ -1,9 +1,9 @@
 ---
 title: Email SDK
-description: Send transactional email through 23 adapters with one typed TypeScript SDK.
+description: Email for TypeScript apps. Send transactional email through 24 adapters with one typed SDK.
 ---
 
-Install the SDK, add the adapter for your provider, and call `email.send()`. The message shape stays the same if you switch providers later.
+Email for TypeScript apps. Install the SDK, add the adapter for your existing provider account, and call `email.send()`. The message shape stays the same if you switch providers later.
 
 <Card title="Send your first email" href="/docs/getting-started/quickstart" description="Install the SDK, configure one adapter, and send a message from Node.js or Bun." />
 
@@ -22,7 +22,7 @@ Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugi
 
 ## Included
 
-- 22 provider API adapters plus SMTP, 23 adapters total
+- 23 provider API adapters plus SMTP, 24 adapters total
 - Typed adapter names in `send`, `validate`, `adapter`, and `withAdapter`
 - Retries on the current adapter, then fallback only when delivery is known to have failed
 - Independent `sendMany` calls and personalized `sendPersonalized` delivery
@@ -33,7 +33,7 @@ Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugi
 
 ## Runtime boundary
 
-Email SDK is ESM-only and server-side. It supports Node.js 20+ and Bun 1.1+. Keep API keys and SMTP credentials out of browser bundles.
+Email SDK is server-side and supports Node.js 20+ or Bun 1.1+. Use ESM imports on any supported runtime, or `require()` from CommonJS applications on Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+). On older supported runtimes, use dynamic `import()`. See [Install](/docs/getting-started/install) for typed CommonJS configuration. Keep API keys and SMTP credentials out of browser bundles.
 
 <Card title="Install" href="/docs/getting-started/install" description="Install the SDK and confirm your Node.js or Bun version." />
 <Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use sendAt for provider scheduling, or keep long-running jobs in your own queue." />

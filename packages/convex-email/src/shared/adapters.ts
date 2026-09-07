@@ -64,6 +64,10 @@ export const CONVEX_EMAIL_ADAPTERS = {
     route: { type: "string", env: "LETTERMINT_ROUTE", inline: true },
     baseUrl: BASE_URL,
   },
+  lettr: {
+    apiKey: { type: "string", env: "LETTR_API_KEY", required: true },
+    baseUrl: BASE_URL,
+  },
   loops: {
     apiKey: { type: "string", env: "LOOPS_API_KEY", required: true },
     transactionalId: {

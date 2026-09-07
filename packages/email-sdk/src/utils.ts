@@ -468,6 +468,16 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  lettr: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+    sendAt: true,
+  },
   primitive: { attachments: true },
   plunk: { replyTo: true, headers: true, attachments: true, metadata: true },
   mailtrap: {
@@ -576,14 +586,15 @@ export function validateBuiltInAdapter(
 		adapter === "mailtrap" ||
 		adapter === "plunk" ||
 		adapter === "unosend" ||
-		adapter === "sequenzy"
+		adapter === "sequenzy" ||
+		adapter === "lettr"
 	) {
 		assertMaxItems(adapter, "replyTo", replyTo, 1);
 	}
   if (adapter === "sequenzy") {
     assertMaxItems(adapter, "recipient", to, 50);
   }
-  if (adapter === "postmark" || adapter === "lettermint" || adapter === "mailtrap") {
+  if (adapter === "postmark" || adapter === "lettermint" || adapter === "mailtrap" || adapter === "lettr") {
     assertMaxItems(adapter, "tag", [...(message.tags ?? [])], 1);
   }
   if (adapter === "scaleway" && replyTo.length > 0) {

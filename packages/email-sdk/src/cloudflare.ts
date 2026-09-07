@@ -1,20 +1,82 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
-import { base64Attachments, commonHeadersObject, emailParts } from "./payloads.js";
-import type { EmailAddress, EmailMessage, EmailAdapter, OneOrMany } from "./types.js";
+import { base64Attachments, commonHeadersObject, emailParts, stringAddresses } from "./payloads.js";
+import type { EmailAddress, EmailAdapter, EmailMessage, OneOrMany } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   arrayify,
   assertMaxItems,
   assertSupportedMessageFields,
+  builtInAdapterDefinition,
 } from "./utils.js";
 
-export type CloudflareAdapterOptions = {
+export type CloudflareSendEmailAddress =
+  | string
+  | {
+      email: string;
+      name: string;
+    };
+
+export type CloudflareSendEmailAttachment =
+  | {
+      content: string | ArrayBuffer | ArrayBufferView;
+      filename: string;
+      type: string;
+      disposition: "inline";
+      contentId: string;
+    }
+  | {
+      content: string | ArrayBuffer | ArrayBufferView;
+      filename: string;
+      type: string;
+      disposition: "attachment";
+      contentId?: undefined;
+    };
+
+export type CloudflareSendEmailMessage = {
+  from: CloudflareSendEmailAddress;
+  to: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
+  bcc?: CloudflareSendEmailAddress | CloudflareSendEmailAddress[];
+  replyTo?: CloudflareSendEmailAddress;
+  attachments?: CloudflareSendEmailAttachment[];
+  headers?: Record<string, string>;
+};
+
+export type CloudflareSendEmailResult = {
+  messageId?: string;
+};
+
+export type CloudflareSendEmailBinding = {
+  send(message: CloudflareSendEmailMessage): Promise<CloudflareSendEmailResult | void>;
+};
+
+export type CloudflareHttpAdapterOptions = {
   apiToken: string;
   accountId: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+  binding?: never;
 };
+
+export type CloudflareBindingAdapterOptions = {
+  binding: CloudflareSendEmailBinding;
+  apiToken?: never;
+  accountId?: never;
+  baseUrl?: never;
+  fetch?: never;
+};
+
+export type CloudflareAdapterOptions =
+  | CloudflareHttpAdapterOptions
+  | CloudflareBindingAdapterOptions;
+
+export type CloudflareAdapterRaw =
+  | { baseUrl: string; accountId: string }
+  | { binding: CloudflareSendEmailBinding };
 
 type CloudflareSendResponse = {
   success?: boolean;
@@ -29,6 +91,86 @@ type CloudflareSendResponse = {
 
 export function cloudflare(
   options: CloudflareAdapterOptions,
+): EmailAdapter<"cloudflare", CloudflareAdapterRaw> {
+  if ("binding" in options && options.binding) {
+    return fromBinding(options.binding);
+  }
+
+  return fromHttp(options);
+}
+
+function fromBinding(
+  binding: CloudflareSendEmailBinding,
+): EmailAdapter<"cloudflare", { binding: CloudflareSendEmailBinding }> {
+  return {
+    name: "cloudflare",
+    ...builtInAdapterDefinition("cloudflare"),
+    raw: { binding },
+    async send(message) {
+      assertCloudflareMessage(message);
+
+      const attachments = await base64Attachments(message);
+
+      const payload: CloudflareSendEmailMessage = {
+        from: cloudflareBindingAddress(message.from),
+        to: cloudflareRecipients(message.to),
+        cc: cloudflareOptionalRecipients(message.cc),
+        bcc: cloudflareOptionalRecipients(message.bcc),
+        replyTo: cloudflareOptionalBindingReplyTo(message.replyTo),
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+        headers: commonHeadersObject(message),
+        attachments: attachments?.map((attachment) =>
+          attachment.contentId
+            ? {
+                content: attachment.content!,
+                filename: attachment.filename,
+                type: attachment.contentType ?? "application/octet-stream",
+                disposition: "inline" as const,
+                contentId: attachment.contentId,
+              }
+            : {
+                content: attachment.content!,
+                filename: attachment.filename,
+                type: attachment.contentType ?? "application/octet-stream",
+                disposition: "attachment" as const,
+              },
+        ),
+      };
+
+      try {
+        const result = await binding.send(payload);
+
+        const accepted = [
+          ...stringAddresses(message.to),
+          ...(message.cc ? stringAddresses(message.cc) : []),
+          ...(message.bcc ? stringAddresses(message.bcc) : []),
+        ];
+
+        return {
+          adapter: "cloudflare",
+          id: result?.messageId,
+          accepted,
+          raw: result ?? undefined,
+        };
+      } catch (error) {
+        if (error instanceof EmailAdapterError || error instanceof EmailValidationError) {
+          throw error;
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new EmailAdapterError(`cloudflare failed: ${errorMessage}`, {
+          adapter: "cloudflare",
+          cause: error,
+          retryable: isRetryableCloudflareBindingError(error),
+        });
+      }
+    },
+  };
+}
+
+function fromHttp(
+  options: CloudflareHttpAdapterOptions,
 ): EmailAdapter<"cloudflare", { baseUrl: string; accountId: string }> {
   const baseUrl = options.baseUrl ?? "https://api.cloudflare.com/client/v4";
 
@@ -111,6 +253,19 @@ function cloudflareAddress(address: EmailAddress) {
   };
 }
 
+function cloudflareBindingAddress(address: EmailAddress): CloudflareSendEmailAddress {
+  const parts = emailParts(address);
+
+  if (!parts.name) {
+    return parts.email;
+  }
+
+  return {
+    email: parts.email,
+    name: parts.name,
+  };
+}
+
 function cloudflareRecipients(addresses: OneOrMany<EmailAddress>) {
   return arrayify(addresses).map(cloudflareRecipient);
 }
@@ -144,10 +299,31 @@ function cloudflareOptionalReplyTo(addresses: OneOrMany<EmailAddress> | undefine
   return cloudflareAddress(values[0]!);
 }
 
+function cloudflareOptionalBindingReplyTo(
+  addresses: OneOrMany<EmailAddress> | undefined,
+) {
+  const values = arrayify(addresses);
+
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  assertMaxItems("cloudflare", "replyTo", values, 1);
+  return cloudflareBindingAddress(values[0]!);
+}
+
 function assertCloudflareLimits(message: EmailMessage) {
   const recipients = [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)];
 
   assertMaxItems("cloudflare", "recipient", recipients, 50);
+}
+
+function isRetryableCloudflareBindingError(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return false;
+  }
+
+  return ["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR"].includes(String(error.code));
 }
 
 function cloudflareErrorMessage(body: CloudflareSendResponse) {

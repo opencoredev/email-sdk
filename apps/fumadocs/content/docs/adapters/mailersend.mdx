@@ -77,11 +77,11 @@ The response `id` comes from the `x-message-id` response header, falling back to
 ## Verify from the CLI
 
 ```bash
-MAILERSEND_API_KEY="mlsn..." npx email-sdk doctor --adapter mailersend
+MAILERSEND_API_KEY="mlsn..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter mailersend
 ```
 
 ```bash
-MAILERSEND_API_KEY="mlsn..." npx email-sdk send \
+MAILERSEND_API_KEY="mlsn..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter mailersend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -18,7 +18,7 @@ export const sponsorRowGeometry = {
   labelOffset: 32,
   fontSize: 13,
   /** Blank space kept between a label and the next logo. */
-  minClearance: 14,
+  minClearance: 12,
   /** Below this the labels get too small to read, so the build must fail. */
   minScale: 0.7,
 } as const;

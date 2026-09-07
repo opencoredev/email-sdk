@@ -5,10 +5,15 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
-import type { ConvexEmailConfig, ConvexEmailSendArgs } from "../shared/types.js";
+import type {
+  ConvexEmailConfig,
+  ConvexEmailProviderFailure,
+  ConvexEmailSendArgs,
+} from "../shared/types.js";
 import {
   vCancelEmailArgs,
   vEmailConfig,
+  vEmailProviderFailure,
   vListEmailEventsArgs,
   vRetryEmailArgs,
   vSendBatchEmailsArgs,
@@ -36,6 +41,36 @@ export const enqueue = mutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     return await enqueueEmail(ctx, args);
+  },
+});
+
+/** Only app-side wrappers should call this; it stamps ownership for public API access. */
+export const enqueueOwned = mutation({
+  args: { email: v.object(vSendEmailArgs), ownerId: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await enqueueEmail(ctx, args.email, undefined, args.ownerId);
+  },
+});
+
+/** Only app-side wrappers should call this; it atomically stamps ownership for public batch sends. */
+export const enqueueOwnedBatch = mutation({
+  args: { messages: v.array(v.object(vSendEmailArgs)), ownerId: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    if (args.messages.length > maxBatchSize) {
+      throw new ConvexError({
+        code: "BATCH_TOO_LARGE",
+        message: `sendBatch accepts at most ${maxBatchSize} messages per mutation. Split larger batches client-side.`,
+      });
+    }
+
+    const config = await readConfig(ctx);
+    const ids: string[] = [];
+    for (const message of args.messages) {
+      ids.push(await enqueueEmail(ctx, message, config, args.ownerId));
+    }
+    return ids;
   },
 });
 
@@ -122,6 +157,8 @@ export const retry = mutation({
       attemptCount: 0,
       nextAttemptAt: now,
       lastError: undefined,
+      providerFailure: undefined,
+      providerMessageId: undefined,
       terminalAt: undefined,
       updatedAt: now,
     });
@@ -283,6 +320,7 @@ export const markSent = internalMutation({
       sentAt: now,
       terminalAt: now,
       lastError: undefined,
+      providerFailure: undefined,
     });
     await insertEvent(ctx, {
       emailId: args.emailId,
@@ -305,6 +343,8 @@ export const markFailedOrRetry = internalMutation({
     emailId: v.id("emails"),
     processingLease: v.number(),
     error: v.string(),
+    retryable: v.boolean(),
+    providerFailure: v.optional(vEmailProviderFailure),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -318,7 +358,10 @@ export const markFailedOrRetry = internalMutation({
       return false;
     }
 
-    await markEmailFailedOrRetry(ctx, email, args.error);
+    await markEmailFailedOrRetry(ctx, email, args.error, {
+      retryable: args.retryable,
+      providerFailure: args.providerFailure,
+    });
 
     return true;
   },
@@ -434,14 +477,22 @@ async function enqueueEmail(
   ctx: any,
   args: ConvexEmailSendArgs,
   preloadedConfig?: ConvexEmailConfig,
+  ownerId?: string,
 ) {
   const idempotencyKey = args.idempotencyKey;
 
   if (idempotencyKey) {
-    const existing = await ctx.db
-      .query("emails")
-      .withIndex("by_idempotencyKey", (q: any) => q.eq("idempotencyKey", idempotencyKey))
-      .first();
+    const existing = ownerId
+      ? await ctx.db
+          .query("emails")
+          .withIndex("by_ownerId_and_idempotencyKey", (q: any) =>
+            q.eq("ownerId", ownerId).eq("idempotencyKey", idempotencyKey),
+          )
+          .first()
+      : await ctx.db
+          .query("emails")
+          .withIndex("by_idempotencyKey", (q: any) => q.eq("idempotencyKey", idempotencyKey))
+          .first();
 
     if (existing) {
       return existing._id as string;
@@ -454,6 +505,7 @@ async function enqueueEmail(
   const emailId = await ctx.db.insert("emails", {
     status: "queued",
     message,
+    ownerId,
     adapter: args.adapter,
     attemptedAdapters: [],
     fallbackAdapters: args.fallbackAdapters ?? [],
@@ -553,7 +605,11 @@ async function markEmailFailedOrRetry(
   ctx: any,
   email: any,
   error: string,
-  options: { immediate?: boolean } = {},
+  options: {
+    immediate?: boolean;
+    retryable?: boolean;
+    providerFailure?: ConvexEmailProviderFailure;
+  } = {},
 ) {
   if (!email || email.status === "sent" || email.status === "canceled") {
     return;
@@ -561,7 +617,7 @@ async function markEmailFailedOrRetry(
 
   const now = Date.now();
 
-  if (email.attemptCount < email.maxAttempts) {
+  if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate
       ? 0
       : Math.min(email.retryBaseMs * 2 ** Math.max(email.attemptCount - 1, 0), 60_000);
@@ -578,7 +634,11 @@ async function markEmailFailedOrRetry(
       type: "retry_scheduled",
       attempt: email.attemptCount,
       error,
-      payload: { delayMs, nextAttemptAt },
+      payload: {
+        delayMs,
+        nextAttemptAt,
+        ...(options.providerFailure ? { providerFailure: options.providerFailure } : {}),
+      },
     });
 
     if (options.immediate) {
@@ -593,14 +653,23 @@ async function markEmailFailedOrRetry(
   await ctx.db.patch(email._id, {
     status: "failed",
     lastError: error,
+    ...(options.providerFailure
+      ? {
+          providerFailure: options.providerFailure,
+          providerMessageId: options.providerFailure.requestId,
+        }
+      : {}),
     updatedAt: now,
     terminalAt: now,
   });
   await insertEvent(ctx, {
     emailId: email._id,
     type: "failed",
+    adapter: options.providerFailure?.adapter,
     attempt: email.attemptCount,
+    providerMessageId: options.providerFailure?.requestId,
     error,
+    payload: options.providerFailure ? { providerFailure: options.providerFailure } : undefined,
   });
 }
 
