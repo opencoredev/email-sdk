@@ -24,12 +24,6 @@ const sponsorNames = [
 
 const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint"] as const;
 
-const deliveryRules = [
-  ["not_sent", "Not accepted. A configured fallback may try another adapter."],
-  ["unknown", "Acceptance unclear. Inspect before sending again."],
-  ["Accepted", "Keep the receipt. Acceptance is not inbox delivery."],
-] as const;
-
 type FooterLink = {
   label: string;
   href: string;
@@ -91,13 +85,10 @@ function Home() {
       <Nav />
       <Hero />
       <div aria-hidden="true" className="landing-nav-rule" />
-      <OneCall />
-      <BeforeLiveSend />
-      <DeliveryRules />
-      <WhenToUse />
-      <Adapters />
-      <FlockDivider />
       <Sponsors />
+      <FlockDivider />
+      <OneCall />
+      <Adapters />
       <Footer />
       <div aria-hidden="true" className="landing-hero-art">
         <div className="landing-engraving" />
@@ -135,15 +126,14 @@ function Hero() {
     <section className="landing-hero" aria-labelledby="landing-heading">
       <h1 id="landing-heading">Email for TypeScript apps.</h1>
       <p id="landing-summary">
-        Send, validate, test without sending, and inspect failures with the provider account you
-        already have.
+        One typed send() call. Use the provider account you already have.
       </p>
       <div className="landing-hero-actions">
         <DocsVersionLink className="landing-button landing-button-primary" docsPath="/docs/getting-started/quickstart">
-          Run the quickstart
+          Start sending
         </DocsVersionLink>
-        <DocsVersionLink className="landing-button landing-button-secondary" docsPath="/docs/reference/cli/doctor">
-          Check your setup
+        <DocsVersionLink className="landing-button landing-button-secondary" docsPath="/docs/adapters">
+          Browse adapters
         </DocsVersionLink>
       </div>
     </section>
@@ -175,15 +165,14 @@ function OneCall() {
     <section className="landing-section landing-one-call" aria-labelledby="landing-one-call-heading">
       <SectionLabel
         id="landing-one-call-heading"
-        title="Send with the account you already have"
+        title="One call"
         after={
           <DocsVersionLink className="landing-section-link" docsPath="/docs/getting-started/quickstart">
             Run the quickstart →
           </DocsVersionLink>
         }
       >
-        One adapter, one verified sender, one call. The result is provider acceptance, not inbox
-        delivery.
+        Write the email once. Any of the 24 adapters sends it.
       </SectionLabel>
       <CodePanel />
     </section>
@@ -223,7 +212,6 @@ function CodePanel() {
             <em>RESEND_API_KEY</em>
             {"! })],"}
           </span>
-          <span className="landing-code-line">{"  retry: { maxAttempts: 1 },"}</span>
           <span className="landing-code-line">{"});"}</span>
           <span className="landing-code-gap" />
           <span className="landing-code-line">
@@ -257,150 +245,6 @@ function CodePanel() {
   );
 }
 
-function BeforeLiveSend() {
-  return (
-    <section className="landing-section landing-operate" aria-labelledby="landing-operate-heading">
-      <SectionLabel
-        id="landing-operate-heading"
-        title="Check configuration. Test without email."
-        after={
-          <DocsVersionLink className="landing-section-link" docsPath="/docs/reference/cli/doctor">
-            Read the doctor guide →
-          </DocsVersionLink>
-        }
-      >
-        <code>doctor</code> checks configuration locally; <code>--live</code> authenticates on
-        request. The memory adapter tests sends with no network.
-      </SectionLabel>
-      <div className="landing-operate-body">
-        <div className="landing-terminal">
-          <div className="landing-code-header">
-            <span>shell</span>
-            <span>doctor</span>
-          </div>
-          <pre className="landing-code">
-            <code>
-              <span className="landing-code-line">
-                $ npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
-              </span>
-              <span className="landing-code-line landing-code-muted">
-                resend: configuration ok (RESEND_API_KEY set). No provider request made.
-              </span>
-              <span className="landing-code-gap" />
-              <span className="landing-code-line">
-                $ email-sdk send --adapter resend --from ... --to ... --subject ... --text ...
-                --dry-run
-              </span>
-              <span className="landing-code-line landing-code-muted">
-                Validates fields and adapter support. Sends nothing.
-              </span>
-            </code>
-          </pre>
-        </div>
-        <div className="landing-code-panel">
-          <div className="landing-code-header">
-            <span>email.test.ts</span>
-            <span>no network</span>
-          </div>
-          <pre className="landing-code" aria-label="Memory adapter test example">
-            <code>
-              <span className="landing-code-line">
-                <b>import </b>
-                <em>{"{ memoryAdapter } "}</em>
-                <b>from </b>
-                <i>'@opencoredev/email-sdk/testing'</i>;
-              </span>
-              <span className="landing-code-gap" />
-              <span className="landing-code-line">
-                <b>const </b>
-                <em>memory </em>= memoryAdapter();
-              </span>
-              <span className="landing-code-line">
-                <b>const </b>
-                <em>email </em>= createEmailClient({"{"}
-              </span>
-              <span className="landing-code-line">
-                {"  adapters: ["}
-                <em>memory</em>
-                {"], telemetry: false,"}
-              </span>
-              <span className="landing-code-line">{"});"}</span>
-              <span className="landing-code-line">
-                <b>await </b>
-                <em>email</em>.send(message);
-              </span>
-              <span className="landing-code-line">
-                expect(<em>memory</em>.raw?.sent[0]?.message.subject).toBe(<i>'Welcome'</i>);
-              </span>
-            </code>
-          </pre>
-          <DocsVersionLink className="landing-panel-link" docsPath="/docs/guides/test-email-behavior">
-            Write a no-network test →
-          </DocsVersionLink>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DeliveryRules() {
-  return (
-    <section className="landing-section landing-delivery" aria-labelledby="landing-delivery-heading">
-      <SectionLabel
-        id="landing-delivery-heading"
-        title="When a send fails"
-        after={
-          <DocsVersionLink className="landing-section-link" docsPath="/docs/guides/troubleshoot-failed-sends">
-            Inspect a failed send →
-          </DocsVersionLink>
-        }
-      >
-        Every error carries a code, the adapter, retryability, and a delivery state.
-      </SectionLabel>
-      <div className="landing-delivery-list">
-        {deliveryRules.map(([condition, outcome]) => (
-          <div key={condition}>
-            <strong>{condition}</strong>
-            <span>{outcome}</span>
-          </div>
-        ))}
-      </div>
-      <div aria-hidden="true" className="landing-art landing-art-horn">
-        <div className="landing-engraving" />
-      </div>
-    </section>
-  );
-}
-
-function WhenToUse() {
-  return (
-    <section className="landing-section landing-fit" aria-labelledby="landing-fit-heading">
-      <SectionLabel id="landing-fit-heading" title="Email SDK or a provider SDK?">
-        A library, not an email service. You keep your provider account and billing.
-      </SectionLabel>
-      <div className="landing-fit-columns">
-        <div>
-          <h3>Use Email SDK when</h3>
-          <ul>
-            <li>You want validation, test adapters, and typed errors in one place.</li>
-            <li>You need a fallback route after a confirmed failure.</li>
-          </ul>
-        </div>
-        <div>
-          <h3>A direct provider SDK may be enough when</h3>
-          <ul>
-            <li>You send through one provider and already handle tests and failures.</li>
-            <li>You need provider-specific APIs outside the common message model.</li>
-          </ul>
-          <DocsVersionLink className="landing-section-link" docsPath="/docs/adapters/field-support">
-            Compare supported fields →
-          </DocsVersionLink>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function Adapters() {
   return (
     <section className="landing-section landing-adapters" aria-labelledby="landing-adapters-heading">
@@ -413,7 +257,7 @@ function Adapters() {
           </Link>
         }
       >
-        Same send call across providers. Check supported fields before switching.
+        Keep your provider account and API key. Your send calls stay the same when you switch.
       </SectionLabel>
       <div className="landing-adapter-list">
         {adapterNames.map((name) => {
