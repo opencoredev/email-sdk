@@ -1,17 +1,94 @@
 ---
 title: Quickstart
-description: Create a Resend client and send your first email.
+description: Copy the standalone Resend starter, validate a message without sending, then send one email explicitly.
 ---
 
-Set a server-only Resend key:
+This page walks through the [first-send starter](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send): a private ESM project with its own `package.json`, plain `.mjs` entry, and two dependencies (`@opencoredev/email-sdk` and `dotenv`). It runs on Node.js 20+ or Bun 1.1+ and needs only a Resend account.
 
-```bash title=".env.local"
-RESEND_API_KEY=re_xxx
+## 1. Copy and install
+
+```bash
+git clone --depth 1 https://github.com/opencoredev/email-sdk /tmp/email-sdk
+cp -r /tmp/email-sdk/packages/email-sdk/examples/first-send ~/first-send
+cd ~/first-send
+npm install          # or: bun install
+cp .env.example .env
 ```
 
-Then create the client and send:
+## 2. Validate without sending
 
-```ts title="src/send-welcome.ts"
+```bash
+npm run validate
+# Bun: bun --no-env-file first-send.mjs
+```
+
+Expected output:
+
+```json
+{
+  "ok": true,
+  "mode": "validate",
+  "adapter": "resend",
+  "sent": false
+}
+```
+
+This runs with the `.env.example` placeholders unchanged. `email.validate` checks the message shape and the Resend adapter's field support locally. It does not contact Resend, so it cannot tell you whether the key works or the domain is verified.
+
+## 3. Configure `.env`
+
+The starter reads `.env.local`, then `.env`, from its own directory via `dotenv`, never overriding values already in the process environment. The SDK and CLI do not read these files themselves.
+
+```bash title=".env"
+RESEND_API_KEY=re_replace_with_real_server_key
+EMAIL_FROM="Acme <hello@your-verified-domain.com>"
+EMAIL_TO=you@your-domain.com
+```
+
+- `RESEND_API_KEY`: a Resend API key with sending permission. Server-side only.
+- `EMAIL_FROM`: a sender on a [domain you verified in Resend](https://resend.com/docs/dashboard/domains/introduction).
+- `EMAIL_TO`: a recipient you control.
+
+Resend's shared `onboarding@resend.dev` sender can only send to the email address on your Resend account ([Resend: 403 using resend.dev](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain)). To reach anyone else, verify your own domain first. See [credentials](/docs/getting-started/credentials) for details.
+
+## 4. Authenticate with doctor (still no email)
+
+Export the variables into your shell first; the CLI does not load `.env`:
+
+```bash
+set -a; . ./.env; set +a
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
+```
+
+The first command prints `resend looks configured.` and makes no network request. `--live` authenticates the key against Resend; `--from` additionally checks that the sender domain is verified. `./node_modules/.bin/email-sdk` runs the same binary; `bunx --package @opencoredev/email-sdk email-sdk ...` is the Bun form. Statuses are documented in the [doctor reference](/docs/reference/cli/doctor).
+
+## 5. Send one email
+
+```bash
+npm run send
+# Bun: bun --no-env-file first-send.mjs --send
+```
+
+**This sends a real email.** The starter refuses to run `email.send` unless `EMAIL_FROM` and `EMAIL_TO` are set, `RESEND_API_KEY` is not the placeholder, and neither address uses a reserved example/test domain. Expected output:
+
+```json
+{
+  "ok": true,
+  "mode": "send",
+  "adapter": "resend",
+  "id": "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794",
+  "receipt": "accepted by provider; inbox delivery not confirmed"
+}
+```
+
+`id` is Resend's receipt: the provider accepted the message. Whether it reached an inbox is only visible later in the Resend dashboard or via [webhooks](/docs/reference/webhooks). If the command times out, check the dashboard before retrying.
+
+## What the starter runs
+
+The SDK calls inside `first-send.mjs`, shown here in TypeScript for an application:
+
+```ts title="email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 
@@ -19,45 +96,40 @@ const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
 });
 
-const result = await email.send({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Welcome",
-  text: "Your account is ready.",
-});
+const message = {
+  from: process.env.EMAIL_FROM!,
+  to: process.env.EMAIL_TO!,
+  subject: "Your first Email SDK message",
+  text: "Hello from the standalone Email SDK starter.",
+};
 
-console.log(result.adapter, result.id);
+try {
+  await email.validate(message); // local checks only
+  const result = await email.send(message); // one POST to Resend
+  console.log(result.adapter, result.id); // "resend", provider receipt id
+} finally {
+  await email.flush(); // deliver pending anonymous telemetry before exit
+}
 ```
 
-That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.
+## Telemetry
 
-## Check a message without sending
+The SDK sends anonymous usage telemetry by default; `email.flush()` in `finally` ensures it is delivered before the process exits. Opt out with `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1`, or `createEmailClient({ adapters, telemetry: false })`. With telemetry off, `npm run validate` makes no network requests at all.
 
-Use `validate` when you want the same message and routing checks without a provider send request:
+## Likely errors
 
-```ts
-await email.validate({
-  from: "Acme <hello@acme.com>",
-  to: "user@example.com",
-  subject: "Welcome",
-  text: "Your account is ready.",
-});
-```
+| Output | Meaning |
+| --- | --- |
+| `Set EMAIL_FROM and EMAIL_TO ... before --send.` | Addresses missing. Nothing was sent. |
+| `Set a real server-only RESEND_API_KEY ...` | Key missing or still the placeholder. Nothing was sent. |
+| `... adapter_error: Resend failed with 401: API key is invalid` | Wrong key. |
+| `... adapter_error: Resend failed with 403: You can only send testing emails to your own email address` | `onboarding@resend.dev` sender with a non-owner recipient. Verify a domain. |
+| `... adapter_error: Resend failed with 403: The ... domain is not verified` | `EMAIL_FROM` domain not verified in Resend. |
 
-## Check from the CLI
+The starter's [README](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send#likely-errors) lists more, and `EMAIL_SDK_TELEMETRY=0 npm test` runs its offline checks (the explicit send hits a temporary `127.0.0.1` fixture, never Resend).
 
-`--dry-run` runs the same validation without sending email.
+## Next step
 
-```bash
-EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
-  --adapter resend \
-  --from "Acme <hello@acme.com>" \
-  --to user@example.com \
-  --subject "Welcome" \
-  --text "Your account is ready." \
-  --dry-run
-```
-
-<Card title="Add retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="Choose retry counts and unknown-delivery policy deliberately." />
-<Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use provider scheduling now, or an app-owned queue when you need more control." />
+<Card title="v1 server example" href="https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/v1-server" description="Fallback routes, sendMany, sendPersonalized, scheduling, and React templates." />
+<Card title="CLI dry run" href="/docs/reference/cli/send" description="Validate a message from flags without sending." />
 <Card title="Test without a provider" href="/docs/guides/test-email-behavior" description="Capture sends with the memory adapter and capture plugin." />

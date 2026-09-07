@@ -1,11 +1,13 @@
 ---
 title: Email SDK
-description: Send transactional email through 24 adapters with one typed TypeScript SDK.
+description: Send transactional email with your existing provider, validate messages, test without sending, and inspect failures in TypeScript.
 ---
 
-Install the SDK, add the adapter for your provider, and call `email.send()`. The message shape stays the same if you switch providers later.
+Email for TypeScript apps. Email SDK is an open-source, server-side library for transactional email. Send with your existing provider account, validate message fields, test without calling a provider, and inspect failures through common error types.
 
-<Card title="Send your first email" href="/docs/getting-started/quickstart" description="Install the SDK, configure one adapter, and send a message from Node.js or Bun." />
+You install it in your app. It is not a hosted email service or campaign builder, and your provider still handles credentials, billing, and delivery.
+
+<Card title="Send your first email" href="/docs/getting-started/quickstart" description="Copy the standalone Resend starter, validate without sending, then send one message from Node.js or Bun." />
 
 ## Start here
 
@@ -15,16 +17,39 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 export const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  retry: { maxAttempts: 1 },
 });
+
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+console.log(result.adapter, result.id);
 ```
 
-Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugins, and more adapters only when you need them.
+Set `RESEND_API_KEY`, use a sender on a domain verified with Resend, and choose a recipient you control. This makes a live request. `result.id` means Resend accepted the message; it is not proof of inbox delivery. Call `email.validate(message)` first to check the message without a provider request, and `await email.flush()` before the process exits so anonymous telemetry is not dropped (`EMAIL_SDK_TELEMETRY=0` opts out).
+
+## Before and after a send
+
+- [Run doctor](/docs/reference/cli/doctor) to check required environment variables locally; add `--live` to authenticate the key and `--from` to check the Resend sender domain, without sending.
+- [Test email behavior](/docs/guides/test-email-behavior) with memory and failing adapters, without calling a provider.
+- [Inspect a failed send](/docs/guides/troubleshoot-failed-sends) using its error code, adapter, and delivery state before resending.
+
+The example uses one attempt. If you enable retries, the default predicate can retry an unknown outcome when the error is retryable. Fallback stops on unknown delivery by default, but that is separate from retries within an adapter. Read [fallbacks and retries](/docs/concepts/fallbacks-and-retries) before changing either policy.
+
+## Do you need Email SDK?
+
+Use it when you want common field validation, test adapters, error types, and configurable send policies. You can start with one provider; switching adapters later keeps the message shape, but supported fields and provider behavior still differ.
+
+A direct provider SDK is sufficient if you only need its send API and already handle tests and failures. Prefer it for provider-specific APIs outside the common message model.
 
 ## Included
 
 - 23 provider API adapters plus SMTP, 24 adapters total
 - Typed adapter names in `send`, `validate`, `adapter`, and `withAdapter`
-- Retries on the current adapter, then fallback only when delivery is known to have failed
+- Configurable retries on the current adapter and fallback routes that stop on unknown delivery by default
 - Independent `sendMany` calls and personalized `sendPersonalized` delivery
 - Hooks, middleware, built-in plugins, and no-network test adapters
 - Provider-native scheduled sends with `sendAt`

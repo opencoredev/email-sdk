@@ -12,6 +12,7 @@ description: Configure one of 23 provider API adapters or the built-in SMTP tran
 | Monthly cost from 1K to 1M emails | [Pricing comparison](/docs/adapters/pricing) |
 | CC, BCC, reply-to, attachments, tags, or metadata | [Field support](/docs/adapters/field-support) |
 | Repeated headers, scheduled delivery, native idempotency, or personalized fanout | [Delivery capabilities](/docs/adapters/capability-groups) |
+| Configured checks versus dated auth, send, and delivery results | [Verification evidence](/docs/adapters/verification) |
 | Existing SMTP service | [SMTP](/docs/adapters/smtp) |
 
 ## Add more than one provider
@@ -42,8 +43,8 @@ Email SDK checks every fallback before sending. If your backup cannot handle par
 ## Check your setup without sending
 
 ```bash
-npx email-sdk adapters
-npx email-sdk doctor --adapter resend
+npm exec --package=@opencoredev/email-sdk -- email-sdk adapters
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
 ```
 
-`doctor` checks your credentials and required settings. `send --dry-run` checks the whole message without sending it.
+`doctor` checks local configuration and required settings only by default; use explicit [`doctor --live`](/docs/reference/cli/doctor) for supported provider authentication probes. `send --dry-run` checks the whole message without sending it.

@@ -89,11 +89,11 @@ await email.sendPersonalized({
 ## Verify from the CLI
 
 ```bash
-SENDGRID_API_KEY="SG...." npx email-sdk doctor --adapter sendgrid
+SENDGRID_API_KEY="SG...." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter sendgrid
 ```
 
 ```bash
-SENDGRID_API_KEY="SG...." npx email-sdk send \
+SENDGRID_API_KEY="SG...." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter sendgrid \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

@@ -14,7 +14,8 @@
     "check": "oxlint && oxfmt --write",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release:ci": "bun run check-types && bun run test && bun run community:check && bun run docs:versions:check && bun run docs:check && bun run build && bun run pack:check",
+    "verification:check": "bun scripts/check-adapter-verification.ts && bun test scripts/check-adapter-verification.test.ts apps/fumadocs/src/lib/adapter-verification.test.ts",
+    "release:ci": "bun run check-types && bun run test && bun run verification:check && bun run community:check && bun run docs:versions:check && bun run docs:check && bun run build && bun run pack:check",
     "release": "changeset publish",
     "pack:check": "bun scripts/check-package-tarballs.ts",
     "live:resend": "bun scripts/check-resend-account.ts",
@@ -25,7 +26,7 @@
     "live:run": "bun scripts/run-live-adapters.ts",
     "community:check": "bun scripts/validate-community-registry.ts",
     "docs:versions:check": "bun scripts/validate-docs-versions.ts",
-    "docs:check": "bun scripts/check-adapter-support-docs.ts && cd apps/fumadocs && bun run types:check && bun run build",
+    "docs:check": "bun scripts/check-adapter-support-docs.ts && bun test scripts/check-cli-doc-consistency.test.ts && cd apps/fumadocs && bun run types:check && bun run build",
     "homebrew:update": "bun scripts/update-homebrew-formula.ts"
   },
   "dependencies": {

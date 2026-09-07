@@ -73,11 +73,11 @@ console.log(result.id); // MailPace message id (`id` or `message_id` in the resp
 ## Verify from the CLI
 
 ```bash
-MAILPACE_API_KEY="..." npx email-sdk doctor --adapter mailpace
+MAILPACE_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter mailpace
 ```
 
 ```bash
-MAILPACE_API_KEY="..." npx email-sdk send \
+MAILPACE_API_KEY="..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter mailpace \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

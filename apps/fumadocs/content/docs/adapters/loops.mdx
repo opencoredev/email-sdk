@@ -90,11 +90,11 @@ Attachments are supported and sent as `{ filename, contentType, data }` with bas
 ## Verify from the CLI
 
 ```bash
-LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npx email-sdk doctor --adapter loops
+LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter loops
 ```
 
 ```bash
-LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npx email-sdk send \
+LOOPS_API_KEY="..." LOOPS_TRANSACTIONAL_ID="cm..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter loops \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

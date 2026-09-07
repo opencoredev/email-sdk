@@ -11,7 +11,15 @@ description: Install the ESM-only SDK for Node.js 20+ or Bun 1.1+.
 
 <PackageInstallTabs />
 
-The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package is unrelated.
+```bash
+npm install @opencoredev/email-sdk
+# Or:
+bun add @opencoredev/email-sdk
+```
+
+For a complete runnable project, copy the [first-send starter](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send) and run `npm install` inside it. It declares `@opencoredev/email-sdk` and `dotenv`; the SDK does not read `.env` files on its own. The [quickstart](/docs/getting-started/quickstart) walks through it.
+
+The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package on npm is unrelated.
 
 </Step>
 
@@ -46,12 +54,16 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 ### Verify the CLI
 
-A project install exposes the `email-sdk` binary. The built CLI uses a Node shebang and also runs under Bun.
+Run the CLI through the scoped package so the unrelated unscoped `email-sdk` package is never resolved. The built CLI uses a Node shebang and also runs under Bun.
 
 ```bash
-npx email-sdk version
-npx email-sdk adapters
+npm exec --package=@opencoredev/email-sdk -- email-sdk version
+npm exec --package=@opencoredev/email-sdk -- email-sdk adapters
+# Bun:
+bunx --package @opencoredev/email-sdk email-sdk version
 ```
+
+Inside a project that already installed the package, `./node_modules/.bin/email-sdk version` runs the same binary.
 
 For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` after the formula points at a published release.
 
@@ -59,5 +71,5 @@ For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` afte
 
 </Steps>
 
-<Card title="Quickstart" href="/docs/getting-started/quickstart" description="Create a client and send a validated message." />
+<Card title="Quickstart" href="/docs/getting-started/quickstart" description="Validate a message with the starter, then send one explicitly." />
 <Card title="Provider credentials" href="/docs/getting-started/credentials" description="Set the environment variables required by your adapter." />

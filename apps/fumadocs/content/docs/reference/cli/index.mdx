@@ -5,13 +5,24 @@ description: Commands, runtime, aliases, telemetry, adapter detection, and exit 
 
 The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node shebang. It supports Node.js 20+ and Bun 1.1+.
 
+## Execute the scoped package
+
+```bash
+npm install @opencoredev/email-sdk
+npm exec --package=@opencoredev/email-sdk -- email-sdk version
+# Or:
+bunx --package @opencoredev/email-sdk email-sdk version
+```
+
+The npm package is scoped; the executable is `email-sdk`. Do not use `npx email-sdk` in an uninstalled directory: the unscoped package is unrelated. The CLI reads the process environment, not `.env` files. Keep credentials server-only. Explicit credential flags override environment values.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `version` | Print package name and version; `--json` returns JSON. |
 | `adapters` | List bundled adapter names, required environment, and notes; `--json` returns JSON. |
-| `doctor` | Check whether required values are present for one adapter. |
+| `doctor` | Check configuration only by default; `--live` explicitly authenticates without sending; `--from` adds Resend sender readiness; `--json` returns structured checks. |
 | `send` | Build, validate, and optionally send one message. |
 
 `providers` aliases `adapters`. `--provider` aliases `--adapter` in CLI input, but new examples use adapter vocabulary.
@@ -22,11 +33,13 @@ Pass `--adapter`. If omitted, `doctor` and `send` select the first bundled adapt
 
 ## Failures
 
-Usage and SDK errors print one message to stderr and exit with status 1. Unexpected errors are rethrown after telemetry flush.
+Usage and SDK errors print one message to stderr and exit with status 1. `doctor` exits 1 whenever any requested check is not passed (see [doctor exit codes](/docs/reference/cli/doctor#exit-codes)). Unexpected errors are rethrown after telemetry flush.
 
 ## Telemetry
 
-CLI runs use the same default telemetry and environment opt-outs as the SDK. Set `EMAIL_SDK_TELEMETRY=0` for repeatable smoke tests.
+CLI runs use the same default-on anonymous telemetry as the SDK and await flush before exit. Set `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` for repeatable offline smoke tests. Configuration-only doctor and `send --dry-run` do not contact a provider, but telemetry can still use the network unless disabled.
+
+`send` is live unless `--dry-run` is present. For a safer first project, the [standalone starter](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send) validates by default and requires its own explicit `--send` flag. Authentication, sender readiness, and provider acceptance are separate from inbox delivery.
 
 <Card title="List adapters" href="/docs/reference/cli/adapters" description="Inspect the bundled registry and credential names." />
 <Card title="Check setup" href="/docs/reference/cli/doctor" description="Verify required values are present." />

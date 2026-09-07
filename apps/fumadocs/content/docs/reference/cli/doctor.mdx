@@ -1,34 +1,83 @@
 ---
 title: email-sdk doctor
-description: Check whether required adapter configuration is present without authenticating to the provider.
+description: Check configuration safely by default; explicitly authenticate and inspect Resend sender readiness without sending.
 ---
 
+## Safe default
+
+After exporting server credentials:
+
 ```bash
-RESEND_API_KEY=re_xxx email-sdk doctor --adapter resend
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
+# Bun equivalent:
+bunx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
-Success prints:
+Success prints `resend looks configured.`. Default doctor checks required configuration only: it does not contact the provider, authenticate, inspect domains, or prove deliverability. The CLI does not load `.env` files. Anonymous telemetry is default-on; set `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` to disable it.
 
-```text
-resend looks configured.
+## Explicit non-sending live checks
+
+```bash
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live
+npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend --live --from "$EMAIL_FROM" --json
 ```
 
-## Selection
+`--live` contacts the provider to check authentication, never to send an email. Supported providers: **Resend, Sequenzy, JetEmail, Primitive, Lettermint, and Lettr**. Other adapters report an `unsupported` live check rather than pretending success.
 
-Use `--adapter <name>` or the `--provider` alias. Without either flag, the command selects the first adapter whose required environment variables are all set.
+| Adapter | Probe | Why it cannot send |
+| --- | --- | --- |
+| Resend | `GET https://api.resend.com/domains?limit=100` | Read-only domain listing. |
+| Sequenzy | `GET https://api.sequenzy.com/api/v1/account` | Read-only account/permission summary (`account:read`). |
+| Primitive | `GET https://api.primitive.dev/v1/account` | Read-only account info. |
+| Lettermint | `GET https://api.lettermint.co/v1/ping` (`x-lettermint-token`) | Documented status/authentication ping. |
+| Lettr | `GET https://app.lettr.com/api/auth/check` | Documented key-validation endpoint. |
+| JetEmail | `POST https://api.jetemail.com/email` with body `{}` | See below. |
 
-## What it checks
+JetEmail transactional keys are scoped to the send endpoints and there is no documented authentication endpoint for them, so the probe posts an empty JSON object to `/email` with no sender, recipient, subject, or content; the API rejects it before anything can be queued. Only a `401` is a definite answer (`invalid_credentials`). Validation responses (400/422) and unexpected 2xx responses are reported as `inconclusive`, not as proof of authentication.
 
-`doctor` checks the required environment variables from the CLI registry. It also recognizes the corresponding credential flags, such as `--api-key`, `--server-token`, `--host`, or provider-specific account fields.
+`--from <address>` requires `--live` and requests sender readiness. Currently only Resend supports this check, using sender-domain status/capability. Readiness does not prove recipient approval, sending permissions for every key, or inbox delivery. The shared `resend.dev` sender remains restricted to the account owner's recipient address; use your verified domain for other approved recipients.
 
-It does not call the provider, verify sender domains, inspect API scopes, or prove deliverability.
+## Selection and options
 
-## Failures
+Use `--adapter <name>` or `--provider`. Without either, doctor selects the first adapter with all required environment values. Explicit selection is recommended if several credentials are configured. Credential flags (for example `--api-key`, `--api-token`) override environment values; prefer environment variables to keep secrets out of command history. The CLI reads only the process environment: it never loads `.env` or `.env.local` files, so export credentials into the shell first.
 
-- Unknown adapter: `Unsupported adapter "<name>".`
-- Missing values: `Missing environment for <adapter>: <NAMES>`
-- No explicit or detectable route: `Pass --adapter or set the required environment for one adapter.`
+Live requests are bounded to a 10 second timeout, never follow redirects, and send only the credential header plus `Accept: application/json`. The JetEmail probe body is an empty JSON object; no probe carries a sender, recipient, subject, or message content.
 
-Use `send --dry-run` after doctor to validate a representative message and adapter-specific constraints.
+`--base-url` (or `<ADAPTER>_BASE_URL`, e.g. `RESEND_BASE_URL`) is a test-only override for local fixture servers. It accepts the provider's fixed HTTPS base or an explicit numeric-loopback HTTP(S) URL (`http://127.0.0.1:<port>` or `http://[::1]:<port>`); hostnames such as `localhost`, arbitrary remote origins, and URLs with userinfo, query, or fragment are rejected as a configuration failure before any credential is forwarded. Do not use real credentials with fixtures.
+
+## Structured results and exit status
+
+`--json` returns `{ ok, adapter, checks }`. The `checks` object always includes `configuration`, `authentication`, and `sender`, each with `status` and a sanitized actionable `message`. Default configuration-only success has `configuration.status: "passed"`, while authentication and sender are `"not_requested"`.
+
+| Status | Meaning / next action |
+| --- | --- |
+| `passed` | This requested check passed; not a delivery guarantee. |
+| `not_requested` | This check was not requested. |
+| `failed` | Fix the reported configuration or check failure. |
+| `blocked` | A prerequisite check prevented this check. |
+| `unsupported` | This adapter does not implement the requested check. |
+| `invalid_credentials` | Replace/review the server credential privately. |
+| `insufficient_permissions` | The key lacks diagnostic read scope (HTTP 403, or Resend's sending-only `restricted_api_key` 401); do not assume it cannot send. |
+| `inconclusive` | Provider response did not establish the requested result (unexpected status such as 400/422/5xx, invalid JSON, or an unrecognized body). Never treated as authentication success. |
+| `rate_limited` | The provider returned HTTP 429. Wait and reduce probe frequency; this does not prove the key is invalid. |
+| `network_failure` | DNS, TLS, proxy, connection, or a rejected redirect prevented a response. Redirects are never followed. |
+| `timeout` | The request exceeded the 10 second bound; retry the non-sending check later. |
+| `not_ready` | The Resend sender domain is missing, unverified, or has sending disabled. Complete domain setup in the dashboard. |
+
+Provider response bodies, raw network errors, credentials, sender addresses, and account or domain IDs are never printed in either output mode.
+
+### Exit codes
+
+| Exit code | When |
+| --- | --- |
+| `0` | `ok: true`: configuration passed and every requested check (`authentication`, `sender`) is `passed`; `not_requested` checks do not fail. |
+| `1` | Any check is not `passed`/`not_requested`: missing configuration, `--from` without `--live`, unsupported live check, invalid credentials, insufficient permissions, inconclusive/rate-limited/network/timeout results, or an unverified (`not_ready`) sender. |
+| `1` | Usage errors (for example an unknown command) print one message to stderr. |
+
+No other exit codes are used. A sending-only Resend key may lack domain-list access: do not broaden a production key merely to turn a diagnostic green.
+
+Usage errors include unsupported adapter, missing required environment, and no explicit/detectable adapter. Check the installed version with `npm exec --package=@opencoredev/email-sdk -- email-sdk version` if flags are unrecognized.
+
+Use `send --dry-run` next to validate the exact message. A subsequent live send requires separate approval of sender and recipient; its provider receipt is not inbox delivery.
 
 <Card title="Send command" href="/docs/reference/cli/send" description="Validate the exact message without provider delivery." />

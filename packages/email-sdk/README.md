@@ -1,6 +1,8 @@
 # Email SDK
 
-A server-side TypeScript SDK for transactional email send pipelines. You get one typed client, literal adapter routes, field-support validation before providers drop data, delivery-aware retries and fallback, and plugins for defaults, observability, capture, or custom adapters.
+Email for TypeScript apps. Email SDK is an open-source, server-side library for sending transactional email with your existing provider account. Validate message fields before sending, test without calling a provider, and inspect failures through common error types.
+
+You keep your provider credentials and billing. A direct provider SDK may be enough if you only need its send API or provider-specific features and already have tests and error handling. Use Email SDK when you want common validation, test adapters, and configurable retry and fallback policies. Changing providers is optional, and adapter field support still differs.
 
 Docs: https://email-sdk.dev/docs
 
@@ -26,6 +28,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 const email = createEmailClient({
   adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  retry: { maxAttempts: 1 },
 });
 
 const result = await email.send({
@@ -38,9 +41,13 @@ const result = await email.send({
 console.log(result.adapter, result.id);
 ```
 
+Use a verified sender and a recipient you control. The [runnable quickstart](https://email-sdk.dev/docs/getting-started/quickstart) covers setup. Before a live send, [run doctor](https://email-sdk.dev/docs/reference/cli/doctor) and [write a no-network test](https://email-sdk.dev/docs/guides/test-email-behavior).
+
+A receipt records provider acceptance, not delivery. This example disables retries. When enabled, the default retry predicate can retry an unknown outcome if the error is retryable. Fallback stopping on unknown delivery is a separate policy. [Inspect failures](https://email-sdk.dev/docs/guides/troubleshoot-failed-sends) before resending.
+
 ## Why use this
 
-- One `EmailMessage` shape across provider APIs.
+- One `EmailMessage` shape across 23 provider API adapters plus SMTP, 24 adapters total.
 - Adapter subpath imports, so apps load only the integrations they use.
 - Type-inferred route names across `send`, `validate`, `adapter`, and `withAdapter`.
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.

@@ -1,6 +1,7 @@
 "use node";
 
 import { EmailAdapterError, EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
+import { normalizeWebhookEvent as normalizeSdkWebhook } from "@opencoredev/email-sdk/webhooks";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
@@ -94,7 +95,7 @@ export const handleWebhook = internalAction({
   },
   returns: v.object({ ok: v.boolean(), duplicate: v.optional(v.boolean()) }),
   handler: async (ctx, args) => {
-    const parsed = parseProviderWebhook(args.provider, args.body, args.headers);
+    const parsed = await parseProviderWebhook(args.provider, args.body, args.headers);
 
     return (await ctx.runMutation(recordWebhookRef, {
       provider: args.provider,
@@ -140,25 +141,21 @@ function providerFailureMetadata(error: unknown) {
   };
 }
 
-function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
-  const payload = parseJson(body);
-
-  if (provider === "resend") {
-    const record = payload as Record<string, unknown>;
-    const data =
-      typeof record.data === "object" && record.data
-        ? (record.data as Record<string, unknown>)
-        : {};
-    const deliveryId =
-      stringValue(record.id) ??
-      headers["svix-id"] ??
-      headers["resend-signature"] ??
-      deterministicDeliveryId(provider, body);
-    const providerMessageId = stringValue(data.email_id) ?? stringValue(data.id);
-    const event = normalizeWebhookEvent(stringValue(record.type));
-
-    return { deliveryId, providerMessageId, event, payload };
+async function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
+  if (provider === "resend" || provider === "postmark" || provider === "mailgun") {
+    const parsed = await normalizeSdkWebhook({ provider, body, headers });
+    return {
+      deliveryId: parsed.deliveryId,
+      providerMessageId: parsed.providerMessageId,
+      event: parsed.status ?? parsed.type,
+      payload: parsed.payload,
+    };
   }
+  return parseGenericWebhook(provider, body);
+}
+
+function parseGenericWebhook(provider: string, body: string) {
+  const payload = parseJson(body);
 
   const record = payload as Record<string, unknown>;
   const eventData =

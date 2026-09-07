@@ -15,7 +15,7 @@ export const sponsors: readonly Sponsor[] = [
   {
     name: "Resend",
     href: "https://go.resend.com/email-sdk",
-    logo: "/landing/sponsors/resend.png",
+    logo: "/landing/sponsors/resend-light.png",
   },
   {
     name: "Sequenzy",

@@ -96,11 +96,11 @@ await email.send({
 ## Verify from the CLI
 
 ```bash
-SEQUENZY_API_KEY="seq_live_..." npx email-sdk doctor --adapter sequenzy
+SEQUENZY_API_KEY="seq_live_..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter sequenzy
 ```
 
 ```bash
-SEQUENZY_API_KEY="seq_live_..." npx email-sdk send \
+SEQUENZY_API_KEY="seq_live_..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter sequenzy \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

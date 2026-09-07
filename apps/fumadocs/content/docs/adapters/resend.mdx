@@ -86,11 +86,11 @@ The `idempotencyKey` is sent as Resend's `Idempotency-Key` header, so retried re
 ## Verify from the CLI
 
 ```bash
-RESEND_API_KEY="re_..." npx email-sdk doctor --adapter resend
+RESEND_API_KEY="re_..." npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter resend
 ```
 
 ```bash
-RESEND_API_KEY="re_..." npx email-sdk send \
+RESEND_API_KEY="re_..." npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter resend \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

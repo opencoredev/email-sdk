@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { runDoctor } from "../packages/email-sdk/src/doctor.js";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { lettermint } from "../packages/email-sdk/src/lettermint.js";
@@ -13,53 +14,14 @@ if (!apiToken) {
   fail("Missing LETTERMINT_API_TOKEN. Set it in your shell or .env.local.");
 }
 
-// Validate the token by confirming the send endpoint authenticates it: an empty
-// payload authenticates and then fails validation with a 422, never a 401.
-const authProbe = await fetch(`${baseUrl}/send`, {
-  method: "POST",
-  headers: {
-    "x-lettermint-token": apiToken,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  },
-  body: JSON.stringify({}),
+const result = await runDoctor({
+  adapter: "lettermint",
+  credential: apiToken,
+  live: true,
+  baseUrl,
 });
-
-const authBody = await authProbe.text();
-
-if (authProbe.status === 401 || authProbe.status === 403) {
-  fail(`Lettermint rejected the API token (HTTP ${authProbe.status}): ${truncate(authBody)}`);
-}
-
-// The empty probe payload should authenticate and then fail validation with a
-// 422 (missing from/to/subject). Treat 422, 400, or any 2xx as proof the token
-// passed auth; 401 and 403 are bad tokens, and 5xx or unexpected proxy/WAF
-// bodies are inconclusive.
-const authenticated =
-  authProbe.status === 422 ||
-  authProbe.status === 400 ||
-  (authProbe.status >= 200 && authProbe.status < 300);
-
-console.log(
-  JSON.stringify(
-    {
-      ok: authenticated,
-      provider: "lettermint",
-      check: "auth",
-      status: authProbe.status,
-      authenticated,
-      detail: truncate(authBody),
-    },
-    null,
-    2,
-  ),
-);
-
-if (!authenticated) {
-  fail(
-    `Lettermint auth probe inconclusive (HTTP ${authProbe.status}); expected 422 or 400 for the empty probe payload.`,
-  );
-}
+console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exit(1);
 
 if (process.env.LETTERMINT_LIVE_SEND !== "true") {
   process.exit(0);
@@ -111,11 +73,6 @@ function requiredEnv(name: string) {
   }
 
   return value;
-}
-
-function truncate(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
 }
 
 function fail(message: string): never {

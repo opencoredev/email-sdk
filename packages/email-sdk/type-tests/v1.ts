@@ -2,6 +2,25 @@ import { cloudflare } from "../src/cloudflare.js";
 import { createEmailClient } from "../src/index.js";
 import type { EmailAdapter, EmailHookEvent, EmailMessage } from "../src/index.js";
 import { smtp } from "../src/smtp.js";
+import { normalizeWebhookEvent, verifyMailgunWebhook, verifyResendWebhook } from "../src/webhooks.js";
+import type { NormalizedWebhookEvent, WebhookDeliveryStatus } from "../src/webhooks.js";
+
+const verifiedWebhook: Promise<boolean> = verifyResendWebhook({
+  body: "{}", headers: new Headers(), secret: ["current", "previous"], now: Date.now(), toleranceSeconds: 300,
+});
+const verifiedMailgun: Promise<boolean> = verifyMailgunWebhook({ body: "{}", secret: "signing-key", signatureField: "parent-signature" });
+const normalizedWebhook: Promise<NormalizedWebhookEvent> = normalizeWebhookEvent({ provider: "resend", body: "{}" });
+normalizedWebhook.then(event => {
+  const status: WebhookDeliveryStatus | undefined = event.status;
+  void status;
+});
+void verifiedWebhook;
+void verifiedMailgun;
+// @ts-expect-error sending adapters are not necessarily supported webhook normalizers
+normalizeWebhookEvent({ provider: "smtp", body: "{}" });
+// @ts-expect-error verification helpers are not exported from the root
+import { verifyResendWebhook as rootWebhookVerifier } from "../src/index.js";
+void rootWebhookVerifier;
 
 const primary: EmailAdapter<"primary"> = {
   name: "primary",

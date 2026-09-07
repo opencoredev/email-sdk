@@ -104,11 +104,11 @@ console.log(result.id); // SES MessageId
 
 ```bash
 AWS_ACCESS_KEY_ID="..." AWS_SECRET_ACCESS_KEY="..." AWS_REGION="us-east-1" \
-  npx email-sdk doctor --adapter ses
+  npm exec --package=@opencoredev/email-sdk -- email-sdk doctor --adapter ses
 ```
 
 ```bash
-npx email-sdk send \
+npm exec --package=@opencoredev/email-sdk -- email-sdk send \
   --adapter ses \
   --access-key-id "$AWS_ACCESS_KEY_ID" \
   --secret-access-key "$AWS_SECRET_ACCESS_KEY" \
