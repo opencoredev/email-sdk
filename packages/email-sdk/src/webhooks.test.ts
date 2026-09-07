@@ -141,7 +141,7 @@ describe("webhook normalization", () => {
   });
   test("package exposes helpers only through the webhook subpath", async () => {
     const manifest = await Bun.file(new URL("../package.json", import.meta.url)).json();
-    expect(manifest.exports["./webhooks"]).toEqual({ types: "./dist/webhooks.d.ts", import: "./dist/webhooks.js" });
+    expect(manifest.exports["./webhooks"]).toEqual({ types: "./dist/webhooks.d.ts", default: "./dist/webhooks.js" });
     const root = await import("./index.js");
     expect("verifyResendWebhook" in root).toBe(false);
     expect("normalizeWebhookEvent" in root).toBe(false);

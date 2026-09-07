@@ -33,7 +33,7 @@ Now call `email.send({ from, to, subject, text })`. Add retries, fallback, plugi
 
 ## Runtime boundary
 
-Email SDK is ESM-only and server-side. It supports Node.js 20+ and Bun 1.1+. Keep API keys and SMTP credentials out of browser bundles.
+Email SDK is server-side and supports Node.js 20+ or Bun 1.1+. Use ESM imports on any supported runtime, or `require()` from CommonJS applications on Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+). On older supported runtimes, use dynamic `import()`. See [Install](/docs/getting-started/install) for typed CommonJS configuration. Keep API keys and SMTP credentials out of browser bundles.
 
 <Card title="Install" href="/docs/getting-started/install" description="Install the SDK and confirm your Node.js or Bun version." />
 <Card title="Schedule an email" href="/docs/guides/schedule-email" description="Use sendAt for provider scheduling, or keep long-running jobs in your own queue." />
