@@ -43,6 +43,10 @@ try {
       "@react-email/render@^2.1.0",
       "react@^19.0.0",
       "react-dom@^19.0.0",
+      "typescript-min@npm:typescript@5.8.3",
+      "typescript@6.0.3",
+      "@types/node@^20.0.0",
+      "@types/react@^19.0.0",
     ],
     install,
   );
@@ -51,6 +55,31 @@ try {
   await writeFile(smoke, smokeProgram());
   const commonJsSmoke = join(install, "smoke.cjs");
   await writeFile(commonJsSmoke, commonJsSmokeProgram());
+
+  const commonJsTypes = join(install, "consumer.cts");
+  await writeFile(commonJsTypes, commonJsTypeProgram());
+  console.log("Compiling installed-package typed CommonJS consumers...");
+  for (const [compiler, module] of [
+    ["typescript-min", "nodenext"],
+    ["typescript", "nodenext"],
+    ["typescript", "node20"],
+  ]) {
+    await run(
+      [
+        "node",
+        join(install, "node_modules", compiler, "bin/tsc"),
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--target",
+        "es2022",
+        "--module",
+        module,
+        commonJsTypes,
+      ],
+      install,
+    );
+  }
 
   console.log("Running installed-package smoke tests under Node...");
   await run(["node", smoke], install);
@@ -198,6 +227,30 @@ async function declarationMaps(directory) {
   }
   return paths;
 }
+`;
+}
+
+function commonJsTypeProgram(): string {
+  return String.raw`
+import sdk = require("@opencoredev/email-sdk");
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email: sdk.EmailClient = sdk.createEmailClient({
+  adapters: [resend({ apiKey: "compile-only" })],
+  telemetry: false,
+});
+
+void email.send({
+  from: "sender@example.com",
+  to: "recipient@example.com",
+  subject: "Compile only",
+  text: "This fixture is never executed.",
+});
+
+// @ts-expect-error Adapter options must remain typed.
+resend({ apiKey: 123 });
+// @ts-expect-error Client options must remain typed.
+sdk.createEmailClient({ adapters: "invalid" });
 `;
 }
 

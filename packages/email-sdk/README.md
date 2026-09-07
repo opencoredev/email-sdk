@@ -16,7 +16,9 @@ pnpm add @opencoredev/email-sdk
 bun add @opencoredev/email-sdk
 ```
 
-The public npm package is `@opencoredev/email-sdk`. The CLI binary it installs is `email-sdk`. Use both from server-side runtimes such as Node.js 20+ or Bun 1.1+, and never expose provider API keys in browser code. CommonJS applications running Node.js 20.19+ can load the package and its adapter entry points with `require()`.
+The public npm package is `@opencoredev/email-sdk`. The CLI binary it installs is `email-sdk`. Use both from server-side runtimes such as Node.js 20+ or Bun 1.1+, and never expose provider API keys in browser code. ESM imports work across this supported range. CommonJS applications running Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) can load the package and its adapter entry points with `require()`. On older supported runtimes, use dynamic `import()` or upgrade.
+
+For typed CommonJS (`.cts`), use TypeScript 5.8+ with `module: nodenext`, or a compiler supporting `module: node20`, and typed imports such as `import sdk = require("@opencoredev/email-sdk")`. This loads ESM from CommonJS; legacy `node16`/`node18` modes do not model `require(esm)`. See the [installation guide](https://email-sdk.dev/docs/getting-started/install) for an adapter example.
 
 ## Quickstart
 

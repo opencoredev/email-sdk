@@ -111,7 +111,7 @@
     },
     "./lettr": {
       "types": "./dist/lettr.d.ts",
-      "import": "./dist/lettr.js"
+      "default": "./dist/lettr.js"
     },
     "./primitive": {
       "types": "./dist/primitive.d.ts",
@@ -143,7 +143,7 @@
     },
     "./webhooks": {
       "types": "./dist/webhooks.d.ts",
-      "import": "./dist/webhooks.js"
+      "default": "./dist/webhooks.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",

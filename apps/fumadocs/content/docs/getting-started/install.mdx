@@ -19,11 +19,22 @@ The public package is `@opencoredev/email-sdk`. The unscoped `email-sdk` package
 
 ### Confirm your runtime
 
-Use Node.js 20+ or Bun 1.1+. ESM imports work across the supported range. CommonJS applications running Node.js 20.19+ can use `require()` for the main package and every adapter entry point.
+Use Node.js 20+ or Bun 1.1+. ESM imports work across the supported range. CommonJS applications running Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) can use `require()` for the main package and every adapter entry point. On older supported runtimes, use dynamic `import()` or upgrade.
 
 ```js title="email.cjs"
 const { createEmailClient } = require("@opencoredev/email-sdk");
 const { resend } = require("@opencoredev/email-sdk/resend");
+```
+
+For typed CommonJS, use TypeScript 5.8+ with `module: nodenext`, or a compiler version supporting `module: node20`. The SDK remains ESM: legacy `node16`/`node18` modes do not model `require(esm)`. Use a `.cts` file with typed imports rather than an untyped bare `require()`:
+
+```ts title="email.cts"
+import sdk = require("@opencoredev/email-sdk");
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = sdk.createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
 ```
 
 </Step>
