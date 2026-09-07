@@ -169,7 +169,7 @@ function DnsCheckerPage() {
               cover setup and verification for each provider, and the{" "}
               <DocsVersionLink
                 className="text-fd-primary underline-offset-4 hover:underline"
-                docsPath="/docs/authentication"
+                docsPath="/docs/getting-started/credentials"
                 forceLatest
               >
                 authentication docs

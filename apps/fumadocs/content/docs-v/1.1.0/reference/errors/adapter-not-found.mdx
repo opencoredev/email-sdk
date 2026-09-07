@@ -1,0 +1,16 @@
+---
+title: adapter_not_found
+description: A runtime route name does not match a registered adapter.
+---
+
+`EmailAdapterNotFoundError` has code `adapter_not_found`, is not retryable, and exposes the missing `adapter` string.
+
+Literal route names normally fail type checking. This error remains necessary for values that enter from untyped configuration, JSON, plugin code, or other runtime boundaries.
+
+```ts title="src/send.ts"
+if (error instanceof EmailAdapterNotFoundError) {
+  console.error(error.adapter);
+}
+```
+
+List registered routes through `email.adapters` or run `email-sdk adapters` for bundled CLI names.

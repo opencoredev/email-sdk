@@ -1,5 +1,12 @@
 # @opencoredev/email-sdk
 
+## 1.2.0
+
+### Minor Changes
+
+- 3b46d04: Add support for Cloudflare Email Workers binding (`SendEmail`) in `cloudflare` adapter.
+- 92d4fb6: Add a Lettr adapter for transactional sends through Lettr's REST API. Convex Email now preserves normalized provider failure metadata and does not retry non-retryable delivery failures.
+
 ## 1.1.0
 
 ### Minor Changes

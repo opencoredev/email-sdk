@@ -1,5 +1,6 @@
 import {
   docs,
+  docsV110,
   docsV101,
   docsV100,
   docsV020,
@@ -17,8 +18,14 @@ import {
 import { loader } from "fumadocs-core/source";
 
 import { resolveDocsIcon } from "./docs-icons";
+import { absolutizeSiteLinks } from "./markdown-links";
 import { docsRoute, siteUrl } from "./shared";
 import { type DocsVersion, docsVersions, getDocsVersionBase, latestDocsVersion } from "./versions";
+
+const v110DocsVersion = docsVersions.find((version) => version.collection === "docsV110");
+if (!v110DocsVersion) {
+  throw new Error("Missing docs source config for v1.1.0");
+}
 
 const v101DocsVersion = docsVersions.find((version) => version.collection === "docsV101");
 if (!v101DocsVersion) {
@@ -89,6 +96,11 @@ const sources = {
   docs: loader({
     source: docs.toFumadocsSource(),
     baseUrl: docsRoute,
+    icon: resolveDocsIcon,
+  }),
+  docsV110: loader({
+    source: docsV110.toFumadocsSource(),
+    baseUrl: getDocsVersionBase(v110DocsVersion),
     icon: resolveDocsIcon,
   }),
   docsV101: loader({
@@ -206,9 +218,11 @@ export async function getLLMText(
   version: DocsVersion = latestDocsVersion,
 ) {
   const docsBasePath = getDocsVersionBase(version);
-  const processed = (await page.data.getText("processed"))
-    .replaceAll("](/docs/", `](${docsBasePath}/`)
-    .replaceAll('href="/docs/', `href="${docsBasePath}/`);
+  const processed = absolutizeSiteLinks(
+    (await page.data.getText("processed"))
+      .replaceAll("](/docs/", `](${docsBasePath}/`)
+      .replaceAll('href="/docs/', `href="${docsBasePath}/`),
+  );
 
   return `# ${page.data.title} (${siteUrl}${page.url})
 

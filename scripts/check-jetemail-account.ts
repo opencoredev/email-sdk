@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { runDoctor } from "../packages/email-sdk/src/doctor.js";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { jetemail } from "../packages/email-sdk/src/jetemail.js";
@@ -13,50 +14,9 @@ if (!apiKey) {
   fail("Missing JETEMAIL_API_KEY. Set it in your shell or .env.local.");
 }
 
-// Transactional keys are scoped to /email and /email-batch, so the key is
-// validated by confirming the send endpoint authenticates it: a malformed
-// payload is rejected with a 4xx validation error, never 401 Unauthorized.
-const authProbe = await fetch(`${baseUrl}/email`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({}),
-});
-
-const authBody = await authProbe.text();
-
-if (authProbe.status === 401) {
-  fail(`JetEmail rejected the API key (401 Unauthorized): ${truncate(authBody)}`);
-}
-
-// The empty probe payload should authenticate and then fail validation with a
-// 400. Treat only a 400 (or a 2xx) as proof the key passed auth; 403, 5xx, and
-// unexpected proxy/WAF bodies are inconclusive rather than a pass.
-const authenticated =
-  authProbe.status === 400 || (authProbe.status >= 200 && authProbe.status < 300);
-
-console.log(
-  JSON.stringify(
-    {
-      ok: authenticated,
-      provider: "jetemail",
-      check: "auth",
-      status: authProbe.status,
-      authenticated,
-      detail: truncate(authBody),
-    },
-    null,
-    2,
-  ),
-);
-
-if (!authenticated) {
-  fail(
-    `JetEmail auth probe inconclusive (HTTP ${authProbe.status}); expected 400 for the empty probe payload.`,
-  );
-}
+const result = await runDoctor({ adapter: "jetemail", credential: apiKey, live: true, baseUrl });
+console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exit(1);
 
 if (process.env.JETEMAIL_LIVE_SEND !== "true") {
   process.exit(0);
@@ -107,11 +67,6 @@ function requiredEnv(name: string) {
   }
 
   return value;
-}
-
-function truncate(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
 }
 
 function fail(message: string): never {

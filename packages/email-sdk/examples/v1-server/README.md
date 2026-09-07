@@ -1,5 +1,7 @@
 # Email SDK v1 server example
 
+For a copyable standalone Node.js/Bun project with safe validation first, start with [first-send](../first-send).
+
 This example shows the v1 server-side path without adding a standalone example package. The files import the public package entry points, define a Resend primary adapter with an SMTP fallback route, validate before sending, use `sendMany` and `sendPersonalized`, and prove fallback behavior without provider network calls.
 
 From the repository root:

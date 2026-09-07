@@ -105,11 +105,11 @@ await email.sendPersonalized({
 
 ```bash
 MAILGUN_API_KEY="key-..." MAILGUN_DOMAIN="mg.acme.com" \
-  npx email-sdk doctor --adapter mailgun
+  npx --package @opencoredev/email-sdk email-sdk doctor --adapter mailgun
 ```
 
 ```bash
-MAILGUN_API_KEY="key-..." npx email-sdk send \
+MAILGUN_API_KEY="key-..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter mailgun \
   --domain mg.acme.com \
   --from "Acme <hello@mg.acme.com>" \

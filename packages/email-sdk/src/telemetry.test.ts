@@ -94,6 +94,7 @@ describe("telemetry capture", () => {
     });
 
     expect(telemetry.enabled).toBe(true);
+    expect(telemetry.realProviderVolume).toBe(false);
     await telemetry.capture("email sent", { adapter: "resend", success: true });
 
     expect(calls).toHaveLength(1);
@@ -105,6 +106,8 @@ describe("telemetry capture", () => {
       adapter: "resend",
       success: true,
       sdk_version: "1.2.3",
+      measurement_schema_version: 2,
+      capture_mode: "injected",
       platform: process.platform,
       $process_person_profile: false,
     });

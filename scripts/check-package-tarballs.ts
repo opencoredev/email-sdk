@@ -43,17 +43,50 @@ try {
       "@react-email/render@^2.1.0",
       "react@^19.0.0",
       "react-dom@^19.0.0",
+      "typescript-min@npm:typescript@5.8.3",
+      "typescript@6.0.3",
+      "@types/node@^20.0.0",
+      "@types/react@^19.0.0",
     ],
     install,
   );
 
   const smoke = join(install, "smoke.mjs");
   await writeFile(smoke, smokeProgram());
+  const commonJsSmoke = join(install, "smoke.cjs");
+  await writeFile(commonJsSmoke, commonJsSmokeProgram());
+
+  const commonJsTypes = join(install, "consumer.cts");
+  await writeFile(commonJsTypes, commonJsTypeProgram());
+  console.log("Compiling installed-package typed CommonJS consumers...");
+  for (const [compiler, module] of [
+    ["typescript-min", "nodenext"],
+    ["typescript", "nodenext"],
+    ["typescript", "node20"],
+  ]) {
+    await run(
+      [
+        "node",
+        join(install, "node_modules", compiler, "bin/tsc"),
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--target",
+        "es2022",
+        "--module",
+        module,
+        commonJsTypes,
+      ],
+      install,
+    );
+  }
 
   console.log("Running installed-package smoke tests under Node...");
   await run(["node", smoke], install);
+  await run(["node", commonJsSmoke], install);
   console.log("Running installed-package smoke tests under Bun...");
   await run(["bun", smoke], install);
+  await run(["bun", commonJsSmoke], install);
   console.log("Installed package smoke tests passed.");
 } finally {
   await rm(scratch, { recursive: true, force: true });
@@ -193,6 +226,44 @@ async function declarationMaps(directory) {
     else if (!entry.name.startsWith("._") && entry.name.endsWith(".d.ts.map")) paths.push(path);
   }
   return paths;
+}
+`;
+}
+
+function commonJsTypeProgram(): string {
+  return String.raw`
+import sdk = require("@opencoredev/email-sdk");
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email: sdk.EmailClient = sdk.createEmailClient({
+  adapters: [resend({ apiKey: "compile-only" })],
+  telemetry: false,
+});
+
+void email.send({
+  from: "sender@example.com",
+  to: "recipient@example.com",
+  subject: "Compile only",
+  text: "This fixture is never executed.",
+});
+
+// @ts-expect-error Adapter options must remain typed.
+resend({ apiKey: 123 });
+// @ts-expect-error Client options must remain typed.
+sdk.createEmailClient({ adapters: "invalid" });
+`;
+}
+
+function commonJsSmokeProgram(): string {
+  return String.raw`
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
+
+const coreDir = join(__dirname, "node_modules/@opencoredev/email-sdk");
+const manifest = JSON.parse(readFileSync(join(coreDir, "package.json"), "utf8"));
+
+for (const subpath of Object.keys(manifest.exports ?? {})) {
+  require(subpath === "." ? manifest.name : manifest.name + subpath.slice(1));
 }
 `;
 }

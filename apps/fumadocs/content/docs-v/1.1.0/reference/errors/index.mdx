@@ -1,0 +1,34 @@
+---
+title: Error reference
+description: Closed v1 error codes, exported classes, retryability, delivery certainty, and route failure structure.
+---
+
+Every SDK-owned failure extends `EmailSdkError` and uses one exported `EmailErrorCode`.
+
+| Code | Class | Key fields |
+| --- | --- | --- |
+| `validation_error` | `EmailValidationError` | Message and cause |
+| `adapter_not_found` | `EmailAdapterNotFoundError` | `adapter` |
+| `adapter_error` | `EmailAdapterError` | `adapter`, `status?`, `requestId?`, `retryable`, `delivery` |
+| `route_error` | `EmailRouteError` | Ordered `failures` |
+| `all_recipients_failed` | `EmailAllRecipientsFailedError` | Ordered `failures` |
+| `middleware_error` | `EmailMiddlewareError` | `phase` |
+| `aborted` | `EmailAbortError` | Cause |
+
+`isRetryableEmailError(error)` returns true only for `EmailSdkError` instances whose `retryable` field is true.
+
+Provider response bodies, credentials, URLs, filesystem paths, and arbitrary details are not public error fields.
+
+## Match safely
+
+```ts title="src/send.ts"
+try {
+  await email.send(message);
+} catch (error) {
+  if (error instanceof EmailAdapterError) {
+    console.error(error.adapter, error.status, error.delivery);
+  }
+}
+```
+
+<Card title="Troubleshooting" href="/docs/guides/troubleshoot-failed-sends" description="Diagnose failures by code and delivery classification." />

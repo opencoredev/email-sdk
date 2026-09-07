@@ -1,3 +1,7 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <image href="/logo.png" width="1024" height="1024" preserveAspectRatio="xMidYMid meet" />
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <rect width="240" height="240" rx="44" fill="#131313"/>
+  <g fill="#ECEAE3" font-family="'Helvetica Neue', HelveticaNeue-Bold, Helvetica, Arial, system-ui, sans-serif" font-weight="700" font-size="56" letter-spacing="-0.56" text-anchor="middle">
+    <text x="120" y="112">Email</text>
+    <text x="120" y="172">SDK</text>
+  </g>
 </svg>

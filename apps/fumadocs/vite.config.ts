@@ -8,6 +8,8 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
 
+import { devJsonImports } from "./scripts/dev-json-imports";
+
 import { comparePairs } from "./src/lib/compare";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
@@ -73,6 +75,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_EMAIL_SDK_BUILD_ID": JSON.stringify(buildId),
     },
     plugins: [
+      devJsonImports(),
       mdx(),
       tailwindcss(),
       tanstackStart({

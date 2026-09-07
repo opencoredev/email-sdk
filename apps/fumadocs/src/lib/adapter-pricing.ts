@@ -77,8 +77,8 @@ const pricingByProvider = {
   lettr: {
     model: "Plan + volume tiers",
     sources: [{ label: "Lettr pricing", href: "https://lettr.com/pricing" }],
-    note: "Free includes 3K. Pro is $15 through 100K. Business is $110 through 200K. Higher published volumes are custom.",
-    prices: [usd(0), usd(15), usd(15), custom, custom, custom],
+    note: "Free includes 3K. Published tiers are 50K at $15, 100K at $30, 200K at $110, 500K at $250, and 1M at $450. The 250K column uses the 500K tier.",
+    prices: [usd(0), usd(15), usd(30), usd(250), usd(250), usd(450)],
   },
   lettermint: {
     model: "Plan + overage · EUR",
