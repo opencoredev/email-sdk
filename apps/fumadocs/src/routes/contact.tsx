@@ -3,27 +3,19 @@ import { HomeLayout } from "fumadocs-ui/layouts/home";
 import type { ReactNode } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, gitConfig, siteUrl } from "@/lib/shared";
 
 const repoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
-    meta: [
-      { title: `Contact - ${appName}` },
-      {
-        name: "description",
-        content:
-          "Contact the Email SDK project — report bugs, ask questions, disclose security issues, or sponsor development through GitHub.",
-      },
-      { property: "og:title", content: `Contact - ${appName}` },
-      {
-        property: "og:description",
-        content:
-          "How to reach the Email SDK project: GitHub issues for bugs, discussions for questions, private security reports, and sponsorship.",
-      },
-      { property: "og:url", content: `${siteUrl}/contact` },
-    ],
+    meta: buildPageMeta({
+      title: `Contact - ${appName}`,
+      description:
+        "Contact the Email SDK project: report bugs, ask questions, disclose security issues, or sponsor development through GitHub.",
+      url: `${siteUrl}/contact`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/contact` }],
   }),
   component: Contact,

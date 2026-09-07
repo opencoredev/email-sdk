@@ -4,25 +4,17 @@ import type { ReactNode } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { baseOptions } from "@/lib/layout.shared";
+import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
-    meta: [
-      { title: `About - ${appName}` },
-      {
-        name: "description",
-        content:
-          "About Email SDK — an open-source TypeScript SDK for transactional email across 24 adapters, maintained by OpenCore.",
-      },
-      { property: "og:title", content: `About - ${appName}` },
-      {
-        property: "og:description",
-        content:
-          "What Email SDK is, why it exists, and who maintains it — one typed email API across Resend, SMTP, Postmark, SendGrid, AWS SES, and more.",
-      },
-      { property: "og:url", content: `${siteUrl}/about` },
-    ],
+    meta: buildPageMeta({
+      title: `About - ${appName}`,
+      description:
+        "About Email SDK, an open-source TypeScript SDK for transactional email across 24 adapters, maintained by OpenCore.",
+      url: `${siteUrl}/about`,
+    }),
     links: [{ rel: "canonical", href: `${siteUrl}/about` }],
   }),
   component: About,
