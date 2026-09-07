@@ -114,6 +114,18 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.attachments[0].content).toBe(base64("hello"));
   });
 
+  test("Resend gives a per-send idempotency key precedence over static headers", async () => {
+    const capture = jsonCapture({ id: "res_123" });
+
+    await resend({
+      apiKey: "key",
+      headers: { "idempotency-key": "static-key" },
+      fetch: capture.fetch,
+    }).send(messageWithoutMetadata, context);
+
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
   test("Postmark maps metadata, headers, and attachments", async () => {
     const capture = jsonCapture({ MessageID: "postmark_123", To: "ada@example.com" });
 
@@ -1341,6 +1353,18 @@ describe("provider payloads", () => {
       filename: "hello.txt",
       data: base64("hello"),
     });
+  });
+
+  test("JetEmail gives a per-send idempotency key precedence over static headers", async () => {
+    const capture = jsonCapture({ id: "jet_123" });
+
+    await jetemail({
+      apiKey: "key",
+      headers: { "idempotency-key": "static-key" },
+      fetch: capture.fetch,
+    }).send(messageWithoutTagsOrMetadata, context);
+
+    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
   test("JetEmail requires a from address with a display name", async () => {
