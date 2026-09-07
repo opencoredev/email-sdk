@@ -1,5 +1,24 @@
 # @opencoredev/convex-email
 
+## 4.0.0
+
+### Major Changes
+
+- 32e98c9: Secure `exposeApi()` with authenticated ownership checks. Unauthenticated callers can no longer send, read, cancel, or retry email records; use `authorize` for custom tenant or operation policy, and `authorizeConfig` for explicitly authorized configuration access.
+
+### Patch Changes
+
+- 308074d: Prevent stale recovered email workers from overwriting the active worker's result.
+- 3e07cf2: Require Email SDK ^1.3.0 for the shared webhook export used by the component. SDK 1.2.0 does not provide this entry point; the accumulated SDK minor changesets introduce it in 1.3.0.
+- 3e07cf2: Reuse the SDK webhook normalizer for Resend, Postmark, and Mailgun, reject malformed non-object payloads, and handle Resend delivery headers case-insensitively while preserving optional application verification and generic-provider compatibility.
+- bcf0306: Harden remote attachment downloads by validating every redirect, limiting redirects and response size, and applying a fetch timeout.
+- Updated dependencies [3e07cf2]
+- Updated dependencies [bcf0306]
+- Updated dependencies [3e07cf2]
+- Updated dependencies [3e07cf2]
+- Updated dependencies [14a6dc0]
+  - @opencoredev/email-sdk@1.3.0
+
 ## 3.0.0
 
 ### Minor Changes

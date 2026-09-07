@@ -1,5 +1,18 @@
 # @opencoredev/email-sdk
 
+## 1.3.0
+
+### Minor Changes
+
+- 3e07cf2: Add opt-in `doctor --live`, `--from`, and `--json` diagnostics with independently reported `configuration`, `authentication`, and `sender` checks. Default `doctor` stays configuration-only and makes no network request. Live probes use documented non-sending endpoints for Resend, Sequenzy, JetEmail, Primitive, Lettermint, and Lettr; Resend additionally supports paginated sender-domain readiness via `--from`, while other adapters report sender readiness as `unsupported`. Results distinguish `invalid_credentials`, `insufficient_permissions`, `inconclusive`, `rate_limited`, `network_failure`, `timeout`, `unsupported`, and `not_ready`; generic HTTP 400/422 responses are never treated as authentication success. Probes are bounded by a timeout, reject redirects and non-loopback base URL overrides, and never print credentials, response bodies, or account identifiers. The live verification scripts reuse the same probes.
+- 3e07cf2: Add a separate webhooks entry point with Web Crypto Resend and Mailgun signature verification, timestamp checks and key rotation, plus delivery event normalization for Resend, Postmark, and Mailgun.
+- 14a6dc0: Allow CommonJS applications on Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) to load every SDK entry point with `require()`. ESM imports still support Node.js 20+. Typed CommonJS consumers need TypeScript 5.8+ with `module: nodenext`, or a compiler supporting `module: node20`. On older supported runtimes, use dynamic `import()` instead.
+
+### Patch Changes
+
+- bcf0306: Ensure the packaged CLI is executable when builds run with a restrictive file-creation mask.
+- 3e07cf2: Correct anonymous usage measurements by separating logical send outcomes, adapter attempts, submitted volume, and explicit provider acceptance. Version the counting schema, replace the misleading `delivered_count` metric, exclude built-in test adapters from provider volume even when renamed, and preserve acceptance evidence when later middleware fails. Default-on telemetry and existing opt-outs remain unchanged. Document aggregation rules and why provider acceptance does not establish delivery.
+
 ## 1.2.0
 
 ### Minor Changes
