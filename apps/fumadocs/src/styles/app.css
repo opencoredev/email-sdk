@@ -517,10 +517,18 @@ body :not(.email-landing *):is(
 }
 
 .landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 24px;
+}
+
+.landing-brand img {
+  width: 24px;
+  height: 24px;
 }
 
 .landing-nav-links {

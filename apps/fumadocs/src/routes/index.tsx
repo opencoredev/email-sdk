@@ -101,6 +101,7 @@ function Nav() {
   return (
     <nav className="landing-nav" aria-label="Primary navigation">
       <Link className="landing-brand" to="/">
+        <img alt="" aria-hidden="true" src="/logo.png" />
         Email SDK
       </Link>
       <div className="landing-nav-links">
