@@ -50,7 +50,7 @@
     "@changesets/cli": "^2.31.1",
     "@email-sdk/config": "workspace:*",
     "oxfmt": "^0.46.0",
-    "oxlint": "^1.72.0",
+    "oxlint": "^1.80.0",
     "turbo": "^2.10.12",
     "typescript": "^6.0.3"
   },
