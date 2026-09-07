@@ -25,9 +25,9 @@ const sponsorNames = [
 const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint"] as const;
 
 const deliveryRules = [
-  ["not_sent", "The provider did not accept it. A configured fallback may try another adapter."],
-  ["unknown", "Acceptance is unclear. Inspect the provider before sending again."],
-  ["Accepted", "Keep the receipt. Provider acceptance does not prove inbox delivery."],
+  ["not_sent", "Not accepted. A configured fallback may try another adapter."],
+  ["unknown", "Acceptance unclear. Inspect before sending again."],
+  ["Accepted", "Keep the receipt. Acceptance is not inbox delivery."],
 ] as const;
 
 type FooterLink = {
@@ -135,8 +135,8 @@ function Hero() {
     <section className="landing-hero" aria-labelledby="landing-heading">
       <h1 id="landing-heading">Email for TypeScript apps.</h1>
       <p id="landing-summary">
-        Send transactional email with your existing provider account. Validate messages, test
-        without sending, and inspect failures in one server-side SDK.
+        Send, validate, test without sending, and inspect failures with the provider account you
+        already have.
       </p>
       <div className="landing-hero-actions">
         <DocsVersionLink className="landing-button landing-button-primary" docsPath="/docs/getting-started/quickstart">
@@ -146,9 +146,6 @@ function Hero() {
           Check your setup
         </DocsVersionLink>
       </div>
-      <DocsVersionLink className="landing-hero-test-link" docsPath="/docs/guides/test-email-behavior">
-        Or start with a no-network test →
-      </DocsVersionLink>
     </section>
   );
 }
@@ -185,9 +182,7 @@ function OneCall() {
           </DocsVersionLink>
         }
       >
-        Install <code>@opencoredev/email-sdk</code>, set <code>RESEND_API_KEY</code> on your
-        server, and use a sender verified with Resend. This example makes a live provider request
-        from Node.js 20+ or Bun 1.1+. A successful result records provider acceptance, not inbox
+        One adapter, one verified sender, one call. The result is provider acceptance, not inbox
         delivery.
       </SectionLabel>
       <CodePanel />
@@ -274,10 +269,8 @@ function BeforeLiveSend() {
           </DocsVersionLink>
         }
       >
-        By default, <code>doctor</code> checks required configuration locally and makes no provider
-        request. Explicit <code>--live</code> checks authenticate supported providers; Resend also
-        supports a sender-domain check with <code>--from</code>. Neither proves delivery. The CLI
-        does not load <code>.env</code> files; export credentials into your server process.
+        <code>doctor</code> checks configuration locally; <code>--live</code> authenticates on
+        request. The memory adapter tests sends with no network.
       </SectionLabel>
       <div className="landing-operate-body">
         <div className="landing-terminal">
@@ -362,10 +355,7 @@ function DeliveryRules() {
           </DocsVersionLink>
         }
       >
-        Errors expose a code, adapter, retryability, and delivery state. A timeout can mean the
-        provider accepted the message but its response never reached your app. The example above
-        sets <code>retry.maxAttempts: 1</code>; if you enable retries, a retryable unknown outcome
-        can be retried. Fallback is separate and stops on unknown delivery by default.
+        Every error carries a code, the adapter, retryability, and a delivery state.
       </SectionLabel>
       <div className="landing-delivery-list">
         {deliveryRules.map(([condition, outcome]) => (
@@ -374,9 +364,6 @@ function DeliveryRules() {
             <span>{outcome}</span>
           </div>
         ))}
-        <DocsVersionLink className="landing-section-link" docsPath="/docs/concepts/fallbacks-and-retries">
-          Configure retries and fallback →
-        </DocsVersionLink>
       </div>
       <div aria-hidden="true" className="landing-art landing-art-horn">
         <div className="landing-engraving" />
@@ -389,17 +376,14 @@ function WhenToUse() {
   return (
     <section className="landing-section landing-fit" aria-labelledby="landing-fit-heading">
       <SectionLabel id="landing-fit-heading" title="Email SDK or a provider SDK?">
-        Email SDK adds field-support validation, no-network test adapters, common error types, and
-        configurable retry and fallback policies. You keep your provider account, credentials, and
-        billing.
+        A library, not an email service. You keep your provider account and billing.
       </SectionLabel>
       <div className="landing-fit-columns">
         <div>
           <h3>Use Email SDK when</h3>
           <ul>
             <li>You want validation, test adapters, and typed errors in one place.</li>
-            <li>You may change providers later and want the message shape to stay put.</li>
-            <li>You need a fallback route that only runs after a confirmed failure.</li>
+            <li>You need a fallback route after a confirmed failure.</li>
           </ul>
         </div>
         <div>
@@ -408,11 +392,6 @@ function WhenToUse() {
             <li>You send through one provider and already handle tests and failures.</li>
             <li>You need provider-specific APIs outside the common message model.</li>
           </ul>
-          <p>
-            Email SDK is a library, not an email service, campaign builder, or delivery guarantee.
-            Switching adapters keeps the message shape, but field support and provider behavior
-            still differ.
-          </p>
           <DocsVersionLink className="landing-section-link" docsPath="/docs/adapters/field-support">
             Compare supported fields →
           </DocsVersionLink>
@@ -434,8 +413,7 @@ function Adapters() {
           </Link>
         }
       >
-        Use the adapter for the provider account you already have. Your send calls stay the same
-        when you switch; check supported fields first.
+        Same send call across providers. Check supported fields before switching.
       </SectionLabel>
       <div className="landing-adapter-list">
         {adapterNames.map((name) => {

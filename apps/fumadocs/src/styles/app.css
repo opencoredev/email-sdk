@@ -631,19 +631,6 @@ body :not(.email-landing *):is(
   border-color: var(--landing-gold);
 }
 
-.landing-hero-test-link {
-  align-self: flex-start;
-  margin-top: -8px;
-  color: var(--landing-muted);
-  font-size: 15px;
-  line-height: 18px;
-  transition: color 160ms ease;
-}
-
-.landing-hero-test-link:hover {
-  color: var(--landing-gold);
-}
-
 .landing-hero-art {
   position: absolute;
   top: 120px;
@@ -1305,10 +1292,6 @@ body :not(.email-landing *):is(
   .landing-fit .landing-section-label p,
   .landing-adapters .landing-section-label p {
     max-width: 100%;
-  }
-
-  .landing-hero-test-link {
-    margin-top: 0;
   }
 
   .landing-footer {
