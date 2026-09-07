@@ -12,7 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@opencoredev/email-sdk": "file:../../../../../../../../../../tmp/email-sdk-pack/opencoredev-email-sdk-1.2.0.tgz",
+    "@opencoredev/email-sdk": "^1.2.0",
     "dotenv": "^17.4.2"
   }
 }
