@@ -38,8 +38,10 @@
     "ws": "^8.20.1",
     "brace-expansion": "1.1.18",
     "dompurify": "3.4.14",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
+    "fflate": "0.4.9",
     "js-yaml": "4.3.1",
+    "browserslist": "4.28.7",
     "postcss": "8.5.26",
     "read-yaml-file": "3.0.0",
     "esbuild": "0.28.1"
