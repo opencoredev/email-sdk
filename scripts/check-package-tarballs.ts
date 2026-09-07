@@ -1,10 +1,14 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 type PackReport = {
   filename: string;
   files: Array<{ path: string; mode: number }>;
+};
+
+type ReleasePlan = {
+  releases: Array<{ name: string; newVersion: string }>;
 };
 
 const root = resolve(import.meta.dir, "..");
@@ -15,10 +19,19 @@ const scratch = await mkdtemp(join(scratchBase, "email-sdk-pack-check-"));
 try {
   const packed = join(scratch, "packed");
   await mkdir(packed);
+  const releaseVersions = await getReleaseVersions(scratch);
 
   console.log("Packing public packages and Convex component...");
-  const core = await pack(join(root, "packages/email-sdk"), packed);
-  const convex = await pack(join(root, "packages/convex-email"), packed);
+  const core = await pack(
+    join(root, "packages/email-sdk"),
+    packed,
+    releaseVersions.get("@opencoredev/email-sdk"),
+  );
+  const convex = await pack(
+    join(root, "packages/convex-email"),
+    packed,
+    releaseVersions.get("@opencoredev/convex-email"),
+  );
 
   assertCoreTarball(core);
   assertConvexTarball(convex);
@@ -96,10 +109,38 @@ try {
   await rm(scratch, { recursive: true, force: true });
 }
 
-async function pack(packageDir: string, destination: string): Promise<PackReport> {
+async function getReleaseVersions(scratch: string) {
+  const planPath = join(scratch, "release-plan.json");
+  await run(["bunx", "changeset", "status", `--output=${planPath}`], root);
+  const plan = JSON.parse(await readFile(planPath, "utf8")) as ReleasePlan;
+  return new Map(plan.releases.map((release) => [release.name, release.newVersion]));
+}
+
+async function pack(
+  packageDir: string,
+  destination: string,
+  releaseVersion?: string,
+): Promise<PackReport> {
+  const manifestPath = join(packageDir, "package.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { version: string };
+  let sourceDir = packageDir;
+  const packArguments = ["npm", "pack", "--json", "--silent", "--pack-destination", destination];
+
+  if (releaseVersion && releaseVersion !== manifest.version) {
+    await run(["bun", "run", "build"], packageDir);
+    sourceDir = join(destination, "sources", basename(packageDir));
+    await mkdir(join(destination, "sources"), { recursive: true });
+    await cp(packageDir, sourceDir, { recursive: true });
+    await writeFile(
+      join(sourceDir, "package.json"),
+      `${JSON.stringify({ ...manifest, version: releaseVersion }, null, 2)}\n`,
+    );
+    packArguments.push("--ignore-scripts");
+  }
+
   const output = await run(
-    ["npm", "pack", "--json", "--silent", "--pack-destination", destination],
-    packageDir,
+    packArguments,
+    sourceDir,
   );
   const jsonStart = output.lastIndexOf("\n[");
   const report = JSON.parse(output.slice(jsonStart >= 0 ? jsonStart + 1 : output.indexOf("["))) as

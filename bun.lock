@@ -80,7 +80,7 @@
         "convex-test": "0.0.53",
       },
       "peerDependencies": {
-        "@opencoredev/email-sdk": "^1.2.0",
+        "@opencoredev/email-sdk": "^1.3.0",
         "convex": "^1.36.1",
       },
     },
