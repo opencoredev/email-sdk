@@ -10,5 +10,5 @@
     "types": ["node", "bun"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "type-tests/**/*.ts", "examples/**/*.ts", "examples/**/*.tsx"],
-  "exclude": ["dist", "src/**/*.test.ts"]
+  "exclude": ["dist", "src/**/*.test.ts", "examples/durable-postgres"]
 }

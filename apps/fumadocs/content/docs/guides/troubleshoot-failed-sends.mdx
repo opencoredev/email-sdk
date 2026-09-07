@@ -20,7 +20,7 @@ Check:
 Run the same path without sending:
 
 ```bash
-EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
+EMAIL_SDK_TELEMETRY=0 npx --package @opencoredev/email-sdk email-sdk send \
   --adapter resend \
   --from hello@example.com \
   --to user@example.com \
@@ -34,7 +34,7 @@ EMAIL_SDK_TELEMETRY=0 npx email-sdk send \
 `EmailAdapterNotFoundError` includes the unregistered `adapter`. Construction catches unknown defaults and client fallbacks; runtime strings can still reach this error.
 
 ```bash
-npx email-sdk adapters
+npx --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 ## One adapter failed

@@ -1,0 +1,29 @@
+{
+  "name": "email-sdk-durable-postgres-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "tsx src/cli.ts setup",
+    "enqueue": "tsx src/cli.ts enqueue",
+    "worker": "tsx src/cli.ts worker",
+    "status": "tsx src/cli.ts status",
+    "reconcile": "tsx src/cli.ts reconcile",
+    "webhook": "tsx src/cli.ts webhook",
+    "test:integration": "tsx --test integration/postgres.integration.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencoredev/email-sdk": "^1.3.0",
+    "dotenv": "^16.6.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

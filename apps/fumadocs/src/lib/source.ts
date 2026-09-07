@@ -218,11 +218,13 @@ export async function getLLMText(
   version: DocsVersion = latestDocsVersion,
 ) {
   const docsBasePath = getDocsVersionBase(version);
-  const pageData = page.data as typeof page.data & {
-    getText(type: "processed"): Promise<string>;
-  };
+  const getText = Reflect.get(page.data, "getText");
+  if (typeof getText !== "function") {
+    throw new Error(`Page ${page.url} does not expose generated Markdown text`);
+  }
+
   const processed = absolutizeSiteLinks(
-    (await pageData.getText("processed"))
+    (await getText.call(page.data, "processed"))
       .replaceAll("](/docs/", `](${docsBasePath}/`)
       .replaceAll('href="/docs/', `href="${docsBasePath}/`),
   );

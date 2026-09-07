@@ -97,11 +97,11 @@ await email.send({
 ## Verify from the CLI
 
 ```bash
-LETTR_API_KEY="lttr_..." npx email-sdk doctor --adapter lettr
+LETTR_API_KEY="lttr_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter lettr
 ```
 
 ```bash
-LETTR_API_KEY="lttr_..." npx email-sdk send \
+LETTR_API_KEY="lttr_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter lettr \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

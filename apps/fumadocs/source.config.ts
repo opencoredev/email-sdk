@@ -1,4 +1,7 @@
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
+import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
+
+import { emailSdkDark, emailSdkLight } from "./src/lib/code-theme";
 
 export const docs = defineDocs({
   dir: "content/docs",
@@ -135,4 +138,14 @@ export const docsV065 = defineDocs({
   },
 });
 
-export default defineConfig();
+export default defineConfig({
+  mdxOptions: {
+    rehypeCodeOptions: {
+      ...rehypeCodeDefaultOptions,
+      themes: {
+        light: emailSdkLight,
+        dark: emailSdkDark,
+      },
+    },
+  },
+});

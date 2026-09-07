@@ -6,6 +6,7 @@ import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
+import { runDoctor } from "./doctor.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
 import { lettermint } from "./lettermint.js";
@@ -258,7 +259,7 @@ async function main(command: string | undefined, flags: CliFlags) {
   }
 
   if (command === "doctor") {
-    doctor(flags);
+    await doctor(flags);
     return;
   }
 
@@ -349,26 +350,55 @@ function printAdapters(flags: CliFlags) {
   }
 }
 
-function doctor(flags: CliFlags) {
-  const providerName = selectedAdapter(flags) ?? detectProvider();
+async function doctor(flags: CliFlags) {
+  const providerName =
+    selectedAdapter(flags) ??
+    providerDocs.find((item) => item.env.every((name) => process.env[name]?.trim()))?.name;
   const provider = providerDocs.find((item) => item.name === providerName);
-
-  if (!provider) {
-    fail(`Unsupported adapter "${providerName}".`);
+  const missing = provider?.env.filter((name) => !hasEnvOrFlag(flags, name)) ?? [];
+  const live = truthyFlag(flags, "live");
+  const from = flags.from === undefined ? undefined : (stringFlag(flags, "from") ?? "");
+  const credentialEnv = provider?.env[0];
+  const credentialFlag = credentialEnv ? envFlagNames[credentialEnv] : undefined;
+  const result = await runDoctor({
+    adapter: provider?.name ?? "unknown",
+    configured: Boolean(provider) && missing.length === 0,
+    credential:
+      credentialFlag && flags[credentialFlag] !== undefined
+        ? (stringFlag(flags, credentialFlag) ?? "")
+        : credentialEnv
+          ? process.env[credentialEnv]
+          : undefined,
+    live,
+    from,
+    baseUrl:
+      flags["base-url"] !== undefined
+        ? (stringFlag(flags, "base-url") ?? "")
+        : provider
+          ? process.env[`${provider.name.toUpperCase()}_BASE_URL`]
+          : undefined,
+  });
+  if (!provider)
+    result.checks.configuration.message =
+      "Select a supported adapter with --adapter or set its required environment variables. Run `email-sdk adapters` for options.";
+  if (truthyFlag(flags, "json")) {
+    console.log(JSON.stringify(result, null, 2));
+  } else if (result.ok && !live) {
+    console.log(`${result.adapter} looks configured.`);
+  } else {
+    if (missing.length > 0)
+      console.error(`Missing environment for ${result.adapter}: ${missing.join(", ")}`);
+    for (const [name, item] of Object.entries(result.checks)) {
+      console.log(`${name}: ${item.status} — ${item.message}`);
+    }
   }
-
-  const missing = provider.env.filter((name) => !hasEnvOrFlag(flags, name));
-
-  if (missing.length > 0) {
-    fail(`Missing environment for ${provider.name}: ${missing.join(", ")}`);
-  }
-
-  console.log(`${provider.name} looks configured.`);
+  if (!result.ok) process.exitCode = 1;
 }
 
 function hasEnvOrFlag(flags: CliFlags, env: string) {
   const flag = envFlagNames[env];
-  return Boolean(process.env[env] || (flag ? stringFlag(flags, flag) : undefined));
+  const value = flag && flags[flag] !== undefined ? stringFlag(flags, flag) : process.env[env];
+  return Boolean(value?.trim());
 }
 
 async function printVersion(flags: CliFlags) {
@@ -648,6 +678,17 @@ Usage:
   email-sdk adapters
   RESEND_API_KEY="re_..." email-sdk doctor --adapter resend
   email-sdk send --adapter resend --from you@example.com --to them@example.com --subject "Hello" --text "It works"
+
+Doctor options:
+  --live                       Explicitly check authentication without sending email.
+  --from <address>             Check sender readiness (requires --live; Resend only).
+  --json                       Print configuration, authentication, and sender statuses.
+  --api-key <key>              Overrides the selected adapter's API key environment.
+  --api-token <token>          Overrides token environment (including Lettermint).
+  --base-url <url>             Test-only: fixed provider base or 127.0.0.1/[::1] fixture URL.
+  Default checks configuration only and makes no provider request.
+  Authentication is not delivery proof. The CLI does not load .env files.
+  Exit status: 0 when every requested check passes, 1 otherwise.
 
 Send options:
   --adapter <name>             Adapter routing name. Run "email-sdk adapters".

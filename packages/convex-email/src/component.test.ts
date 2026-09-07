@@ -5,6 +5,9 @@ import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
 import { buildEmailClient, hydrateAttachments } from "./component/providers.js";
 
+const originalFetch = globalThis.fetch;
+const originalSetTimeout = globalThis.setTimeout;
+
 const modules = {
   "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
   "./component/_generated/server.ts": () => import("./component/_generated/server.js"),
@@ -56,6 +59,8 @@ describe("convex-email component", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
   });
 
   test("queues a memory-adapter email and records sent status", async () => {
@@ -150,6 +155,48 @@ describe("convex-email component", () => {
     });
 
     expect(secondId).toBe(firstId);
+  });
+
+  test("scopes public API idempotency keys to their stamped owner", async () => {
+    const t = createTest();
+    const enqueueOwned = (api.lib as any).enqueueOwned;
+    const email = {
+      ...message,
+      idempotencyKey: "welcome",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    };
+
+    const firstId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const sameOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
+    const anotherOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_2" });
+
+    expect(sameOwnerId).toBe(firstId);
+    expect(anotherOwnerId).not.toBe(firstId);
+  });
+
+  test("enqueues owner-stamped batches atomically and preserves the batch limit", async () => {
+    const t = createTest();
+    const enqueueOwnedBatch = (api.lib as any).enqueueOwnedBatch;
+    const email = {
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+    };
+
+    await expect(
+      t.mutation(enqueueOwnedBatch, {
+        ownerId: "user_1",
+        messages: Array.from({ length: 101 }, () => email),
+      }),
+    ).rejects.toThrow("at most 100");
+
+    const ids = await t.mutation(enqueueOwnedBatch, {
+      ownerId: "user_1",
+      messages: [email, { ...email, to: "grace@example.com" }],
+    });
+    expect(ids).toHaveLength(2);
+    expect((await t.query(api.lib.status, { emailId: ids[0] }))?.ownerId).toBe("user_1");
   });
 
   test("enqueues a batch, applies config defaults, and returns ids in order", async () => {
@@ -427,6 +474,29 @@ describe("convex-email component", () => {
     expect(config).toMatchObject({ testMode: true, sandboxTo: ["dev@example.test"] });
     expect(config?.defaultFrom).toBeUndefined();
     expect(config?.cleanupAfterDays).toBeUndefined();
+  });
+
+  test("rejects non-object webhook JSON for known providers", async () => {
+    const t = createTest();
+    for (const provider of ["resend", "postmark", "mailgun"]) {
+      for (const body of ["null", "[]", "true", "malformed"]) {
+        await expect(t.action(api.worker.handleWebhook, { provider, body, headers: {} })).rejects.toThrow();
+      }
+    }
+  });
+
+  test("deduplicates Resend delivery headers case-insensitively", async () => {
+    const t = createTest();
+    const args = { provider: "resend", headers: { "Svix-Id": "case-id" }, body: '{"type":"email.opened"}' };
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
+    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({ ok: true, duplicate: true });
+  });
+
+  test("retains generic provider compatibility", async () => {
+    const t = createTest();
+    const args = { provider: "custom", headers: {}, body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}' };
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
+    expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true, duplicate: true });
   });
 
   test("records duplicate webhook deliveries idempotently", async () => {
@@ -739,6 +809,87 @@ describe("convex-email component", () => {
     ).rejects.toThrow('Attachment "loopback.txt" URL host is not allowed.');
   });
 
+  test("validates every redirect before fetching a remote attachment", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = async (input, init) => {
+      requests.push({ url: String(input), init });
+      if (requests.length === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://cdn.example.test/attachment.txt" },
+        });
+      }
+      return new Response("attachment");
+    };
+
+    const hydrated = await hydrateAttachments({
+      ...message,
+      attachments: [{ filename: "attachment.txt", url: "https://files.example.test/attachment.txt" }],
+    });
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://files.example.test/attachment.txt",
+      "https://cdn.example.test/attachment.txt",
+    ]);
+    expect(requests.every((request) => request.init?.redirect === "manual")).toBe(true);
+    expect(requests.every((request) => request.init?.signal instanceof AbortSignal)).toBe(true);
+    expect(new TextDecoder().decode(hydrated.attachments?.[0]?.content as ArrayBuffer)).toBe(
+      "attachment",
+    );
+  });
+
+  test("rejects unsafe redirect targets without requesting them", async () => {
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://127.0.0.1/private" },
+      });
+    };
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "private.txt", url: "https://files.example.test/private.txt" }],
+      }),
+    ).rejects.toThrow('Attachment "private.txt" URL host is not allowed.');
+    expect(calls).toBe(1);
+  });
+
+  test("rejects remote attachments that exceed the size limit", async () => {
+    globalThis.fetch = async () =>
+      new Response(new Uint8Array(10 * 1024 * 1024 + 1), { headers: { "content-type": "text/plain" } });
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "large.txt", url: "https://files.example.test/large.txt" }],
+      }),
+    ).rejects.toThrow('Attachment "large.txt" exceeds the 10485760-byte size limit.');
+  });
+
+  test("times out when a remote attachment body stalls after response headers", async () => {
+    globalThis.setTimeout = ((callback: (...args: never[]) => void, _delay?: number, ...args: never[]) =>
+      originalSetTimeout(callback, 0, ...args)) as typeof setTimeout;
+    globalThis.fetch = async (_input, init) => {
+      const signal = init?.signal as AbortSignal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal.addEventListener("abort", () => controller.error(new Error("aborted")));
+        },
+      });
+      return new Response(body);
+    };
+
+    await expect(
+      hydrateAttachments({
+        ...message,
+        attachments: [{ filename: "stalled.txt", url: "https://files.example.test/stalled.txt" }],
+      }),
+    ).rejects.toThrow('Fetching email attachment "stalled.txt" timed out.');
+  });
+
   test("recovers emails stuck in processing", async () => {
     const t = createTest();
     const originalNow = Date.now;
@@ -770,6 +921,104 @@ describe("convex-email component", () => {
     } finally {
       Date.now = originalNow;
     }
+  });
+
+  test("ignores stale worker completion after a processing lease is recovered", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+
+    Date.now = () => startedAt;
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        idempotencyKey: "stale-lease:ada@example.com",
+        adapters: [{ kind: "memory" }],
+        adapter: "memory",
+        maxAttempts: 2,
+      });
+      const staleWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+      await t.mutation(api.lib.processDueEmails, { limit: 25 });
+      const currentWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+      expect(staleWorker?.processingLease).toBe(1);
+      expect(currentWorker?.processingLease).toBe(2);
+
+      expect(
+        await t.mutation(api.lib.markSent, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          response: { id: "stale-provider-id", adapter: "memory" },
+        }),
+      ).toBe(false);
+      expect(
+        await t.mutation(api.lib.markFailedOrRetry, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          error: "late stale worker failure",
+          retryable: true,
+        }),
+      ).toBe(false);
+      expect(
+        await t.mutation(api.lib.recordProviderAttempt, {
+          emailId,
+          processingLease: staleWorker!.processingLease,
+          adapter: "memory",
+          attempt: 1,
+        }),
+      ).toBe(false);
+
+      const statusBeforeCurrentCompletion = await t.query(api.lib.status, { emailId });
+      expect(statusBeforeCurrentCompletion).toMatchObject({
+        status: "processing",
+        processingLease: currentWorker?.processingLease,
+      });
+
+      expect(
+        await t.mutation(api.lib.markSent, {
+          emailId,
+          processingLease: currentWorker!.processingLease,
+          response: { id: "current-provider-id", adapter: "memory" },
+        }),
+      ).toBe(true);
+
+      const status = await t.query(api.lib.status, { emailId });
+      const events = await t.query(api.lib.listEvents, { emailId });
+      expect(status).toMatchObject({
+        status: "sent",
+        providerMessageId: "current-provider-id",
+      });
+      expect(events.filter((event) => event.type === "sent")).toHaveLength(1);
+      expect(events.some((event) => event.error === "late stale worker failure")).toBe(false);
+      expect(events.some((event) => event.adapter === "memory" && event.type === "provider_attempt")).toBe(false);
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("keeps processing leases monotonic across manual retries", async () => {
+    const t = createTest();
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+    const firstWorker = await t.mutation(api.lib.markProcessing, { emailId });
+
+    await t.mutation(api.lib.markFailedOrRetry, {
+      emailId,
+      processingLease: firstWorker!.processingLease,
+      error: "first attempt failed",
+      retryable: true,
+    });
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+
+    const retriedWorker = await t.mutation(api.lib.markProcessing, { emailId });
+    expect(firstWorker?.processingLease).toBe(1);
+    expect(retriedWorker?.processingLease).toBe(2);
   });
 
   test("does not auto-retry stale processing emails without an idempotency key", async () => {

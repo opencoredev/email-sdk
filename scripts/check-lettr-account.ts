@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { runDoctor } from "../packages/email-sdk/src/doctor.js";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { lettr } from "../packages/email-sdk/src/lettr.js";
@@ -13,49 +14,9 @@ if (!apiKey) {
   fail("Missing LETTR_API_KEY. Set it in your shell or .env.local.");
 }
 
-// Validate the key on the send endpoint so Sending Only keys pass. An empty
-// payload authenticates and then fails validation with a 422, never a 401.
-const authProbe = await fetch(`${baseUrl}/emails`, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${apiKey}`,
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({}),
-});
-
-const authBody = await authProbe.text();
-
-if (authProbe.status === 401 || authProbe.status === 403) {
-  fail(`Lettr rejected the API key (HTTP ${authProbe.status}): ${truncate(authBody)}`);
-}
-
-const authenticated =
-  authProbe.status === 422 ||
-  authProbe.status === 400 ||
-  (authProbe.status >= 200 && authProbe.status < 300);
-
-console.log(
-  JSON.stringify(
-    {
-      ok: authenticated,
-      provider: "lettr",
-      check: "auth",
-      status: authProbe.status,
-      authenticated,
-      detail: truncate(authBody),
-    },
-    null,
-    2,
-  ),
-);
-
-if (!authenticated) {
-  fail(
-    `Lettr auth probe inconclusive (HTTP ${authProbe.status}); expected 422 or 400 for the empty probe payload.`,
-  );
-}
+const result = await runDoctor({ adapter: "lettr", credential: apiKey, live: true, baseUrl });
+console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exit(1);
 
 if (process.env.LETTR_LIVE_SEND !== "true") {
   process.exit(0);
@@ -106,11 +67,6 @@ function requiredEnv(name: string) {
   }
 
   return value;
-}
-
-function truncate(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
 }
 
 function fail(message: string): never {
