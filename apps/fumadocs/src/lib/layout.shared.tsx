@@ -16,12 +16,7 @@ export function baseOptions({
 }: BaseOptionsConfig = {}): BaseLayoutProps {
   return {
     nav: {
-      title: (
-        <span className="flex items-center gap-3">
-          <EmailSdkLogoIcon />
-          <span>{appName}</span>
-        </span>
-      ),
+      title: appName,
     },
     slots: {
       themeSwitch: ThemeToggle,
@@ -75,8 +70,3 @@ export function baseOptions({
   };
 }
 
-function EmailSdkLogoIcon() {
-  return (
-    <img alt="" aria-hidden="true" className="size-8 shrink-0 object-contain" src="/logo.png" />
-  );
-}
