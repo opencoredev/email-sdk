@@ -21,6 +21,7 @@ type QueuedEmail = {
   adapters: ConvexEmailAdapterConfig[];
   adapter?: string;
   fallbackAdapters: string[];
+  processingLease: number;
   message: ConvexEmailMessage;
   idempotencyKey?: string;
   sendMetadata?: Record<string, unknown>;
@@ -56,6 +57,7 @@ export const processEmail = internalAction({
         async recordAttempt(event) {
           await ctx.runMutation(recordProviderAttemptRef, {
             emailId: args.emailId,
+            processingLease: email.processingLease,
             adapter: event.adapter,
             attempt: event.attempt,
           });
@@ -71,12 +73,14 @@ export const processEmail = internalAction({
 
       await ctx.runMutation(markSentRef, {
         emailId: args.emailId,
+        processingLease: email.processingLease,
         response,
       });
     } catch (error) {
       const providerFailure = providerFailureMetadata(error);
       await ctx.runMutation(markFailedOrRetryRef, {
         emailId: args.emailId,
+        processingLease: email.processingLease,
         error: stringifyError(error),
         retryable: providerFailure?.retryable ?? isRetryableFailure(error),
         ...(providerFailure ? { providerFailure } : {}),
