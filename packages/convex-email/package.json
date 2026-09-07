@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/convex-email",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "Provider-portable transactional email for Convex with durable queues, retries, fallback adapters, idempotency, webhooks, and reactive status.",
   "keywords": [
     "convex",
@@ -9,12 +9,18 @@
     "brevo",
     "cloudflare",
     "iterable",
+    "jetemail",
+    "lettermint",
+    "lettr",
+    "loops",
+    "mailchimp",
     "mailgun",
     "mailersend",
     "mailpace",
     "mailtrap",
     "plunk",
     "postmark",
+    "primitive",
     "resend",
     "scaleway",
     "sequenzy",
@@ -30,7 +36,7 @@
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/opencoredev/email-sdk.git",
@@ -92,7 +98,7 @@
     "convex-test": "0.0.53"
   },
   "peerDependencies": {
-    "@opencoredev/email-sdk": "^1.0.0",
+    "@opencoredev/email-sdk": "^1.3.0",
     "convex": "^1.36.1"
   },
   "engines": {

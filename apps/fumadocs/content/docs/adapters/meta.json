@@ -9,6 +9,7 @@
     "jetemail",
     "primitive",
     "lettermint",
+    "lettr",
     "postmark",
     "sendgrid",
     "cloudflare",

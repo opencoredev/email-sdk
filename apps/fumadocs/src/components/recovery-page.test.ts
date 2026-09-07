@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
 
-import { classifyRecoveryError, getErrorMessage } from "./recovery-page";
+import {
+  AppErrorPage,
+  NotFoundPage,
+  RootRecoveryShell,
+  classifyRecoveryError,
+  getErrorMessage,
+  recoveryRobots,
+} from "./recovery-page";
 
 describe("recovery page helpers", () => {
   test("classifies stale chunk load failures", () => {
@@ -38,5 +46,46 @@ describe("recovery page helpers", () => {
     const namelessError = new Error();
     namelessError.name = "";
     expect(getErrorMessage(namelessError)).toBe("Unknown error");
+  });
+});
+
+describe("recovery page markup", () => {
+  test("error page renders without a fumadocs provider and stays off the default TanStack copy", () => {
+    const html = renderToStaticMarkup(
+      AppErrorPage({
+        error: new Error("You need to wrap your application inside FrameworkProvider"),
+        reset: () => undefined,
+      }),
+    );
+
+    expect(html).not.toContain("Something went wrong");
+    expect(html).not.toContain("Show Error");
+    expect(html).toContain('name="robots"');
+    expect(html).toContain(recoveryRobots);
+    expect(html).toContain("The docs could not finish loading.");
+  });
+
+  test("not-found page is noindex and does not use the default error copy", () => {
+    const html = renderToStaticMarkup(NotFoundPage());
+
+    expect(html).not.toContain("Something went wrong");
+    expect(html).not.toContain("Show Error");
+    expect(html).toContain(recoveryRobots);
+    expect(html).toContain("That docs route is not here.");
+  });
+
+  test("root recovery shell ships a titled noindex document", () => {
+    const html = renderToStaticMarkup(
+      RootRecoveryShell({
+        children: "recovery",
+        stylesheetHref: "/app.css",
+      }),
+    );
+
+    expect(html).toContain("<title>Email SDK</title>");
+    expect(html).toContain('name="robots"');
+    expect(html).toContain(recoveryRobots);
+    expect(html).toContain('href="/app.css"');
+    expect(html).not.toContain("Untitled");
   });
 });

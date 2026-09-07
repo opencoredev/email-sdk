@@ -1,0 +1,28 @@
+---
+title: Timeout plugin
+description: Bound one logical send, including retries and fallback, while preserving caller cancellation.
+---
+
+`timeoutPlugin` adds an `AbortSignal.timeout` to every send. When a caller already supplies a signal, the plugin combines both and aborts on whichever happens first.
+
+```ts title="src/email.ts"
+import { timeoutPlugin } from "@opencoredev/email-sdk/plugins/timeout";
+
+const email = createEmailClient({
+  adapters: [primary, backup],
+  plugins: [timeoutPlugin({ timeoutMs: 10_000 })],
+  retry: { maxAttempts: 2 },
+  fallback: { adapters: ["backup"] },
+});
+```
+
+The timeout covers the whole logical operation after `beforeSend` begins. It does not reset for each retry or fallback adapter. A timeout surfaces as `EmailAbortError` and stops routing.
+
+## Choose the bound from the user operation
+
+Use a short timeout for request-response flows and a larger timeout in durable workers. The plugin is not a queue deadline and does not cancel a provider request after the provider has already accepted it.
+
+`timeoutMs` must be a positive finite number. Use a custom `id` when registering multiple instances for separate composed clients.
+
+<Card title="Aborted error" href="/docs/reference/errors/aborted" description="Handle caller cancellation and timeout failures." />
+<Card title="Production pipeline" href="/docs/guides/production-send-pipeline" description="Use durable worker deadlines and persisted recovery." />

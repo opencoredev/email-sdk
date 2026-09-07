@@ -1,7 +1,37 @@
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
+import { rehypeCodeDefaultOptions } from "fumadocs-core/mdx-plugins";
+
+import { emailSdkDark, emailSdkLight } from "./src/lib/code-theme";
 
 export const docs = defineDocs({
   dir: "content/docs",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
+export const docsV110 = defineDocs({
+  dir: "content/docs-v/1.1.0",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
+export const docsV101 = defineDocs({
+  dir: "content/docs-v/1.0.1",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
+export const docsV100 = defineDocs({
+  dir: "content/docs-v/1.0.0",
   docs: {
     postprocess: {
       includeProcessedMarkdown: true,
@@ -108,4 +138,14 @@ export const docsV065 = defineDocs({
   },
 });
 
-export default defineConfig();
+export default defineConfig({
+  mdxOptions: {
+    rehypeCodeOptions: {
+      ...rehypeCodeDefaultOptions,
+      themes: {
+        light: emailSdkLight,
+        dark: emailSdkDark,
+      },
+    },
+  },
+});

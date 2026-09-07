@@ -1,10 +1,20 @@
 import type { MetaDescriptor } from "@tanstack/react-router";
 
+import { providers } from "@/lib/providers";
 import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
-export const siteTitle = `${appName} - Transactional email for TypeScript`;
+// Both the FAQ answer and the ItemList below used to spell the adapters out by
+// hand, so each new adapter left the structured data one provider short of the
+// code. Derive them from the adapter registry instead.
+const supportedProviderNames = providers.map((provider) => provider.name);
+const supportedProviderSentence = new Intl.ListFormat("en", {
+  style: "long",
+  type: "conjunction",
+}).format(supportedProviderNames);
+
+export const siteTitle = `${appName} - Email for TypeScript apps.`;
 export const siteImageAlt =
-  "Email SDK: Transactional email across 23 adapters in one typed SDK";
+  "Email SDK: Email for TypeScript apps. Alpine background with an illustrative send example.";
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 
@@ -85,6 +95,72 @@ export const siteMeta = [
   },
 ] satisfies MetaDescriptor[];
 
+export function buildDocsStructuredData({
+  canonicalUrl,
+  dateModified,
+  description,
+  title,
+}: {
+  canonicalUrl: string;
+  dateModified: string;
+  description: string;
+  title: string;
+}) {
+  const breadcrumbItems = [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: appName,
+      item: siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Documentation",
+      item: `${siteUrl}/docs`,
+    },
+  ];
+
+  if (canonicalUrl !== `${siteUrl}/docs`) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: 3,
+      name: title,
+      item: canonicalUrl,
+    });
+  }
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        "@id": `${canonicalUrl}#article`,
+        headline: title,
+        description,
+        dateModified,
+        url: canonicalUrl,
+        mainEntityOfPage: canonicalUrl,
+        inLanguage: "en",
+        author: {
+          "@id": `${siteUrl}/#organization`,
+        },
+        publisher: {
+          "@id": `${siteUrl}/#organization`,
+        },
+        isPartOf: {
+          "@id": `${siteUrl}/#website`,
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        itemListElement: breadcrumbItems,
+      },
+    ],
+  };
+}
+
 export const homeStructuredData = {
   "@context": "https://schema.org",
   "@graph": [
@@ -136,7 +212,7 @@ export const homeStructuredData = {
       // text-to-speech readout (the hero heading and one-line summary).
       speakable: {
         "@type": "SpeakableSpecification",
-        cssSelector: ["#hero-heading", "#hero-summary"],
+        cssSelector: ["#landing-heading", "#landing-summary"],
       },
     },
     {
@@ -144,8 +220,7 @@ export const homeStructuredData = {
       "@id": `${siteUrl}/#service`,
       name: "Email SDK transactional email integration",
       serviceType: "Transactional email integration",
-      description:
-        "Send transactional email through 22 provider APIs plus SMTP behind one typed TypeScript client, with retries and compatible fallbacks.",
+      description: appDescription,
       provider: {
         "@id": `${siteUrl}/#organization`,
       },
@@ -162,7 +237,7 @@ export const homeStructuredData = {
       image: siteOgImageUrl,
       description: appDescription,
       programmingLanguage: "TypeScript",
-      runtimePlatform: ["Node.js", "Bun", "JavaScript"],
+      runtimePlatform: ["Node.js 20+", "Bun 1.1+"],
       softwareHelp: `${siteUrl}/docs`,
       codeRepository: "https://github.com/opencoredev/email-sdk",
       downloadUrl: "https://www.npmjs.com/package/@opencoredev/email-sdk",
@@ -172,9 +247,10 @@ export const homeStructuredData = {
         priceCurrency: "USD",
       },
       featureList: [
-        "Unified transactional email sending",
-        "Provider adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, and more",
-        "Fallback routes and retries",
+        "Transactional email through your existing provider account",
+        "23 provider API adapters plus SMTP, 24 adapters total, including Resend, Postmark, SendGrid, Mailgun, and AWS SES",
+        "Message validation, no-network test adapters, and common error types",
+        "Configurable fallback routes and retries",
         "Plugins for defaults, observability, capture, and community adapters",
         "CLI for local checks and smoke-test sends",
       ],
@@ -188,7 +264,7 @@ export const homeStructuredData = {
           name: "What is Email SDK?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK is a TypeScript email SDK that gives applications one typed client and one message shape for sending transactional email through providers such as Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, Cloudflare, and AWS SES.",
+            text: "Email for TypeScript apps. Email SDK is an open-source, server-side TypeScript library for sending transactional email with your existing provider account. It adds message validation, no-network test adapters, and common error types. Your provider still handles credentials, billing, and delivery.",
           },
         },
         {
@@ -196,7 +272,7 @@ export const homeStructuredData = {
           name: "Which email providers does Email SDK support?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Email SDK supports adapters for Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Iterable, Loops, Sequenzy, JetEmail, Primitive, Lettermint, Plunk, Mailtrap, Scaleway, ZeptoMail, and MailPace.",
+            text: `Email SDK supports adapters for ${supportedProviderSentence}.`,
           },
         },
         {
@@ -215,31 +291,8 @@ export const homeStructuredData = {
       "@type": "ItemList",
       "@id": `${siteUrl}/#supported-providers`,
       name: "Email providers supported by Email SDK",
-      itemListElement: [
-        "Resend",
-        "SMTP",
-        "Postmark",
-        "SendGrid",
-        "Mailgun",
-        "Cloudflare Email Sending",
-        "Unosend",
-        "AWS SES",
-        "MailerSend",
-        "Brevo",
-        "Mailchimp Transactional",
-        "SparkPost",
-        "Iterable",
-        "Loops",
-        "Sequenzy",
-        "JetEmail",
-        "Primitive",
-        "Lettermint",
-        "Plunk",
-        "Mailtrap",
-        "Scaleway",
-        "ZeptoMail",
-        "MailPace",
-      ].map((name, index) => ({
+      numberOfItems: supportedProviderNames.length,
+      itemListElement: supportedProviderNames.map((name, index) => ({
         "@type": "ListItem",
         position: index + 1,
         name,

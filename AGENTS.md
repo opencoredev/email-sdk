@@ -67,6 +67,7 @@ When adding or changing a provider adapter, verify it against a live account. Th
 bun run live:resend
 bun run live:sequenzy
 bun run live:lettermint
+bun run live:lettr
 # Adapters without a script alias run directly:
 bun scripts/check-jetemail-account.ts
 bun scripts/check-primitive-account.ts

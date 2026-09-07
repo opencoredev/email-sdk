@@ -1,0 +1,36 @@
+---
+title: Convex
+description: Durable, provider-portable transactional email for Convex applications.
+---
+
+`@opencoredev/convex-email` is a real Convex Component: it owns isolated tables, queues provider work outside your mutation, retries safe failures, deduplicates sends, stores an event timeline, and exposes reactive delivery status.
+
+Email SDK owns message validation and provider adapters. The Convex component owns durable application state around those sends.
+
+## What you get
+
+- **Fast mutations.** `send` stores the message and returns an email id before the provider request runs.
+- **Durable idempotency.** Reusing an idempotency key returns the original email id instead of queueing another message.
+- **Retry and recovery.** Failed attempts use exponential backoff, stale processing work is recovered safely, and terminal failures can be retried manually.
+- **Provider portability.** Use any serializable built-in Email SDK adapter configuration, including named fallback routes.
+- **Reactive status.** Query queue state, provider receipts, attempted adapters, normalized delivery state, and the complete event timeline.
+- **Safe testing.** Redirect all recipients to a sandbox mailbox or use the in-memory adapter without changing application flow.
+
+## Public API
+
+| Method | Purpose |
+| --- | --- |
+| `send(ctx, message)` | Queue one email and return its component id. |
+| `sendBatch(ctx, messages)` | Queue up to 100 messages and return ids in input order. |
+| `status(ctx, { emailId })` | Read the current stored email state. |
+| `listEvents(ctx, { emailId })` | Read the ordered queue, attempt, retry, and webhook timeline. |
+| `cancel(ctx, { emailId })` | Cancel work that has not started. |
+| `retry(ctx, { emailId })` | Start a fresh retry cycle for a terminal failure. |
+| `setConfig(ctx, config)` | Replace test, sender, retry, and retention defaults. |
+
+<CardGroup cols={2}>
+  <Card title="Install and configure" href="/docs/integrations/convex/setup" description="Mount the component, map provider secrets, and create the server client." />
+  <Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Queue messages and expose reactive status to your application." />
+  <Card title="Process webhooks" href="/docs/integrations/convex/webhooks" description="Verify provider events and store normalized delivery state." />
+  <Card title="Test and recover" href="/docs/integrations/convex/testing-and-recovery" description="Redirect recipients, inspect failures, cancel work, and retry safely." />
+</CardGroup>

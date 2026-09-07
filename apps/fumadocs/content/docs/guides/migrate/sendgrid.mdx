@@ -52,8 +52,8 @@ SendGrid has native personalized capability, so this stays one provider request.
 ## Verify
 
 ```bash
-SENDGRID_API_KEY=SG.x npx email-sdk doctor --adapter sendgrid
-SENDGRID_API_KEY=SG.x npx email-sdk send \
+SENDGRID_API_KEY=SG.x npx --package @opencoredev/email-sdk email-sdk doctor --adapter sendgrid
+SENDGRID_API_KEY=SG.x npx --package @opencoredev/email-sdk email-sdk send \
   --adapter sendgrid \
   --from hello@example.com \
   --to user@example.com \

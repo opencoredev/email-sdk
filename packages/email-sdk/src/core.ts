@@ -39,6 +39,7 @@ import {
   isReportableSendError,
   normalizeAdapterName,
 } from "./telemetry.js";
+import { isTestAdapter } from "./testing.js";
 import {
   arrayify,
   assertMessage,
@@ -93,6 +94,80 @@ export function createEmailClient<
   const telemetry = options.telemetry === false ? undefined : getTelemetry();
   const telemetrySource = getTelemetrySource();
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
+  const measureAttempt: MeasureAttempt = async (adapter, path, recipients, invoke) => {
+    if (!telemetry?.enabled) return await invoke();
+    const startedAt = Date.now();
+    const adapterName = normalizeAdapterName(adapter.name);
+    const adapterKind =
+      isTestAdapter(adapter) || adapter.name === "memory"
+        ? "test"
+        : ["custom", "unknown"].includes(adapterName)
+          ? "custom"
+          : "provider";
+    const provider = telemetry.realProviderVolume === true && adapterKind !== "test";
+    let result: EmailSendResult | undefined;
+    let failure: unknown;
+    let resolved = false;
+    try {
+      const response = await invoke();
+      result = response;
+      resolved = true;
+      return response;
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      // Optional recipient lists/counts are evidence; IDs and resolved promises are not.
+      const adapterError = failure instanceof EmailAdapterError ? failure : undefined;
+      const counts = acceptanceCounts(
+        result?.accepted?.length ?? adapterError?.acceptedCount,
+        result?.rejected?.length ?? adapterError?.rejectedCount,
+        recipients,
+        adapterError !== undefined,
+      );
+      const { accepted, rejected } = counts;
+      const acceptedMessages = path === "personalized_native" ? accepted : Number(accepted > 0);
+      const inferred = resolved && result?.accepted === undefined && result?.rejected === undefined;
+      const acceptanceBasis = counts.explicit
+        ? "explicit"
+        : inferred
+          ? "inferred_from_success"
+          : "unknown";
+      const submittedRecipients = inferred ? recipients : accepted;
+      const submittedMessages =
+        path === "personalized_native" ? submittedRecipients : Number(submittedRecipients > 0);
+      const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
+      const unknownRecipients = notSent ? 0 : Math.max(0, recipients - accepted - rejected);
+      void telemetry?.capture("email adapter attempted", {
+        measurement_schema_version: 2,
+        measurement_scope: "adapter_attempt",
+        adapter: adapterName,
+        adapter_kind: adapterKind,
+        delivery_path: path,
+        source: telemetrySource,
+        duration_ms: Date.now() - startedAt,
+        adapter_attempt_count: 1,
+        adapter_resolved_count: Number(resolved),
+        adapter_failure_count: Number(!resolved),
+        not_sent_attempt_count: Number(notSent),
+        uncertain_attempt_count: Number(!resolved && !notSent),
+        attempted_message_count: path === "personalized_native" ? recipients : 1,
+        attempted_recipient_count: recipients,
+        not_sent_recipient_count: notSent ? recipients : 0,
+        accepted_message_count: acceptedMessages,
+        accepted_recipient_count: accepted,
+        rejected_recipient_count: rejected,
+        unknown_recipient_count: unknownRecipients,
+        provider_volume_eligible: provider,
+        provider_attempt_count: Number(provider),
+        provider_accepted_message_count: provider ? acceptedMessages : 0,
+        provider_accepted_recipient_count: provider ? accepted : 0,
+        acceptance_basis: acceptanceBasis,
+        provider_submitted_message_count: provider ? submittedMessages : 0,
+        provider_submitted_recipient_count: provider ? submittedRecipients : 0,
+      });
+    }
+  };
 
   void telemetry?.capture("client created", {
     adapters: [...adapters.keys()].map(normalizeAdapterName),
@@ -148,8 +223,17 @@ export function createEmailClient<
             retry: prepared.options?.retry ?? options.retry,
             hooks,
             middleware,
+            measureAttempt,
           });
-          captureSendTelemetry(telemetry, telemetrySource, startedAt, facts, result.adapter, true);
+          captureSendTelemetry({
+            telemetry,
+            source: telemetrySource,
+            startedAt,
+            facts,
+            adapter: result.adapter,
+            success: true,
+            messageCount: 1,
+          });
           return result;
         } catch (error) {
           if (
@@ -186,15 +270,16 @@ export function createEmailClient<
     } catch (error) {
       const normalized = normalizeOwnedError(error);
       const attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
-      captureSendTelemetry(
+      captureSendTelemetry({
         telemetry,
-        telemetrySource,
+        source: telemetrySource,
         startedAt,
         facts,
-        attemptedAdapter,
-        false,
-        normalized.code,
-      );
+        adapter: attemptedAdapter,
+        success: false,
+        messageCount: 1,
+        errorCode: normalized.code,
+      });
       if (telemetry && isReportableSendError(normalized)) {
         void telemetry.captureException(normalized, {
           source: telemetrySource,
@@ -240,6 +325,8 @@ export function createEmailClient<
 
     void telemetry?.capture("email batch sent", {
       message_count: items.length,
+      measurement_schema_version: 2,
+      measurement_scope: "batch_summary",
       succeeded: items.length - failed,
       failed,
       recipients: items.reduce(
@@ -303,6 +390,7 @@ export function createEmailClient<
               options.retry,
               hooks,
               middleware,
+              measureAttempt,
             )
           : await attemptExpandedPersonalized(
               adapter,
@@ -311,22 +399,20 @@ export function createEmailClient<
               options.retry,
               hooks,
               middleware,
+              measureAttempt,
             );
 
         if (result.accepted.length > 0) {
-          captureSendTelemetry(
+          captureSendTelemetry({
             telemetry,
-            telemetrySource,
+            source: telemetrySource,
             startedAt,
             facts,
-            result.adapter,
-            true,
-            undefined,
+            adapter: result.adapter,
+            success: true,
+            messageCount: facts.recipients,
             deliveryPath,
-            result.accepted.length,
-            result.rejected.length,
-            result.failures.length,
-          );
+          });
           return result;
         }
 
@@ -342,19 +428,17 @@ export function createEmailClient<
       throw new EmailAllRecipientsFailedError(routeFailures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      captureSendTelemetry(
+      captureSendTelemetry({
         telemetry,
-        telemetrySource,
+        source: telemetrySource,
         startedAt,
         facts,
-        attemptedAdapter,
-        false,
-        normalized.code,
+        adapter: attemptedAdapter,
+        success: false,
+        messageCount: facts.recipients,
+        errorCode: normalized.code,
         deliveryPath,
-        0,
-        facts.recipients,
-        normalized instanceof EmailAllRecipientsFailedError ? normalized.failures.length : undefined,
-      );
+      });
       if (telemetry && isReportableSendError(normalized)) {
         void telemetry.captureException(normalized, {
           source: telemetrySource,
@@ -377,6 +461,9 @@ export function createEmailClient<
     sendPersonalized,
     adapter(name: string) {
       return requireAdapter(adapters, name);
+    },
+    flush() {
+      return telemetry?.flush() ?? Promise.resolve();
     },
     withAdapter(name: string) {
       requireAdapter(adapters, name);
@@ -409,6 +496,37 @@ export function createEmailClient<
   return client;
 }
 
+function acceptanceCounts(
+  accepted: number | undefined,
+  rejected: number | undefined,
+  recipients: number,
+  requireComplete: boolean,
+) {
+  const valid = (count: number | undefined) =>
+    count === undefined || (Number.isSafeInteger(count) && count >= 0 && count <= recipients);
+  if (
+    !valid(accepted) ||
+    !valid(rejected) ||
+    (accepted !== undefined &&
+      rejected !== undefined &&
+      (accepted + rejected > recipients || (requireComplete && accepted + rejected !== recipients)))
+  ) {
+    return { accepted: 0, rejected: 0, explicit: false };
+  }
+  return {
+    accepted: accepted ?? 0,
+    rejected: rejected ?? 0,
+    explicit: accepted !== undefined || rejected !== undefined,
+  };
+}
+
+type MeasureAttempt = <T extends EmailSendResult>(
+  adapter: EmailAdapter,
+  path: "single" | "personalized_native" | "personalized_expanded",
+  recipients: number,
+  invoke: () => T | PromiseLike<T>,
+) => Promise<T>;
+
 type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
@@ -416,6 +534,8 @@ type AttemptInput = {
   retry?: EmailRetryConfig;
   hooks: EmailHooks[];
   middleware: EmailSendMiddleware[];
+  measureAttempt: MeasureAttempt;
+  path?: "single" | "personalized_expanded";
 };
 
 class AttemptFailure {
@@ -437,14 +557,20 @@ async function attemptAdapter(input: AttemptInput): Promise<EmailSendResult> {
 
     let result: EmailSendResult;
     try {
-      const adapterResult = await input.adapter.send(input.message, {
-        adapter: input.adapter.name,
-        operation: "send",
-        attempt,
-        signal: input.options?.signal,
-        idempotencyKey: input.options?.idempotencyKey,
-        metadata: input.options?.metadata,
-      });
+      const adapterResult = await input.measureAttempt(
+        input.adapter,
+        input.path ?? "single",
+        messageFacts(input.message).recipients,
+        () =>
+          input.adapter.send(input.message, {
+            adapter: input.adapter.name,
+            operation: "send",
+            attempt,
+            signal: input.options?.signal,
+            idempotencyKey: input.options?.idempotencyKey,
+            metadata: input.options?.metadata,
+          }),
+      );
       throwIfAborted(input.options?.signal);
       result = normalizeAdapterResult(input.adapter.name, adapterResult);
     } catch (error) {
@@ -487,6 +613,7 @@ async function attemptNativePersonalized(
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
+  measureAttempt: MeasureAttempt,
 ): Promise<PersonalizedAttempt> {
   const maxAttempts = sendOptions?.retry?.maxAttempts ?? clientRetry?.maxAttempts ?? 1;
   const retry = sendOptions?.retry ?? clientRetry;
@@ -496,14 +623,20 @@ async function attemptNativePersonalized(
     const event = hookEvent(adapter.name, hookMessage, attempt, sendOptions?.metadata);
     await invokeHooks(hooks, "beforeSend", event);
     try {
-      const result = await adapter.sendPersonalized!(input, {
-        adapter: adapter.name,
-        operation: "personalized",
-        attempt,
-        signal: sendOptions?.signal,
-        idempotencyKey: sendOptions?.idempotencyKey,
-        metadata: sendOptions?.metadata,
-      });
+      const result = await measureAttempt(
+        adapter,
+        "personalized_native",
+        input.recipients.length,
+        () =>
+          adapter.sendPersonalized!(input, {
+            adapter: adapter.name,
+            operation: "personalized",
+            attempt,
+            signal: sendOptions?.signal,
+            idempotencyKey: sendOptions?.idempotencyKey,
+            metadata: sendOptions?.metadata,
+          }),
+      );
       throwIfAborted(sendOptions?.signal);
       const normalized = normalizeAdapterResult(adapter.name, result);
       const personalized = {
@@ -575,6 +708,7 @@ async function attemptExpandedPersonalized(
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
+  measureAttempt: MeasureAttempt,
 ): Promise<PersonalizedAttempt> {
   const accepted: string[] = [];
   const rejected: string[] = [];
@@ -595,6 +729,8 @@ async function attemptExpandedPersonalized(
         retry: sendOptions?.retry ?? clientRetry,
         hooks,
         middleware,
+        measureAttempt,
+        path: "personalized_expanded",
       });
       firstResult ??= result;
       accepted.push(address);
@@ -981,19 +1117,34 @@ function personalizedFacts(input: EmailPersonalizedInput) {
   };
 }
 
-function captureSendTelemetry(
-  telemetry: ReturnType<typeof getTelemetry> | undefined,
-  source: string,
-  startedAt: number,
-  facts: ReturnType<typeof messageFacts> | ReturnType<typeof personalizedFacts>,
-  adapter: string,
-  success: boolean,
-  errorCode?: string,
+type SendTelemetryInput = {
+  telemetry: ReturnType<typeof getTelemetry> | undefined;
+  source: string;
+  startedAt: number;
+  facts: ReturnType<typeof messageFacts> | ReturnType<typeof personalizedFacts>;
+  adapter: string;
+  success: boolean;
+  /**
+   * Individual messages this call represents: 1 for send() regardless of how many
+   * to/cc/bcc addresses share it, one per recipient for sendPersonalized(). Counting
+   * events instead would undercount a personalized send to 500 people as 1.
+   */
+  messageCount: number;
+  errorCode?: string;
+  deliveryPath?: string;
+};
+
+function captureSendTelemetry({
+  telemetry,
+  source,
+  startedAt,
+  facts,
+  adapter,
+  success,
+  messageCount,
+  errorCode,
   deliveryPath = "single",
-  acceptedRecipientCount?: number,
-  rejectedRecipientCount?: number,
-  failureCount?: number,
-) {
+}: SendTelemetryInput) {
   void telemetry?.capture("email sent", {
     ...facts,
     adapter: normalizeAdapterName(adapter),
@@ -1001,9 +1152,12 @@ function captureSendTelemetry(
     success,
     duration_ms: Date.now() - startedAt,
     error_code: errorCode,
-    accepted_recipient_count: acceptedRecipientCount,
-    rejected_recipient_count: rejectedRecipientCount,
-    failure_count: failureCount,
+    message_count: messageCount,
+    measurement_schema_version: 2,
+    measurement_scope: "logical_operation",
+    logical_operation_count: 1,
+    operation_success_count: Number(success),
+    operation_failure_count: Number(!success),
     source,
   });
 }

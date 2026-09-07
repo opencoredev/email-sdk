@@ -176,6 +176,15 @@ export const providers = [
     currentOnly: true,
   },
   {
+    name: "Lettr",
+    key: "lettr",
+    importPath: "@opencoredev/email-sdk/lettr",
+    docs: "/docs/adapters/lettr",
+    website: "https://lettr.com/?utm_source=email-sdk.dev&utm_medium=referral&utm_campaign=sponsor",
+    logo: "/og/provider-logos/lettr.svg",
+    currentOnly: true,
+  },
+  {
     name: "Plunk",
     key: "plunk",
     importPath: "@opencoredev/email-sdk/plunk",

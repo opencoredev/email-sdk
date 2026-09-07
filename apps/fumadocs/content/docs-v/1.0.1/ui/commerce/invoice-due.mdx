@@ -1,0 +1,56 @@
+---
+title: Invoice due
+description: A clear invoice summary before payment is due.
+---
+
+<EmailExample id="invoice-due" />
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+<Tab value="CLI">
+
+```bash
+npx shadcn@latest add https://email-sdk.dev/r/invoice-due.json
+```
+
+</Tab>
+<Tab value="Manual">
+
+Copy this template into your app and customize its props, words, and links.
+
+```tsx title="src/ui/email/invoice-due.tsx"
+import {
+  EmailButton,
+  EmailCard,
+  EmailHeading,
+  EmailSeparator,
+  EmailText,
+  ShadcnEmail,
+} from "@opencoredev/email-sdk/react";
+
+export function InvoiceDueEmail({ amount, dueDate, invoiceUrl }: {
+  amount: string;
+  dueDate: string;
+  invoiceUrl: string;
+}) {
+  return (
+    <ShadcnEmail preview={`Your invoice is due ${dueDate}`}>
+      <EmailCard>
+        <EmailHeading>Invoice due {dueDate}</EmailHeading>
+        <EmailText>
+          Your invoice is ready and will be charged to your saved payment method.
+        </EmailText>
+        <EmailSeparator />
+        <EmailText muted>Amount due</EmailText>
+        <EmailText style={{ fontSize: 24, fontWeight: 700 }}>{amount}</EmailText>
+        <EmailText muted>Due date: {dueDate}</EmailText>
+        <EmailButton href={invoiceUrl}>View invoice</EmailButton>
+      </EmailCard>
+    </ShadcnEmail>
+  );
+}
+```
+
+</Tab>
+</Tabs>

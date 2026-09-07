@@ -15,6 +15,7 @@ import type {
   ConvexEmailDoc,
   ConvexEmailEventDoc,
   ConvexEmailMessage,
+  ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
 } from "../shared/types.js";
 import {
@@ -270,5 +271,6 @@ export type {
   ConvexEmailDoc,
   ConvexEmailEventDoc,
   ConvexEmailMessage,
+  ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
 };

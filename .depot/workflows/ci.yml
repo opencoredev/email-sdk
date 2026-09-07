@@ -87,4 +87,5 @@ jobs:
           JETEMAIL_API_KEY: ${{ secrets.JETEMAIL_API_KEY }}
           PRIMITIVE_API_KEY: ${{ secrets.PRIMITIVE_API_KEY }}
           LETTERMINT_API_TOKEN: ${{ secrets.LETTERMINT_API_TOKEN }}
+          LETTR_API_KEY: ${{ secrets.LETTR_API_KEY }}
         run: bun run live:run -- "${{ steps.plan.outputs.adapters }}"

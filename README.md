@@ -8,9 +8,9 @@
   <a href="https://x.com/leodev"><img alt="Follow @leodev on X" src="https://shieldcn.dev/x/follow/leodev.svg?variant=branded&mode=dark" /></a>
 </p>
 
-One TypeScript client for transactional email. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
+Email for TypeScript apps. One client for transactional email with your existing provider account. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- Adapters for 22 provider APIs plus SMTP, 23 adapters total, behind one normalized message
+- Adapters for 23 provider APIs plus SMTP, 24 adapters total, behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
 - Fail-fast field-support checks before a provider drops data
 - Batch personalization with per-recipient variables, plus provider-side scheduled sends
@@ -46,15 +46,15 @@ await email.send({
 
 ## Adapters
 
-Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Primitive, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
+Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 
 ```bash
-npx email-sdk doctor --adapter resend
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
-Discover adapters, validate setup, and run dry-run smoke sends from any environment.
+Discover adapters, validate setup (`doctor --live` authenticates without sending), and run dry-run smoke sends from any environment.
 
 ## Documentation
 
@@ -71,11 +71,13 @@ Email SDK collects anonymous usage analytics so we can see which adapters and CL
 What gets collected:
 
 - Built-in adapter names (custom adapters are reported as `custom`) and CLI command names
-- Success or failure, error codes, and send duration
+- Logical send outcomes, adapter attempts, submitted and explicitly accepted message and recipient counts, uncertain outcomes, error codes, and send duration
 - Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
 - Whether scheduling was requested
 - SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
 - Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+
+Provider acceptance is not proof of delivery, and telemetry is best-effort, so these counts describe observed SDK usage, not every email sent. See [telemetry](https://email-sdk.dev/docs/reference/telemetry) for counting rules.
 
 Everything is tied to a random anonymous ID stored in `~/.config/email-sdk/telemetry.json`. Email content, subjects, addresses, headers, attachments, API keys, and any other message data are never collected.
 
@@ -101,9 +103,9 @@ Email SDK is supported by companies that help keep provider integrations practic
 <p align="center">
   <a href="https://github.com/sponsors/opencoredev">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint&title=false&mode=dark&preset=surface" />
-      <source media="(prefers-color-scheme: light)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint&title=false&mode=light&preset=surface" />
-      <img alt="Email SDK sponsors" src="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint&title=false&mode=dark&preset=surface" width="820" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint,zernio-dev&title=false&mode=dark&preset=surface" />
+      <source media="(prefers-color-scheme: light)" srcset="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint,zernio-dev&title=false&mode=light&preset=surface" />
+      <img alt="Email SDK sponsors" src="https://shieldcn.dev/sponsors/opencoredev.svg?special=resend,instatushq,primitivedotdev,lettermint,zernio-dev&title=false&mode=dark&preset=surface" width="820" />
     </picture>
   </a>
 </p>
@@ -120,4 +122,4 @@ Email SDK is supported by companies that help keep provider integrations practic
   <a href="https://github.com/opencoredev/email-sdk/stargazers"><img alt="Star history" src="https://shieldcn.dev/chart/github/stars/opencoredev/email-sdk.svg?mode=dark" /></a>
 </p>
 
-<p align="center"><sub><a href="./LICENSE">AGPL-3.0 License</a> · Built by <a href="https://x.com/leodev">@leodev</a></sub></p>
+<p align="center"><sub><a href="./LICENSE">MIT License</a> · Built by <a href="https://x.com/leodev">@leodev</a></sub></p>

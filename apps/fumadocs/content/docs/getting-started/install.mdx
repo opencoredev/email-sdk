@@ -48,8 +48,8 @@ import { resend } from "@opencoredev/email-sdk/resend";
 A project install exposes the `email-sdk` binary. The built CLI uses a Node shebang and also runs under Bun.
 
 ```bash
-npx email-sdk version
-npx email-sdk adapters
+npx --package @opencoredev/email-sdk email-sdk version
+npx --package @opencoredev/email-sdk email-sdk adapters
 ```
 
 For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` after the formula points at a published release.

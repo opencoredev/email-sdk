@@ -66,7 +66,8 @@ A subscribed client updates as the record moves through `queued`, `processing`, 
 | `status` | Whether the component queued and handed the message to a provider. |
 | `deliveryStatus` | What a provider webhook later reported about mailbox delivery. |
 | `attemptedAdapters` | Every named adapter attempted across the current record. |
-| `providerMessageId` | The provider receipt used to correlate webhook events. |
+| `providerMessageId` | The provider receipt used to correlate webhook events or reconcile a terminal partial send. |
+| `providerFailure` | Normalized terminal failure details, including retryability, delivery certainty, and recipient counts when available. |
 | `lastError` | The last component send failure, if the send is retrying or terminal. |
 | `nextAttemptAt` | When the next automatic retry becomes eligible. |
 

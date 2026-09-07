@@ -1,0 +1,41 @@
+---
+title: Community plugins and adapters
+description: Evaluate third-party Email SDK extensions without treating them as core-maintained integrations.
+---
+
+Community packages can register adapters, hooks, middleware, and typed client extensions through the public plugin contract.
+
+<CommunityPluginRegistry />
+
+## Review before installing
+
+Check the package source and release history for:
+
+- support for the current `@opencoredev/email-sdk` major
+- a literal adapter name and complete capability declaration
+- explicit validation for every normalized field the provider cannot represent
+- secret-safe errors, logs, and examples
+- tests for payload mapping, retries, aborts, idempotency, and ambiguous delivery
+- no browser credential exposure
+
+A community adapter should return `EmailSendResult` and throw typed `EmailAdapterError` values with conservative `delivery` classification.
+
+## Install without changing the root client
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { acmePlugin } from "@example/email-sdk-acme";
+
+const email = createEmailClient({
+  plugins: [acmePlugin({ apiKey: process.env.ACME_API_KEY! })],
+});
+```
+
+The plugin must register at least one adapter when the client has no `adapters` option.
+
+## Support boundary
+
+The Email SDK maintainers do not verify third-party credentials, delivery claims, or account behavior. Report core contract defects to Email SDK and package-specific defects to the community maintainer.
+
+<Card title="Publish a community plugin" href="/docs/guides/authoring/publish-community-plugin" description="Package, test, and document a plugin for external users." />
+<Card title="Publish a community adapter" href="/docs/guides/authoring/publish-community-adapter" description="Ship a provider route without adding it to core." />

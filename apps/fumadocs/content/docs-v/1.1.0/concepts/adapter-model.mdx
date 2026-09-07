@@ -1,0 +1,73 @@
+---
+title: Adapters
+sidebarTitle: Adapters
+description: How adapters turn one Email SDK message into a provider request.
+---
+
+An adapter turns the Email SDK message into the request one provider expects.
+
+## Registered routes
+
+Adapter factories return literal names. `createEmailClient` derives the accepted route-name union from the adapters you pass, including custom SMTP names.
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({ name: "backup", host: process.env.SMTP_HOST! }),
+  ],
+  defaultAdapter: "resend",
+});
+
+await email.send(message, { adapter: "backup" });
+```
+
+Unknown literal names fail type checking. Unknown runtime strings throw `EmailAdapterNotFoundError`.
+
+## Adapter responsibilities
+
+Every adapter declares four capabilities and provides `send`. It may add adapter-specific validation and native personalized sending.
+
+```ts title="adapter-contract.ts"
+type EmailAdapterCapabilities = {
+  repeatedHeaders: boolean;
+  idempotency: "native" | "message_id" | "none";
+  scheduling: boolean;
+  personalized: "native" | "expanded" | "unsupported";
+};
+```
+
+The client validates every candidate route before the first provider call. Unsupported fields, repeated headers on an incapable route, invalid schedules, and adapter-specific limits fail with `EmailValidationError`.
+
+## Normalized results
+
+Every successful route returns the same top-level shape.
+
+```ts title="result.ts"
+type EmailSendResult<Name extends string = string, Raw = unknown> = {
+  adapter: Name;
+  id?: string;
+  accepted?: readonly string[];
+  rejected?: readonly string[];
+  raw?: Raw;
+};
+```
+
+The v1 root has no `provider` or `messageId` aliases. The [`/compat` subpath](/docs/reference/compatibility) keeps temporary v0 source compatibility.
+
+## Direct adapter access
+
+Use `adapter(name)` to access the exact adapter or `withAdapter(name)` to bind all client operations to one route.
+
+```ts title="src/email.ts"
+const backup = email.withAdapter("backup");
+await backup.validate(message);
+await backup.send(message);
+```
+
+<Card title="Adapter contract" href="/docs/reference/adapter-contract" description="Implement validation, capabilities, send, and optional personalized delivery." />
+<Card title="Capability groups" href="/docs/adapters/capability-groups" description="Choose routes by scheduling, idempotency, headers, and personalization." />

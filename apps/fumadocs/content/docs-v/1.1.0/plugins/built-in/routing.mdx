@@ -1,0 +1,35 @@
+---
+title: Routing plugin
+description: Select a registered adapter from the prepared message and send options before route validation.
+---
+
+`routingPlugin` centralizes application routing rules without hiding fallback behavior inside an adapter.
+
+```ts title="src/email.ts"
+import { routingPlugin } from "@opencoredev/email-sdk/plugins/routing";
+
+const email = createEmailClient({
+  adapters: [primary, transactional],
+  plugins: [
+    routingPlugin({
+      select({ message, options }) {
+        if (options?.metadata?.tenant === "enterprise") return "primary";
+        if (message.tags?.some((tag) => tag.name === "receipt")) {
+          return "transactional";
+        }
+      },
+    }),
+  ],
+});
+```
+
+The selector may be async. Returning `undefined` preserves the caller's adapter choice or the client default. Returning a name sets the primary adapter; normal retry, validation, and fallback rules still apply.
+
+## Keep rules deterministic
+
+Route from data already present in the message or send metadata. Avoid network calls in the selector because they delay every send and can fail as `EmailMiddlewareError` before provider validation.
+
+A routing plugin does not register adapters. Every returned name must already exist on the client.
+
+<Card title="Delivery capabilities" href="/docs/adapters/capability-groups" description="Make sure every selected route preserves the required behavior." />
+<Card title="Fallback and retries" href="/docs/concepts/fallbacks-and-retries" description="Understand what happens after the primary route fails." />

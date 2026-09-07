@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/email-sdk",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "A TypeScript email SDK for unified transactional sending.",
   "keywords": [
     "bun",
@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/opencoredev/email-sdk/issues"
   },
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/opencoredev/email-sdk.git",
@@ -109,6 +109,10 @@
       "types": "./dist/lettermint.d.ts",
       "default": "./dist/lettermint.js"
     },
+    "./lettr": {
+      "types": "./dist/lettr.d.ts",
+      "import": "./dist/lettr.js"
+    },
     "./primitive": {
       "types": "./dist/primitive.d.ts",
       "default": "./dist/primitive.js"
@@ -136,6 +140,10 @@
     "./smtp": {
       "types": "./dist/smtp.d.ts",
       "default": "./dist/smtp.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "import": "./dist/webhooks.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",

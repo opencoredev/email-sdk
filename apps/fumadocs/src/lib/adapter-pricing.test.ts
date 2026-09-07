@@ -13,7 +13,7 @@ describe("adapter pricing", () => {
     const providerKeys = providers.map((provider) => provider.key).sort();
     const pricingKeys = adapterPricing.map((row) => row.provider.key).sort();
 
-    expect(adapterPricing).toHaveLength(23);
+    expect(adapterPricing).toHaveLength(24);
     expect(new Set(pricingKeys).size).toBe(pricingKeys.length);
     expect(pricingKeys).toEqual(providerKeys);
     expect(adapterPricing.every((row) => row.prices.length === pricingVolumes.length)).toBe(true);
@@ -45,6 +45,38 @@ describe("adapter pricing", () => {
       kind: "money",
       currency: "USD",
       cents: 0,
+    });
+  });
+
+  test("Lettr uses published volume tiers", () => {
+    const row = adapterPricing.find((entry) => entry.provider.key === "lettr");
+
+    expect(row).toBeDefined();
+    expect(getPrice(row!, 1_000)).toMatchObject({ kind: "money", currency: "USD", cents: 0 });
+    expect(getPrice(row!, 50_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 1_500,
+    });
+    expect(getPrice(row!, 100_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 3_000,
+    });
+    expect(getPrice(row!, 250_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 25_000,
+    });
+    expect(getPrice(row!, 500_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 25_000,
+    });
+    expect(getPrice(row!, 1_000_000)).toMatchObject({
+      kind: "money",
+      currency: "USD",
+      cents: 45_000,
     });
   });
 

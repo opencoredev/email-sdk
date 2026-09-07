@@ -11,6 +11,7 @@ import { Resvg } from "@resvg/resvg-js";
 
 import { providers } from "../../src/lib/providers";
 import { sponsors } from "../../src/lib/sponsors";
+import { sponsorLabelFontFile, sponsorRowGeometry, sponsorRowLayout } from "./sponsor-row";
 
 const ogDir = import.meta.dirname;
 const publicDir = join(ogDir, "../../public");
@@ -119,20 +120,19 @@ const sponsorLogoSizes: Record<string, number> = {
 };
 
 function sponsorRowSvg(): string {
-  const startX = 174;
-  const step = 124;
-  const cy = 573;
+  const { cy } = sponsorRowGeometry;
+  const { scale, slots } = sponsorRowLayout(sponsors.map((sponsor) => sponsor.name));
 
-  return sponsors
-    .map((sponsor, index) => {
-      const x = startX + index * step;
-      const size = sponsorLogoSizes[sponsor.name] ?? 28;
+  return slots
+    .map((slot, index) => {
+      const sponsor = sponsors[index]!;
+      const size = (sponsorLogoSizes[sponsor.name] ?? 28) * scale;
       const logo = toDataUri(join(publicDir, sponsor.logo));
       return `
         <g>
-          <circle cx="${x}" cy="${cy}" r="22" fill="#f5f5f4" stroke="#ffffff" stroke-opacity="0.72"/>
-          <image href="${logo}" x="${x - size / 2}" y="${cy - size / 2}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>
-          <text x="${x + 32}" y="${cy + 5}" font-family="Liberation Sans" font-size="13" font-weight="bold" fill="#d4d4d4">${escapeXml(sponsor.name)}</text>
+          <circle cx="${slot.x}" cy="${cy}" r="${slot.radius}" fill="#f5f5f4" stroke="#ffffff" stroke-opacity="0.72"/>
+          <image href="${logo}" x="${slot.x - size / 2}" y="${cy - size / 2}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/>
+          <text x="${slot.labelX}" y="${cy + 5}" font-family="Liberation Sans" font-size="${slot.fontSize}" font-weight="bold" fill="#d4d4d4">${escapeXml(sponsor.name)}</text>
         </g>`;
     })
     .join("\n");
@@ -189,7 +189,7 @@ function render(svg: string): Buffer {
     font: {
       fontFiles: [
         join(ogDir, "fonts/LiberationSans-Regular.ttf"),
-        join(ogDir, "fonts/LiberationSans-Bold.ttf"),
+        sponsorLabelFontFile,
         join(ogDir, "fonts/LiberationMono-Regular.ttf"),
         join(ogDir, "fonts/LiberationMono-Bold.ttf"),
       ],

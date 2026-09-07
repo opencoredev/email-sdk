@@ -284,6 +284,14 @@ export type EmailClient<
     options?: EmailSendOptions<RouteName<Routes>>,
   ): Promise<EmailPersonalizedResult<RouteName<Routes>>>;
   adapter<Name extends RouteName<Routes>>(name: Name): AdapterForName<Routes, Name>;
+  /**
+   * Waits for in-flight anonymous telemetry to finish sending. Sends fire telemetry
+   * without awaiting it so delivery never blocks an email, which means serverless
+   * runtimes (Vercel, Lambda, Workers) freeze the process on response and drop it.
+   * Await this — or hand it to `waitUntil` — at the end of a request to keep counts
+   * accurate. Resolves immediately when telemetry is disabled, and never rejects.
+   */
+  flush(): Promise<void>;
   withAdapter<Name extends RouteName<Routes>>(
     name: Name,
   ): Pick<EmailClient<Routes>, "validate" | "send" | "sendMany" | "sendPersonalized">;

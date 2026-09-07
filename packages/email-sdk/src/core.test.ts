@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { createEmailClient } from "./core.js";
+import { resend } from "./resend.js";
+import { failingAdapter, memoryAdapter } from "./testing.js";
 import {
   EmailAbortError,
   EmailAdapterError,
@@ -11,7 +16,7 @@ import {
 } from "./errors.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import type { Telemetry, TelemetryEventName, TelemetryProperties } from "./telemetry.js";
-import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
+import { createTelemetry, resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 
 const message: EmailMessage = {
   from: "hello@example.com",
@@ -53,7 +58,11 @@ function telemetryCapture() {
 }
 
 function emailAddressOfTest(value: EmailMessage["to"]): string {
-  return typeof value === "string" ? value : Array.isArray(value) ? emailAddressOfTest(value[0]) : value.email;
+  return typeof value === "string"
+    ? value
+    : Array.isArray(value)
+      ? emailAddressOfTest(value[0])
+      : value.email;
 }
 
 describe("createEmailClient v1", () => {
@@ -476,7 +485,11 @@ describe("createEmailClient v1", () => {
     });
 
     await expandedClient.sendPersonalized({
-      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      message: {
+        from: message.from,
+        subject: "Hi %recipient.name%",
+        text: "Hello %recipient.name%",
+      },
       recipients: [
         { to: "ada@example.com", variables: { name: "Ada" } },
         { to: "linus@example.com", variables: { name: "Linus" } },
@@ -529,7 +542,11 @@ describe("createEmailClient v1", () => {
     });
 
     await nativeClient.sendPersonalized({
-      message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+      message: {
+        from: message.from,
+        subject: "Hi %recipient.name%",
+        text: "Hello %recipient.name%",
+      },
       recipients: [{ to: "ada@example.com", variables: { name: "Ada" } }],
     });
 
@@ -600,11 +617,7 @@ describe("createEmailClient v1", () => {
         ],
       }),
     ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
-    expect(middlewareErrors).toEqual([
-      "bad@example.com",
-      "bad@example.com",
-      "worse@example.com",
-    ]);
+    expect(middlewareErrors).toEqual(["bad@example.com", "bad@example.com", "worse@example.com"]);
     expect(hookErrors).toEqual(["bad@example.com", "bad@example.com", "worse@example.com"]);
   });
 
@@ -720,7 +733,11 @@ describe("createEmailClient v1", () => {
       });
 
       await nativeClient.sendPersonalized({
-        message: { from: message.from, subject: "Hi %recipient.name%", text: "Hello %recipient.name%" },
+        message: {
+          from: message.from,
+          subject: "Hi %recipient.name%",
+          text: "Hello %recipient.name%",
+        },
         recipients: [
           { to: "ada@example.com", variables: { name: "Ada" } },
           { to: "linus@example.com", variables: { name: "Linus" } },
@@ -736,13 +753,20 @@ describe("createEmailClient v1", () => {
         recipients: 3,
         personalized_recipient_count: 3,
         used_recipient_variables: true,
-        accepted_recipient_count: 2,
-        rejected_recipient_count: 1,
-        failure_count: 0,
+        logical_operation_count: 1,
         source: "sdk",
       });
       expect(JSON.stringify(nativeEvent?.properties)).not.toContain("Ada");
       expect(JSON.stringify(nativeEvent?.properties)).not.toContain("ada@example.com");
+      expect(
+        nativeCapture.events.find((item) => item.event === "email adapter attempted")?.properties,
+      ).toMatchObject({
+        accepted_message_count: 2,
+        accepted_recipient_count: 2,
+        rejected_recipient_count: 1,
+        unknown_recipient_count: 0,
+        adapter_attempt_count: 1,
+      });
       expect(nativeCapture.exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();
@@ -779,14 +803,806 @@ describe("createEmailClient v1", () => {
         delivery_path: "personalized_expanded",
         success: true,
         recipients: 2,
-        accepted_recipient_count: 1,
-        rejected_recipient_count: 1,
-        failure_count: 1,
+        logical_operation_count: 1,
       });
       expect(expandedCapture.exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();
     }
+  });
+
+  test("logical operations never infer acceptance from successful results", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+
+    try {
+      const client = createEmailClient({
+        adapters: [
+          adapter("resend", (value) => {
+            if (value.to === "bad@example.com") {
+              throw new EmailAdapterError("bad", { adapter: "resend", delivery: "not_sent" });
+            }
+            return { adapter: "resend", id: "ok" };
+          }),
+        ],
+      });
+
+      // One message shared by three addresses is one email, not three.
+      await client.send({
+        ...message,
+        to: ["a@example.com", "b@example.com"],
+        cc: "c@example.com",
+      });
+
+      // Personalized fans out to one message per recipient; one fails.
+      await client.sendPersonalized({
+        message: { from: message.from, subject: "Hi", text: "Hello" },
+        recipients: [
+          { to: "good@example.com", variables: {} },
+          { to: "bad@example.com", variables: {} },
+        ],
+      });
+
+      await expect(client.send({ ...message, to: "bad@example.com" })).rejects.toBeDefined();
+
+      const sends = capture.events.filter((item) => item.event === "email sent");
+      expect(sends.map((item) => item.properties?.message_count)).toEqual([1, 2, 1]);
+      expect(sends.map((item) => item.properties?.logical_operation_count)).toEqual([1, 1, 1]);
+      expect(sends.map((item) => item.properties?.operation_failure_count)).toEqual([0, 0, 1]);
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts).toHaveLength(4);
+      expect(attempts.map((item) => item.properties?.accepted_recipient_count)).toEqual([
+        0, 0, 0, 0,
+      ]);
+      expect(attempts.map((item) => item.properties?.unknown_recipient_count)).toEqual([
+        3, 1, 0, 0,
+      ]);
+      for (const item of capture.events)
+        expect(item.properties).not.toHaveProperty("delivered_count");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("sendMany counts every item once on 'email sent'", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+
+    try {
+      const client = createEmailClient({ adapters: [adapter("resend")] });
+      await client.sendMany([{ message }, { message }, { message }]);
+
+      const operations = capture.events.reduce(
+        (total, item) => total + Number(item.properties?.logical_operation_count ?? 0),
+        0,
+      );
+      const attempts = capture.events.reduce(
+        (total, item) => total + Number(item.properties?.adapter_attempt_count ?? 0),
+        0,
+      );
+      const batch = capture.events.find((item) => item.event === "email batch sent");
+      expect(operations).toBe(3);
+      expect(attempts).toBe(3);
+      expect(batch?.properties).toMatchObject({ message_count: 3, succeeded: 3 });
+      expect(batch?.properties).not.toHaveProperty("delivered_count");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("attempt measurements separate retries, fallback, and partial acceptance", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      let calls = 0;
+      const client = createEmailClient({
+        adapters: [
+          adapter("resend", () => {
+            calls++;
+            throw new EmailAdapterError("private provider detail", {
+              adapter: "resend",
+              retryable: true,
+              delivery: calls === 1 ? "unknown" : "not_sent",
+            });
+          }),
+          adapter("smtp", () => ({
+            adapter: "smtp",
+            accepted: ["a@example.com"],
+            rejected: ["b@example.com"],
+          })),
+        ],
+        retry: { maxAttempts: 2, delay: () => 0, shouldRetry: () => true },
+        fallback: { adapters: ["smtp"] },
+      });
+      await client.send({ ...message, to: ["a@example.com", "b@example.com"] });
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts).toHaveLength(3);
+      expect(attempts.map((item) => item.properties?.adapter)).toEqual([
+        "resend",
+        "resend",
+        "smtp",
+      ]);
+      expect(attempts.map((item) => item.properties?.uncertain_attempt_count)).toEqual([1, 0, 0]);
+      expect(attempts.map((item) => item.properties?.not_sent_attempt_count)).toEqual([0, 1, 0]);
+      expect(attempts[2]?.properties).toMatchObject({
+        accepted_message_count: 1,
+        accepted_recipient_count: 1,
+        rejected_recipient_count: 1,
+      });
+      expect(capture.events.filter((item) => item.event === "email sent")).toHaveLength(1);
+      expect(JSON.stringify(attempts)).not.toContain("@example.com");
+      expect(JSON.stringify(attempts)).not.toContain("private provider detail");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("validation, pre-abort, and before middleware failures never count attempts", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const client = createEmailClient({ adapters: [adapter("resend")] });
+      await client.validate(message);
+      expect(capture.events.filter((item) => item.event !== "client created")).toHaveLength(0);
+      await expect(client.send({ ...message, to: [] })).rejects.toBeDefined();
+      await expect(client.send(message, { signal: AbortSignal.abort() })).rejects.toBeDefined();
+      const blocked = createEmailClient({
+        adapters: [adapter("resend")],
+        plugins: [
+          {
+            id: "block",
+            middleware: [
+              {
+                beforeSend() {
+                  throw new Error("blocked");
+                },
+              },
+            ],
+          },
+        ],
+      });
+      await expect(blocked.send(message)).rejects.toBeDefined();
+      expect(
+        capture.events.filter((item) => item.event === "email adapter attempted"),
+      ).toHaveLength(0);
+      expect(capture.events.filter((item) => item.event === "email sent")).toHaveLength(3);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test.each(["single", "native", "expanded"])(
+    "%s retains acceptance before after-send middleware failure",
+    async (path) => {
+      const capture = telemetryCapture();
+      setSharedTelemetry(capture.telemetry);
+      try {
+        const result = { adapter: "resend", accepted: ["a@example.com"], rejected: [] };
+        const client = createEmailClient({
+          adapters: [
+            adapter(
+              "resend",
+              () => result,
+              path === "native" ? { sendPersonalized: () => result } : {},
+            ),
+          ],
+          plugins: [
+            {
+              id: "after",
+              middleware: [
+                {
+                  afterSend() {
+                    throw new Error("after failed");
+                  },
+                },
+              ],
+            },
+          ],
+        });
+        const operation =
+          path === "single"
+            ? client.send(message)
+            : client.sendPersonalized({
+                message,
+                recipients: [{ to: "a@example.com", variables: {} }],
+              });
+        await expect(operation).rejects.toBeInstanceOf(EmailMiddlewareError);
+        expect(
+          capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+        ).toMatchObject({
+          accepted_message_count: 1,
+          accepted_recipient_count: 1,
+          adapter_failure_count: 0,
+        });
+        expect(
+          capture.events.find((item) => item.event === "email sent")?.properties,
+        ).toMatchObject({ operation_failure_count: 1 });
+      } finally {
+        resetTelemetry();
+      }
+    },
+  );
+
+  test("abort after adapter resolution preserves explicit acceptance", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const controller = new AbortController();
+      const client = createEmailClient({
+        adapters: [
+          adapter("smtp", () => {
+            controller.abort();
+            return { adapter: "smtp", accepted: ["a@example.com"] };
+          }),
+        ],
+      });
+      await expect(client.send(message, { signal: controller.signal })).rejects.toBeInstanceOf(
+        EmailAbortError,
+      );
+      expect(
+        capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+      ).toMatchObject({
+        accepted_recipient_count: 1,
+        uncertain_attempt_count: 0,
+        adapter_resolved_count: 1,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("native errors and expanded unknown failures do not fabricate rejection", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const fail = () => {
+        throw new EmailAdapterError("partial outcome", { adapter: "smtp", delivery: "unknown" });
+      };
+      const input = {
+        message,
+        recipients: [
+          { to: "a@example.com", variables: {} },
+          { to: "b@example.com", variables: {} },
+        ],
+      };
+      for (const native of [true, false]) {
+        const client = createEmailClient({
+          adapters: [adapter("smtp", fail, native ? { sendPersonalized: fail } : {})],
+        });
+        await expect(client.sendPersonalized(input)).rejects.toBeInstanceOf(
+          EmailAllRecipientsFailedError,
+        );
+      }
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts.map((item) => item.properties?.unknown_recipient_count)).toEqual([2, 1, 1]);
+      for (const item of attempts)
+        expect(item.properties).toMatchObject({
+          rejected_recipient_count: 0,
+          accepted_recipient_count: 0,
+          uncertain_attempt_count: 1,
+        });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("attempt facts use middleware-prepared recipients and the actual adapter", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const client = createEmailClient({
+        adapters: [adapter("resend"), adapter("smtp")],
+        plugins: [
+          {
+            id: "reroute",
+            middleware: [
+              {
+                beforeSend: () => ({
+                  message: {
+                    ...message,
+                    to: ["a@example.com", "b@example.com"],
+                    bcc: "c@example.com",
+                  },
+                  options: { adapter: "smtp" },
+                }),
+              },
+            ],
+          },
+        ],
+      });
+      await client.send(message);
+      expect(
+        capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+      ).toMatchObject({ adapter: "smtp", attempted_recipient_count: 3 });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test.each(["memory", "resend", "private-custom-name"])(
+    "%s injected captures never contribute real provider volume",
+    async (name) => {
+      const capture = telemetryCapture();
+      setSharedTelemetry(capture.telemetry);
+      try {
+        await createEmailClient({
+          adapters: [adapter(name, () => ({ adapter: name, accepted: ["a@example.com"] }))],
+        }).send(message);
+        expect(
+          capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+        ).toMatchObject({
+          provider_volume_eligible: false,
+          provider_attempt_count: 0,
+          provider_accepted_message_count: 0,
+          provider_accepted_recipient_count: 0,
+          accepted_recipient_count: 1,
+        });
+        expect(JSON.stringify(capture.events)).not.toContain("private-custom-name");
+      } finally {
+        resetTelemetry();
+      }
+    },
+  );
+
+  test("native retry and fallback emit one observation per call, not per recipient", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      let calls = 0;
+      const client = createEmailClient({
+        adapters: [
+          adapter("sendgrid", undefined, {
+            sendPersonalized() {
+              if (++calls === 1)
+                throw new EmailAdapterError("retry", {
+                  adapter: "sendgrid",
+                  delivery: "not_sent",
+                  retryable: true,
+                });
+              return {
+                adapter: "sendgrid",
+                accepted: [],
+                rejected: ["a@example.com", "b@example.com"],
+              };
+            },
+          }),
+          adapter("resend", (value) => ({
+            adapter: "resend",
+            accepted: [emailAddressOfTest(value.to)],
+          })),
+        ],
+        retry: { maxAttempts: 2, delay: () => 0 },
+        fallback: { adapters: ["resend"] },
+      });
+      await client.sendPersonalized({
+        message,
+        recipients: [
+          { to: "a@example.com", variables: {} },
+          { to: "b@example.com", variables: {} },
+        ],
+      });
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts).toHaveLength(4);
+      expect(attempts.map((item) => item.properties?.accepted_message_count)).toEqual([0, 0, 1, 1]);
+      expect(attempts.map((item) => item.properties?.rejected_recipient_count)).toEqual([
+        0, 2, 0, 0,
+      ]);
+      expect(attempts.map((item) => item.properties?.adapter_failure_count)).toEqual([1, 0, 0, 0]);
+      expect(capture.events.filter((item) => item.event === "email sent")).toHaveLength(1);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("expanded resolved rejection is not treated as telemetry acceptance", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const client = createEmailClient({
+        adapters: [
+          adapter("smtp", () => ({ adapter: "smtp", accepted: [], rejected: ["a@example.com"] })),
+        ],
+      });
+      await client.sendPersonalized({
+        message,
+        recipients: [{ to: "a@example.com", variables: {} }],
+      });
+      expect(
+        capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+      ).toMatchObject({
+        adapter_resolved_count: 1,
+        accepted_message_count: 0,
+        accepted_recipient_count: 0,
+        rejected_recipient_count: 1,
+        unknown_recipient_count: 0,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("empty and mixed-outcome batches are summaries without volume counters", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const client = createEmailClient({
+        adapters: [adapter("resend", () => ({ adapter: "resend", accepted: ["a@example.com"] }))],
+      });
+      await client.sendMany([]);
+      await client.sendMany([{ message }, { message: { ...message, to: [] } }]);
+      const batches = capture.events.filter((item) => item.event === "email batch sent");
+      expect(batches.map((item) => item.properties?.message_count)).toEqual([0, 2]);
+      expect(batches[1]?.properties).toMatchObject({
+        succeeded: 1,
+        failed: 1,
+        measurement_scope: "batch_summary",
+      });
+      for (const item of batches) {
+        expect(item.properties).not.toHaveProperty("logical_operation_count");
+        expect(item.properties).not.toHaveProperty("adapter_attempt_count");
+        expect(item.properties).not.toHaveProperty("accepted_message_count");
+      }
+      expect(
+        capture.events.reduce(
+          (sum, item) => sum + Number(item.properties?.accepted_message_count ?? 0),
+          0,
+        ),
+      ).toBe(1);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test.each([false, true])(
+    "partial provider errors preserve valid aggregate acceptance (native=%s)",
+    async (native) => {
+      const capture = telemetryCapture();
+      setSharedTelemetry(capture.telemetry);
+      try {
+        const fail = () => {
+          throw new EmailAdapterError("partial", {
+            adapter: "lettr",
+            delivery: "unknown",
+            acceptedCount: 2,
+            rejectedCount: 1,
+            requestId: "private-request-id",
+          });
+        };
+        const client = createEmailClient({
+          adapters: [adapter("lettr", fail, native ? { sendPersonalized: fail } : {})],
+        });
+        const recipients = ["a@example.com", "b@example.com", "c@example.com"];
+        await expect(
+          native
+            ? client.sendPersonalized({
+                message,
+                recipients: recipients.map((to) => ({ to, variables: {} })),
+              })
+            : client.send({ ...message, to: recipients }),
+        ).rejects.toBeDefined();
+        const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+        expect(attempt?.properties).toMatchObject({
+          accepted_message_count: native ? 2 : 1,
+          accepted_recipient_count: 2,
+          rejected_recipient_count: 1,
+          unknown_recipient_count: 0,
+          adapter_failure_count: 1,
+          uncertain_attempt_count: 1,
+        });
+        expect(JSON.stringify(attempt)).not.toContain("private-request-id");
+      } finally {
+        resetTelemetry();
+      }
+    },
+  );
+
+  test.each([
+    [2, 2],
+    [1, 0],
+    [-1, 4],
+    [NaN, 3],
+    [0.5, 2.5],
+  ])("invalid provider counts %s/%s remain unknown", async (acceptedCount, rejectedCount) => {
+    const capture = telemetryCapture();
+    setSharedTelemetry(capture.telemetry);
+    try {
+      const client = createEmailClient({
+        adapters: [
+          adapter("lettr", () => {
+            throw new EmailAdapterError("inconsistent", {
+              adapter: "lettr",
+              delivery: "unknown",
+              acceptedCount,
+              rejectedCount,
+            });
+          }),
+        ],
+      });
+      await expect(
+        client.send({ ...message, to: ["a@example.com", "b@example.com", "c@example.com"] }),
+      ).rejects.toBeDefined();
+      expect(
+        capture.events.find((item) => item.event === "email adapter attempted")?.properties,
+      ).toMatchObject({
+        accepted_recipient_count: 0,
+        rejected_recipient_count: 0,
+        unknown_recipient_count: 3,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("runtime provider volume excludes memory but includes anonymized custom adapters", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    try {
+      for (const name of ["resend", "memory", "private-adapter"]) {
+        await createEmailClient({
+          adapters: [adapter(name, () => ({ adapter: name, accepted: ["a@example.com"] }))],
+        }).send(message);
+      }
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts.map((item) => item.properties?.provider_attempt_count)).toEqual([1, 0, 1]);
+      expect(attempts.map((item) => item.properties?.provider_accepted_message_count)).toEqual([
+        1, 0, 1,
+      ]);
+      expect(attempts.map((item) => item.properties?.provider_accepted_recipient_count)).toEqual([
+        1, 0, 1,
+      ]);
+      expect(attempts[2]?.properties).toMatchObject({
+        adapter: "custom",
+        adapter_kind: "custom",
+        provider_volume_eligible: true,
+      });
+      expect(JSON.stringify(attempts)).not.toContain("private-adapter");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("renamed provider routes retain volume without exposing their names", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    try {
+      const backup = {
+        ...resend({
+          apiKey: "test-key",
+          fetch: (async () => Response.json({ id: "private-receipt" })) as typeof fetch,
+        }),
+        name: "private-backup-route",
+      };
+      const primary = adapter("resend", () => {
+        throw new EmailAdapterError("unavailable", { adapter: "resend", delivery: "not_sent" });
+      });
+      await createEmailClient({
+        adapters: [primary, backup],
+        fallback: { adapters: [backup.name] },
+      }).send(message);
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts.map((item) => item.properties?.provider_attempt_count)).toEqual([1, 1]);
+      expect(attempts.map((item) => item.properties?.provider_submitted_message_count)).toEqual([0, 1]);
+      expect(attempts[1]?.properties).toMatchObject({
+        adapter: "custom",
+        adapter_kind: "custom",
+        provider_volume_eligible: true,
+        acceptance_basis: "inferred_from_success",
+      });
+      expect(JSON.stringify(capture.events)).not.toContain("private-backup-route");
+      expect(JSON.stringify(capture.events)).not.toContain("private-receipt");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("real Resend ID-only results count submissions without inventing explicit acceptance", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    let requests = 0;
+    try {
+      const client = createEmailClient({
+        adapters: [
+          resend({
+            apiKey: "test-key",
+            fetch: (async () => {
+              requests++;
+              return Response.json({ id: "private-message-id" });
+            }) as typeof fetch,
+          }),
+        ],
+      });
+      await client.send({
+        ...message,
+        to: ["a@example.com", "b@example.com"],
+        cc: "c@example.com",
+        bcc: "d@example.com",
+      });
+      await client.sendPersonalized({
+        message,
+        recipients: [
+          { to: "a@example.com", variables: {} },
+          { to: "b@example.com", variables: {} },
+        ],
+      });
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(requests).toBe(3);
+      expect(attempts.map((item) => item.properties?.provider_submitted_message_count)).toEqual([
+        1, 1, 1,
+      ]);
+      expect(attempts.map((item) => item.properties?.provider_submitted_recipient_count)).toEqual([
+        4, 1, 1,
+      ]);
+      for (const item of attempts)
+        expect(item.properties).toMatchObject({
+          adapter_kind: "provider",
+          provider_volume_eligible: true,
+          acceptance_basis: "inferred_from_success",
+          accepted_message_count: 0,
+          accepted_recipient_count: 0,
+          provider_accepted_message_count: 0,
+          provider_accepted_recipient_count: 0,
+        });
+      expect(JSON.stringify(attempts)).not.toContain("private-message-id");
+      expect(JSON.stringify(attempts)).not.toContain("@example.com");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("test-adapter markers survive built-in names, spread, renaming, and native extensions", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    try {
+      for (const testAdapter of [
+        memoryAdapter("resend"),
+        failingAdapter("resend"),
+        { ...memoryAdapter("private"), name: "resend" },
+        { ...failingAdapter("private"), name: "resend" },
+      ]) {
+        await createEmailClient({ adapters: [testAdapter] }).sendMany([{ message }]);
+        const extended = {
+          ...testAdapter,
+          sendPersonalized: () => ({
+            adapter: "resend",
+            accepted: ["a@example.com"],
+            rejected: [],
+          }),
+        };
+        await createEmailClient({ adapters: [extended] }).sendPersonalized({
+          message,
+          recipients: [{ to: "a@example.com", variables: {} }],
+        });
+      }
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts).toHaveLength(8);
+      for (const item of attempts)
+        expect(item.properties).toMatchObject({
+          adapter: "resend",
+          adapter_kind: "test",
+          provider_volume_eligible: false,
+          provider_attempt_count: 0,
+          provider_accepted_message_count: 0,
+          provider_accepted_recipient_count: 0,
+          provider_submitted_message_count: 0,
+          provider_submitted_recipient_count: 0,
+        });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("explicit empty or rejected results never infer recipient submissions", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    try {
+      for (const result of [
+        { adapter: "resend", accepted: [] },
+        { adapter: "resend", rejected: ["a@example.com", "b@example.com"] },
+        { adapter: "resend", accepted: [], rejected: ["a@example.com", "b@example.com"] },
+        { adapter: "resend", accepted: ["a@example.com"], rejected: ["b@example.com"] },
+      ]) {
+        await createEmailClient({ adapters: [adapter("resend", () => result)] }).send({
+          ...message,
+          to: ["a@example.com", "b@example.com"],
+        });
+      }
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts.map((item) => item.properties?.provider_submitted_message_count)).toEqual([
+        0, 0, 0, 1,
+      ]);
+      expect(attempts.map((item) => item.properties?.provider_submitted_recipient_count)).toEqual([
+        0, 0, 0, 1,
+      ]);
+      expect(attempts.map((item) => item.properties?.acceptance_basis)).toEqual([
+        "explicit",
+        "explicit",
+        "explicit",
+        "explicit",
+      ]);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("partial typed errors retain submissions while unknown failures do not infer them", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+    try {
+      for (const counts of [
+        { acceptedCount: 1, rejectedCount: 1 },
+        {},
+        { acceptedCount: 4, rejectedCount: 0 },
+      ]) {
+        await createEmailClient({
+          adapters: [
+            adapter("lettr", () => {
+              throw new EmailAdapterError("partial", {
+                adapter: "lettr",
+                delivery: "unknown",
+                ...counts,
+              });
+            }),
+          ],
+        }).sendMany([{ message: { ...message, to: ["a@example.com", "b@example.com"] } }]);
+      }
+      const attempts = capture.events.filter((item) => item.event === "email adapter attempted");
+      expect(attempts.map((item) => item.properties?.provider_submitted_recipient_count)).toEqual([
+        1, 0, 0,
+      ]);
+      expect(attempts.map((item) => item.properties?.provider_accepted_recipient_count)).toEqual([
+        1, 0, 0,
+      ]);
+      expect(attempts.map((item) => item.properties?.acceptance_basis)).toEqual([
+        "explicit",
+        "unknown",
+        "unknown",
+      ]);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("client.flush() waits for the telemetry request to actually land", async () => {
+    let releaseResponse: (() => void) | undefined;
+    const responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const delivered: string[] = [];
+
+    const fetchFn = (async (_url: URL | RequestInfo, init?: RequestInit) => {
+      await responseGate;
+      delivered.push(JSON.parse(String(init?.body)).event);
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+
+    setSharedTelemetry(
+      createTelemetry({
+        env: {},
+        fetch: fetchFn,
+        configDir: join(mkdtempSync(join(tmpdir(), "email-sdk-flush-")), "email-sdk"),
+        notify: () => {},
+      }),
+    );
+
+    try {
+      const client = createEmailClient({ adapters: [adapter("resend")] });
+      await client.send(message);
+
+      // send() resolves while the POST is still open — on serverless the runtime
+      // freezes here and the event is lost. flush() is what closes that window.
+      expect(delivered).toHaveLength(0);
+
+      releaseResponse?.();
+      await client.flush();
+      expect(delivered).toContain("email sent");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("client.flush() resolves when telemetry is disabled", async () => {
+    const client = createEmailClient({ adapters: [adapter("resend")], telemetry: false });
+    await expect(client.flush()).resolves.toBeUndefined();
   });
 
   test("sendPersonalized throws when every recipient fails", async () => {

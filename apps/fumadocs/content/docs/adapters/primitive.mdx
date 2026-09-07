@@ -96,11 +96,11 @@ await email.send(message, { idempotencyKey: "receipt:order_123" });
 ## Verify from the CLI
 
 ```bash
-PRIMITIVE_API_KEY="prim_..." npx email-sdk doctor --adapter primitive
+PRIMITIVE_API_KEY="prim_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter primitive
 ```
 
 ```bash
-PRIMITIVE_API_KEY="prim_..." npx email-sdk send \
+PRIMITIVE_API_KEY="prim_..." npx --package @opencoredev/email-sdk email-sdk send \
   --adapter primitive \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
