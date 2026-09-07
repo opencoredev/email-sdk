@@ -1,10 +1,14 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 type PackReport = {
   filename: string;
   files: Array<{ path: string; mode: number }>;
+};
+
+type ReleasePlan = {
+  releases: Array<{ name: string; newVersion: string }>;
 };
 
 const root = resolve(import.meta.dir, "..");
@@ -15,14 +19,25 @@ const scratch = await mkdtemp(join(scratchBase, "email-sdk-pack-check-"));
 try {
   const packed = join(scratch, "packed");
   await mkdir(packed);
+  const releaseVersions = await getReleaseVersions(scratch);
 
   console.log("Packing public packages and Convex component...");
-  const core = await pack(join(root, "packages/email-sdk"), packed);
-  await pack(join(root, "packages/convex-email"), packed);
+  const core = await pack(
+    join(root, "packages/email-sdk"),
+    packed,
+    releaseVersions.get("@opencoredev/email-sdk"),
+  );
+  const convex = await pack(
+    join(root, "packages/convex-email"),
+    packed,
+    releaseVersions.get("@opencoredev/convex-email"),
+  );
 
   assertCoreTarball(core);
+  assertConvexTarball(convex);
 
   const coreTarball = join(packed, core.filename);
+  const convexTarball = join(packed, convex.filename);
   const install = join(scratch, "install");
   await mkdir(install);
   await writeFile(
@@ -41,8 +56,10 @@ try {
       coreTarball,
       "ai@^7.0.0",
       "@react-email/render@^2.1.0",
+      "convex@^1.42.1",
       "react@^19.0.0",
       "react-dom@^19.0.0",
+      convexTarball,
       "typescript-min@npm:typescript@5.8.3",
       "typescript@6.0.3",
       "@types/node@^20.0.0",
@@ -92,10 +109,38 @@ try {
   await rm(scratch, { recursive: true, force: true });
 }
 
-async function pack(packageDir: string, destination: string): Promise<PackReport> {
+async function getReleaseVersions(scratch: string) {
+  const planPath = join(scratch, "release-plan.json");
+  await run(["bunx", "changeset", "status", `--output=${planPath}`], root);
+  const plan = JSON.parse(await readFile(planPath, "utf8")) as ReleasePlan;
+  return new Map(plan.releases.map((release) => [release.name, release.newVersion]));
+}
+
+async function pack(
+  packageDir: string,
+  destination: string,
+  releaseVersion?: string,
+): Promise<PackReport> {
+  const manifestPath = join(packageDir, "package.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { version: string };
+  let sourceDir = packageDir;
+  const packArguments = ["npm", "pack", "--json", "--silent", "--pack-destination", destination];
+
+  if (releaseVersion && releaseVersion !== manifest.version) {
+    await run(["bun", "run", "build"], packageDir);
+    sourceDir = join(destination, "sources", basename(packageDir));
+    await mkdir(join(destination, "sources"), { recursive: true });
+    await cp(packageDir, sourceDir, { recursive: true });
+    await writeFile(
+      join(sourceDir, "package.json"),
+      `${JSON.stringify({ ...manifest, version: releaseVersion }, null, 2)}\n`,
+    );
+    packArguments.push("--ignore-scripts");
+  }
+
   const output = await run(
-    ["npm", "pack", "--json", "--silent", "--pack-destination", destination],
-    packageDir,
+    packArguments,
+    sourceDir,
   );
   const jsonStart = output.lastIndexOf("\n[");
   const report = JSON.parse(output.slice(jsonStart >= 0 ? jsonStart + 1 : output.indexOf("["))) as
@@ -138,6 +183,37 @@ function assertCoreTarball(report: PackReport) {
   }
 }
 
+function assertConvexTarball(report: PackReport) {
+  const paths = new Set(report.files.map((file) => file.path));
+
+  for (const required of [
+    "README.md",
+    "package.json",
+    "dist/client/index.d.ts",
+    "dist/client/index.js",
+    "dist/testing.d.ts",
+    "dist/testing.js",
+    "dist/component/convex.config.d.ts",
+    "dist/component/convex.config.js",
+    "dist/component/_generated/component.d.ts",
+    "dist/component/_generated/component.js",
+    "src/client/index.ts",
+    "src/testing.ts",
+  ]) {
+    if (!paths.has(required)) {
+      throw new Error(`Convex Email tarball is missing ${required}.`);
+    }
+  }
+
+  if (
+    [...paths].some(
+      (path) => path.endsWith(".test.ts") || path === "src/email-sdk-shim.d.ts",
+    )
+  ) {
+    throw new Error("Convex Email tarball contains test-only source files.");
+  }
+}
+
 async function run(command: string[], cwd: string): Promise<string> {
   const child = Bun.spawn(command, {
     cwd,
@@ -169,12 +245,17 @@ import { spawnSync } from "node:child_process";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const coreDir = join(root, "node_modules/@opencoredev/email-sdk");
+const convexDir = join(root, "node_modules/@opencoredev/convex-email");
 
 await importAllExports(coreDir, "@opencoredev/email-sdk");
+await importAllExports(convexDir, "@opencoredev/convex-email");
 
 const core = await import("@opencoredev/email-sdk");
 const resend = await import("@opencoredev/email-sdk/resend");
 const react = await import("@opencoredev/email-sdk/react");
+const convex = await import("@opencoredev/convex-email");
+const convexConfig = await import("@opencoredev/convex-email/convex.config.js");
+const convexTesting = await import("@opencoredev/convex-email/test");
 
 if (
   typeof core.createEmailClient !== "function" ||
@@ -186,7 +267,18 @@ if (
   throw new Error("Installed Email SDK exports are incomplete.");
 }
 
+if (
+  typeof convex.ConvexEmail !== "function" ||
+  typeof convexConfig.default !== "object" ||
+  typeof convexTesting.memoryAdapter !== "function" ||
+  typeof convexTesting.registerConvexEmail !== "function" ||
+  convexTesting.memoryAdapter("mailbox").kind !== "memory"
+) {
+  throw new Error("Installed Convex Email documented exports are incomplete.");
+}
+
 await verifyDeclarationMaps(coreDir);
+await verifyDeclarationMaps(convexDir);
 
 const coreCli = join(coreDir, "dist/cli.js");
 const coreManifest = JSON.parse(await readFile(join(coreDir, "package.json"), "utf8"));
@@ -214,6 +306,7 @@ async function verifyDeclarationMaps(packageDir) {
 async function importAllExports(packageDir, packageName) {
   const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
   for (const subpath of Object.keys(manifest.exports ?? {})) {
+    if (subpath === "./package.json") continue;
     await import(subpath === "." ? packageName : packageName + subpath.slice(1));
   }
 }

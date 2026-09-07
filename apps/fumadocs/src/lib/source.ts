@@ -218,8 +218,12 @@ export async function getLLMText(
   version: DocsVersion = latestDocsVersion,
 ) {
   const docsBasePath = getDocsVersionBase(version);
+  // The loader preserves this runtime method but omits it from `$inferPage`.
+  const data = page.data as typeof page.data & {
+    getText(type: "processed"): Promise<string>;
+  };
   const processed = absolutizeSiteLinks(
-    (await page.data.getText("processed"))
+    (await data.getText("processed"))
       .replaceAll("](/docs/", `](${docsBasePath}/`)
       .replaceAll('href="/docs/', `href="${docsBasePath}/`),
   );
