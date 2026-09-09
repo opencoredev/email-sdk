@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "overrides": {
     "@opencoredev/email-sdk": "workspace:*",
@@ -51,7 +51,7 @@
     "@changesets/cli": "^2.31.1",
     "@email-sdk/config": "workspace:*",
     "oxfmt": "^0.46.0",
-    "oxlint": "^1.80.0",
+    "oxlint": "^1.82.0",
     "turbo": "^2.10.12",
     "typescript": "^6.0.3"
   },
