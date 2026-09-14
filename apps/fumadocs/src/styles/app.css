@@ -925,15 +925,15 @@ body :not(.email-landing *):is(
 .landing-footer-columns {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 64px var(--landing-gutter) 0;
 }
 
 .landing-footer-brand {
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  width: 312px;
+  min-width: 0;
   gap: 18px;
 }
 
@@ -960,8 +960,7 @@ body :not(.email-landing *):is(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  flex-shrink: 0;
-  width: 312px;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -1155,17 +1154,17 @@ body :not(.email-landing *):is(
   }
 
   .landing-footer-columns {
-    flex-wrap: wrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 36px 24px;
     padding-top: 40px;
   }
 
   .landing-footer-brand {
-    width: 100%;
+    grid-column: 1 / -1;
   }
 
   .landing-footer-group {
-    width: calc(50% - 12px);
+    width: auto;
   }
 
   .landing-mountains {
