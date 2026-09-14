@@ -926,8 +926,8 @@ body :not(.email-landing *):is(
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 64px var(--landing-gutter) 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.6fr);
+  padding: 64px calc(var(--landing-gutter) + 32px) 0;
 }
 
 .landing-footer-brand {
@@ -1156,6 +1156,7 @@ body :not(.email-landing *):is(
   .landing-footer-columns {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 36px 24px;
+    padding-inline: var(--landing-gutter);
     padding-top: 40px;
   }
 
