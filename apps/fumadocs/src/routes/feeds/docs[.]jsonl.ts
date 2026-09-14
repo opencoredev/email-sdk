@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { comparePairs, getComparePairTitle } from "@/lib/compare";
+import { buildCompareDescription } from "@/lib/compare-page";
 import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { siteUrl } from "@/lib/shared";
 import { source } from "@/lib/source";
@@ -38,7 +40,31 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
           return JSON.stringify(entity);
         });
 
-        return new Response(`${lines.join("\n")}\n`, {
+        const compareLines = comparePairs.map((pair) => {
+          const url = `${siteUrl}/compare/${pair.slug}`;
+          return JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "TechArticle",
+            "@id": `${url}#article`,
+            url,
+            mainEntityOfPage: url,
+            headline: getComparePairTitle(pair),
+            name: getComparePairTitle(pair),
+            description: buildCompareDescription(pair),
+            dateModified: "2026-09-14",
+            inLanguage: "en",
+            isPartOf: { "@id": `${siteUrl}/#website` },
+            author: { "@id": `${siteUrl}/#organization` },
+            publisher: { "@id": `${siteUrl}/#organization` },
+            encoding: {
+              "@type": "MediaObject",
+              encodingFormat: "text/markdown",
+              contentUrl: `${url}.md`,
+            },
+          });
+        });
+
+        return new Response(`${[...lines, ...compareLines].join("\n")}\n`, {
           headers: { "content-type": "application/x-ndjson; charset=utf-8" },
         });
       },

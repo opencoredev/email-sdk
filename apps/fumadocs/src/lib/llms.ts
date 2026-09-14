@@ -29,7 +29,7 @@ function comparisonsSection() {
 
   return `## Provider comparisons
 
-Per-pair message field support, fallback compatibility, and adapter code for both providers.
+Per-pair message field support, fallback compatibility, and adapter code for both providers. Append \`.md\` to any comparison URL (for example ${siteUrl}/compare/resend-vs-postmark.md) to fetch the same page as raw markdown.
 
 - [All provider comparisons](${siteUrl}/compare)
 ${pairs}`;
