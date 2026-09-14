@@ -66,7 +66,12 @@ export const Route = createFileRoute("/")({
       { property: "og:url", content: siteUrl },
       { "script:ld+json": homeStructuredData },
     ],
-    links: [{ rel: "canonical", href: siteUrl }],
+    links: [
+      { rel: "canonical", href: siteUrl },
+      // The vercel.json Link header advertises /index.md to HTTP clients; this
+      // tag exposes the same mirror to anything that only parses the HTML head.
+      { rel: "alternate", type: "text/markdown", href: `${siteUrl}/index.md` },
+    ],
   }),
   component: Home,
 });

@@ -94,7 +94,20 @@ export const Route = createFileRoute("/docs/$")({
             ]
           : []),
       ],
-      links: [{ rel: "canonical", href: canonicalUrl }],
+      links: [
+        { rel: "canonical", href: canonicalUrl },
+        // Advertise the raw markdown mirror every docs page already serves at
+        // <url>.md so agents can discover it without knowing the convention.
+        ...(data
+          ? [
+              {
+                rel: "alternate",
+                type: "text/markdown",
+                href: `${siteUrl}${data.markdownUrl}`,
+              },
+            ]
+          : []),
+      ],
     };
   },
   component: Page,

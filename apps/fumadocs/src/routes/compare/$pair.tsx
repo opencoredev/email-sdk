@@ -4,16 +4,14 @@ import type { ReactNode } from "react";
 
 import { CompareTable } from "@/components/compare-table";
 import { DocsVersionLink } from "@/components/docs-version-link";
+import { getComparePair, getComparePairTitle, getFallbackGaps, getProvider } from "@/lib/compare";
 import {
-  type ComparePair,
-  getAdapterConfigSnippet,
-  getComparePair,
-  getComparePairTitle,
-  getFallbackGaps,
-  getProvider,
-  messageFieldLabels,
-  type ProviderKey,
-} from "@/lib/compare";
+  buildCompareDescription,
+  buildCompareFaq,
+  fallbackSnippet,
+  listFields,
+  sendSnippet,
+} from "@/lib/compare-page";
 import { baseOptions } from "@/lib/layout.shared";
 import { appName, siteUrl } from "@/lib/shared";
 
@@ -24,7 +22,7 @@ export const Route = createFileRoute("/compare/$pair")({
 
     const title = getComparePairTitle(pair);
     const pageTitle = `${title}: transactional email API comparison - ${appName}`;
-    const description = buildDescription(pair);
+    const description = buildCompareDescription(pair);
     const canonicalUrl = `${siteUrl}/compare/${pair.slug}`;
 
     return {
@@ -45,7 +43,7 @@ export const Route = createFileRoute("/compare/$pair")({
               {
                 "@type": "FAQPage",
                 "@id": `${canonicalUrl}#faq`,
-                mainEntity: buildFaq(pair).map((entry) => ({
+                mainEntity: buildCompareFaq(pair).map((entry) => ({
                   "@type": "Question",
                   name: entry.question,
                   acceptedAnswer: { "@type": "Answer", text: entry.answer },
@@ -64,7 +62,10 @@ export const Route = createFileRoute("/compare/$pair")({
           },
         },
       ],
-      links: [{ rel: "canonical", href: canonicalUrl }],
+      links: [
+        { rel: "canonical", href: canonicalUrl },
+        { rel: "alternate", type: "text/markdown", href: `${canonicalUrl}.md` },
+      ],
     };
   },
   loader: ({ params }) => {
@@ -73,54 +74,6 @@ export const Route = createFileRoute("/compare/$pair")({
   },
   component: ComparePage,
 });
-
-function buildDescription(pair: ComparePair) {
-  const a = getProvider(pair.a);
-  const b = getProvider(pair.b);
-  return `${a.name} vs ${b.name} for transactional email: message-field support compared side by side (attachments, scheduling, metadata, and more), with code for both via one TypeScript SDK.`;
-}
-
-function buildFaq(pair: ComparePair) {
-  const a = getProvider(pair.a);
-  const b = getProvider(pair.b);
-  const gapsAtoB = getFallbackGaps(pair.a, pair.b);
-  const gapsBtoA = getFallbackGaps(pair.b, pair.a);
-
-  const gapAnswer =
-    gapsAtoB.length > 0
-      ? `${a.name} supports ${listFields(gapsAtoB)} in the unified message shape, which ${b.name} does not.`
-      : `${b.name} supports every message field that ${a.name} supports, so nothing is lost moving a message from ${a.name} to ${b.name}.`;
-
-  const fallbackAnswer =
-    gapsBtoA.length === 0 && gapsAtoB.length === 0
-      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK can fail over between them in either direction without dropping data.`
-      : `Partially. Email SDK checks field support before every send: a fallback from ${a.name} to ${b.name} is rejected for messages using ${
-          gapsAtoB.length > 0 ? listFields(gapsAtoB) : "no fields"
-        }${
-          gapsBtoA.length > 0
-            ? `, and from ${b.name} to ${a.name} for messages using ${listFields(gapsBtoA)}`
-            : ""
-        }. Messages that avoid those fields fail over cleanly.`;
-
-  return [
-    {
-      question: `Can I switch from ${a.name} to ${b.name} without rewriting my email code?`,
-      answer: `Yes. With Email SDK both providers share one typed send() call and one message shape, so switching from ${a.name} to ${b.name} is a one-line adapter change plus an API key. The SDK fails fast if a message uses a field ${b.name} does not support, so nothing is silently dropped.`,
-    },
-    {
-      question: `Which message fields does ${a.name} support that ${b.name} doesn't?`,
-      answer: gapAnswer,
-    },
-    {
-      question: `Can I use ${b.name} as a fallback for ${a.name}?`,
-      answer: fallbackAnswer,
-    },
-  ];
-}
-
-function listFields(fields: ReturnType<typeof getFallbackGaps>) {
-  return fields.map((field) => messageFieldLabels[field].toLowerCase()).join(", ");
-}
 
 function ComparePage() {
   const { pair: slug } = Route.useParams();
@@ -132,7 +85,7 @@ function ComparePage() {
   const title = getComparePairTitle(pair);
   const gapsAtoB = getFallbackGaps(pair.a, pair.b);
   const gapsBtoA = getFallbackGaps(pair.b, pair.a);
-  const faq = buildFaq(pair);
+  const faq = buildCompareFaq(pair);
 
   return (
     <HomeLayout {...baseOptions()}>
@@ -241,37 +194,6 @@ function ComparePage() {
       </main>
     </HomeLayout>
   );
-}
-
-function sendSnippet(key: ProviderKey, importPath: string) {
-  return `import { createEmailClient } from "@opencoredev/email-sdk";
-import { ${key} } from "${importPath}";
-
-const client = createEmailClient({
-  adapters: [${getAdapterConfigSnippet(key)}],
-});
-
-await client.send({
-  from: "hello@yourdomain.com",
-  to: "user@example.com",
-  subject: "Welcome!",
-  html: "<p>It works.</p>",
-});`;
-}
-
-function fallbackSnippet(pair: ComparePair, importPathA: string, importPathB: string) {
-  return `import { createEmailClient } from "@opencoredev/email-sdk";
-import { ${pair.a} } from "${importPathA}";
-import { ${pair.b} } from "${importPathB}";
-
-const client = createEmailClient({
-  adapters: [
-    ${getAdapterConfigSnippet(pair.a)},
-    ${getAdapterConfigSnippet(pair.b)},
-  ],
-  defaultAdapter: "${pair.a}",
-  fallback: ["${pair.b}"],
-});`;
 }
 
 function CodeBlock({ children }: { children: string }) {
