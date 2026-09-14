@@ -785,6 +785,7 @@ body :not(.email-landing *):is(
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  min-width: 0;
   width: 560px;
   margin-left: auto;
   background: var(--landing-panel);
@@ -1029,6 +1030,22 @@ body :not(.email-landing *):is(
 
   .landing-adapter-list {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 1120px) {
+  .landing-one-call {
+    flex-direction: column;
+    gap: 36px;
+  }
+
+  .landing-one-call .landing-section-label {
+    width: 100%;
+  }
+
+  .landing-one-call .landing-code-panel {
+    width: 100%;
+    margin-left: 0;
   }
 }
 
