@@ -493,10 +493,11 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   zeptomail: { cc: true, bcc: true, replyTo: true, attachments: true },
   mailpace: { cc: true, bcc: true, replyTo: true },
   smtp: { cc: true, bcc: true, replyTo: true, headers: true },
+  graph: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
 } satisfies Record<string, MessageFieldSupport>;
 
 const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive"]);
-const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp"]);
+const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
 
 export const BUILT_IN_ADAPTER_CAPABILITIES = Object.fromEntries(
@@ -606,6 +607,26 @@ export function validateBuiltInAdapter(
         "scaleway cannot set replyTo when headers already include Reply-To.",
       );
     }
+  }
+  if (adapter === "graph") {
+    const invalidHeaders = (headersToArray(message.headers) ?? [])
+      .filter((header) => !/^x-/i.test(header.name))
+      .map((header) => header.name);
+
+    if (invalidHeaders.length > 0) {
+      throw new EmailValidationError(
+        `graph only supports custom headers with an x- prefix: ${invalidHeaders.join(", ")}.`,
+      );
+    }
+
+    assertMaxItems(adapter, "header", headersToArray(message.headers) ?? [], 5);
+
+    assertMaxItems(
+      adapter,
+      "recipient",
+      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
+      1000,
+    );
   }
   if (adapter === "smtp") {
     for (const address of [
