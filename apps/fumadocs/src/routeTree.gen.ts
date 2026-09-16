@@ -30,6 +30,7 @@ import { Route as FeedsDocsDotjsonlRouteImport } from './routes/feeds/docs[.]jso
 import { Route as DocsChar123Char125DotmdRouteImport } from './routes/docs/{$}[.]md'
 import { Route as DocsLlmsDottxtRouteImport } from './routes/docs/llms[.]txt'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
+import { Route as CompareChar123pairChar125DotmdRouteImport } from './routes/compare/{$pair}[.]md'
 import { Route as ComparePairRouteImport } from './routes/compare/$pair'
 import { Route as BlogSlugRouteImport } from './routes/blog/$slug'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
@@ -141,6 +142,12 @@ const DocsSplatRoute = DocsSplatRouteImport.update({
   path: '/docs/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompareChar123pairChar125DotmdRoute =
+  CompareChar123pairChar125DotmdRouteImport.update({
+    id: '/compare/{$pair}.md',
+    path: '/compare/{$pair}.md',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ComparePairRoute = ComparePairRouteImport.update({
   id: '/compare/$pair',
   path: '/compare/$pair',
@@ -185,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/compare/$pair': typeof ComparePairRoute
+  '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
@@ -213,6 +221,7 @@ export interface FileRoutesByTo {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/compare/$pair': typeof ComparePairRoute
+  '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
@@ -242,6 +251,7 @@ export interface FileRoutesById {
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/compare/$pair': typeof ComparePairRoute
+  '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
   '/docs/llms.txt': typeof DocsLlmsDottxtRoute
   '/docs/{$}.md': typeof DocsChar123Char125DotmdRoute
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/compare/$pair'
+    | '/compare/{$pair}.md'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
@@ -300,6 +311,7 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/compare/$pair'
+    | '/compare/{$pair}.md'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
@@ -328,6 +340,7 @@ export interface FileRouteTypes {
     | '/api/search'
     | '/blog/$slug'
     | '/compare/$pair'
+    | '/compare/{$pair}.md'
     | '/docs/$'
     | '/docs/llms.txt'
     | '/docs/{$}.md'
@@ -357,6 +370,7 @@ export interface RootRouteChildren {
   ApiSearchRoute: typeof ApiSearchRoute
   BlogSlugRoute: typeof BlogSlugRoute
   ComparePairRoute: typeof ComparePairRoute
+  CompareChar123pairChar125DotmdRoute: typeof CompareChar123pairChar125DotmdRoute
   DocsSplatRoute: typeof DocsSplatRoute
   DocsLlmsDottxtRoute: typeof DocsLlmsDottxtRoute
   DocsChar123Char125DotmdRoute: typeof DocsChar123Char125DotmdRoute
@@ -517,6 +531,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/compare/{$pair}.md': {
+      id: '/compare/{$pair}.md'
+      path: '/compare/{$pair}.md'
+      fullPath: '/compare/{$pair}.md'
+      preLoaderRoute: typeof CompareChar123pairChar125DotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/compare/$pair': {
       id: '/compare/$pair'
       path: '/compare/$pair'
@@ -573,6 +594,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSearchRoute: ApiSearchRoute,
   BlogSlugRoute: BlogSlugRoute,
   ComparePairRoute: ComparePairRoute,
+  CompareChar123pairChar125DotmdRoute: CompareChar123pairChar125DotmdRoute,
   DocsSplatRoute: DocsSplatRoute,
   DocsLlmsDottxtRoute: DocsLlmsDottxtRoute,
   DocsChar123Char125DotmdRoute: DocsChar123Char125DotmdRoute,
