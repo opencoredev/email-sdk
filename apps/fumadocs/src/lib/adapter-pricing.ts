@@ -238,6 +238,14 @@ const pricingByProvider = {
     note: "The adapter is only the transport. Cost depends on the SMTP relay or server you choose, so showing $0 would be misleading.",
     prices: [varies, varies, varies, varies, varies, varies],
   },
+  graph: {
+    model: "Microsoft 365 license",
+    sources: [
+      { label: "Microsoft 365 licensing", href: "https://www.microsoft.com/en-us/microsoft-365/enterprise/microsoft365-plans-and-pricing" },
+    ],
+    note: "Included with Microsoft 365 and Azure AD licenses. Cost depends on your licensing agreement. Per-message rates do not apply; shown as varies because the license is separate from the SDK.",
+    prices: [varies, varies, varies, varies, varies, varies],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

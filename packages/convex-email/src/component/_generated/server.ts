@@ -43,6 +43,11 @@ export type Env = {
   MAILGUN_DOMAIN?: string;
   MAILPACE_API_KEY?: string;
   MAILTRAP_API_KEY?: string;
+  MS_GRAPH_CLIENT_ID?: string;
+  MS_GRAPH_CLIENT_SECRET?: string;
+  MS_GRAPH_SAVE_TO_SENT_ITEMS?: string;
+  MS_GRAPH_TENANT_ID?: string;
+  MS_GRAPH_USER?: string;
   PLUNK_API_KEY?: string;
   POSTMARK_SERVER_TOKEN?: string;
   PRIMITIVE_API_KEY?: string;

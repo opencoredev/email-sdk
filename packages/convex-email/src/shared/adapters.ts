@@ -144,6 +144,14 @@ export const CONVEX_EMAIL_ADAPTERS = {
     user: { type: "string", env: "SMTP_USER" },
     pass: { type: "string", env: "SMTP_PASS" },
   },
+  graph: {
+    tenantId: { type: "string", env: "MS_GRAPH_TENANT_ID", required: true },
+    clientId: { type: "string", env: "MS_GRAPH_CLIENT_ID", required: true },
+    clientSecret: { type: "string", env: "MS_GRAPH_CLIENT_SECRET", required: true },
+    user: { type: "string", env: "MS_GRAPH_USER", inline: true, required: true },
+    saveToSentItems: { type: "boolean", env: "MS_GRAPH_SAVE_TO_SENT_ITEMS", inline: true },
+    baseUrl: BASE_URL,
+  },
   sparkpost: {
     apiKey: { type: "string", env: "SPARKPOST_API_KEY", required: true },
     baseUrl: BASE_URL,

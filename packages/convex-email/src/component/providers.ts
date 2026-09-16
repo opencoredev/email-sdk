@@ -9,6 +9,7 @@ import {
 } from "@opencoredev/email-sdk";
 import { brevo } from "@opencoredev/email-sdk/brevo";
 import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+import { graph } from "@opencoredev/email-sdk/graph";
 import { iterable } from "@opencoredev/email-sdk/iterable";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
@@ -149,6 +150,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
         resolved.user && resolved.pass ? { user: resolved.user, pass: resolved.pass } : undefined,
     });
   },
+  graph: fromOptions(graph),
   sparkpost: fromOptions(sparkpost),
   unosend: fromOptions(unosend),
   zeptomail: fromOptions(zeptomail),

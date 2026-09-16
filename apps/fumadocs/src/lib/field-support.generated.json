@@ -175,5 +175,12 @@
     "bcc": true,
     "replyTo": true,
     "headers": true
+  },
+  "graph": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true
   }
 }

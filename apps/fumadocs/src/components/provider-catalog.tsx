@@ -34,6 +34,7 @@ const providerDescriptions: Record<Provider["key"], string> = {
   lettr: "Transactional and marketing email for SaaS, with a REST API and editor.",
   plunk: "An open-source-friendly option for product email.",
   smtp: "Connect any existing SMTP server or self-hosted mail system.",
+  graph: "Send from Microsoft 365 mailboxes using app permissions.",
 };
 
 export function ProviderGrid() {

@@ -44,6 +44,7 @@ export const CONTRACT_TEST_FILES: Record<string, readonly string[]> = {
   sequenzy: ["adapters.test.ts"],
   ses: ["adapters.test.ts"],
   smtp: ["smtp.test.ts"],
+  graph: ["graph.test.ts"],
   sparkpost: ["adapters.test.ts"],
   unosend: ["adapters.test.ts"],
   zeptomail: ["adapters.test.ts"],

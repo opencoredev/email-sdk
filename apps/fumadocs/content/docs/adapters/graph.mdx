@@ -1,0 +1,159 @@
+---
+title: Microsoft Graph
+description: Send through Microsoft Graph's sendMail API with OAuth 2.0 client credentials or custom token providers for managed identity and certificate authentication.
+icon: graph
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| Yes | `none` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Graph adapter calls Microsoft Graph's [sendMail API](https://learn.microsoft.com/en-us/graph/api/user-sendmail) with plain `fetch` and supports both OAuth 2.0 client credentials flow and custom `getAccessToken` functions for managed identity, certificate-based authentication, or external token providers. It authenticates with app permissions (`Mail.Send`) and sends from a specific user's mailbox by user ID or UPN.
+
+<ProviderBadge adapter="graph" />
+
+## Configure
+
+Create an app registration in Microsoft Entra ID (Azure AD), grant it the `Mail.Send` application permission, get admin consent, and verify the sender identity matches a real mailbox in your tenant.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { graph } from "@opencoredev/email-sdk/graph";
+
+export const email = createEmailClient({
+  adapters: [
+    graph({
+      tenantId: process.env.MS_GRAPH_TENANT_ID!,
+      clientId: process.env.MS_GRAPH_CLIENT_ID!,
+      clientSecret: process.env.MS_GRAPH_CLIENT_SECRET!,
+      user: process.env.MS_GRAPH_USER!,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    tenantId: {
+      description: "Microsoft Entra tenant ID. Required unless using getAccessToken.",
+      type: "string",
+    },
+    clientId: {
+      description: "Application (client) ID from your app registration. Required unless using getAccessToken.",
+      type: "string",
+    },
+    clientSecret: {
+      description: "Client secret value from your app registration. Required unless using getAccessToken.",
+      type: "string",
+    },
+    user: {
+      description: "User ID (GUID) or UPN (email) of the mailbox to send from, e.g. d4f540b2-6478-4ee3-bdd3-d3a5397d97ac or john.doe@contoso.com.",
+      type: "string",
+      required: true,
+    },
+    getAccessToken: {
+      description: "Custom token provider for managed identity, certificate credentials, or external caching. Skips the built-in client credentials flow. Mutually exclusive with tenantId/clientId/clientSecret.",
+      type: "() => string | Promise<string>",
+    },
+    baseUrl: {
+      description: "Override the Graph API origin for national clouds.",
+      type: "string",
+      default: '"https://graph.microsoft.com/v1.0"',
+    },
+    tokenUrl: {
+      description: "Override the OAuth token endpoint.",
+      type: "string",
+      default: '"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token"',
+    },
+    saveToSentItems: {
+      description: "Store a copy in the sender's Sent Items folder.",
+      type: "boolean",
+      default: "true",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+Graph maps `cc`, `bcc`, one `replyTo`, custom headers (x- prefix only), and base64 attachments. There are no tags, metadata, or scheduled delivery.
+
+```ts
+const result = await email.send({
+  from: "Acme Alerts <alerts@acme.com>",
+  to: "ops@example.com",
+  subject: "Build failed on main",
+  html: "<p>Commit abc123 broke the build.</p>",
+  headers: [{ name: "X-Build-ID", value: "build_98412" }],
+});
+
+console.log(result.adapter); // "graph"
+```
+
+Graph returns a `202 Accepted` status with an empty body, so there is no message ID. If you need to correlate delivery events later, keep `saveToSentItems` enabled and retrieve the `internetMessageId` from the Sent Items copy.
+
+<Callout type="warn" title="Only x- prefixed custom headers">
+  Graph accepts custom headers only if the name starts with `x-` (case insensitive). A header like
+  `List-Unsubscribe` throws an `EmailValidationError` before any request is made. Graph caps custom
+  headers at 5 per message.
+</Callout>
+
+<Callout type="warn" title="No tags, metadata, or scheduling">
+  Graph's `sendMail` API has no `tags`, `metadata`, or `sendAt` fields. Pass any of these and the
+  adapter throws an `EmailValidationError` before making a request.
+</Callout>
+
+## Managed identity and certificate authentication
+
+Pass a custom `getAccessToken` function to skip the built-in client credentials flow. The adapter calls your function before every send and caches nothing, so you control token lifetime and refresh logic.
+
+```ts
+import { DefaultAzureCredential } from "@azure/identity";
+import { graph } from "@opencoredev/email-sdk/graph";
+
+const credential = new DefaultAzureCredential();
+
+export const email = createEmailClient({
+  adapters: [
+    graph({
+      user: "alerts@acme.com",
+      async getAccessToken() {
+        const token = await credential.getToken("https://graph.microsoft.com/.default");
+        return token.token;
+      },
+    }),
+  ],
+});
+```
+
+When `getAccessToken` is supplied, `tenantId`, `clientId`, and `clientSecret` must not be set.
+
+## Verify from the CLI
+
+```bash
+MS_GRAPH_TENANT_ID="..." MS_GRAPH_CLIENT_ID="..." MS_GRAPH_CLIENT_SECRET="..." MS_GRAPH_USER="..." \
+  npx --package @opencoredev/email-sdk email-sdk doctor --adapter graph
+```
+
+```bash
+npx --package @opencoredev/email-sdk email-sdk send \
+  --adapter graph \
+  --tenant-id "$MS_GRAPH_TENANT_ID" \
+  --client-id "$MS_GRAPH_CLIENT_ID" \
+  --client-secret "$MS_GRAPH_CLIENT_SECRET" \
+  --user "$MS_GRAPH_USER" \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Graph smoke test" \
+  --text "It works" \
+  --dry-run
+```
+
+Drop `--dry-run` for one real send. Only Microsoft can prove the app registration, consent, and mailbox are set up correctly.

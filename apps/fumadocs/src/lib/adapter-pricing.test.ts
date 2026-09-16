@@ -13,7 +13,7 @@ describe("adapter pricing", () => {
     const providerKeys = providers.map((provider) => provider.key).sort();
     const pricingKeys = adapterPricing.map((row) => row.provider.key).sort();
 
-    expect(adapterPricing).toHaveLength(24);
+    expect(adapterPricing).toHaveLength(25);
     expect(new Set(pricingKeys).size).toBe(pricingKeys.length);
     expect(pricingKeys).toEqual(providerKeys);
     expect(adapterPricing.every((row) => row.prices.length === pricingVolumes.length)).toBe(true);
@@ -88,6 +88,6 @@ describe("adapter pricing", () => {
       getAdapterPricingRows({ status: "variable", volume: 1_000 }).map(
         (row) => row.provider.key,
       ),
-    ).toEqual(["iterable", "smtp"]);
+    ).toEqual(["iterable", "graph", "smtp"]);
   });
 });
