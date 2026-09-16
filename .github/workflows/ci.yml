@@ -21,6 +21,32 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run release:ci
 
+  ai-compatibility:
+    name: ${{ matrix.name }}
+    runs-on: tenki-standard-medium-4c-8g
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: AI SDK 6 on Node 20
+            node: 20
+            case: ai6
+          - name: Chat plus AI SDK 7 on Node 22
+            node: 22
+            case: chat-ai7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx turbo run build --filter=@opencoredev/email-sdk
+      - run: bash scripts/check-ai-compatibility.sh ${{ matrix.case }}
+
   node:
     name: Node ${{ matrix.node }} public-package coverage
     runs-on: tenki-standard-medium-4c-8g

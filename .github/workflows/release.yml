@@ -24,7 +24,8 @@ concurrency:
 jobs:
   release:
     name: Version or publish
-    runs-on: tenki-standard-medium-4c-8g
+    # npm Trusted Publishing requires a GitHub-hosted runner for OIDC.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
