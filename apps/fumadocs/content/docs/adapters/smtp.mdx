@@ -1,6 +1,6 @@
 ---
 title: SMTP
-description: Send over raw SMTP with the built-in TCP/TLS transport. No Nodemailer, no HTTP API.
+description: Send over SMTP with a standards-compliant MIME transport. No HTTP API.
 icon: smtp
 ---
 
@@ -12,7 +12,7 @@ icon: smtp
 
 These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
 
-The SMTP adapter speaks the SMTP protocol directly over Node/Bun TCP and TLS sockets. There is no Nodemailer and no HTTP API in the path. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
+The SMTP adapter uses Nodemailer for the SMTP protocol, TLS, authentication, MIME composition, transfer encoding, RFC-safe subject encoding, and attachments. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
 
 <ProviderBadge adapter="smtp" />
 
@@ -102,7 +102,7 @@ With `secure: true` the whole session is TLS. Otherwise the adapter connects in 
 
 ## Send
 
-SMTP maps `cc`, `bcc`, `replyTo`, and `headers`. When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when send options include an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
+SMTP maps `cc`, `bcc`, `replyTo`, `headers`, and `attachments`. Nodemailer builds the MIME tree, chooses safe transfer encodings, encodes non-ASCII subjects, and supports content or path attachments (including inline `contentId` attachments). When a message has both `html` and `text`, the adapter builds a `multipart/alternative` MIME body. The generated `Message-ID` header is `<{idempotencyKey}@email-sdk.local>` when send options include an `idempotencyKey`, and a random UUID otherwise. An explicit `Message-ID` in `headers` overrides it; set one yourself if you need a specific domain for threading or deduplication.
 
 ```ts
 const result = await email.send({
@@ -121,9 +121,9 @@ console.log(result.id); // parsed from the server's "queued as ..." reply, else 
 
 `rejected` is always empty, because a refused recipient fails the SMTP conversation instead. Retryable transport failures surface as `EmailAdapterError`, so SMTP plays well with [retries and fallbacks](/docs/concepts/fallbacks-and-retries).
 
-<Callout type="warn" title="No attachments, tags, or metadata">
-  The built-in transport does not build attachment MIME parts, and SMTP has no tag or metadata
-  concept. Any of these fields throws an `EmailValidationError` before connecting. See the
+<Callout type="warn" title="No tags or metadata">
+  SMTP has no tag or metadata concept. Those fields throw an `EmailValidationError` before
+  connecting. Attachments are supported and are encoded as MIME parts. See the
   [field support matrix](/docs/adapters/field-support).
 </Callout>
 

@@ -159,13 +159,27 @@ describe("smtp injection guards", () => {
     expect(dataHeaderLines.some((line) => line.toLowerCase().startsWith("bcc:"))).toBe(false);
   });
 
-  test("rejects attachments before connecting", async () => {
+  test("encodes non-ASCII subjects and attachments as MIME parts", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      subject: "Привет, мир",
+      text: "See the report.",
+      attachments: [{ filename: "report.txt", content: "hello attachment" }],
+    });
+
+    expect(transmitted.data).toMatch(/Subject: =\?UTF-8\?[BQ]\?/i);
+    expect(transmitted.data).toContain("Content-Disposition: attachment;");
+    expect(transmitted.data).toContain("filename=report.txt");
+    expect(transmitted.data).toContain("aGVsbG8gYXR0YWNobWVudA==");
+  });
+
+  test("does not reject attachments during validation", async () => {
     await expect(
       send({
         ...baseMessage,
         attachments: [{ filename: "hello.txt", content: "hello" }],
       }),
-    ).rejects.toBeInstanceOf(EmailValidationError);
+    ).rejects.not.toBeInstanceOf(EmailValidationError);
   });
 
   test("accepts addresses with hyphens and plus signs", async () => {

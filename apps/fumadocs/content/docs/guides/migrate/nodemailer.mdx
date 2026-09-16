@@ -1,9 +1,9 @@
 ---
 title: Migrate from Nodemailer
-description: Replace a Nodemailer transporter with Email SDK's dependency-free SMTP adapter.
+description: Replace a Nodemailer transporter with Email SDK's typed SMTP adapter.
 ---
 
-Email SDK includes its own SMTP transport. You do not need Nodemailer for basic address fields, text/HTML bodies, headers, TLS upgrade, and SMTP auth.
+Email SDK includes a typed SMTP transport backed by Nodemailer. It handles address fields, text/HTML bodies, headers, TLS upgrade, SMTP auth, RFC-safe subjects, transfer encoding, and MIME attachments.
 
 ## Replace the transporter
 
@@ -47,7 +47,7 @@ The transport creates `multipart/alternative` for text plus HTML and derives `Me
 
 ## Account for unsupported features
 
-The built-in SMTP adapter rejects attachments, tags, metadata, and schedules. Keep Nodemailer or build a custom adapter if your SMTP workflow depends on MIME attachments or advanced transport plugins.
+The SMTP adapter still has no tag, metadata, or scheduling concept. Keep a custom adapter if your SMTP workflow depends on advanced transport plugins.
 
 ## Verify
 

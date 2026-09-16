@@ -16,9 +16,9 @@ pnpm add @opencoredev/email-sdk
 bun add @opencoredev/email-sdk
 ```
 
-The public npm package is `@opencoredev/email-sdk`. The CLI binary it installs is `email-sdk`. Use both from server-side runtimes such as Node.js 20+ or Bun 1.1+, and never expose provider API keys in browser code. ESM imports work across this supported range. CommonJS applications running Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) can load the package and its adapter entry points with `require()`. On older supported runtimes, use dynamic `import()` or upgrade.
+The public npm package is `@opencoredev/email-sdk`. The CLI binary it installs is `email-sdk`. Use both from server-side runtimes such as Node.js 20+ or Bun 1.1+, and never expose provider API keys in browser code. Every public entry point ships as both ESM and CommonJS, so `import` and `require()` work across the supported Node.js range.
 
-For typed CommonJS (`.cts`), use TypeScript 5.8+ with `module: nodenext`, or a compiler supporting `module: node20`, and typed imports such as `import sdk = require("@opencoredev/email-sdk")`. This loads ESM from CommonJS; legacy `node16`/`node18` modes do not model `require(esm)`. See the [installation guide](https://email-sdk.dev/docs/getting-started/install) for an adapter example.
+For typed CommonJS (`.cts`), use `module: nodenext` and typed imports such as `import sdk = require("@opencoredev/email-sdk")`. See the [installation guide](https://email-sdk.dev/docs/getting-started/install) for an adapter example.
 
 ## Quickstart
 
@@ -48,7 +48,7 @@ console.log(result.adapter, result.id);
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
 - Retries inside one adapter, then fallback only when your fallback policy allows it.
 - Sequential `sendMany` for independent sends and `sendPersonalized` for recipient variables.
-- Built-in SMTP transport with no Nodemailer dependency.
+- Built-in SMTP transport with standards-compliant MIME, TLS, transfer encoding, and attachments.
 - Hooks and middleware for logs, metrics, traces, defaults, and capture stores.
 - Test adapters that never call a real provider.
 - A bundled CLI for adapter discovery, setup checks, and dry-run validation.
@@ -301,7 +301,7 @@ If the migration cannot happen in one change, import from `@opencoredev/email-sd
 
 ## Telemetry
 
-Anonymous telemetry is enabled by default for SDK and CLI usage. It records adapter names, command names, success/failure, error codes, duration, recipient counts, whether scheduling was requested, SDK version, runtime, OS, CI metadata, and redacted error shape. It never records email content, subjects, addresses, headers, attachments, API keys, or provider raw responses.
+Opt-out telemetry is enabled by default for SDK and CLI usage and uses a random, stable installation identifier. It records adapter names, command names, success/failure, error codes, duration, recipient counts, whether scheduling was requested, SDK version, runtime, OS, CI metadata, and redacted error shape. It never records a person's identity, email content, subjects, addresses, headers, attachments, API keys, or provider raw responses.
 
 Opt out globally:
 
