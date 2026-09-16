@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import type { SendMailOptions, SentMessageInfo } from "nodemailer";
 
-import { EmailAdapterError } from "./errors.js";
+import { EmailAbortError, EmailAdapterError } from "./errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
@@ -47,6 +47,20 @@ export function smtp<const Name extends string = "smtp">(
     async send(message, context) {
       validateBuiltInAdapter("smtp", message);
 
+      let mail: SendMailOptions;
+      try {
+        mail = (await toNodemailerMessage(
+          message,
+          options.defaults,
+          context.idempotencyKey,
+        )) as SendMailOptions;
+      } catch (error) {
+        throw new EmailAdapterError(
+          error instanceof Error ? error.message : "SMTP message preparation failed.",
+          { adapter: name, delivery: "not_sent", retryable: false, cause: error },
+        );
+      }
+
       const transport = nodemailer.createTransport({
         host: options.host,
         port,
@@ -62,17 +76,16 @@ export function smtp<const Name extends string = "smtp">(
       });
 
       try {
-        const response = (await transport.sendMail(
-          (await toNodemailerMessage(message, options.defaults, context.idempotencyKey)) as SendMailOptions,
-        )) as SentMessageInfo;
+        const response = await sendMailWithSignal(transport, mail, context.signal);
         return {
           adapter: name,
-          id: response.messageId ?? context.idempotencyKey,
+          id: parseQueueIdentifier(response.response) ?? context.idempotencyKey ?? response.messageId,
           accepted: (response.accepted ?? []).map(String),
           rejected: (response.rejected ?? []).map(String),
           raw: response,
         };
       } catch (error) {
+        if (error instanceof EmailAbortError) throw error;
         throw new EmailAdapterError(error instanceof Error ? error.message : "SMTP send failed.", {
           adapter: name,
           retryable: true,
@@ -83,6 +96,43 @@ export function smtp<const Name extends string = "smtp">(
       }
     },
   };
+}
+
+function parseQueueIdentifier(response: string | undefined) {
+  return response?.match(/\bqueued\s+as\s+([^\s]+)/i)?.[1];
+}
+
+function sendMailWithSignal(
+  transport: ReturnType<typeof nodemailer.createTransport>,
+  mail: SendMailOptions,
+  signal: AbortSignal | undefined,
+) {
+  if (signal?.aborted) return Promise.reject(new EmailAbortError(signal.reason));
+
+  return new Promise<SentMessageInfo>((resolve, reject) => {
+    let settled = false;
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      transport.close();
+      reject(new EmailAbortError(signal?.reason));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    transport.sendMail(mail).then(
+      (response) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        resolve(response as SentMessageInfo);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function toNodemailerMessage(
