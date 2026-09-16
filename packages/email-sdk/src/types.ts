@@ -248,7 +248,7 @@ export type EmailClientOptions<
   hooks?: EmailHooks;
   plugins?: TPlugins;
   /**
-   * Anonymous usage analytics. Defaults to enabled. Set `false` here or use
+   * Opt-out usage telemetry with a stable installation identifier. Defaults to enabled. Set `false` here or use
    * `EMAIL_SDK_TELEMETRY=0` / `DO_NOT_TRACK=1` to opt out.
    */
   telemetry?: boolean;
@@ -285,7 +285,7 @@ export type EmailClient<
   ): Promise<EmailPersonalizedResult<RouteName<Routes>>>;
   adapter<Name extends RouteName<Routes>>(name: Name): AdapterForName<Routes, Name>;
   /**
-   * Waits for in-flight anonymous telemetry to finish sending. Sends fire telemetry
+   * Waits for in-flight opt-out telemetry to finish sending. Sends fire telemetry
    * without awaiting it so delivery never blocks an email, which means serverless
    * runtimes (Vercel, Lambda, Workers) freeze the process on response and drop it.
    * Await this — or hand it to `waitUntil` — at the end of a request to keep counts

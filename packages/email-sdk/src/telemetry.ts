@@ -22,7 +22,7 @@ const MAX_CAUSE_CHAIN = 3;
 const MAX_STACK_FRAMES = 20;
 const MAX_MESSAGE_LENGTH = 300;
 
-export const TELEMETRY_NOTICE = `@opencoredev/email-sdk collects anonymous usage analytics: adapter names, command names, success/failure counts, and redacted error reports. Email content, addresses, and credentials are never collected. Opt out with EMAIL_SDK_TELEMETRY=0 or DO_NOT_TRACK=1. Details: https://github.com/opencoredev/email-sdk#telemetry`;
+export const TELEMETRY_NOTICE = `@opencoredev/email-sdk collects opt-out usage telemetry using a stable installation identifier: adapter names, command names, success/failure counts, and redacted error reports. Email content, addresses, and credentials are never collected. Opt out with EMAIL_SDK_TELEMETRY=0 or DO_NOT_TRACK=1. Details: https://github.com/opencoredev/email-sdk#telemetry`;
 
 export type TelemetryEventName =
   | "client created"
@@ -156,7 +156,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
         body: JSON.stringify({
           api_key: POSTHOG_PROJECT_KEY,
           event,
-          distinct_id: state.anonymousId,
+          distinct_id: state.installationId,
           timestamp: new Date().toISOString(),
           properties: {
             ...commonProperties,
@@ -502,7 +502,7 @@ function redactErrorMessage(message: string): string {
 }
 
 type TelemetryState = {
-  anonymousId: string;
+  installationId: string;
   noticeShown: boolean;
 };
 
@@ -510,11 +510,18 @@ function loadTelemetryState(configDir: string): TelemetryState {
   try {
     const parsed = JSON.parse(
       readFileSync(join(configDir, "telemetry.json"), "utf8"),
-    ) as Partial<TelemetryState>;
+    ) as Partial<TelemetryState> & { anonymousId?: unknown };
 
-    if (typeof parsed.anonymousId === "string" && parsed.anonymousId) {
+    const installationId =
+      typeof parsed.installationId === "string" && parsed.installationId
+        ? parsed.installationId
+        : typeof parsed.anonymousId === "string" && parsed.anonymousId
+          ? parsed.anonymousId
+          : undefined;
+
+    if (installationId) {
       return {
-        anonymousId: parsed.anonymousId,
+        installationId,
         noticeShown: parsed.noticeShown === true,
       };
     }
@@ -522,7 +529,7 @@ function loadTelemetryState(configDir: string): TelemetryState {
     // Missing or unreadable state falls through to a fresh identity.
   }
 
-  const state = { anonymousId: randomUUID(), noticeShown: false };
+  const state = { installationId: randomUUID(), noticeShown: false };
   persistTelemetryState(configDir, state);
 
   return state;

@@ -13,7 +13,7 @@ npx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 bunx --package @opencoredev/email-sdk email-sdk doctor --adapter resend
 ```
 
-Success prints `resend looks configured.`. Default doctor checks required configuration only: it does not contact the provider, authenticate, inspect domains, or prove deliverability. The CLI does not load `.env` files. Anonymous telemetry is default-on; set `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` to disable it.
+Success prints `resend looks configured.`. Default doctor checks required configuration only: it does not contact the provider, authenticate, inspect domains, or prove deliverability. The CLI does not load `.env` files. Opt-out telemetry is enabled by default; set `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` to disable it.
 
 ## Explicit non-sending live checks
 

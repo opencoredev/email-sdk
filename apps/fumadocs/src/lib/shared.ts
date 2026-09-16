@@ -35,7 +35,7 @@ Install the package, import the adapter for the provider whose credentials the a
 - Import each adapter from its own entry point (\`@opencoredev/email-sdk/resend\`, \`/smtp\`, …); do not add Nodemailer — the SDK ships its own SMTP transport.
 - Configure fallback only between adapters that support the same fields (see ${siteUrl}/docs/adapters/field-support). Start with \`retry: { maxAttempts: 1 }\`. Enabled retries can repeat unknown outcomes when errors are retryable; fallback stopping on unknown delivery does not prevent those retries. Inspect uncertain outcomes before resending. Idempotency support is provider-specific, not a universal duplicate-prevention guarantee.
 - A send receipt records provider acceptance, not delivery. Default doctor checks local configuration. Explicit \`doctor --live\` checks authentication for supported adapters; Resend additionally supports sender-domain readiness with \`--from\`. These checks do not prove key-level sending permission or delivery.
-- The CLI does not load .env files. Export credentials into the server process. Local checks and dry runs can send anonymous telemetry; set \`EMAIL_SDK_TELEMETRY=0\` or \`DO_NOT_TRACK=1\` for network-free local validation.
+- The CLI does not load .env files. Export credentials into the server process. Local checks and dry runs can send opt-out telemetry; set \`EMAIL_SDK_TELEMETRY=0\` or \`DO_NOT_TRACK=1\` for network-free local validation.
 - Gate agent-initiated sends behind explicit human approval. Run the CLI \`doctor\` and \`send --dry-run\` before any live send. The CLI sends if \`--dry-run\` is omitted; only the standalone first-send starter requires an explicit \`--send\` flag.`;
 
 export const siteOgImagePath = "/og/email-sdk.png";

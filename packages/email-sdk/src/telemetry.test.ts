@@ -83,7 +83,7 @@ describe("telemetry opt-out", () => {
 });
 
 describe("telemetry capture", () => {
-  test("posts anonymous events to PostHog with common properties", async () => {
+  test("posts installation-scoped events to PostHog with common properties", async () => {
     const { calls, fetchFn } = fetchCapture();
     const telemetry = createTelemetry({
       env: {},
@@ -113,7 +113,7 @@ describe("telemetry capture", () => {
     });
   });
 
-  test("keeps a stable anonymous id across instances", async () => {
+  test("keeps a stable installation id across instances", async () => {
     const configDir = tempConfigDir();
     const first = fetchCapture();
     const second = fetchCapture();
