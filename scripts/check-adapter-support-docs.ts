@@ -32,8 +32,8 @@ const sdkIds = Object.keys(SUPPORTED_MESSAGE_FIELDS);
 const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 24) {
-  fail(`Expected 24 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 25) {
+  fail(`Expected 25 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -104,6 +104,9 @@ requireIncludes(entry("lettr"), "inline attachments");
 requireIncludes(entry("mailtrap"), "one tag");
 requireIncludes(entry("scaleway"), "headers already include Reply-To");
 requireIncludes(entry("smtp"), "ASCII envelope addresses and header names");
+requireIncludes(entry("graph"), "x- prefixed custom headers");
+requireIncludes(entry("graph"), "5 custom headers");
+requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 requireIncludes(entry("mailgun"), "1,000 recipients");
 requireIncludes(entry("sendgrid"), "Tag names are discarded");

@@ -7,6 +7,7 @@ import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
 import { runDoctor } from "./doctor.js";
+import { graph } from "./graph.js";
 import { iterable } from "./iterable.js";
 import { jetemail } from "./jetemail.js";
 import { lettermint } from "./lettermint.js";
@@ -55,6 +56,11 @@ const providerDocs = [
     name: "cloudflare",
     env: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
     note: "Cloudflare Email Sending REST API",
+  },
+  {
+    name: "graph",
+    env: ["MS_GRAPH_TENANT_ID", "MS_GRAPH_CLIENT_ID", "MS_GRAPH_CLIENT_SECRET", "MS_GRAPH_USER"],
+    note: "Microsoft Graph sendMail API",
   },
   { name: "unosend", env: ["UNOSEND_API_KEY"], note: "Unosend REST API" },
   {
@@ -113,6 +119,15 @@ const factories = {
       apiToken: flagOrEnv(flags, "api-token", "CLOUDFLARE_API_TOKEN"),
       accountId: flagOrEnv(flags, "account-id", "CLOUDFLARE_ACCOUNT_ID"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.CLOUDFLARE_BASE_URL,
+    }),
+  graph: (flags) =>
+    graph({
+      tenantId: flagOrEnv(flags, "tenant-id", "MS_GRAPH_TENANT_ID"),
+      clientId: flagOrEnv(flags, "client-id", "MS_GRAPH_CLIENT_ID"),
+      clientSecret: flagOrEnv(flags, "client-secret", "MS_GRAPH_CLIENT_SECRET"),
+      user: flagOrEnv(flags, "user", "MS_GRAPH_USER"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.MS_GRAPH_BASE_URL,
+      saveToSentItems: booleanFlag(flags, "save-to-sent-items") ?? booleanEnv("MS_GRAPH_SAVE_TO_SENT_ITEMS"),
     }),
   unosend: (flags) =>
     unosend({
@@ -214,6 +229,10 @@ const envFlagNames: Record<string, string> = {
   SENDGRID_API_KEY: "api-key",
   CLOUDFLARE_API_TOKEN: "api-token",
   CLOUDFLARE_ACCOUNT_ID: "account-id",
+  MS_GRAPH_TENANT_ID: "tenant-id",
+  MS_GRAPH_CLIENT_ID: "client-id",
+  MS_GRAPH_CLIENT_SECRET: "client-secret",
+  MS_GRAPH_USER: "user",
   UNOSEND_API_KEY: "api-key",
   ITERABLE_API_KEY: "api-key",
   ITERABLE_CAMPAIGN_ID: "campaign-id",

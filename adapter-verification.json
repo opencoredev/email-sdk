@@ -30,6 +30,11 @@
       "command": "bun run live:lettr",
       "secret": "LETTR_API_KEY",
       "probe": "Authenticated GET /auth/check in the shared doctor probe; no send or delivery check. Sending is separately opt-in."
+    },
+    "graph": {
+      "command": "bun run live:graph",
+      "secret": "MS_GRAPH_CLIENT_SECRET",
+      "probe": "OAuth client credentials token exchange; no send or delivery check. Sending is separately opt-in."
     }
   }
 }

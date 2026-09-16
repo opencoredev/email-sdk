@@ -216,9 +216,17 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     capabilities: { repeatedHeaders: true, idempotency: "message_id", scheduling: false, personalized: "expanded" },
     limits: ["Validates ASCII envelope addresses and header names before opening a connection."],
   },
+  {
+    id: "graph",
+    label: "Microsoft Graph",
+    setupHref: "/docs/adapters/graph",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: { repeatedHeaders: true, idempotency: "none", scheduling: false, personalized: "expanded" },
+    limits: ["Only x- prefixed custom headers are supported.", "Accepts at most 5 custom headers per message.", "Accepts at most 1,000 combined to, cc, and bcc recipients."],
+  },
 ] as const satisfies readonly AdapterSupportEntry[];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "23 provider APIs plus SMTP, 24 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "24 provider APIs plus SMTP, 25 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

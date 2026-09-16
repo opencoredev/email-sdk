@@ -18,14 +18,14 @@ const run = (body: unknown, extra: Partial<DoctorOptions> = {}) =>
   runDoctor({ ...options, fetch: async () => json(body), ...extra });
 
 describe("shared live gate wiring", () => {
-  const all = ["jetemail", "lettermint", "lettr", "primitive", "resend", "sequenzy"];
+  const all = ["graph", "jetemail", "lettermint", "lettr", "primitive", "resend", "sequenzy"];
   test.each([
     "packages/email-sdk/src/doctor.ts",
     "packages/email-sdk/src/doctor.test.ts",
     "packages/email-sdk/src/cli.ts",
     "scripts/changed-live-adapters.ts",
     "scripts/run-live-adapters.ts",
-  ])("shared change %s selects all six checks", (file) => {
+  ])("shared change %s selects all seven checks", (file) => {
     expect(selectLiveAdapters([file])).toEqual(all);
   });
   test("individual adapters select only their checks", () => {
