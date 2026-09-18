@@ -71,6 +71,54 @@ async function captureSmtpData(message: EmailMessage) {
   return { commands, data: captured, result: result! };
 }
 
+// Runs a minimal in-process SMTP server that replies to RCPT TO with a fixed
+// scripted response line, so tests can force a specific SMTP reply code.
+async function sendWithRcptReply(reply: string) {
+  const server = net.createServer((socket) => {
+    socket.setEncoding("utf8");
+    socket.write("220 test.local\r\n");
+    socket.on("data", (chunk: string) => {
+      const command = chunk.trim().toUpperCase();
+
+      if (command.startsWith("EHLO")) {
+        socket.write("250 test.local\r\n");
+      } else if (command.startsWith("MAIL")) {
+        socket.write("250 ok\r\n");
+      } else if (command.startsWith("RCPT")) {
+        socket.write(`${reply}\r\n`);
+      } else if (command === "QUIT") {
+        socket.write("221 bye\r\n");
+        socket.end();
+      } else {
+        socket.write("250 ok\r\n");
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as net.AddressInfo;
+
+  try {
+    return await smtp({ host: "127.0.0.1", port }).send(baseMessage, { attempt: 1 });
+  } finally {
+    server.close();
+  }
+}
+
+describe("smtp error retryability", () => {
+  test("a permanent SMTP reply (5xx) is not retryable", async () => {
+    await expect(sendWithRcptReply("550 5.1.1 User unknown")).rejects.toMatchObject({
+      retryable: false,
+    });
+  });
+
+  test("a transient SMTP reply (4xx) is retryable", async () => {
+    await expect(sendWithRcptReply("450 4.2.1 Mailbox busy")).rejects.toMatchObject({
+      retryable: true,
+    });
+  });
+});
+
 describe("smtp injection guards", () => {
   test("rejects CRLF injected into the envelope address", async () => {
     await expect(
