@@ -3,6 +3,7 @@ import net from "node:net";
 
 import { EmailValidationError } from "./errors.js";
 import { smtp } from "./smtp.js";
+import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailMessage } from "./types.js";
 
 const baseMessage: EmailMessage = {
@@ -11,6 +12,70 @@ const baseMessage: EmailMessage = {
   subject: "Hello",
   text: "Hi there",
 };
+
+describe("smtp error classification", () => {
+  test.each([
+    ["ECONNECTION", true],
+    ["ETIMEDOUT", true],
+    ["ESOCKET", true],
+    ["EDNS", true],
+    ["ETLS", true],
+    ["EMAXLIMIT", true],
+    ["EPROTOCOL", false],
+  ])("classifies %s retryability as %s", (code, retryable) => {
+    expect(isRetryableSmtpError({ code })).toBe(retryable);
+  });
+
+  test.each([
+    ["ECONNECTION", "unknown"],
+    ["ETIMEDOUT", "unknown"],
+    ["ESOCKET", "unknown"],
+    ["EDNS", "not_sent"],
+    ["ETLS", "not_sent"],
+    ["EENVELOPE", "not_sent"],
+    ["EMESSAGE", "not_sent"],
+    ["EAUTH", "not_sent"],
+    ["ENOAUTH", "not_sent"],
+    ["EOAUTH2", "not_sent"],
+    ["ECONFIG", "not_sent"],
+    ["EPROXY", "not_sent"],
+    ["EREQUIRETLS", "not_sent"],
+    ["EPROTOCOL", "unknown"],
+  ])("classifies %s delivery state as %s", (code, delivery) => {
+    expect(smtpDeliveryState({ code })).toBe(delivery);
+  });
+
+  test.each([
+    ["ETLS", "certificate has expired"],
+    ["ESOCKET", "unable to verify the first certificate"],
+    ["ETLS", "self-signed certificate"],
+    ["ESOCKET", "Hostname/IP does not match certificate's altnames"],
+  ])("does not retry %s certificate failures", (code, message) => {
+    const error = { code, message };
+    expect(isRetryableSmtpError(error)).toBe(false);
+    expect(smtpDeliveryState(error)).toBe("not_sent");
+  });
+
+  test("keeps transient TLS failures not sent", () => {
+    expect(smtpDeliveryState({ code: "ETLS", message: "TLS negotiation failed" })).toBe(
+      "not_sent",
+    );
+  });
+
+  test.each([
+    [{ responseCode: 450 }, true],
+    [{ responseCode: 550 }, false],
+  ])("uses SMTP response class for retryability", (error, retryable) => {
+    expect(isRetryableSmtpError(error)).toBe(retryable);
+    expect(smtpDeliveryState(error)).toBe("not_sent");
+  });
+
+  test("preserves unknown delivery for ambiguous protocol failures", () => {
+    const error = { code: "EPROTOCOL", message: "connection closed" };
+    expect(isRetryableSmtpError(error)).toBe(false);
+    expect(smtpDeliveryState(error)).toBe("unknown");
+  });
+});
 
 function send(message: EmailMessage) {
   // host points at an unroutable port; validation must reject before any connect.

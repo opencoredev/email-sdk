@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
-import type { SendMailOptions, SentMessageInfo, ErrorCode } from "nodemailer";
+import type { SendMailOptions, SentMessageInfo } from "nodemailer";
 
 import { EmailAbortError, EmailAdapterError } from "./errors.js";
+import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
@@ -98,7 +99,6 @@ export function smtp<const Name extends string = "smtp">(
     },
   };
 }
-
 function parseQueueIdentifier(response: string | undefined) {
   return response?.match(/\bqueued\s+as\s+([^\s]+)/i)?.[1];
 }
@@ -188,69 +188,4 @@ async function toNodemailerAttachment(attachment: EmailAttachment) {
     contentDisposition: attachment.disposition,
     ...(attachment.contentEncoding === "base64" ? { encoding: "base64" as const } : {}),
   };
-}
-
-const RETRYABLE_NODEMAILER_CODES: ReadonlySet<string> = new Set([
-  "ECONNECTION",
-  "ETIMEDOUT",
-  "ESOCKET",
-  "EDNS",
-  "EPROTOCOL",
-  "EMAXLIMIT",
-] satisfies readonly ErrorCode[]);
-
-const NOT_SENT_NODEMAILER_CODES: ReadonlySet<string> = new Set([
-  "EENVELOPE",
-  "EMESSAGE",
-  "EAUTH",
-  "ENOAUTH",
-  "EOAUTH2",
-  "EDNS",
-  "ECONFIG",
-  "EPROXY",
-  "EREQUIRETLS",
-] satisfies readonly ErrorCode[]);
-
-const CERTIFICATE_ERROR_PATTERN =
-  /self[- ]signed certificate|unable to (?:verify the first certificate|get local issuer certificate)|certificate has expired|certificate is not yet valid|does not match certificate's altnames|ERR_TLS_CERT_ALTNAME_INVALID/i;
-
-function smtpErrorFields(error: unknown) {
-  if (!error || typeof error !== "object") return {};
-  return error as { responseCode?: unknown; code?: unknown; message?: unknown };
-}
-
-// A real SMTP reply code follows RFC 5321 semantics: 4xx is a transient failure,
-// 5xx is a permanent one
-function smtpReplyClass(responseCode: unknown) {
-  if (typeof responseCode !== "number") return undefined;
-  if (responseCode >= 400 && responseCode < 500) return "transient";
-  if (responseCode >= 500 && responseCode < 600) return "permanent";
-  return undefined;
-}
-
-function isRetryableSmtpError(error: unknown) {
-  const { responseCode, code, message } = smtpErrorFields(error);
-
-  const replyClass = smtpReplyClass(responseCode);
-  if (replyClass) return replyClass === "transient";
-
-  if (typeof code !== "string") return false;
-
-  if (
-    code === "ESOCKET" &&
-    typeof message === "string" &&
-    CERTIFICATE_ERROR_PATTERN.test(message)
-  ) {
-    return false;
-  }
-
-  return RETRYABLE_NODEMAILER_CODES.has(code);
-}
-
-function smtpDeliveryState(error: unknown) {
-  const { responseCode, code } = smtpErrorFields(error);
-
-  if (smtpReplyClass(responseCode)) return "not_sent";
-
-  return typeof code === "string" && NOT_SENT_NODEMAILER_CODES.has(code) ? "not_sent" : "unknown";
 }
