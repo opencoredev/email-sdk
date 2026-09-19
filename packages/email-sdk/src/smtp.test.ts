@@ -50,7 +50,21 @@ describe("smtp error classification", () => {
     ["ESOCKET", "unable to verify the first certificate"],
     ["ETLS", "self-signed certificate"],
     ["ESOCKET", "Hostname/IP does not match certificate's altnames"],
+    ["ETLS", "Error initiating TLS - certificate revoked"],
+    ["ETLS", "invalid CA certificate"],
+    ["ETLS", "certificate signature failure"],
+    ["ETLS", "CA certificate key too small"],
   ])("does not retry %s certificate failures", (code, message) => {
+    const error = { code, message };
+    expect(isRetryableSmtpError(error)).toBe(false);
+    expect(smtpDeliveryState(error)).toBe("not_sent");
+  });
+
+  test.each([
+    ["INVALID_CA", "TLS handshake failed"],
+    ["CERT_SIGNATURE_FAILURE", "TLS handshake failed"],
+    ["ERR_SSL_CA_KEY_TOO_SMALL", "TLS handshake failed"],
+  ])("classifies certificate error code %s as permanent", (code, message) => {
     const error = { code, message };
     expect(isRetryableSmtpError(error)).toBe(false);
     expect(smtpDeliveryState(error)).toBe("not_sent");
@@ -60,6 +74,7 @@ describe("smtp error classification", () => {
     expect(smtpDeliveryState({ code: "ETLS", message: "TLS negotiation failed" })).toBe(
       "not_sent",
     );
+    expect(isRetryableSmtpError({ code: "ETLS", message: "TLS negotiation failed" })).toBe(true);
   });
 
   test.each([

@@ -22,8 +22,11 @@ const NOT_SENT_NODEMAILER_CODES: ReadonlySet<string> = new Set([
   "ETLS",
 ] satisfies readonly ErrorCode[]);
 
-const CERTIFICATE_ERROR_PATTERN =
-  /(?:certificate|tls).*(?:expired|not yet valid|self[- ]signed|unable to verify|local issuer|altname)|(?:expired|not yet valid|self[- ]signed|unable to verify|local issuer|altname).*(?:certificate|tls)|(?:CERT_HAS_EXPIRED|DEPTH_ZERO_SELF_SIGNED_CERT|UNABLE_TO_VERIFY_LEAF_SIGNATURE|ERR_TLS_CERT_ALTNAME_INVALID)/i;
+const CERTIFICATE_ERROR_CODE_PATTERN =
+  /(?:CERT_HAS_EXPIRED|CERT_NOT_YET_VALID|CERT_REVOKED|CERT_UNTRUSTED|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_GET_ISSUER_CERT(?:_LOCALLY)?|UNABLE_TO_VERIFY_LEAF_SIGNATURE|ERR_TLS_CERT_ALTNAME_INVALID|INVALID_CA|CERT_SIGNATURE_FAILURE|ERR_SSL_(?:CA_KEY_TOO_SMALL|CERTIFICATE_VERIFY_FAILED)|ERR_TLS_CERTIFICATE_REQUIRED)/i;
+
+const CERTIFICATE_ERROR_MESSAGE_PATTERN =
+  /(?:certificate|cert|issuer|ca|tls).*(?:expired|revoked|not yet valid|self[- ]signed|unable to verify|unable to get issuer|unknown ca|invalid ca|signature failure|verify failed|altname|key (?:too small|too weak)|unsupported|untrusted|bad certificate)|(?:expired|revoked|not yet valid|self[- ]signed|unable to verify|unable to get issuer|unknown ca|invalid ca|signature failure|verify failed|altname|key (?:too small|too weak)|unsupported|untrusted|bad certificate).*(?:certificate|cert|issuer|\bca\b|tls)/i;
 
 function smtpErrorFields(error: unknown) {
   if (!error || typeof error !== "object") return {};
@@ -38,11 +41,13 @@ function smtpReplyClass(responseCode: unknown) {
 }
 
 function isCertificateError(code: unknown, message: unknown) {
-  return (
-    (code === "ESOCKET" || code === "ETLS") &&
-    typeof message === "string" &&
-    CERTIFICATE_ERROR_PATTERN.test(message)
-  );
+  const codeText = typeof code === "string" ? code : "";
+  const isTlsError = codeText === "ESOCKET" || codeText === "ETLS";
+  const hasCertificateCode = CERTIFICATE_ERROR_CODE_PATTERN.test(codeText);
+  const hasCertificateMessage =
+    typeof message === "string" && CERTIFICATE_ERROR_MESSAGE_PATTERN.test(message);
+
+  return hasCertificateCode || (isTlsError && hasCertificateMessage);
 }
 
 export function isRetryableSmtpError(error: unknown) {
