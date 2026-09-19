@@ -54,6 +54,10 @@ describe("smtp error classification", () => {
     ["ETLS", "invalid CA certificate"],
     ["ETLS", "certificate signature failure"],
     ["ETLS", "CA certificate key too small"],
+    ["ETLS", "CA is untrusted"],
+    ["ESOCKET", "CA is untrusted"],
+    ["ETLS", "CA key too small"],
+    ["ESOCKET", "CA key too small"],
   ])("does not retry %s certificate failures", (code, message) => {
     const error = { code, message };
     expect(isRetryableSmtpError(error)).toBe(false);
