@@ -492,7 +492,7 @@ function renderPricing() {
     })
     .join("\n");
 
-  return `\n\nMonthly USD prices at the listed volumes, from each provider's published pricing. Free tiers are included where they apply to transactional sends.\n\n${header}\n${separator}\n${rows.join("\n")}\n\n### Pricing notes\n\n${notes}\n\n`;
+  return `\n\nMonthly prices at the listed volumes, from each provider's published pricing. Values retain their listed USD or EUR currency. Free tiers are included where they apply to transactional sends.\n\n${header}\n${separator}\n${rows.join("\n")}\n\n### Pricing notes\n\n${notes}\n\n`;
 }
 
 const EVIDENCE_COLUMN_LABELS: Record<(typeof EVIDENCE_KINDS)[number], string> = {
