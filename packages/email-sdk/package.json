@@ -74,6 +74,8 @@
     },
     "./graph": {
       "types": "./dist/graph.d.ts",
+      "import": "./dist/graph.js",
+      "require": "./dist/graph.cjs",
       "default": "./dist/graph.js"
     },
     "./unosend": {
