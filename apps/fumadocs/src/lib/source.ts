@@ -19,6 +19,7 @@ import { loader } from "fumadocs-core/source";
 
 import { buildAdapterFaq, getAdapterSupportEntry } from "./adapter-faq";
 import { resolveDocsIcon } from "./docs-icons";
+import { renderComponentsAsMarkdown } from "./markdown-components";
 import { absolutizeSiteLinks } from "./markdown-links";
 import { docsRoute, siteUrl } from "./shared";
 import { type DocsVersion, docsVersions, getDocsVersionBase, latestDocsVersion } from "./versions";
@@ -225,7 +226,9 @@ export async function getLLMText(
   }
 
   const processed = absolutizeSiteLinks(
-    (await getText.call(page.data, "processed"))
+    renderComponentsAsMarkdown(await getText.call(page.data, "processed"), {
+      currentVersion: version.current,
+    })
       .replaceAll("](/docs/", `](${docsBasePath}/`)
       .replaceAll('href="/docs/', `href="${docsBasePath}/`),
   );

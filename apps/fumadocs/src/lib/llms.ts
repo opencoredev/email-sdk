@@ -1,5 +1,6 @@
 import { llms } from "fumadocs-core/source";
 
+import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
 import { comparePairs, getComparePairTitle } from "@/lib/compare";
 import { absolutizeSiteLinks } from "@/lib/markdown-links";
 import { appName, llmsOverview, siteUrl } from "@/lib/shared";
@@ -35,6 +36,21 @@ Per-pair message field support, fallback compatibility, and adapter code for bot
 ${pairs}`;
 }
 
+// The blog is server-rendered from the build-time snapshot, so the list here is
+// exactly as fresh as the sitemap and RSS entries built from the same source.
+function blogSection() {
+  const posts = getPublishedBlogPosts();
+  if (posts.length === 0) return "";
+
+  const items = posts
+    .map((post) => `- [${post.title}](${siteUrl}${getBlogPostUrl(post.slug)}): ${post.description}`)
+    .join("\n");
+
+  return `## Blog posts
+
+${items}`;
+}
+
 function toolsSection() {
   return `## Tools
 
@@ -66,6 +82,8 @@ ${markdownHint}
 ${docsIndex()}
 
 ${comparisonsSection()}
+
+${blogSection()}
 
 ${toolsSection()}
 

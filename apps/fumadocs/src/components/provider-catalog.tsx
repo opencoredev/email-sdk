@@ -9,32 +9,6 @@ import { sponsors } from "@/lib/sponsors";
 type LiveCheckProvider = keyof typeof verification.liveChecks;
 
 const sponsorNames = new Set(sponsors.map((sponsor) => sponsor.name));
-const providerDescriptions: Record<Provider["key"], string> = {
-  resend: "A strong default for developer-first transactional email.",
-  postmark: "Great for focused transactional email and deliverability.",
-  sendgrid: "Best when your product already runs on Twilio SendGrid.",
-  ses: "A good fit for AWS teams sending at high volume.",
-  mailgun: "Use with an existing Mailgun setup or sending domain.",
-  mailersend: "A simple API with a friendly dashboard for growing teams.",
-  brevo: "Use transactional email alongside your Brevo marketing stack.",
-  mailchimp: "Best for products already using Mailchimp Transactional.",
-  sparkpost: "Use when SparkPost already powers your email delivery.",
-  mailtrap: "Useful when testing and production email live in Mailtrap.",
-  cloudflare: "Send directly from apps running on Cloudflare Workers.",
-  unosend: "A lightweight choice for straightforward product email.",
-  scaleway: "A natural fit for apps hosted in the Scaleway ecosystem.",
-  zeptomail: "Use transactional email alongside Zoho and ZeptoMail.",
-  mailpace: "A simple transactional email API for smaller products.",
-  iterable: "Best for lifecycle email managed through Iterable.",
-  loops: "Send product and lifecycle email through your Loops account.",
-  sequenzy: "Use one API for transactional email and email sequences.",
-  jetemail: "A focused transactional email API for product teams.",
-  primitive: "Use when your product already sends through Primitive.",
-  lettermint: "Straightforward transactional email with a simple API.",
-  lettr: "Transactional and marketing email for SaaS, with a REST API and editor.",
-  plunk: "An open-source-friendly option for product email.",
-  smtp: "Connect any existing SMTP server or self-hosted mail system.",
-};
 
 export function ProviderGrid() {
   const selectedVersion = useSelectedDocsVersion();
@@ -110,9 +84,7 @@ function ProviderRow({ provider }: { provider: Provider }) {
             <span className="font-medium text-fd-foreground">{provider.name}</span>
             <ProviderStatus provider={provider} />
           </div>
-          <p className="mt-1 text-sm text-fd-muted-foreground">
-            {providerDescriptions[provider.key]}
-          </p>
+          <p className="mt-1 text-sm text-fd-muted-foreground">{provider.summary}</p>
         </div>
       </div>
       <div className="flex items-center gap-2 pl-11 sm:pl-0">

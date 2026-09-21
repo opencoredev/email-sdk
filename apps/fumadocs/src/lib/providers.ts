@@ -5,6 +5,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/resend",
     docs: "/docs/adapters/resend",
     website: "https://resend.com",
+    summary: "A strong default for developer-first transactional email.",
     logo: "/og/provider-logos/resend-mark.svg",
     invertOnDark: true,
   },
@@ -14,6 +15,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/postmark",
     docs: "/docs/adapters/postmark",
     website: "https://postmarkapp.com",
+    summary: "Great for focused transactional email and deliverability.",
     logo: "https://www.google.com/s2/favicons?domain=postmarkapp.com&sz=64",
   },
   {
@@ -22,6 +24,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/sendgrid",
     docs: "/docs/adapters/sendgrid",
     website: "https://sendgrid.com",
+    summary: "Best when your product already runs on Twilio SendGrid.",
     logo: "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64",
   },
   {
@@ -30,6 +33,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/ses",
     docs: "/docs/adapters/ses",
     website: "https://aws.amazon.com/ses/",
+    summary: "A good fit for AWS teams sending at high volume.",
     logo: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64",
   },
   {
@@ -38,6 +42,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/mailgun",
     docs: "/docs/adapters/mailgun",
     website: "https://www.mailgun.com",
+    summary: "Use with an existing Mailgun setup or sending domain.",
     logo: "https://cdn.simpleicons.org/mailgun",
   },
   {
@@ -46,6 +51,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/mailersend",
     docs: "/docs/adapters/mailersend",
     website: "https://www.mailersend.com",
+    summary: "A simple API with a friendly dashboard for growing teams.",
     logo: "https://www.google.com/s2/favicons?domain=mailersend.com&sz=64",
   },
   {
@@ -54,6 +60,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/brevo",
     docs: "/docs/adapters/brevo",
     website: "https://www.brevo.com",
+    summary: "Use transactional email alongside your Brevo marketing stack.",
     logo: "https://cdn.simpleicons.org/brevo",
   },
   {
@@ -62,6 +69,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/mailchimp",
     docs: "/docs/adapters/mailchimp",
     website: "https://mailchimp.com/features/transactional-email",
+    summary: "Best for products already using Mailchimp Transactional.",
     logo: "https://cdn.simpleicons.org/mailchimp",
   },
   {
@@ -70,6 +78,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/sparkpost",
     docs: "/docs/adapters/sparkpost",
     website: "https://www.sparkpost.com",
+    summary: "Use when SparkPost already powers your email delivery.",
     logo: "https://cdn.simpleicons.org/sparkpost",
   },
   {
@@ -78,6 +87,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/mailtrap",
     docs: "/docs/adapters/mailtrap",
     website: "https://mailtrap.io",
+    summary: "Useful when testing and production email live in Mailtrap.",
     logo: "https://cdn.simpleicons.org/mailtrap",
   },
   {
@@ -86,6 +96,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/cloudflare",
     docs: "/docs/adapters/cloudflare",
     website: "https://developers.cloudflare.com/email-service/",
+    summary: "Send directly from apps running on Cloudflare Workers.",
     logo: "https://cdn.simpleicons.org/cloudflare",
   },
   {
@@ -94,6 +105,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/unosend",
     docs: "/docs/adapters/unosend",
     website: "https://www.unosend.co",
+    summary: "A lightweight choice for straightforward product email.",
     logo: "/provider-logos/unosend.svg",
     invertOnDark: true,
     currentOnly: true,
@@ -104,6 +116,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/scaleway",
     docs: "/docs/adapters/scaleway",
     website: "https://www.scaleway.com/en/transactional-email-tem",
+    summary: "A natural fit for apps hosted in the Scaleway ecosystem.",
     logo: "https://cdn.simpleicons.org/scaleway",
   },
   {
@@ -112,6 +125,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/zeptomail",
     docs: "/docs/adapters/zeptomail",
     website: "https://www.zoho.com/zeptomail",
+    summary: "Use transactional email alongside Zoho and ZeptoMail.",
     logo: "https://cdn.simpleicons.org/zoho",
   },
   {
@@ -120,6 +134,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/mailpace",
     docs: "/docs/adapters/mailpace",
     website: "https://mailpace.com",
+    summary: "A simple transactional email API for smaller products.",
     logo: "https://www.google.com/s2/favicons?domain=mailpace.com&sz=64",
   },
   {
@@ -128,6 +143,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/iterable",
     docs: "/docs/adapters/iterable",
     website: "https://iterable.com",
+    summary: "Best for lifecycle email managed through Iterable.",
     logo: "https://www.google.com/s2/favicons?domain=iterable.com&sz=64",
     currentOnly: true,
   },
@@ -137,6 +153,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/loops",
     docs: "/docs/adapters/loops",
     website: "https://loops.so",
+    summary: "Send product and lifecycle email through your Loops account.",
     logo: "https://cdn.simpleicons.org/loops",
   },
   {
@@ -145,6 +162,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/sequenzy",
     docs: "/docs/adapters/sequenzy",
     website: "https://www.sequenzy.com/",
+    summary: "Use one API for transactional email and email sequences.",
     logo: "/og/provider-logos/sequenzy.jpeg",
     currentOnly: true,
   },
@@ -154,6 +172,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/jetemail",
     docs: "/docs/adapters/jetemail",
     website: "https://jetemail.com",
+    summary: "A focused transactional email API for product teams.",
     logo: "/og/provider-logos/jetemail.jpeg",
     currentOnly: true,
   },
@@ -163,6 +182,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/primitive",
     docs: "/docs/adapters/primitive",
     website: "https://www.primitive.dev",
+    summary: "Use when your product already sends through Primitive.",
     logo: "/og/provider-logos/primitive.png",
     currentOnly: true,
   },
@@ -172,6 +192,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/lettermint",
     docs: "/docs/adapters/lettermint",
     website: "https://lettermint.co",
+    summary: "Straightforward transactional email with a simple API.",
     logo: "/og/provider-logos/lettermint.png",
     currentOnly: true,
   },
@@ -181,6 +202,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/lettr",
     docs: "/docs/adapters/lettr",
     website: "https://lettr.com/?utm_source=email-sdk.dev&utm_medium=referral&utm_campaign=sponsor",
+    summary: "Transactional and marketing email for SaaS, with a REST API and editor.",
     logo: "/og/provider-logos/lettr.svg",
     currentOnly: true,
   },
@@ -190,6 +212,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/plunk",
     docs: "/docs/adapters/plunk",
     website: "https://www.useplunk.com",
+    summary: "An open-source-friendly option for product email.",
     logo: "https://www.google.com/s2/favicons?domain=useplunk.com&sz=64",
   },
   {
@@ -198,6 +221,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/smtp",
     docs: "/docs/adapters/smtp",
     website: "https://datatracker.ietf.org/doc/html/rfc5321",
+    summary: "Connect any existing SMTP server or self-hosted mail system.",
     logo: "",
   },
 ] as const;
