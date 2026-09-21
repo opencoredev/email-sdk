@@ -1,5 +1,26 @@
 # @opencoredev/email-sdk
 
+## 2.0.0
+
+### Major Changes
+
+- e0827a3: Replace the hand-rolled SMTP protocol and MIME implementation with Nodemailer-backed delivery, including RFC-safe subject encoding, transfer encoding, and attachments. Add first-class CommonJS entry points alongside ESM. Telemetry remains enabled by default with the existing `telemetry: false`, `EMAIL_SDK_TELEMETRY=0`, and `DO_NOT_TRACK=1` opt-outs; events use a stable installation identifier and never include message content, addresses, or credentials. Move repository CI workflows to Tenki Cloud runners and add Node 20/22/24 package-compatibility coverage.
+
+### Minor Changes
+
+- 3e07cf2: Add opt-in `doctor --live`, `--from`, and `--json` diagnostics with independently reported `configuration`, `authentication`, and `sender` checks. Default `doctor` stays configuration-only and makes no network request. Live probes use documented non-sending endpoints for Resend, Sequenzy, JetEmail, Primitive, Lettermint, and Lettr; Resend additionally supports paginated sender-domain readiness via `--from`, while other adapters report sender readiness as `unsupported`. Results distinguish `invalid_credentials`, `insufficient_permissions`, `inconclusive`, `rate_limited`, `network_failure`, `timeout`, `unsupported`, and `not_ready`; generic HTTP 400/422 responses are never treated as authentication success. Probes are bounded by a timeout, reject redirects and non-loopback base URL overrides, and never print credentials, response bodies, or account identifiers. The live verification scripts reuse the same probes.
+- 3e07cf2: Add a separate webhooks entry point with Web Crypto Resend and Mailgun signature verification, timestamp checks and key rotation, plus delivery event normalization for Resend, Postmark, and Mailgun.
+- 14a6dc0: Allow CommonJS applications on Node.js `^20.19.0 || >=22.12.0` (20.19+ on 20.x, or 22.12+) to load every SDK entry point with `require()`. ESM imports still support Node.js 20+. Typed CommonJS consumers need TypeScript 5.8+ with `module: nodenext`, or a compiler supporting `module: node20`. On older supported runtimes, use dynamic `import()` instead.
+
+### Patch Changes
+
+- bcf0306: Ensure the packaged CLI is executable when builds run with a restrictive file-creation mask.
+- 97ab553: Ensure per-send idempotency keys override static Resend and JetEmail adapter headers.
+- 3e07cf2: Correct anonymous usage measurements by separating logical send outcomes, adapter attempts, submitted volume, and explicit provider acceptance. Version the counting schema, replace the misleading `delivered_count` metric, exclude built-in test adapters from provider volume even when renamed, and preserve acceptance evidence when later middleware fails. Default-on telemetry and existing opt-outs remain unchanged. Document aggregation rules and why provider acceptance does not establish delivery.
+- 4381362: Fix the SMTP adapter marking every send failure as retryable. Permanent SMTP rejections (5xx replies), authentication and envelope errors, protocol errors, and TLS certificate failures are now classified as non-retryable, while transient failures (4xx replies, connection failures, timeouts, DNS resolution failures, and non-certificate TLS failures) remain retryable.
+
+  SMTP failures that prove the server never accepted the message now also report `delivery: "not_sent"`. Failures that could have happened after the server queued the message continue to report `delivery: "unknown"`.
+
 ## 1.2.0
 
 ### Minor Changes
