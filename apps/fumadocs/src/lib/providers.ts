@@ -230,6 +230,7 @@ export const providers = [
     importPath: "@opencoredev/email-sdk/graph",
     docs: "/docs/adapters/graph",
     website: "https://learn.microsoft.com/en-us/graph/api/user-sendmail",
+    summary: "Send through Microsoft 365 and Azure AD with Microsoft Graph.",
     logo: "",
   },
 ] as const;
