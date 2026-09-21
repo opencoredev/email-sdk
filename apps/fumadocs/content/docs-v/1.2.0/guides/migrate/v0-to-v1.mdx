@@ -1,0 +1,244 @@
+---
+title: Upgrade from Email SDK 0.x to v1
+description: Migrate constructor options, send options, results, errors, batches, personalization, headers, attachments, dates, and ESM usage.
+---
+
+v1 keeps `createEmailClient` and adapter subpath imports, but removes legacy aliases from the root and makes ambiguous delivery a first-class safety decision. Treat this as a behavior migration, not a vocabulary-only rename.
+
+<Callout title="Ask your coding agent to migrate the app">
+  Install the dynamic migration skill with `npx skills add opencoredev/email-sdk --skill email-sdk-migrate`, then ask the agent to audit before editing:
+
+  ```text
+  Use the email-sdk-migrate skill. Inspect the installed Email SDK version,
+  run the bundled migration audit, migrate this app to v1, preserve delivery
+  semantics, run focused tests and typechecks, and do not send live email.
+  ```
+
+  The skill reads the installed declarations and current migration docs instead of relying on a frozen codemod.
+</Callout>
+
+## Migration map
+
+| Area | v0 | v1 | Risk |
+| --- | --- | --- | --- |
+| Routing | providers, fallback arrays | adapters, explicit fallback policy | Medium |
+| Retry | retries after the first call | total `maxAttempts` | High |
+| Batches | `sendBatch` | ordered settled `sendMany` | Medium |
+| Personalization | message `recipientVariables` | `sendPersonalized` recipients | High |
+| Idempotency | message field | send option | High |
+| Results | provider aliases | normalized adapter result | Medium |
+| Errors | open provider failures | closed SDK error union | High |
+| Headers and dates | permissive shapes | lossless headers and zoned timestamps | Medium |
+
+Start with the high-risk rows because they can change whether an email is retried, duplicated, delayed, or considered successful.
+
+## 1. Choose an upgrade path
+
+- Migrate directly to the v1 root when you can update callers in one change.
+- Import from `@opencoredev/email-sdk/compat` as a temporary bridge when the migration must be incremental.
+
+The compat subpath is available for the v1 major only. It warns once per deprecated feature in development and keeps v1 unknown-delivery safety.
+
+## 2. Rename provider vocabulary
+
+```ts title="before-v0.ts"
+const email = createEmailClient({
+  providers: [resendAdapter, smtpAdapter],
+  defaultProvider: "resend",
+  fallback: ["smtp"],
+});
+
+await email.send(message, {
+  provider: "resend",
+  fallbackProviders: ["smtp"],
+});
+```
+
+```ts title="after-v1.ts"
+const email = createEmailClient({
+  adapters: [resendAdapter, smtpAdapter],
+  defaultAdapter: "resend",
+  fallback: { adapters: ["smtp"] },
+});
+
+await email.send(message, {
+  adapter: "resend",
+  fallback: { adapters: ["smtp"] },
+});
+```
+
+Rename `EmailProvider` to `EmailAdapter`, `EmailProviderContext` to `EmailAdapterContext`, `EmailProviderResponse` to `EmailSendResult`, `EmailProviderError` to `EmailAdapterError`, and `EmailProviderNotFoundError` to `EmailAdapterNotFoundError`.
+
+Adapter option types follow the same rule. For example, `ResendProviderOptions` becomes `ResendAdapterOptions` and `SmtpProviderOptions` becomes `SmtpAdapterOptions`. The same rename applies to every adapter subpath.
+
+The same rename applies to client inspection, bound clients, hooks, and middleware:
+
+| v0 | v1 |
+| --- | --- |
+| `client.providers` | `client.adapters` |
+| `client.defaultProvider` | `client.defaultAdapter` |
+| `client.provider(name)` | `client.adapter(name)` |
+| `client.withProvider(name)` | `client.withAdapter(name)` |
+| `event.provider` | `event.adapter` |
+| `memoryProvider` | `memoryAdapter` |
+| `failingProvider` | `failingAdapter` |
+| `MemoryProvider` | `MemoryAdapter` |
+
+The compat subpath keeps the client aliases and translates hook and middleware events while you migrate callers.
+
+## 3. Rename removed public types
+
+The v1 root exports only the adapter-first types. Update explicit imports and annotations:
+
+| v0 root type | v1 root type or shape |
+| --- | --- |
+| `SendOptions` | `EmailSendOptions` |
+| `SendBatchItem` | `EmailSendItem` with `{ message, options }` |
+| `SendBatchResult` | `EmailSendSettledResult`; successful entries use `result` instead of `response` |
+| `RecipientVariables` | `EmailPersonalizedRecipient["variables"]` for one recipient, passed through `sendPersonalized` |
+
+`RecipientVariables` has no root-level v1 alias because variables now belong to each `EmailPersonalizedRecipient`, not to an address-keyed message field. The compat subpath still exports all four legacy types for an incremental migration.
+
+## 4. Convert retry counts
+
+v0 counted retries after the first call. v1 counts total attempts.
+
+```ts title="before-v0.ts"
+retry: { retries: 2 } // three total calls
+```
+
+```ts title="after-v1.ts"
+retry: { maxAttempts: 3 }
+```
+
+Per-send `retries: 0` becomes `retry: { maxAttempts: 1 }`.
+
+## 5. Adopt delivery-aware fallback
+
+v1 advances automatically after `delivery: "not_sent"`. It stops after `delivery: "unknown"` unless you explicitly accept duplicate risk.
+
+```ts title="after-v1.ts"
+fallback: {
+  adapters: ["backup"],
+  onUnknownDelivery: "stop", // default
+}
+```
+
+## 6. Move idempotency into send options
+
+```ts title="before-v0.ts"
+await email.send({ ...message, idempotencyKey: "receipt:123" });
+```
+
+```ts title="after-v1.ts"
+await email.send(message, { idempotencyKey: "receipt:123" });
+```
+
+## 7. Read normalized results
+
+```ts title="before-v0.ts"
+console.log(result.provider, result.messageId);
+```
+
+```ts title="after-v1.ts"
+console.log(result.adapter, result.id);
+```
+
+The v1 root result has no legacy aliases.
+
+## 8. Replace `sendBatch` with `sendMany`
+
+```ts title="before-v0.ts"
+const results = await email.sendBatch([welcomeMessage, receiptMessage]);
+const first = results[0]?.ok ? results[0].response : undefined;
+```
+
+```ts title="after-v1.ts"
+const results = await email.sendMany([
+  { message: welcomeMessage },
+  { message: receiptMessage },
+]);
+const first = results[0]?.ok ? results[0].result : undefined;
+```
+
+`sendMany` is sequential, ordered, and settled. Concurrency is not configurable in v1.
+
+## 9. Replace `recipientVariables`
+
+```ts title="before-v0.ts"
+await email.send({
+  from: "hello@acme.com",
+  to: ["ada@example.com", "linus@example.com"],
+  subject: "Hi %recipient.name%",
+  text: "Welcome, %recipient.name%.",
+  recipientVariables: {
+    "ada@example.com": { name: "Ada" },
+    "linus@example.com": { name: "Linus" },
+  },
+});
+```
+
+```ts title="after-v1.ts"
+await email.sendPersonalized({
+  message: {
+    from: "hello@acme.com",
+    subject: "Hi %recipient.name%",
+    text: "Welcome, %recipient.name%.",
+  },
+  recipients: [
+    { to: "ada@example.com", variables: { name: "Ada" } },
+    { to: "linus@example.com", variables: { name: "Linus" } },
+  ],
+});
+```
+
+## 10. Convert headers to a lossless array
+
+```ts title="before-v0.ts"
+headers: { "X-Trace": "abc" }
+```
+
+```ts title="after-v1.ts"
+headers: [{ name: "X-Trace", value: "abc" }]
+```
+
+Repeated names are preserved only by adapters that declare `repeatedHeaders: true`.
+
+## 11. Fix attachment sources
+
+An attachment must contain exactly one of `content` or `path`. Remove one source from any v0 object that set both.
+
+## 12. Use zoned schedules
+
+`sendAt` accepts a `Date` or RFC 3339 string with `Z` or a numeric offset. Replace `2026-08-01 09:00` with `2026-08-01T09:00:00Z` or another explicit offset.
+
+## 13. Update error handling
+
+v1 has a closed error-code union: `validation_error`, `adapter_not_found`, `adapter_error`, `route_error`, `all_recipients_failed`, `middleware_error`, and `aborted`.
+
+`EmailRouteError.failures` replaces arbitrary route details. Middleware exceptions become `EmailMiddlewareError`.
+
+## 14. Confirm ESM and telemetry
+
+v1 is ESM-only on Node.js 20+ or Bun 1.1+. Telemetry remains enabled by default with the existing opt-outs: `telemetry: false`, `EMAIL_SDK_TELEMETRY=0`, or `DO_NOT_TRACK=1`.
+
+## 15. Use the compat bridge only temporarily
+
+```ts title="temporary-compat.ts"
+import { createEmailClient } from "@opencoredev/email-sdk/compat";
+```
+
+Compat translates legacy constructor and send option names, `retries`, `sendBatch`, message-level idempotency, recipient variables, and result aliases. Remove it after all callers use the v1 root.
+
+## 16. Verify the migration
+
+1. Run the application typecheck.
+2. Run unit tests with `memoryAdapter` and explicit `not_sent`/`unknown` failures.
+3. Run `email-sdk doctor` for each production adapter.
+4. Run representative `send --dry-run` commands with telemetry disabled.
+5. Review every fallback route against field and capability support.
+
+The migration is complete only when the application has no `/compat` import, no migration-skill findings that belong to Email SDK, and no tests that depend on legacy result aliases.
+
+<Card title="Compatibility reference" href="/docs/reference/compatibility" description="See exactly what the temporary bridge translates." />
+<Card title="Client reference" href="/docs/reference/client" description="Look up the complete v1 method and option surface." />

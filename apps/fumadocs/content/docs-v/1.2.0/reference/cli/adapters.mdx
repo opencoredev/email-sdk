@@ -1,0 +1,19 @@
+---
+title: email-sdk adapters
+description: List every bundled CLI adapter with required environment variables and provider notes.
+---
+
+```bash
+email-sdk adapters
+email-sdk adapters --json
+```
+
+The command reads the static CLI registry and does not inspect credentials or make network requests.
+
+The current registry contains 23 routes: Resend, Postmark, SendGrid, Cloudflare, Unosend, Iterable, AWS SES, Mailgun, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Loops, Sequenzy, JetEmail, Lettermint, Primitive, Plunk, Mailtrap, Scaleway, ZeptoMail, MailPace, and SMTP.
+
+The human output includes the routing name, required environment variable names, and one provider note. JSON output returns the same `name`, `env`, and `note` records.
+
+`email-sdk providers` is an accepted command alias.
+
+<Card title="Provider credentials" href="/docs/getting-started/credentials" description="Configure the values listed by this command." />

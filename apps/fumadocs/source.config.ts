@@ -12,6 +12,15 @@ export const docs = defineDocs({
   },
 });
 
+export const docsV120 = defineDocs({
+  dir: "content/docs-v/1.2.0",
+  docs: {
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+});
+
 export const docsV110 = defineDocs({
   dir: "content/docs-v/1.1.0",
   docs: {

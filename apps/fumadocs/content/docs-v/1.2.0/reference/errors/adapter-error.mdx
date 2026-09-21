@@ -1,0 +1,23 @@
+---
+title: adapter_error
+description: One adapter or transport failed with explicit retryability and delivery certainty.
+---
+
+`EmailAdapterError` exposes:
+
+- `adapter`
+- optional HTTP `status`
+- optional provider `requestId`
+- `retryable`
+- `delivery: "not_sent" | "unknown"`
+- standard `cause`
+
+`not_sent` means fallback may proceed. `unknown` means delivery cannot be ruled out and fallback stops by default.
+
+```ts title="src/send.ts"
+if (error instanceof EmailAdapterError && error.delivery === "unknown") {
+  await reconcileProviderState(error.requestId);
+}
+```
+
+A retryable flag does not override abort or unknown-delivery policy. It only participates in the configured retry decision for the current adapter.

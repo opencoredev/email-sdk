@@ -1,0 +1,99 @@
+---
+title: Message reference
+description: Exact v1 address, envelope, body, header, attachment, metadata, tag, and schedule types.
+---
+
+## `EmailMessage`
+
+A message requires `from`, at least one `to`, `subject`, and `text`, `html`, or both.
+
+```ts title="types.ts"
+type EmailMessage = EmailEnvelope &
+  ({ html: string; text?: string } | { text: string; html?: string });
+
+type EmailEnvelope = {
+  from: EmailAddress;
+  to: OneOrMany<EmailAddress>;
+  subject: string;
+  cc?: OneOrMany<EmailAddress>;
+  bcc?: OneOrMany<EmailAddress>;
+  replyTo?: OneOrMany<EmailAddress>;
+  headers?: readonly EmailHeader[];
+  attachments?: readonly EmailAttachment[];
+  tags?: readonly EmailTag[];
+  metadata?: Readonly<Record<string, string | number | boolean | null>>;
+  sendAt?: Date | Rfc3339Timestamp;
+};
+```
+
+## Addresses
+
+```ts title="types.ts"
+type EmailAddress = string | { email: string; name?: string };
+type OneOrMany<T> = T | readonly T[];
+```
+
+String values may be plain mailboxes or display-name forms such as `Acme <hello@example.com>`. Adapter-specific address rules still apply.
+
+## Headers
+
+```ts title="types.ts"
+type EmailHeader = { name: string; value: string };
+```
+
+Headers are an array so repeated names remain lossless. The client compares names case-insensitively and rejects duplicates when any candidate route lacks repeated-header capability.
+
+## Attachments
+
+```ts title="types.ts"
+type EmailAttachment = {
+  filename: string;
+  contentType?: string;
+  contentId?: string;
+  disposition?: "attachment" | "inline";
+} & (
+  | {
+      content: string | Uint8Array | ArrayBuffer | Blob;
+      path?: never;
+      contentEncoding?: "raw" | "base64";
+    }
+  | {
+      path: string;
+      content?: never;
+      contentEncoding?: never;
+    }
+);
+```
+
+Exactly one source is required. String content is raw by default and is encoded by adapters that require Base64. `path` is server-side filesystem input.
+
+## Tags and metadata
+
+```ts title="types.ts"
+type EmailTag = { name: string; value: string };
+```
+
+Tags and message metadata are provider-facing fields. Unsupported routes reject them. Send-option metadata is a separate `Record<string, unknown>` used as lifecycle context.
+
+## Scheduled sends
+
+`Rfc3339Timestamp` requires `Z` or a numeric offset. Offset-less and informal strings fail runtime validation.
+
+```ts title="src/message.ts"
+const sendAt = "2026-08-01T09:00:00-04:00" as const;
+```
+
+Past times are allowed at the SDK boundary because provider behavior and clock skew vary. The adapter/provider may send immediately or reject its scheduling window.
+
+## Personalized input
+
+`sendPersonalized` removes `to`, `cc`, and `bcc` from the shared message and accepts an explicit recipient array. Variable keys may contain letters, numbers, `_`, and hyphens. Recipient addresses must be unique.
+
+Unknown `%recipient.key%` tokens remain unchanged during expanded sending.
+
+## Idempotency
+
+`idempotencyKey` is not an `EmailMessage` field in v1. Pass it as the second argument to `send`, `sendMany` item options, or `sendPersonalized`.
+
+<Card title="Field support" href="/docs/adapters/field-support" description="See which built-in adapters map each optional field." />
+<Card title="Sending modes" href="/docs/concepts/sending-modes" description="Choose send, sendMany, or sendPersonalized." />

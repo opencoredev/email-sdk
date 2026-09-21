@@ -1,0 +1,50 @@
+---
+title: Plugin system
+description: Transform send options, select routes, observe lifecycle events, enforce time bounds, and extend the typed client.
+---
+
+Plugins compose around `createEmailClient` without changing adapter implementations. Choose a built-in by the job it owns; do not stack plugins that solve the same problem.
+
+## Built-in plugins
+
+| Plugin | Use it for | Surface | Import |
+| --- | --- | --- | --- |
+| [Defaults](/docs/plugins/built-in/defaults) | Shared reply-to, headers, tags, metadata, and idempotency prefixes | `beforeSend` | `@opencoredev/email-sdk/plugins/defaults` |
+| [Routing](/docs/plugins/built-in/routing) | Select a registered adapter from the prepared message or send metadata | `beforeSend` | `@opencoredev/email-sdk/plugins/routing` |
+| [Timeout](/docs/plugins/built-in/timeout) | Bound one logical send, including retries and fallback, with caller cancellation preserved | `beforeSend` | `@opencoredev/email-sdk/plugins/timeout` |
+| [Observability](/docs/plugins/built-in/observability) | Emit redacted logs, metrics, and traces | hooks + middleware | `@opencoredev/email-sdk/plugins/observability` |
+| [Capture](/docs/plugins/built-in/capture) | Record lifecycle events for tests and local inspection | hooks + middleware + client extension | `@opencoredev/email-sdk/plugins/capture` |
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [primary, transactional],
+  plugins: [
+    defaultsPlugin({ replyTo: "support@example.com" }),
+    routingPlugin({
+      select: ({ message }) =>
+        message.tags?.some((tag) => tag.name === "transactional")
+          ? "transactional"
+          : undefined,
+    }),
+    timeoutPlugin({ timeoutMs: 10_000 }),
+  ],
+});
+```
+
+## Plugin surfaces
+
+| Surface | Purpose | Failure behavior |
+| --- | --- | --- |
+| `adapters` | Register additional routes synchronously. | Duplicate names fail client construction. |
+| `hooks` | Observe attempts, retries, success, and terminal errors. | Exceptions are swallowed. |
+| `middleware` | Transform messages/options and react after success or failure. | Exceptions become `EmailMiddlewareError`. |
+| `extendClient` | Add a typed application-facing property or method. | Reserved-key collisions fail client construction. |
+
+Plugin ids must be unique. Adapter registration and client construction stay synchronous. Order matters for `beforeSend`: each middleware receives the output of the previous one.
+
+## Build or install a plugin
+
+Community packages remain outside the core support boundary. Review source, dependency versions, field validation, secret handling, and maintenance status before use.
+
+<Card title="Write a plugin" href="/docs/guides/authoring/create-first-plugin" description="Build a typed plugin with middleware and a client extension." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="Look up every plugin field and event type." />

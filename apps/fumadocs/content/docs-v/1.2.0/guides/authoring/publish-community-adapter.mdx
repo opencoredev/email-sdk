@@ -1,0 +1,42 @@
+---
+title: Publish a community adapter
+description: Ship a provider adapter with literal routes, capabilities, no-network validation, typed failures, and evidence-backed claims.
+---
+
+Publish a community adapter when the provider is useful but is not maintained as an official core entry point.
+
+## Export an adapter factory
+
+The public return type should keep a literal route name and declare all four capabilities. Avoid re-exporting internal SDK helpers that are not part of the root contract.
+
+## Prove field behavior
+
+Test every normalized field as mapped or rejected. A provider capability claim belongs in documentation only after a payload test or live account check supports it.
+
+Required coverage includes:
+
+- common message validation
+- repeated header handling
+- idempotency forwarding or explicit `none`
+- scheduled-send mapping or rejection
+- native, expanded, or unsupported personalization
+- address and tag limits
+- abort forwarding
+- retryable status mapping
+- conservative `not_sent` and `unknown` delivery classification
+- normalized `adapter` and `id` results
+
+## Keep credentials safe
+
+Accept credentials through factory options and show environment variables in examples. Do not auto-load `.env`, print tokens, include auth values in errors, or expose provider response bodies by default.
+
+## Package for ESM consumers
+
+Declare `type: "module"`, ship declarations, require Node.js 20+ or Bun 1.1+ when your implementation uses the same runtime floor, and peer-depend on the compatible Email SDK major.
+
+## Document support honestly
+
+State provider account prerequisites, known limits, and which claims came from live evidence. The core registry listing does not make a community adapter officially supported.
+
+<Card title="Create an adapter" href="/docs/guides/authoring/create-adapter" description="Build the v1 contract before packaging it." />
+<Card title="Community extensions" href="/docs/plugins/community" description="Understand review and support expectations." />

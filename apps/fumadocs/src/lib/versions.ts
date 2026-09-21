@@ -2,7 +2,7 @@ import emailSdkPackage from "../../../../packages/email-sdk/package.json";
 
 export const sdkPackageName = emailSdkPackage.name;
 export const latestPublishedVersion = emailSdkPackage.version;
-export const currentDocsMajorVersion = 1;
+export const currentDocsMajorVersion = 2;
 export const docsVersion = `v${currentDocsMajorVersion}`;
 export const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
 export const docsVersionRoutePrefix = "v";
@@ -23,6 +23,16 @@ export const docsVersions = [
     collection: "docs",
     contentPath: "content/docs",
     current: true,
+    external: false,
+  },
+  {
+    label: "v1.2.0",
+    version: "v1.2.0",
+    description: "Docs for the v1.2.0 release",
+    href: "/docs/v/1.2.0",
+    collection: "docsV120",
+    contentPath: "content/docs-v/1.2.0",
+    current: false,
     external: false,
   },
   {

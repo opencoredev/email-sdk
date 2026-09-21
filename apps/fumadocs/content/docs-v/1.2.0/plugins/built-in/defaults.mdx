@@ -1,0 +1,46 @@
+---
+title: Defaults plugin
+description: Apply reply-to, headers, tags, metadata, send metadata, and idempotency defaults before validation.
+---
+
+`defaultsPlugin` merges defaults into each send while preserving explicit per-message and per-send values.
+
+```ts title="src/email.ts"
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+
+const email = createEmailClient({
+  adapters: [adapter],
+  plugins: [
+    defaultsPlugin({
+      replyTo: "support@example.com",
+      headers: [{ name: "X-App", value: "billing" }],
+      tags: [{ name: "environment", value: "production" }],
+      metadata: { application: "billing" },
+      sendMetadata: { queue: "transactional" },
+      idempotencyKeyPrefix: "billing:",
+    }),
+  ],
+});
+```
+
+## Merge rules
+
+- Explicit `replyTo` wins over the default.
+- Header and tag arrays append message values after defaults.
+- Message metadata and send metadata merge by key, with explicit values winning.
+- An explicit send-option idempotency key wins over `idempotencyKey`.
+- `idempotencyKeyPrefix` is prepended once unless the key already starts with it.
+
+Defaults run in `beforeSend` middleware, so the complete merged message is validated against every candidate adapter.
+
+## Avoid incompatible defaults
+
+A default field applies to every send through the client. If one fallback adapter cannot represent that field, validation fails even when the primary can.
+
+```ts title="src/email.ts"
+// SMTP does not support tags, so do not apply a global tag default
+// when SMTP is part of the route.
+```
+
+<Card title="Field support" href="/docs/adapters/field-support" description="Check defaults against every candidate route." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="See middleware and plugin type definitions." />

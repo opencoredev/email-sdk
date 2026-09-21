@@ -1,5 +1,6 @@
 import {
   docs,
+  docsV120,
   docsV110,
   docsV101,
   docsV100,
@@ -24,6 +25,11 @@ import { renderComponentsAsMarkdown } from "./markdown-components";
 import { absolutizeSiteLinks } from "./markdown-links";
 import { docsRoute, siteUrl } from "./shared";
 import { type DocsVersion, docsVersions, getDocsVersionBase, latestDocsVersion } from "./versions";
+
+const v120DocsVersion = docsVersions.find((version) => version.collection === "docsV120");
+if (!v120DocsVersion) {
+  throw new Error("Missing docs source config for v1.2.0");
+}
 
 const v110DocsVersion = docsVersions.find((version) => version.collection === "docsV110");
 if (!v110DocsVersion) {
@@ -99,6 +105,11 @@ const sources = {
   docs: loader({
     source: docs.toFumadocsSource(),
     baseUrl: docsRoute,
+    icon: resolveDocsIcon,
+  }),
+  docsV120: loader({
+    source: docsV120.toFumadocsSource(),
+    baseUrl: getDocsVersionBase(v120DocsVersion),
     icon: resolveDocsIcon,
   }),
   docsV110: loader({

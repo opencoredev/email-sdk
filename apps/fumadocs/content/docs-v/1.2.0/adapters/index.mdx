@@ -1,0 +1,49 @@
+---
+title: Adapters
+description: Configure one of 22 provider API adapters or the built-in SMTP transport, 23 adapters total.
+---
+
+<ProviderGrid />
+
+## Compare support
+
+| Requirement | Check first |
+| --- | --- |
+| Monthly cost from 1K to 1M emails | [Pricing comparison](/docs/adapters/pricing) |
+| CC, BCC, reply-to, attachments, tags, or metadata | [Field support](/docs/adapters/field-support) |
+| Repeated headers, scheduled delivery, native idempotency, or personalized fanout | [Delivery capabilities](/docs/adapters/capability-groups) |
+| Existing SMTP service | [SMTP](/docs/adapters/smtp) |
+
+## Add more than one provider
+
+```ts title="src/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    smtp({
+      name: "backup",
+      host: process.env.SMTP_HOST!,
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASS!,
+      },
+    }),
+  ],
+  fallback: { adapters: ["backup"] },
+});
+```
+
+Email SDK checks every fallback before sending. If your backup cannot handle part of the message, you get an error instead of a half-broken email.
+
+## Check your setup without sending
+
+```bash
+npx email-sdk adapters
+npx email-sdk doctor --adapter resend
+```
+
+`doctor` checks your credentials and required settings. `send --dry-run` checks the whole message without sending it.
