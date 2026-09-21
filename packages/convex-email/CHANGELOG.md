@@ -1,5 +1,33 @@
 # @opencoredev/convex-email
 
+## 4.0.0
+
+### Major Changes
+
+- 32e98c9: Secure `exposeApi()` with authenticated ownership checks. Unauthenticated callers can no longer send, read, cancel, or retry email records; use `authorize` for custom tenant or operation policy, and `authorizeConfig` for explicitly authorized configuration access.
+
+### Minor Changes
+
+- 3b7a833: Add Microsoft Graph adapter (`graph`) for sending email through Microsoft 365 and Azure AD using the Microsoft Graph sendMail API with OAuth 2.0 client credentials flow. The adapter supports both client secret and custom `getAccessToken` options (for managed identity, certificate credentials, or external token providers), automatic token caching with refresh skew, mailbox resolution via user ID or UPN, and optional `saveToSentItems` control. Graph enforces x- prefixed custom headers only and caps combined recipients at 1,000. The adapter is available via `@opencoredev/email-sdk/graph` and through the CLI with `--adapter graph`.
+
+### Patch Changes
+
+- 308074d: Prevent stale recovered email workers from overwriting the active worker's result.
+- 3e07cf2: Require Email SDK ^1.3.0 for the shared webhook export used by the component. SDK 1.2.0 does not provide this entry point; the accumulated SDK minor changesets introduce it in 1.3.0.
+- 3e07cf2: Reuse the SDK webhook normalizer for Resend, Postmark, and Mailgun, reject malformed non-object payloads, and handle Resend delivery headers case-insensitively while preserving optional application verification and generic-provider compatibility.
+- bcf0306: Harden remote attachment downloads by validating every redirect, limiting redirects and response size, and applying a fetch timeout.
+- Updated dependencies [3b7a833]
+- Updated dependencies [3e07cf2]
+- Updated dependencies [bcf0306]
+- Updated dependencies [9a40f72]
+- Updated dependencies [97ab553]
+- Updated dependencies [3e07cf2]
+- Updated dependencies [4381362]
+- Updated dependencies [e0827a3]
+- Updated dependencies [3e07cf2]
+- Updated dependencies [14a6dc0]
+  - @opencoredev/email-sdk@2.0.0
+
 ## 3.0.0
 
 ### Minor Changes
