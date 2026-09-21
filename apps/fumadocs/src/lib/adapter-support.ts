@@ -60,14 +60,6 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     limits: ["Accepts at most 50 combined to, cc, and bcc recipients.", "Recipient display names are not supported; plain strings and {email} objects are valid.", "Accepts one reply-to address."],
   },
   {
-    id: "graph",
-    label: "Microsoft Graph",
-    setupHref: "/docs/adapters/graph",
-    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
-    capabilities: { repeatedHeaders: true, idempotency: "none", scheduling: false, personalized: "expanded" },
-    limits: ["Only x- prefixed custom headers are supported.", "Accepts at most 5 custom headers per message.", "Accepts at most 1,000 combined to, cc, and bcc recipients."],
-  },
-  {
     id: "unosend",
     label: "Unosend",
     setupHref: "/docs/adapters/unosend",
@@ -223,6 +215,14 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
     capabilities: { repeatedHeaders: true, idempotency: "message_id", scheduling: false, personalized: "expanded" },
     limits: ["Validates ASCII envelope addresses and header names before opening a connection."],
+  },
+  {
+    id: "graph",
+    label: "Microsoft Graph",
+    setupHref: "/docs/adapters/graph",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: { repeatedHeaders: true, idempotency: "none", scheduling: false, personalized: "expanded" },
+    limits: ["Only x- prefixed custom headers are supported.", "Accepts at most 5 custom headers per message.", "Accepts at most 1,000 combined to, cc, and bcc recipients."],
   },
 ] as const satisfies readonly AdapterSupportEntry[];
 
