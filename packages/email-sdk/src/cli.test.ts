@@ -519,6 +519,20 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("unosend looks configured.");
   });
 
+  test("doctor accepts SendHeron credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "sendheron",
+      "--api-key",
+      "sh_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("sendheron looks configured.");
+  });
+
   test("doctor accepts Iterable credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",

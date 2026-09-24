@@ -33,6 +33,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
 import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+import { sendheron } from "@opencoredev/email-sdk/sendheron";
 import { ses } from "@opencoredev/email-sdk/ses";
 import { smtp } from "@opencoredev/email-sdk/smtp";
 import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
@@ -380,6 +381,20 @@ describe("documented adapter entry points", () => {
         replyTo: "support@example.com",
       },
       { id: "mailpace_1" },
+    ],
+    [
+      "sendheron",
+      sendheron({
+        apiKey: "test",
+        fetch: fetchOk({ id: "heron_1", status: "sent" }).fetcher,
+      }),
+      {
+        ...simpleMessage,
+        to: "user@example.com",
+        cc: "cc@example.com",
+        replyTo: "support@example.com",
+      },
+      { id: "heron_1", status: "sent" },
     ],
   ];
 

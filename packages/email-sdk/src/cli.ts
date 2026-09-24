@@ -27,6 +27,7 @@ import { scaleway } from "./scaleway.js";
 import { sequenzy } from "./sequenzy.js";
 import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
+import { sendheron } from "./sendheron.js";
 import { smtp } from "./smtp.js";
 import { sparkpost } from "./sparkpost.js";
 import type {
@@ -101,6 +102,7 @@ const providerDocs = [
   },
   { name: "zeptomail", env: ["ZEPTOMAIL_TOKEN"], note: "Zoho ZeptoMail API" },
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
+  { name: "sendheron", env: ["SENDHERON_API_KEY"], note: "SendHeron transactional email API" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
 ] as const satisfies ReadonlyArray<{
   name: SupportedAdapterName;
@@ -211,6 +213,11 @@ const factories = {
     }),
   zeptomail: (flags) => zeptomail({ token: flagOrEnv(flags, "token", "ZEPTOMAIL_TOKEN") }),
   mailpace: (flags) => mailpace({ apiKey: flagOrEnv(flags, "api-key", "MAILPACE_API_KEY") }),
+  sendheron: (flags) =>
+    sendheron({
+      apiKey: flagOrEnv(flags, "api-key", "SENDHERON_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.SENDHERON_BASE_URL,
+    }),
   smtp: (flags) =>
     smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
@@ -266,6 +273,7 @@ const envFlagNames = new Map<string, string>([
   ["SCALEWAY_PROJECT_ID", "project-id"],
   ["ZEPTOMAIL_TOKEN", "token"],
   ["MAILPACE_API_KEY", "api-key"],
+  ["SENDHERON_API_KEY", "api-key"],
   ["SMTP_HOST", "host"],
 ]);
 

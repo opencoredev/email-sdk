@@ -244,6 +244,45 @@ describe("doctor safe probes", () => {
     expect(JSON.stringify(result)).not.toContain("team_id");
   });
 
+  test("SendHeron treats emailSending.notFound on a placeholder send as authenticated", async () => {
+    let calls = 0;
+    const result = await runDoctor({
+      ...options,
+      adapter: "sendheron",
+      fetch: async (url, init) => {
+        calls++;
+        expect(url).toBe(
+          "https://api.sendheron.com/api/v1/emails/00000000-0000-4000-8000-000000000000",
+        );
+        expect(init.method).toBe("GET");
+        expect(init.body).toBeUndefined();
+        expect(init.redirect).toBe("error");
+        expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${credential}`);
+        return json({ statusCode: 404, message: "emailSending.notFound", error: "NOT_FOUND" }, 404);
+      },
+    });
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(true);
+    expect(result.checks.authentication.status).toBe("passed");
+    expect(JSON.stringify(result)).not.toContain(credential);
+  });
+
+  test.each([
+    [404, { message: "Cannot GET /api/v1/emails" }, "inconclusive"],
+    [200, { id: "private-account-id" }, "inconclusive"],
+    [401, { message: "apiKeys.invalidToken" }, "invalid_credentials"],
+    [403, { message: "apiKeys.insufficientScope" }, "insufficient_permissions"],
+  ] as const)("SendHeron HTTP %s maps to a safe diagnostic", async (status, body, expected) => {
+    const result = await runDoctor({
+      ...options,
+      adapter: "sendheron",
+      fetch: async () => json(body, status),
+    });
+    expect(result.checks.authentication.status).toBe(expected);
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private-account-id");
+  });
+
   test.each([200, 201, 400, 422])(
     "JetEmail HTTP %s cannot alone prove authentication",
     async (status) => {

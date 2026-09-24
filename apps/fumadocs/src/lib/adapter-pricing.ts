@@ -258,6 +258,12 @@ const pricingByProvider = {
     note: "Included with Microsoft 365 and Azure AD licenses. Cost depends on your licensing agreement. Per-message rates do not apply; shown as varies because the license is separate from the SDK.",
     prices: [varies, varies, varies, varies, varies, varies],
   },
+  sendheron: {
+    model: "Monthly plans · EUR",
+    sources: [{ label: "SendHeron pricing", href: "https://sendheron.com/pricing" }],
+    note: "One allowance covers marketing and transactional mail. Starter is 50K for €19, Growth 150K for €49, Scale 250K for €99, and Max 500K for €179. No published plan covers 1M. There is no free plan, only a 7-day trial.",
+    prices: [eur(19), eur(19), eur(49), eur(99), eur(179), custom],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

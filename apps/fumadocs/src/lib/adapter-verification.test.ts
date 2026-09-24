@@ -31,9 +31,9 @@ const parse = (input: JsonValue) => parseEvidence(input, undefined, undefined, n
 const empty = { schemaVersion: 1, records: [] };
 
 describe("adapter verification evidence", () => {
-  test("empty evidence covers all 25 adapters without inferred passes", () => {
+  test("empty evidence covers all 26 adapters without inferred passes", () => {
     const rows = verificationRows(empty, now);
-    expect(rows).toHaveLength(25);
+    expect(rows).toHaveLength(26);
     expect(rows.filter((row) => row.check)).toHaveLength(7);
     expect(rows.every((row) => row.contractTestFiles.length > 0)).toBe(true);
     expect(rows.every((row) => Object.values(row.evidence).every((value) => value === undefined))).toBe(true);
@@ -42,11 +42,11 @@ describe("adapter verification evidence", () => {
 
   test("renders the empty state for every adapter and every run column", () => {
     const html = renderToStaticMarkup(createElement(AdapterVerification, { evidence: empty, now }));
-    expect(html.match(/No published run evidence/g)).toHaveLength(25 * EVIDENCE_KINDS.length);
+    expect(html.match(/No published run evidence/g)).toHaveLength(26 * EVIDENCE_KINDS.length);
     expect(html).toContain("0 published run records");
     expect(html).toContain("7 configured auth probes");
     expect(html.match(/Live check available/g)).toHaveLength(7);
-    expect(html.match(/No live check configured/g)).toHaveLength(18);
+    expect(html.match(/No live check configured/g)).toHaveLength(19);
     expect(html).toContain("Configured probe, not a published passing run.");
     expect(html).toContain("overflow-x-auto");
     expect(html).toContain('role="region"');

@@ -1,0 +1,108 @@
+---
+title: SendHeron
+description: Send through the SendHeron transactional email API with native idempotency, scheduling, and suppressed sends reported as errors.
+icon: sendheron
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The SendHeron adapter calls `POST /emails/send` on the SendHeron API with plain `fetch`. Every send passes through SendHeron's compliance gate, which can refuse a message on policy. The adapter turns that refusal into an error so it is never mistaken for a sent email.
+
+<ProviderBadge adapter="sendheron" />
+
+## Configure
+
+Create an API key with the `emails:send` scope in your SendHeron workspace and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { sendheron } from "@opencoredev/email-sdk/sendheron";
+
+export const email = createEmailClient({
+  adapters: [sendheron({ apiKey: process.env.SENDHERON_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "SendHeron API key with the emails:send scope.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API base URL, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.sendheron.com/api/v1"',
+    },
+    headers: {
+      description: "Extra request headers sent with every call.",
+      type: "Record<string, string>",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+SendHeron takes one recipient per send. The adapter maps `cc` and `bcc` (up to 50 each), one `replyTo`, `headers`, `attachments`, and `sendAt`. The sender's display name goes into SendHeron's `fromName` field.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Your invoice is ready",
+  html: "<p>Your March invoice is attached.</p>",
+  attachments: [
+    { filename: "invoice.pdf", content: pdfBytes, contentType: "application/pdf" },
+  ],
+});
+
+console.log(result.id); // SendHeron send id, readable later with GET /emails/{id}
+```
+
+SendHeron has no plain-text body. When a message has `html`, the adapter sends it and drops `text`. A text-only message is HTML-escaped and wrapped in a `<pre>` block so line breaks survive.
+
+The client's idempotency key goes out as SendHeron's `idempotency-key` header. SendHeron honors a key for 24 hours, so a retry after a timeout replays the first response instead of sending twice.
+
+### Suppressed sends
+
+SendHeron answers a refused send with HTTP 201 and `status: "suppressed"`, with the reason (such as `HARD_SUPPRESSED` or `ORG_SENDING_PAUSED`) in `errorMessage`. The adapter throws an `EmailAdapterError` for it with `retryable: false` and `delivery: "not_sent"`, and the reason appears in the error message. Fix the cause instead of retrying.
+
+<Callout type="warn" title="Plain addresses, one recipient">
+  `to`, `cc`, `bcc`, and `replyTo` must be plain addresses without display names, and `to` takes
+  exactly one address. Attachments need a `contentType` from SendHeron's allowlist (PDF, PNG, JPEG,
+  GIF, WebP, calendar, CSV, plain text, or ZIP), are limited to 10 per message, and cannot be
+  combined with `sendAt`. Inline attachments, tags, and metadata are not supported. Each of these
+  throws an `EmailValidationError` before any request is made.
+</Callout>
+
+## Verify from the CLI
+
+```bash
+SENDHERON_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter sendheron --live
+```
+
+The live check reads a send ID that cannot exist. SendHeron answers `emailSending.notFound` once the key authenticates and holds the `emails:send` scope, so no email is sent. A missing scope reports `insufficient_permissions`.
+
+```bash
+SENDHERON_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
+  --adapter sendheron \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "SendHeron smoke test" \
+  --html "<p>It works</p>" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. Failed requests surface SendHeron's description and its stable error key, for example `SendHeron failed with 401: Unauthorized (apiKeys.invalidToken)`.

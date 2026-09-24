@@ -232,11 +232,24 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     capabilities: { repeatedHeaders: true, idempotency: "none", scheduling: false, personalized: "expanded" },
     limits: ["Only x- prefixed custom headers are supported.", "Accepts at most 5 custom headers per message.", "Accepts at most 1,000 combined to, cc, and bcc recipients."],
   },
+  {
+    id: "sendheron",
+    label: "SendHeron",
+    setupHref: "/docs/adapters/sendheron",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, sendAt: true },
+    capabilities: { repeatedHeaders: false, idempotency: "native", scheduling: true, personalized: "expanded" },
+    limits: [
+      "Normal send accepts one to recipient, up to 50 cc and 50 bcc, and one reply-to.",
+      "Recipient and reply-to addresses must be plain addresses without display names.",
+      "Sends html only; a text-only message is escaped into html and text is dropped when html is present.",
+      "Up to 10 attachments from an allowlist of content types; no inline attachments and no attachments with sendAt.",
+    ],
+  },
 ] as const satisfies readonly AdapterSupportEntry[];
 
 export type AdapterSupportId = (typeof ADAPTER_SUPPORT_ENTRIES)[number]["id"];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "24 provider APIs plus SMTP, 25 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "25 provider APIs plus SMTP, 26 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

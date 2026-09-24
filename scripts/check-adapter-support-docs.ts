@@ -47,8 +47,8 @@ const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 25) {
-  fail(`Expected 25 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 26) {
+  fail(`Expected 26 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -102,11 +102,11 @@ for (const docsEntry of ADAPTER_SUPPORT_ENTRIES) {
   }
 }
 
-const oneReplyTo = ["brevo", "cloudflare", "unosend", "sequenzy", "mailersend", "plunk", "mailtrap", "lettr"];
+const oneReplyTo = ["brevo", "cloudflare", "unosend", "sequenzy", "mailersend", "plunk", "mailtrap", "lettr", "sendheron"];
 
 for (const id of oneReplyTo) requireIncludes(entry(id), "one reply-to");
 
-const oneNormalRecipient = ["iterable", "loops", "primitive"];
+const oneNormalRecipient = ["iterable", "loops", "primitive", "sendheron"];
 
 for (const id of oneNormalRecipient) requireIncludes(entry(id), "Normal send accepts one to recipient");
 
@@ -144,6 +144,8 @@ requireIncludes(entry("graph"), "5 custom headers");
 
 requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
 
+requireIncludes(entry("sendheron"), "without display names");
+requireIncludes(entry("sendheron"), "no attachments with sendAt");
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 
 requireIncludes(entry("mailgun"), "1,000 recipients");

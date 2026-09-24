@@ -12,7 +12,7 @@ export const Route = createFileRoute("/about")({
     meta: buildPageMeta({
       title: `About - ${appName}`,
       description:
-        "About Email SDK, an open-source TypeScript SDK for transactional email across 24 adapters, maintained by OpenCore.",
+        "About Email SDK, an open-source TypeScript SDK for transactional email across 26 adapters, maintained by OpenCore.",
       url: `${siteUrl}/about`,
     }),
     links: [{ rel: "canonical", href: `${siteUrl}/about` }],

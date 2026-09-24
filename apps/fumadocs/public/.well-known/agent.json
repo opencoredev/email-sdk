@@ -25,7 +25,7 @@
     "cli": "email-sdk"
   },
   "capabilities": [
-    "Send transactional email through one typed client across 24 adapters",
+    "Send transactional email through one typed client across 26 adapters",
     "Retry transient failures and fall back across compatible adapters",
     "Expose a guarded send_email tool to LLM agents",
     "Run local configuration checks and dry-run sends via the email-sdk CLI"

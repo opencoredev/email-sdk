@@ -50,6 +50,7 @@ const env = {
   SCALEWAY_REGION: v.optional(v.string()),
   SCALEWAY_SECRET_KEY: v.optional(v.string()),
   SENDGRID_API_KEY: v.optional(v.string()),
+  SENDHERON_API_KEY: v.optional(v.string()),
   SEQUENZY_API_KEY: v.optional(v.string()),
   SMTP_HOST: v.optional(v.string()),
   SMTP_PASS: v.optional(v.string()),

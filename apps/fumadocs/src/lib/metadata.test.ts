@@ -81,11 +81,11 @@ describe("homepage product explanation", () => {
     }
 
     for (const text of readmes) {
-      expect(text).toContain("23 provider API");
-      expect(text).toContain("24 adapters total");
+      expect(text).toContain("25 provider API");
+      expect(text).toContain("26 adapters total");
     }
 
-    expect(llmsOverview).toContain("24 adapters total");
+    expect(llmsOverview).toContain("26 adapters total");
     const webpage = homeStructuredData["@graph"].find((node) => node["@type"] === "WebPage");
     expect(webpage?.speakable.cssSelector).toEqual(["#landing-heading", "#landing-summary"]);
     const faq = homeStructuredData["@graph"].find((node) => node["@type"] === "FAQPage");

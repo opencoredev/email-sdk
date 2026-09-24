@@ -10,7 +10,7 @@
 
 Email for TypeScript apps. One client for transactional email with your existing provider account. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- Adapters for 23 provider APIs plus SMTP, 24 adapters total, behind one normalized message
+- Adapters for 25 provider APIs plus SMTP, 26 adapters total, behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
 - Fail-fast field-support checks before a provider drops data
 - Batch personalization with per-recipient variables, plus provider-side scheduled sends

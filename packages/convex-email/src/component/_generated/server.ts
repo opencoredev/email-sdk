@@ -59,6 +59,7 @@ export type Env = {
   SCALEWAY_REGION?: string;
   SCALEWAY_SECRET_KEY?: string;
   SENDGRID_API_KEY?: string;
+  SENDHERON_API_KEY?: string;
   SEQUENZY_API_KEY?: string;
   SMTP_HOST?: string;
   SMTP_PASS?: string;

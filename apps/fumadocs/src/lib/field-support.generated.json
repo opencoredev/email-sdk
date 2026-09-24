@@ -183,5 +183,13 @@
     "replyTo": true,
     "headers": true,
     "attachments": true
+  },
+  "sendheron": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "sendAt": true
   }
 }

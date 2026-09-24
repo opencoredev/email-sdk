@@ -12,6 +12,7 @@
     "postmark",
     "resend",
     "sendgrid",
+    "sendheron",
     "sequenzy",
     "ses",
     "smtp",
@@ -191,6 +192,12 @@
       "import": "./dist/mailpace.js",
       "require": "./dist/mailpace.cjs",
       "default": "./dist/mailpace.js"
+    },
+    "./sendheron": {
+      "types": "./dist/sendheron.d.ts",
+      "import": "./dist/sendheron.js",
+      "require": "./dist/sendheron.cjs",
+      "default": "./dist/sendheron.js"
     },
     "./smtp": {
       "types": "./dist/smtp.d.ts",

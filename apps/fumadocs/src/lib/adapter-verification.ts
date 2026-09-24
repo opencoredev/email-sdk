@@ -45,6 +45,7 @@ export const CONTRACT_TEST_FILES = {
   resend: ["adapters.field-support.test.ts", "adapters.resend-postmark-sendgrid.test.ts", "adapters.scheduling.test.ts", "core.telemetry-volume.test.ts"],
   scaleway: ["adapters.field-support.test.ts", "adapters.json-providers.test.ts"],
   sendgrid: ["adapters.json-providers.test.ts", "adapters.resend-postmark-sendgrid.test.ts", "adapters.scheduling.test.ts"],
+  sendheron: ["adapters.sendheron.test.ts"],
   sequenzy: ["adapters.field-support.test.ts", "adapters.sequenzy-iterable-zeptomail.test.ts"],
   ses: ["adapters.field-support.test.ts", "adapters.scheduling.test.ts", "adapters.unosend-ses-mailgun.test.ts"],
   smtp: ["smtp.test.ts"],

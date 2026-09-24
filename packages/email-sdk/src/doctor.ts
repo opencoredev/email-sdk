@@ -52,6 +52,12 @@ const probes = {
   lettermint: { base: "https://api.lettermint.co/v1", path: "/ping" },
   lettr: { base: "https://app.lettr.com/api", path: "/auth/check" },
   jetemail: { base: "https://api.jetemail.com", path: "/email" },
+  // SendHeron has no account endpoint; reading a send that cannot exist needs the
+  // emails:send scope and answers 404 emailSending.notFound once the key authenticates.
+  sendheron: {
+    base: "https://api.sendheron.com/api/v1",
+    path: "/emails/00000000-0000-4000-8000-000000000000",
+  },
 } as const;
 
 class TransportFailure extends Error {}
@@ -290,7 +296,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     controller.signal.throwIfAborted();
 
     if (
-      (response.status !== 200 && !(adapter === "resend" && response.status === 401)) ||
+      (response.status !== 200 &&
+        !(adapter === "resend" && response.status === 401) &&
+        !(adapter === "sendheron" && response.status === 404)) ||
       validation
     ) {
       void response.body?.cancel().catch(() => {});
@@ -306,6 +314,12 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
   const work = async () => {
     const first = await request(probe.path);
+    if (adapter === "sendheron" && first.status === 404) {
+      checks.authentication = validAuthentication(adapter, first.body)
+        ? authenticated()
+        : uncertain();
+      return;
+    }
     checks.authentication = httpFailure(first.status, adapter, first.body) ?? uncertain();
 
     if (first.status !== 200 || adapter === "jetemail") return;
@@ -450,6 +464,8 @@ function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): b
   if (adapter === "lettermint") return body === 200;
 
   if (!isJsonObject(body)) return false;
+
+  if (adapter === "sendheron") return body.message === "emailSending.notFound";
 
   if (adapter === "resend") return Array.isArray(body.data) && isJsonBoolean(body.has_more);
 

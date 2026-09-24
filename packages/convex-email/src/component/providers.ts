@@ -32,6 +32,7 @@ import { resend } from "@opencoredev/email-sdk/resend";
 import { scaleway } from "@opencoredev/email-sdk/scaleway";
 import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+import { sendheron } from "@opencoredev/email-sdk/sendheron";
 import { ses } from "@opencoredev/email-sdk/ses";
 import { smtp } from "@opencoredev/email-sdk/smtp";
 import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
@@ -150,6 +151,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   resend: fromOptions(resend),
   scaleway: fromOptions(scaleway),
   sendgrid: fromOptions(sendgrid),
+  sendheron: fromOptions(sendheron),
   sequenzy: fromOptions(sequenzy),
   ses: fromOptions(ses),
   // SMTP is the one reshaped adapter: credentials resolve as flat fields but nest under `auth`.

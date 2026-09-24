@@ -128,6 +128,10 @@ export const CONVEX_EMAIL_ADAPTERS = {
     apiKey: { type: "string", env: "SENDGRID_API_KEY", required: true },
     baseUrl: BASE_URL,
   },
+  sendheron: {
+    apiKey: { type: "string", env: "SENDHERON_API_KEY", required: true },
+    baseUrl: BASE_URL,
+  },
   sequenzy: {
     apiKey: { type: "string", env: "SEQUENZY_API_KEY", required: true },
     baseUrl: BASE_URL,

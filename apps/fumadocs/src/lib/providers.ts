@@ -233,6 +233,16 @@ export const providers = [
     summary: "Send through Microsoft 365 and Azure AD with Microsoft Graph.",
     logo: "",
   },
+  {
+    name: "SendHeron",
+    key: "sendheron",
+    importPath: "@opencoredev/email-sdk/sendheron",
+    docs: "/docs/adapters/sendheron",
+    website: "https://sendheron.com",
+    summary: "EU-hosted transactional and marketing email with a compliance gate on every send.",
+    logo: "https://www.google.com/s2/favicons?domain=sendheron.com&sz=64",
+    currentOnly: true,
+  },
 ] as const;
 
 export type Provider = (typeof providers)[number];

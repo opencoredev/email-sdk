@@ -518,10 +518,30 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   mailpace: { cc: true, bcc: true, replyTo: true },
   smtp: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
   graph: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+  sendheron: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    sendAt: true,
+  },
 } satisfies Record<string, MessageFieldSupport>;
 
-const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive"]);
+const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron"]);
 
+// SendHeron refuses any attachment type outside this allowlist.
+const SENDHERON_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "text/calendar",
+  "text/csv",
+  "text/plain",
+  "application/zip",
+]);
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 
 const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
@@ -668,7 +688,39 @@ export function validateBuiltInAdapter(
       1000,
     );
   }
+  if (adapter === "sendheron") {
+    const cc = arrayify(message.cc);
+    const bcc = arrayify(message.bcc);
+    assertMaxItems(adapter, "recipient", to, 1);
+    assertMaxItems(adapter, "cc", cc, 50);
+    assertMaxItems(adapter, "bcc", bcc, 50);
+    assertMaxItems(adapter, "replyTo", replyTo, 1);
+    for (const address of [...to, ...cc, ...bcc, ...replyTo]) {
+      if (typeof address === "string" ? address.includes("<") : Boolean(address.name)) {
+        throw new EmailValidationError(
+          "sendheron recipient and replyTo fields only support plain email addresses.",
+        );
+      }
+    }
 
+    const attachments = message.attachments ?? [];
+    assertMaxItems(adapter, "attachment", attachments, 10);
+    if (attachments.length > 0 && message.sendAt !== undefined) {
+      throw new EmailValidationError("sendheron cannot schedule a message with attachments.");
+    }
+    for (const attachment of attachments) {
+      if (attachment.disposition === "inline" || attachment.contentId) {
+        throw new EmailValidationError("sendheron does not support inline attachments.");
+      }
+      if (!attachment.contentType || !SENDHERON_ATTACHMENT_TYPES.has(attachment.contentType)) {
+        throw new EmailValidationError(
+          `sendheron requires an attachment contentType from its allowlist: ${[
+            ...SENDHERON_ATTACHMENT_TYPES,
+          ].join(", ")}.`,
+        );
+      }
+    }
+  }
   if (adapter === "smtp") {
     for (const address of [
       message.from,
