@@ -1,6 +1,9 @@
 export { createEmailClient } from "./core.js";
+
 export { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
+
 export type { MessageFieldSupport } from "./utils.js";
+
 export {
   EmailAbortError,
   EmailAdapterError,
@@ -12,10 +15,16 @@ export {
   EmailValidationError,
   isRetryableEmailError,
 } from "./errors.js";
+
 export type { EmailErrorCode } from "./errors.js";
+
 export type {
   AdapterForName,
   EmailAddress,
+  EmailMetadataRecord,
+  EmailMetadataRegister,
+  EmailMetadataValue,
+  EmailSendMetadata,
   EmailAdapter,
   EmailAdapterCapabilities,
   EmailAdapterContext,

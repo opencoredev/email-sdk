@@ -1,5 +1,7 @@
 import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { isJsonString, isStringMember, jsonField } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import { formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -15,18 +17,6 @@ export type SequenzyAdapterOptions = {
   fetch?: typeof fetch;
 };
 
-type SequenzyResponse = {
-  success?: boolean;
-  error?: string;
-  jobId?: string;
-  to?: string | string[];
-  transactional?: {
-    id?: string;
-    slug?: string;
-    name?: string;
-  };
-};
-
 const reservedMetadataKeys = new Set([
   "sequenzySlug",
   "sequenzyPreview",
@@ -37,7 +27,7 @@ const reservedMetadataKeys = new Set([
 export function sequenzy(
   options: SequenzyAdapterOptions,
 ): EmailAdapter<"sequenzy", { baseUrl: string }> {
-  return jsonProvider<"sequenzy", SequenzyResponse>({
+  return jsonProvider({
     name: "sequenzy",
     baseUrl: options.baseUrl ?? "https://api.sequenzy.com/api/v1",
     endpoint: "/transactional/send",
@@ -52,9 +42,11 @@ export function sequenzy(
 
       const slug = stringMetadata(message, "sequenzySlug");
       const preview = stringMetadata(message, "sequenzyPreview");
+
       const subscriberExternalId =
         stringMetadata(message, "subscriberExternalId") ??
         stringMetadata(message, "sequenzySubscriberExternalId");
+
       const variables = sequenzyVariables(message.metadata);
 
       return {
@@ -73,8 +65,10 @@ export function sequenzy(
       };
     },
     parseResponse(body) {
-      if (body.success === false || body.error) {
-        throw new EmailAdapterError(`Sequenzy failed: ${body.error ?? "Unknown error"}`, {
+      const error = jsonField(body, "error");
+
+      if (jsonField(body, "success") === false || error) {
+        throw new EmailAdapterError(`Sequenzy failed: ${error ?? "Unknown error"}`, {
           adapter: "sequenzy",
           retryable: false,
         });
@@ -82,23 +76,33 @@ export function sequenzy(
 
       return {
         adapter: "sequenzy",
-        id: firstString(body as Record<string, unknown>, ["jobId", "id"]),
-        messageId: firstString(body as Record<string, unknown>, ["jobId", "id"]),
-        accepted: Array.isArray(body.to) ? body.to : body.to ? [body.to] : undefined,
+        id: firstString(body, ["jobId", "id"]),
+        messageId: firstString(body, ["jobId", "id"]),
+        accepted: acceptedRecipients(jsonField(body, "to")),
         raw: body,
       };
     },
   });
 }
 
+function acceptedRecipients(to: JsonValue | undefined) {
+  if (Array.isArray(to)) {
+    return to.filter(isJsonString);
+  }
+
+  return isJsonString(to) && to ? [to] : undefined;
+}
+
 function toSequenzyRecipients(message: EmailMessage) {
   const recipients = formatAddresses(message.to);
+
   return recipients.length === 1 ? recipients[0] : recipients;
 }
 
 function stringMetadata(message: EmailMessage, key: string) {
   const value = message.metadata?.[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+
+  return isStringMember(value) && value.length > 0 ? value : undefined;
 }
 
 function sequenzyVariables(metadata: EmailMessage["metadata"]) {
@@ -107,6 +111,7 @@ function sequenzyVariables(metadata: EmailMessage["metadata"]) {
   }
 
   const entries = Object.entries(metadata).filter(([key]) => !reservedMetadataKeys.has(key));
+
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 

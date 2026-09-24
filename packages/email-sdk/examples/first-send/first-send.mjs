@@ -6,8 +6,10 @@ import { resend } from "@opencoredev/email-sdk/resend";
 
 // The value shipped in .env.example; never accepted for a real send.
 const PLACEHOLDER_KEY = "re_replace_with_real_server_key";
+
 const MAILBOX =
   /^(?:[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+|[^<>\r\n]+<[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+>)$/;
+
 // RFC 2606 reserved names: example.com/net/org and the .test/.example/.invalid/.localhost TLDs.
 const EXAMPLE_DOMAIN = /@(example\.(com|org|net)|[^\s>]*\.(test|example|invalid|localhost))(>|$)/i;
 
@@ -22,20 +24,24 @@ export function loadEnvironment() {
 // environment variable can redirect where the real command sends credentials.
 function fixtureTransport(fixture, env) {
   const url = new URL(fixture.baseUrl);
+
   if (
     url.protocol !== "http:" || url.hostname !== "127.0.0.1" || !url.port ||
     url.username || url.password || url.pathname !== "/" || url.search || url.hash
   ) {
     throw new Error("Fixtures require an explicit http://127.0.0.1:PORT origin.");
   }
+
   if (env.RESEND_API_KEY && env.RESEND_API_KEY !== "re_fixture_only") {
     throw new Error("Fixtures reject real credentials; use re_fixture_only.");
   }
+
   return {
     apiKey: "re_fixture_only",
     baseUrl: url.origin,
     fetch: (input, init) => {
       if (String(input) !== `${url.origin}/emails`) throw new Error("Fixture URL rejected.");
+
       return (fixture.fetch ?? fetch)(input, { ...init, redirect: "error" });
     },
   };
@@ -47,11 +53,14 @@ function assertSendConfigured(env, fixture) {
       "Set EMAIL_FROM and EMAIL_TO to an approved sender and recipient before --send.",
     );
   }
+
   if (fixture) return;
   const key = env.RESEND_API_KEY?.trim() ?? "";
+
   if (!key.startsWith("re_") || key === PLACEHOLDER_KEY) {
     throw new Error("Set a real server-only RESEND_API_KEY (starts with re_) before --send.");
   }
+
   if ([env.EMAIL_FROM, env.EMAIL_TO].some((address) => EXAMPLE_DOMAIN.test(address.trim()))) {
     throw new Error("Replace example addresses with approved real addresses before --send.");
   }
@@ -61,7 +70,9 @@ export async function run({ args = [], env = process.env, fixture } = {}) {
   if (args.length > 1 || args.some((arg) => arg !== "--send")) {
     throw new Error("Usage: node first-send.mjs [--send]");
   }
+
   const sending = args.includes("--send");
+
   if (sending) assertSendConfigured(env, fixture);
 
   const message = {
@@ -70,6 +81,7 @@ export async function run({ args = [], env = process.env, fixture } = {}) {
     subject: "Your first Email SDK message",
     text: "Hello from the standalone Email SDK starter.",
   };
+
   if (![message.from, message.to].every((address) => MAILBOX.test(address.trim()))) {
     throw new Error("Set EMAIL_FROM and EMAIL_TO to one valid mailbox each.");
   }
@@ -78,14 +90,18 @@ export async function run({ args = [], env = process.env, fixture } = {}) {
   const adapterOptions = fixture
     ? fixtureTransport(fixture, env)
     : { apiKey: sending ? env.RESEND_API_KEY : "re_validation_only" };
-  const email = createEmailClient({
-    adapters: [resend(adapterOptions)],
-    ...(fixture ? { telemetry: false } : {}),
-  });
+
+  const clientOptions = { adapters: [resend(adapterOptions)] };
+
+  if (fixture) clientOptions.telemetry = false;
+  const email = createEmailClient(clientOptions);
+
   try {
     await email.validate(message);
+
     if (!sending) return { ok: true, mode: "validate", adapter: "resend", sent: false };
     const result = await email.send(message);
+
     return {
       ok: true,
       mode: "send",
@@ -101,6 +117,7 @@ export async function run({ args = [], env = process.env, fixture } = {}) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   loadEnvironment();
+
   try {
     console.log(JSON.stringify(await run({ args: process.argv.slice(2) }), null, 2));
   } catch (error) {
@@ -115,6 +132,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     } else {
       console.error(`Unexpected ${error?.constructor?.name ?? "error"}; see the README troubleshooting section.`);
     }
+
     process.exitCode = 1;
   }
 }

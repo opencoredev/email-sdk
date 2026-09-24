@@ -23,7 +23,9 @@ test("falls back only after a proven not-sent failure", async () => {
       delivery: "not_sent",
     }),
   );
+
   const backup = memoryAdapter("backup");
+
   const email = createEmailClient({
     adapters: [primary, backup],
     fallback: { adapters: ["backup"] },

@@ -143,6 +143,7 @@ async function captureSmtpData(message: EmailMessage) {
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // SAFETY: a server listening on a TCP host and port reports an AddressInfo, never a pipe path.
   const { port } = server.address() as net.AddressInfo;
   let result: Awaited<ReturnType<ReturnType<typeof smtp>["send"]>>;
 
@@ -180,6 +181,7 @@ async function sendWithRcptReply(reply: string) {
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // SAFETY: a server listening on a TCP host and port reports an AddressInfo, never a pipe path.
   const { port } = server.address() as net.AddressInfo;
 
   try {
@@ -257,9 +259,11 @@ describe("smtp injection guards", () => {
     // The lone \r is folded into a space, so the value stays on one header line
     // and no injected Bcc header reaches the wire.
     expect(transmitted.data).toContain("X-Custom: legit Bcc: evil@example.com");
+
     const injected = transmitted.data
       .split(/\r\n|[\r\n]/)
       .some((line) => line.toLowerCase().startsWith("bcc:"));
+
     expect(injected).toBe(false);
   });
 

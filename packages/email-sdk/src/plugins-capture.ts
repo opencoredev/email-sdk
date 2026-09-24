@@ -1,10 +1,10 @@
-import type { EmailMessage, EmailPlugin, EmailSendResult } from "./types.js";
+import type { EmailSendMetadata, EmailMessage, EmailPlugin, EmailSendResult } from "./types.js";
 
 export type CapturedEmailEvent =
   | {
       type: "beforeSend";
       message: EmailMessage;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     }
   | {
       type: "afterSend";
@@ -12,7 +12,7 @@ export type CapturedEmailEvent =
       attempt: number;
       message: EmailMessage;
       response: EmailSendResult;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     }
   | {
       type: "retry";
@@ -22,7 +22,7 @@ export type CapturedEmailEvent =
       delayMs: number;
       message: EmailMessage;
       error: unknown;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     }
   | {
       type: "error";
@@ -30,7 +30,7 @@ export type CapturedEmailEvent =
       attempt: number;
       message: EmailMessage;
       error: unknown;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     };
 
 export type EmailCaptureStore = {

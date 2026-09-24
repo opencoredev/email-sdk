@@ -2,19 +2,25 @@ import { describe, expect, test } from "bun:test";
 import { runDoctor, type DoctorOptions } from "./doctor.js";
 import { selectLiveAdapters } from "../../../scripts/changed-live-adapters.js";
 import { nonSendingEnvironment } from "../../../scripts/run-live-adapters.js";
+import type { JsonValue } from "../test-support/json.js";
 
 const credential = "private-api-key-canary";
+
 const domain = {
   id: "private-account-id",
   name: "example.com",
   status: "verified",
   capabilities: { sending: "enabled" },
 };
-const list = (data: unknown[] = [domain], has_more = false) => ({ data, has_more });
-const json = (body: unknown, status = 200) =>
+
+const list = (data: JsonValue[] = [domain], has_more = false) => ({ data, has_more });
+
+const json = (body: JsonValue, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
 const options: DoctorOptions = { adapter: "resend", credential, live: true };
-const run = (body: unknown, extra: Partial<DoctorOptions> = {}) =>
+
+const run = (body: JsonValue, extra: Partial<DoctorOptions> = {}) =>
   runDoctor({ ...options, fetch: async () => json(body), ...extra });
 
 describe("shared live gate wiring", () => {
@@ -44,11 +50,13 @@ describe("shared live gate wiring", () => {
       ],
       { env: { EMAIL_SDK_TELEMETRY: "0" }, stdout: "pipe", stderr: "pipe" },
     );
+
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
       child.exited,
     ]);
+
     expect(exitCode).toBe(1);
     expect(stdout).toBe("");
     expect(stderr.trim()).toBe("Unknown live adapter check: unknown-fixture-adapter");
@@ -61,8 +69,10 @@ describe("shared live gate wiring", () => {
       LETTERMINT_LIVE_SEND: "true",
       RESEND_API_KEY: "private-key",
     };
+
     const safe = nonSendingEnvironment(env);
     expect(safe.UNREGISTERED_LIVE_SEND).toBeUndefined();
+
     for (const name of all) expect(safe[`${name.toUpperCase()}_LIVE_SEND`]).toBe("false");
     expect(safe.RESEND_API_KEY).toBe("private-key");
     expect(env.RESEND_LIVE_SEND).toBe("true");
@@ -72,6 +82,7 @@ describe("shared live gate wiring", () => {
 describe("Graph live probe", () => {
   test("checks client credentials without sending mail and honors national-cloud options", async () => {
     const requests: Array<{ url: string; body: string }> = [];
+
     const result = await runDoctor({
       adapter: "graph",
       configured: true,
@@ -83,9 +94,11 @@ describe("Graph live probe", () => {
       scope: "https://graph.microsoft.us/.default",
       fetch: async (url, init) => {
         requests.push({ url, body: String(init.body) });
+
         return json({ access_token: "private-token" });
       },
     });
+
     expect(result.checks.authentication.status).toBe("passed");
     expect(result.checks.sender.status).toBe("not_requested");
     expect(requests).toEqual([
@@ -108,6 +121,7 @@ describe("Graph live probe", () => {
       timeoutMs: 5,
       fetch: async () => new Promise<Response>(() => {}),
     });
+
     expect(result.checks.authentication.status).toBe("timeout");
   });
 
@@ -126,6 +140,7 @@ describe("Graph live probe", () => {
           headers: { "Content-Type": "application/json" },
         }),
     });
+
     expect(result.checks.authentication.status).toBe("inconclusive");
     expect(result.ok).toBe(false);
   });
@@ -134,6 +149,7 @@ describe("Graph live probe", () => {
 describe("doctor safe probes", () => {
   test("default checks configuration without provider requests", async () => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       live: false,
@@ -142,6 +158,7 @@ describe("doctor safe probes", () => {
         throw new Error(credential);
       },
     });
+
     expect(calls).toBe(0);
     expect(result.ok).toBe(true);
     expect(result.checks.authentication.status).toBe("not_requested");
@@ -150,14 +167,17 @@ describe("doctor safe probes", () => {
 
   test.each([undefined, "", "   "])("missing credential %s blocks requests", async (credential) => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       credential,
       fetch: async () => {
         calls++;
+
         return json(list());
       },
     });
+
     expect(calls).toBe(0);
     expect(result.ok).toBe(false);
     expect(result.checks.configuration.status).toBe("failed");
@@ -172,6 +192,7 @@ describe("doctor safe probes", () => {
         throw new Error("must not request");
       },
     });
+
     expect(result.checks.configuration.message).toContain("--from requires --live");
     expect(result.ok).toBe(false);
   });
@@ -196,6 +217,7 @@ describe("doctor safe probes", () => {
     ],
   ])("%s uses its documented non-sending GET", async (adapter, endpoint, body) => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       adapter: String(adapter),
@@ -210,9 +232,11 @@ describe("doctor safe probes", () => {
         expect(headers.get(adapter === "lettermint" ? "x-lettermint-token" : "Authorization")).toBe(
           adapter === "lettermint" ? credential : `Bearer ${credential}`,
         );
+
         return json(body);
       },
     });
+
     expect(calls).toBe(1);
     expect(result.ok).toBe(true);
     expect(JSON.stringify(result)).not.toContain(credential);
@@ -232,9 +256,11 @@ describe("doctor safe probes", () => {
           expect(init.body).toBe("{}");
           expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
           expect(init.redirect).toBe("error");
+
           return json({ message: "Missing from, to, subject", secret: credential }, status);
         },
       });
+
       expect(result.ok).toBe(false);
       expect(result.checks.authentication.status).toBe("inconclusive");
       expect(JSON.stringify(result)).not.toContain(credential);
@@ -256,6 +282,7 @@ describe("doctor safe probes", () => {
       fetch: async () =>
         json({ message: credential, account: "private-account-id" }, Number(status)),
     });
+
     expect(result.checks.authentication.status).toBe(expected);
     expect(result.checks.sender.status).toBe("blocked");
     expect(result.ok).toBe(false);
@@ -281,6 +308,7 @@ describe("doctor safe probes", () => {
       from: "hello@example.com",
       fetch: async () => json({ name: "restricted_api_key", message: credential }, 401),
     });
+
     expect(result.checks.authentication.status).toBe("insufficient_permissions");
     expect(result.checks.sender.status).toBe("blocked");
     expect(result.ok).toBe(false);
@@ -317,15 +345,19 @@ describe("doctor safe probes", () => {
       timeout: await run({}, { timeoutMs: 5, fetch: () => new Promise(() => {}) }),
       unsupported: await run({}, { adapter: "smtp" }),
     };
+
     for (const [status, result] of Object.entries(results)) {
       expect(result.checks.authentication.status).toBe(status);
       expect(result.ok).toBe(false);
     }
+
     const messages = Object.values(results).map((result) => result.checks.authentication.message);
     expect(new Set(messages).size).toBe(messages.length);
+
     const unverified = await run(list([{ ...domain, status: "pending" }]), {
       from: "hello@example.com",
     });
+
     expect(unverified.checks.sender.status).toBe("not_ready");
     expect(unverified.ok).toBe(false);
   });
@@ -335,12 +367,14 @@ describe("doctor safe probes", () => {
       ...options,
       fetch: async () => json({ secret: credential }, 429),
     });
+
     const network = await runDoctor({
       ...options,
       fetch: async () => {
         throw new Error(credential);
       },
     });
+
     const stream = await runDoctor({
       ...options,
       fetch: async () =>
@@ -352,6 +386,7 @@ describe("doctor safe probes", () => {
           }),
         ),
     });
+
     const malformed = await runDoctor({ ...options, fetch: async () => new Response(credential) });
     const invalid = await run({ unexpected: credential });
     expect(rate.checks.authentication.message).toContain("HTTP 429");
@@ -370,6 +405,7 @@ describe("doctor safe probes", () => {
     expect(stream.checks.authentication.status).toBe("network_failure");
     expect(malformed.checks.authentication.status).toBe("inconclusive");
     expect(invalid.checks.authentication.status).toBe("inconclusive");
+
     for (const result of [rate, network, stream, malformed, invalid]) {
       expect(result.ok).toBe(false);
       expect(JSON.stringify(result)).not.toContain(credential);
@@ -378,17 +414,20 @@ describe("doctor safe probes", () => {
 
   test("redirect rejection is diagnosed as transport without following it", async () => {
     let calls = 0;
+
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch(request) {
         calls++;
+
         return new Response(null, {
           status: 302,
           headers: { Location: new URL("/blocked", request.url).href },
         });
       },
     });
+
     try {
       const result = await runDoctor({ ...options, baseUrl: server.url.origin });
       expect(result.ok).toBe(false);
@@ -404,16 +443,21 @@ describe("doctor safe probes", () => {
     "later %s failure preserves actionable sender diagnostics",
     async (mode) => {
       let calls = 0;
+
       const result = await runDoctor({
         ...options,
         from: "hello@example.com",
         fetch: async () => {
           if (++calls === 1) return json(list([{ ...domain, name: "other.example.com" }], true));
+
           if (mode === "network") throw new Error(credential);
+
           if (mode === "rate") return json({ secret: credential }, 429);
+
           return new Response(credential);
         },
       });
+
       expect(result.ok).toBe(false);
       expect(result.checks.authentication.status).toBe("passed");
       expect(result.checks.sender.status).toBe(
@@ -435,6 +479,7 @@ describe("doctor safe probes", () => {
       ...options,
       fetch: async () => new Response("x".repeat(1_048_577)),
     });
+
     expect(result.checks.authentication.status).toBe("inconclusive");
   });
 
@@ -444,6 +489,7 @@ describe("doctor safe probes", () => {
       timeoutMs: 5,
       fetch: () => new Promise(() => {}),
     });
+
     expect(result.checks.authentication.status).toBe("timeout");
     expect(result.ok).toBe(false);
   });
@@ -454,6 +500,7 @@ describe("doctor safe probes", () => {
       timeoutMs: 5,
       fetch: async () => new Response(new ReadableStream({ start() {} })),
     });
+
     expect(result.checks.authentication.status).toBe("timeout");
   });
 
@@ -469,13 +516,16 @@ describe("doctor safe probes", () => {
     "http://localhost:1234",
   ])("rejects unsafe base %s before requests", async (baseUrl) => {
     let calls = 0;
+
     const result = await run(list(), {
       baseUrl,
       fetch: async () => {
         calls++;
+
         return json(list());
       },
     });
+
     expect(calls).toBe(0);
     expect(result.checks.configuration.status).toBe("failed");
     expect(JSON.stringify(result)).not.toContain(baseUrl);
@@ -488,23 +538,28 @@ describe("doctor safe probes", () => {
         baseUrl,
         fetch: async (url) => {
           expect(url).toBe(`${baseUrl.replace(/\/$/, "")}/domains?limit=100`);
+
           return json(list());
         },
       });
+
       expect(result.ok).toBe(true);
     },
   );
 
   test("unsupported authentication is not a successful live check", async () => {
     let calls = 0;
+
     const result = await run(list(), {
       adapter: "smtp",
       from: "hello@example.com",
       fetch: async () => {
         calls++;
+
         return json(list());
       },
     });
+
     expect(calls).toBe(0);
     expect(result.ok).toBe(false);
     expect(result.checks.authentication.status).toBe("unsupported");
@@ -516,6 +571,7 @@ describe("doctor safe probes", () => {
       { success: true, companies: [] },
       { adapter: "sequenzy", from: "hello@example.com" },
     );
+
     expect(result.checks.authentication.status).toBe("passed");
     expect(result.checks.sender.status).toBe("unsupported");
     expect(result.ok).toBe(false);
@@ -577,11 +633,13 @@ describe("Resend sender readiness", () => {
 
   test("paginates with encoded cursor on the fixed origin", async () => {
     const urls: string[] = [];
+
     const result = await runDoctor({
       ...options,
       from: "hello@example.com",
       fetch: async (url) => {
         urls.push(url);
+
         return json(
           urls.length === 1
             ? list(
@@ -592,6 +650,7 @@ describe("Resend sender readiness", () => {
         );
       },
     });
+
     expect(result.ok).toBe(true);
     expect(urls).toEqual([
       "https://api.resend.com/domains?limit=100",
@@ -601,12 +660,14 @@ describe("Resend sender readiness", () => {
 
   test("bounds pagination to ten pages", async () => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       from: "hello@example.com",
       fetch: async () =>
         json(list([{ ...domain, id: String(++calls), name: "other.example.com" }], true)),
     });
+
     expect(calls).toBe(10);
     expect(result.checks.authentication.status).toBe("passed");
     expect(result.checks.sender.status).toBe("inconclusive");
@@ -623,20 +684,24 @@ describe("Resend sender readiness", () => {
 
   test("repeated pagination cursors stop", async () => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       from: "hello@example.com",
       fetch: async () => {
         calls++;
+
         return json(list([{ ...domain, name: "other.example.com" }], true));
       },
     });
+
     expect(calls).toBe(2);
     expect(result.checks.sender.status).toBe("inconclusive");
   });
 
   test("later permission failure does not erase authentication success", async () => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       from: "hello@example.com",
@@ -645,6 +710,7 @@ describe("Resend sender readiness", () => {
           ? json(list([{ ...domain, name: "other.example.com" }], true))
           : json({}, 403),
     });
+
     expect(result.checks.authentication.status).toBe("passed");
     expect(result.checks.sender.status).toBe("insufficient_permissions");
     expect(result.ok).toBe(false);

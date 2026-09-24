@@ -45,9 +45,18 @@ test("registry rejects fields implying a passing run or date", () => {
 
 test("contract test membership in the docs table matches packages/email-sdk/src on disk", () => {
   const onDisk = contractTestFilesOnDisk(["resend", "smtp", "brevo", "nonexistent"]);
-  expect(onDisk.resend).toEqual(["adapters.test.ts", "core.test.ts"]);
+  expect(onDisk.resend).toEqual([
+    "adapters.field-support.test.ts",
+    "adapters.resend-postmark-sendgrid.test.ts",
+    "adapters.scheduling.test.ts",
+    "core.telemetry-volume.test.ts",
+  ]);
   expect(onDisk.smtp).toEqual(["smtp.test.ts"]);
-  expect(onDisk.brevo).toEqual(["adapters.test.ts"]);
+  expect(onDisk.brevo).toEqual([
+    "adapters.field-support.test.ts",
+    "adapters.json-providers.test.ts",
+    "adapters.scheduling.test.ts",
+  ]);
   expect(onDisk.nonexistent).toEqual([]);
 });
 

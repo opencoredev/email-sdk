@@ -14,6 +14,7 @@ export function routingPlugin<Name extends string>(
       {
         async beforeSend(event) {
           const adapter = await options.select(event);
+
           if (!adapter) return;
 
           return {

@@ -27,9 +27,13 @@ import {
 import { webhook } from "../src/webhook.js";
 
 const url = process.env.DURABLE_TEST_DATABASE_URL;
+
 const schema = `durable_test_${randomUUID().replaceAll("-", "")}`;
+
 const pool = url ? database(url, schema) : undefined;
+
 const integration = url ? test : test.skip;
+
 const message: DurableMessage = {
   from: "sender@example.test",
   to: ["to@example.test"],
@@ -38,9 +42,11 @@ const message: DurableMessage = {
   subject: "Fixture",
   text: "Never sent externally",
 };
+
 function fixture(send?: EmailAdapter["send"], provider = "resend", account = "fixture-account") {
   const adapter = memoryAdapter(provider);
   let calls = 0;
+
   const route: Route = {
     provider,
     account,
@@ -50,6 +56,7 @@ function fixture(send?: EmailAdapter["send"], provider = "resend", account = "fi
           ...adapter,
           send: async (msg, context) => {
             calls++;
+
             return send ? send(msg, context) : { adapter: provider, id: `fixture_${randomUUID()}` };
           },
         },
@@ -58,20 +65,26 @@ function fixture(send?: EmailAdapter["send"], provider = "resend", account = "fi
       retry: { maxAttempts: 1 },
     }),
   };
+
   return { route, calls: () => calls };
 }
+
 async function add(route: Route, key: string = randomUUID(), payload = message, maxAttempts = 3) {
   return transaction(pool!, (tx) => enqueue(tx, route, { key, message: payload, maxAttempts }));
 }
+
 async function row(id: string) {
   return (await pool!.query("SELECT * FROM jobs WHERE id=$1", [id])).rows[0];
 }
+
 async function due(id: string) {
   await pool!.query("UPDATE jobs SET next_at=now()-interval '1 second' WHERE id=$1", [id]);
 }
+
 async function expire(id: string) {
   await pool!.query("UPDATE jobs SET lease_until=now()-interval '1 second' WHERE id=$1", [id]);
 }
+
 function event(
   deliveryId: string,
   messageId: string,
@@ -80,8 +93,11 @@ function event(
 ) {
   return { provider, deliveryId, providerMessageId: messageId, status, payload: {} };
 }
+
 const secretBytes = Buffer.from("fixture-secret-not-a-real-credential");
+
 const secret = `whsec_${secretBytes.toString("base64")}`;
+
 function signedRequest(
   messageId: string,
   type = "email.delivered",
@@ -89,9 +105,11 @@ function signedRequest(
   timestamp = Math.floor(Date.now() / 1000),
 ) {
   const body = JSON.stringify({ type, data: { email_id: messageId } });
+
   const signature = createHmac("sha256", secretBytes)
     .update(`${deliveryId}.${timestamp}.${body}`)
     .digest("base64");
+
   return new Request("http://localhost/webhooks/resend", {
     method: "POST",
     body,
@@ -102,15 +120,18 @@ function signedRequest(
     },
   });
 }
+
 before(async () => {
   if (pool) await setup(pool, schema);
 });
+
 beforeEach(async () => {
   if (pool)
     await pool.query(
       "TRUNCATE reconciliations,suppressions,webhook_events,receipts,attempts,jobs,business_records CASCADE",
     );
 });
+
 after(async () => {
   if (pool) {
     try {
@@ -133,6 +154,7 @@ integration(
     assert.equal((await pool!.query("SELECT count(*)::int AS n FROM jobs")).rows[0].n, 1);
   },
 );
+
 integration(
   "validation precedes persistence and business changes roll back with enqueue",
   async () => {
@@ -165,6 +187,7 @@ integration(
     );
   },
 );
+
 integration("SKIP LOCKED concurrent workers claim each job only once", async () => {
   const { route, calls } = fixture();
   await Promise.all(Array.from({ length: 20 }, () => add(route)));
@@ -183,11 +206,13 @@ integration("SKIP LOCKED concurrent workers claim each job only once", async () 
   );
   assert.equal((await pool!.query("SELECT count(*)::int AS n FROM attempts")).rows[0].n, 20);
 });
+
 integration("locked candidate is skipped without blocking another claim", async () => {
   const { route } = fixture();
   const first = await add(route);
   const second = await add(route);
   const tx = await pool!.connect();
+
   try {
     await tx.query("BEGIN");
     await tx.query("SELECT id FROM jobs WHERE id=$1 FOR UPDATE", [first]);
@@ -198,6 +223,7 @@ integration("locked candidate is skipped without blocking another claim", async 
     tx.release();
   }
 });
+
 integration(
   "expired inflight work is quarantined and stale tokens cannot complete or resend",
   async () => {
@@ -223,6 +249,7 @@ integration(
     );
   },
 );
+
 integration(
   "proven not_sent retry persists bounded backoff and exactly one SDK attempt per claim",
   async () => {
@@ -233,27 +260,33 @@ integration(
         retryable: true,
       });
     });
+
     const id = await add(route);
+
     for (let attempt = 1; attempt <= 3; attempt++) {
       await runOne(pool!, route);
       assert.equal(calls(), attempt);
       const job = await row(id);
       assert.equal(job.attempts, attempt);
       assert.equal(job.state, attempt < 3 ? "queued" : "failed");
+
       const delay = (
         await pool!.query(
           "SELECT extract(epoch FROM (next_at-updated_at))*1000 AS delay FROM jobs WHERE id=$1",
           [id],
         )
       ).rows[0].delay;
+
       assert.equal(Number(delay), backoff(attempt));
       assert.equal(await runOne(pool!, route), false);
       await due(id);
     }
+
     assert.equal(await claim(pool!, route), undefined);
     assert.equal(backoff(100), 60000);
   },
 );
+
 integration(
   "unknown, partial acceptance, middleware and generic failures never auto-retry",
   async () => {
@@ -268,22 +301,26 @@ integration(
       }),
       new EmailMiddlewareError("after_send", new Error("fixture")),
     ];
+
     for (const error of failures) {
       const { route, calls } = fixture(() => {
         throw error;
       });
+
       const id = await add(route);
       await runOne(pool!, route);
       assert.equal((await row(id)).state, "needs_reconciliation");
       assert.equal(await runOne(pool!, route), false);
       assert.equal(calls(), 1);
     }
+
     const { route } = fixture(() => ({
       adapter: "resend",
       id: "partial-receipt",
       accepted: [message.to[0]],
       rejected: [message.cc![0]],
     }));
+
     const id = await add(route);
     await runOne(pool!, route);
     assert.equal((await row(id)).state, "needs_reconciliation");
@@ -294,16 +331,19 @@ integration(
     );
   },
 );
+
 integration("terminal not_sent failure is failed rather than quarantined or retried", async () => {
   const { route, calls } = fixture(() => {
     throw new EmailAdapterError("terminal", { adapter: "resend", delivery: "not_sent" });
   });
+
   const id = await add(route);
   await runOne(pool!, route);
   assert.equal((await row(id)).state, "failed");
   assert.equal(await runOne(pool!, route), false);
   assert.equal(calls(), 1);
 });
+
 integration(
   "signed Resend replay persistence is atomic and bounce/complaint remain sticky",
   async () => {
@@ -311,6 +351,7 @@ integration(
     const id = await add(route);
     await runOne(pool!, route);
     const replay = randomUUID();
+
     const responses = await Promise.all(
       Array.from({ length: 8 }, () =>
         webhook(
@@ -321,6 +362,7 @@ integration(
         ),
       ),
     );
+
     assert.ok(responses.every((response) => response.status === 200));
     assert.equal((await pool!.query("SELECT count(*)::int AS n FROM webhook_events")).rows[0].n, 1);
     assert.equal((await row(id)).delivery, "bounced");
@@ -336,6 +378,7 @@ integration(
     );
   },
 );
+
 integration(
   "pre-receipt inbox joins atomically with acceptance and scopes provider/account/message ID",
   async () => {
@@ -352,12 +395,14 @@ integration(
     assert.equal((await pool!.query("SELECT count(*)::int AS n FROM suppressions")).rows[0].n, 0);
     await complete(pool!, job, { kind: "accepted", messageId: "same-id" });
     assert.equal((await row(id)).delivery, "bounced");
+
     const next = await add(route, randomUUID(), {
       ...message,
       to: ["other@example.test"],
       cc: undefined,
       bcc: undefined,
     });
+
     const nextJob = (await claim(pool!, route))!;
     await Promise.all([
       complete(pool!, nextJob, { kind: "accepted", messageId: "racing" }),
@@ -366,19 +411,23 @@ integration(
     assert.equal((await row(next)).delivery, "complained");
   },
 );
+
 integration(
   "suppression checks every to/cc/bcc recipient across every explicit route and account",
   async () => {
     await pool!.query("INSERT INTO suppressions(recipient,reason) VALUES($1,'bounced')", [
       "blocked@example.test",
     ]);
+
     for (const field of ["to", "cc", "bcc"] as const) {
       for (const provider of ["resend", "memory"]) {
         const { route, calls } = fixture(undefined, provider, `account-${provider}`);
+
         const id = await add(route, randomUUID(), {
           ...message,
           [field]: ["blocked@example.test"],
         });
+
         await runOne(pool!, route);
         assert.equal((await row(id)).state, "suppressed");
         assert.equal(calls(), 0);
@@ -386,6 +435,7 @@ integration(
     }
   },
 );
+
 integration(
   "invalid/stale signatures persist nothing and persistence failure requests replay",
   async () => {
@@ -408,6 +458,7 @@ integration(
     await pool!.query(
       "ALTER TABLE webhook_events ADD CONSTRAINT fixture_failure CHECK(false) NOT VALID",
     );
+
     try {
       assert.equal(
         (await webhook(pool!, "fixture-account", secret, signedRequest("id"))).status,
@@ -416,9 +467,11 @@ integration(
     } finally {
       await pool!.query("ALTER TABLE webhook_events DROP CONSTRAINT fixture_failure");
     }
+
     assert.equal((await pool!.query("SELECT count(*)::int AS n FROM webhook_events")).rows[0].n, 0);
   },
 );
+
 integration(
   "reconciliation requires evidence, respects retry bound, and attaches early delivery without sending",
   async () => {

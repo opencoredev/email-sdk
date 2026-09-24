@@ -9,9 +9,14 @@ import {
 } from "./errors.js";
 import { graph } from "./graph.js";
 import type { EmailAdapterContext, EmailMessage } from "./types.js";
+import { stubFetch } from "../test-support/fetch.js";
+import { rejectionOf } from "../test-support/assertions.js";
+import type { JsonValue } from "../test-support/json.js";
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
+
 const user = "d4f540b2-6478-4ee3-bdd3-d3a5397d97ac";
+
 const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
 const context: EmailAdapterContext = {
@@ -36,9 +41,9 @@ type GraphCall = {
 function graphCapture(
   options: {
     sendStatus?: number;
-    sendBody?: unknown;
+    sendBody?: JsonValue;
     tokenStatus?: number;
-    tokenBody?: unknown;
+    tokenBody?: JsonValue;
   } = {},
 ) {
   const {
@@ -47,9 +52,10 @@ function graphCapture(
     tokenStatus = 200,
     tokenBody = { access_token: "test-token", expires_in: 3600 },
   } = options;
+
   const calls: GraphCall[] = [];
 
-  const fetch = (async (input, requestInit) => {
+  const fetch = stubFetch(async (input, requestInit) => {
     const url = String(input);
     calls.push({
       url,
@@ -64,12 +70,12 @@ function graphCapture(
     return sendBody === undefined
       ? new Response(null, { status: sendStatus })
       : jsonResponse(sendBody, sendStatus);
-  }) as typeof globalThis.fetch;
+  });
 
   return { calls, fetch };
 }
 
-function jsonResponse(body: unknown, status: number) {
+function jsonResponse(body: JsonValue, status: number) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
@@ -97,6 +103,7 @@ function sendMailUrl(mailbox: string) {
 function sendMailCall(calls: readonly GraphCall[]) {
   const call = calls.find((entry) => entry.url.includes("/sendMail"));
   expect(call).toBeDefined();
+
   return call!;
 }
 
@@ -155,6 +162,7 @@ describe("graph validation", () => {
 
   test("allows 5 custom headers but rejects a sixth", () => {
     const adapter = graphAdapter(graphCapture().fetch);
+
     const headers = Array.from({ length: 6 }, (_, index) => ({
       name: `X-Probe-${index + 1}`,
       value: String(index + 1),
@@ -353,16 +361,23 @@ describe("graph authentication", () => {
     let tokenRequests = 0;
     let sends = 0;
     let release!: (response: Response) => void;
-    const adapter = graphAdapter((async (url) => {
-      if (String(url) === tokenUrl) {
-        tokenRequests++;
-        return await new Promise<Response>((resolve) => {
-          release = resolve;
-        });
-      }
-      sends++;
-      return new Response(null, { status: 202 });
-    }) as typeof fetch);
+
+    const adapter = graphAdapter(
+      stubFetch(async (url) => {
+        if (String(url) === tokenUrl) {
+          tokenRequests++;
+
+          return await new Promise<Response>((resolve) => {
+            release = resolve;
+          });
+        }
+
+        sends++;
+
+        return new Response(null, { status: 202 });
+      }),
+    );
+
     const controller = new AbortController();
     const cancelled = adapter.send(message, { ...context, signal: controller.signal });
     const other = adapter.send(message, context);
@@ -390,13 +405,15 @@ describe("graph authentication", () => {
 
   test("aborts while an injected token provider is pending", async () => {
     const controller = new AbortController();
+
     const adapter = graph({
       user,
       getAccessToken: () => new Promise<string>(() => {}),
-      fetch: (() => {
+      fetch: stubFetch(() => {
         throw new Error("An aborted send must not reach Graph");
-      }) as typeof fetch,
+      }),
     });
+
     const pending = adapter.send(message, { ...context, signal: controller.signal });
     controller.abort();
     await expect(pending).rejects.toBeInstanceOf(EmailAbortError);
@@ -405,20 +422,23 @@ describe("graph authentication", () => {
   test("shares token acquisition and expired-token refresh across concurrent sends", async () => {
     let tokenRequests = 0;
     let release: ((response: Response) => void) | undefined;
+
     const adapter = graph({
       tenantId,
       clientId: "client-id",
       clientSecret: "client-secret",
       user,
-      fetch: (async (url) => {
+      fetch: stubFetch(async (url) => {
         if (String(url) === tokenUrl) {
           tokenRequests++;
+
           return await new Promise<Response>((resolve) => {
             release = resolve;
           });
         }
+
         return new Response(null, { status: 202 });
-      }) as typeof fetch,
+      }),
     });
 
     for (const round of [1, 2]) {
@@ -432,25 +452,30 @@ describe("graph authentication", () => {
 
   test("clears a failed shared refresh so later sends can recover", async () => {
     let tokenRequests = 0;
+
     const adapter = graph({
       tenantId,
       clientId: "client-id",
       clientSecret: "client-secret",
       user,
-      fetch: (async (url) => {
+      fetch: stubFetch(async (url) => {
         if (String(url) === tokenUrl) {
           tokenRequests++;
+
           if (tokenRequests === 1) return new Response(null, { status: 503 });
+
           return Response.json({ access_token: "recovered", expires_in: 3600 });
         }
+
         return new Response(null, { status: 202 });
-      }) as typeof fetch,
+      }),
     });
 
     const failed = await Promise.allSettled([
       adapter.send(message, context),
       adapter.send(message, context),
     ]);
+
     expect(failed.map((result) => result.status)).toEqual(["rejected", "rejected"]);
     expect(tokenRequests).toBe(1);
     await adapter.send(message, context);
@@ -460,6 +485,7 @@ describe("graph authentication", () => {
   test("uses the configured national-cloud token endpoint and scope", async () => {
     const calls: GraphCall[] = [];
     const tokenUrl = `https://login.microsoftonline.us/${tenantId}/oauth2/v2.0/token`;
+
     const adapter = graph({
       tenantId,
       clientId: "client-id",
@@ -468,17 +494,19 @@ describe("graph authentication", () => {
       baseUrl: "https://graph.microsoft.us/v1.0",
       tokenUrl,
       scope: "https://graph.microsoft.us/.default",
-      fetch: (async (url, init) => {
+      fetch: stubFetch(async (url, init) => {
         calls.push({
           url: String(url),
           headers: new Headers(init?.headers),
           body: String(init?.body),
         });
+
         return String(url) === tokenUrl
           ? Response.json({ access_token: "government-token", expires_in: 3600 })
           : new Response(null, { status: 202 });
-      }) as typeof fetch,
+      }),
     });
+
     await adapter.send(message, context);
     expect(calls[0]?.url).toBe(tokenUrl);
     expect(calls[0]?.body).toContain("scope=https%3A%2F%2Fgraph.microsoft.us%2F.default");
@@ -513,6 +541,7 @@ describe("graph authentication", () => {
 
   test("uses getAccessToken instead of the token endpoint", async () => {
     const capture = graphCapture();
+
     const adapter = graph({
       getAccessToken: () => "injected-token",
       user,
@@ -528,14 +557,19 @@ describe("graph authentication", () => {
   test("refreshes a cached built-in token once after a 401", async () => {
     let tokenRequests = 0;
     let sends = 0;
-    const fetch = (async (input) => {
+
+    const fetch = stubFetch(async (input) => {
       if (String(input) === tokenUrl) {
         tokenRequests++;
+
         return Response.json({ access_token: `token-${tokenRequests}`, expires_in: 3600 });
       }
+
       sends++;
+
       return new Response(null, { status: sends === 1 ? 401 : 202 });
-    }) as typeof globalThis.fetch;
+    });
+
     const adapter = graphAdapter(fetch);
 
     await adapter.send(message, context);
@@ -547,14 +581,18 @@ describe("graph authentication", () => {
   test("does not loop when refreshed built-in tokens also return 401", async () => {
     let tokenRequests = 0;
     let sends = 0;
-    const fetch = (async (input) => {
+
+    const fetch = stubFetch(async (input) => {
       if (String(input) === tokenUrl) {
         tokenRequests++;
+
         return Response.json({ access_token: `token-${tokenRequests}`, expires_in: 3600 });
       }
+
       sends++;
+
       return new Response(null, { status: 401 });
-    }) as typeof globalThis.fetch;
+    });
 
     const adapter = graphAdapter(fetch);
     await expect(adapter.send(message, context)).rejects.toMatchObject({ status: 401 });
@@ -570,17 +608,22 @@ describe("graph authentication", () => {
     async (stage) => {
       let tokenRequests = 0;
       let hang = true;
-      const fetch = (async (input) => {
+
+      const fetch = stubFetch(async (input) => {
         if (String(input) === tokenUrl) {
           tokenRequests++;
+
           if (hang)
             return stage === "fetch"
               ? await new Promise<Response>(() => {})
               : new Response(new ReadableStream());
+
           return Response.json({ access_token: "recovered", expires_in: 3600 });
         }
+
         return new Response(null, { status: 202 });
-      }) as typeof globalThis.fetch;
+      });
+
       const adapter = graphAdapter(fetch, { tokenTimeoutMs: 10 });
 
       await expect(adapter.send(message, context)).rejects.toMatchObject({
@@ -598,23 +641,31 @@ describe("graph authentication", () => {
     let sends = 0;
     let releaseOld!: (response: Response) => void;
     let started!: () => void;
+
     const firstRequest = new Promise<void>((resolve) => {
       started = resolve;
     });
-    const adapter = graphAdapter((async (input, init) => {
-      if (String(input) === tokenUrl) {
-        return Response.json({ access_token: `token-${++tokenRequests}`, expires_in: 3600 });
-      }
-      if (++sends === 1) {
-        started();
-        return await new Promise<Response>((resolve) => {
-          releaseOld = resolve;
+
+    const adapter = graphAdapter(
+      stubFetch(async (input, init) => {
+        if (String(input) === tokenUrl) {
+          return Response.json({ access_token: `token-${++tokenRequests}`, expires_in: 3600 });
+        }
+
+        if (++sends === 1) {
+          started();
+
+          return await new Promise<Response>((resolve) => {
+            releaseOld = resolve;
+          });
+        }
+
+        return new Response(null, {
+          status: new Headers(init?.headers).get("Authorization") === "Bearer token-1" ? 401 : 202,
         });
-      }
-      return new Response(null, {
-        status: new Headers(init?.headers).get("Authorization") === "Bearer token-1" ? 401 : 202,
-      });
-    }) as typeof fetch);
+      }),
+    );
+
     const first = adapter.send(message, context);
     await firstRequest;
     await adapter.send(message, context);
@@ -627,19 +678,23 @@ describe("graph authentication", () => {
   test("does not refresh custom tokens after a 401", async () => {
     let tokenCalls = 0;
     let sends = 0;
+
     const adapter = graph({
       getAccessToken: () => {
         tokenCalls++;
+
         return "custom-token";
       },
       user,
-      fetch: (async (input) => {
+      fetch: stubFetch(async (input) => {
         if (String(input).includes("/sendMail")) {
           sends++;
+
           return new Response(null, { status: 401 });
         }
+
         throw new Error("unexpected request");
-      }) as typeof globalThis.fetch,
+      }),
     });
 
     await expect(adapter.send(message, context)).rejects.toMatchObject({ status: 401 });
@@ -675,6 +730,7 @@ describe("graph errors", () => {
       sendStatus: 429,
       sendBody: { error: { code: "TooMany" } },
     });
+
     const serverError = graphCapture({ sendStatus: 503 });
 
     await expect(graphAdapter(throttled.fetch).send(message, context)).rejects.toMatchObject({
@@ -722,13 +778,15 @@ describe("graph errors", () => {
   test("retries a token exchange that previously failed", async () => {
     let tokenStatus = 500;
     const calls: string[] = [];
-    const fetch = (async (input) => {
+
+    const fetch = stubFetch(async (input) => {
       const url = String(input);
       calls.push(url);
 
       if (url === tokenUrl) {
         const status = tokenStatus;
         tokenStatus = 200;
+
         return jsonResponse(
           status === 200 ? { access_token: "test-token", expires_in: 3600 } : { error: {} },
           status,
@@ -736,7 +794,8 @@ describe("graph errors", () => {
       }
 
       return new Response(null, { status: 202 });
-    }) as typeof globalThis.fetch;
+    });
+
     const adapter = graphAdapter(fetch);
 
     await expect(adapter.send(message, context)).rejects.toBeInstanceOf(EmailAdapterError);
@@ -761,15 +820,17 @@ describe("graph errors", () => {
   test("reports token network failures as retryable and not sent", async () => {
     const email = createEmailClient({
       adapters: [
-        graphAdapter((async () => {
-          throw new TypeError("fetch failed");
-        }) as unknown as typeof globalThis.fetch),
+        graphAdapter(
+          stubFetch(async () => {
+            throw new TypeError("fetch failed");
+          }),
+        ),
       ],
     });
 
-    const error = await email.send(message).catch((caught) => caught);
+    const error = await rejectionOf(email.send(message), EmailRouteError);
     expect(error).toBeInstanceOf(EmailRouteError);
-    expect((error as EmailRouteError).failures[0]).toMatchObject({
+    expect(error.failures[0]).toMatchObject({
       adapter: "graph",
       message: "fetch failed",
       retryable: true,
@@ -779,6 +840,7 @@ describe("graph errors", () => {
 
   test("reports getAccessToken failures as not sent", async () => {
     const capture = graphCapture();
+
     const email = createEmailClient({
       adapters: [
         graph({
@@ -791,9 +853,9 @@ describe("graph errors", () => {
       ],
     });
 
-    const error = await email.send(message).catch((caught) => caught);
+    const error = await rejectionOf(email.send(message), EmailRouteError);
     expect(error).toBeInstanceOf(EmailRouteError);
-    expect((error as EmailRouteError).failures[0]).toMatchObject({
+    expect(error.failures[0]).toMatchObject({
       adapter: "graph",
       message: "managed identity unavailable",
       retryable: false,

@@ -19,6 +19,7 @@ import { webhook } from "./webhook.js";
 function route(): Route {
   const mode = process.env.EMAIL_MODE ?? "memory";
   const account = process.env.EMAIL_ACCOUNT ?? "local-fixture";
+
   if (mode === "memory") {
     const adapter = memoryAdapter();
     const send = adapter.send;
@@ -26,6 +27,7 @@ function route(): Route {
       ...(await send(message, context)),
       id: `fixture_${randomUUID()}`,
     });
+
     return {
       provider: "memory",
       account,
@@ -36,6 +38,7 @@ function route(): Route {
       }),
     };
   }
+
   if (
     mode !== "resend" ||
     process.env.EMAIL_LIVE_SEND !== "I_AUTHORIZE_REAL_EMAIL" ||
@@ -43,6 +46,7 @@ function route(): Route {
     account === "local-fixture"
   )
     throw new Error("Live sending requires explicit mode, authorization, key, and account");
+
   return {
     provider: "resend",
     account,
@@ -53,12 +57,16 @@ function route(): Route {
     }),
   };
 }
+
 const pool = database(
   process.env.DATABASE_URL ?? "postgres://email_sdk_test@127.0.0.1:5438/email_sdk_adoption",
   process.env.DATABASE_SCHEMA,
 );
+
 const [command, ...args] = process.argv.slice(2);
+
 let serverRunning = false;
+
 try {
   switch (command) {
     case "setup":
@@ -72,6 +80,7 @@ try {
           "INSERT INTO business_records(id,state) VALUES($1,'active') ON CONFLICT(id) DO UPDATE SET state='active'",
           [key],
         );
+
         return enqueue(tx, route(), {
           key,
           message: {
@@ -82,26 +91,33 @@ try {
           },
         });
       });
+
       console.log(JSON.stringify({ event: "enqueued", jobId: id }));
       break;
     }
+
     case "worker": {
       const emailRoute = route();
       let processed = 0;
+
       while (await runOne(pool, emailRoute)) processed++;
       console.log(JSON.stringify({ event: "worker_drained", processed }));
       break;
     }
+
     case "status": {
       const rows = await pool.query(
         "SELECT id,state,attempts,max_attempts,next_at,delivery FROM jobs ORDER BY created_at DESC LIMIT 100",
       );
+
       console.log(JSON.stringify(rows.rows, null, 2));
       break;
     }
+
     case "reconcile": {
       await recover(pool);
       const [id, decision, evidence, messageId] = args;
+
       if (!id) {
         console.log(
           JSON.stringify(
@@ -118,31 +134,44 @@ try {
         await reconcile(pool, id, decision, evidence ?? "", messageId);
         console.log(JSON.stringify({ event: "reconciled", jobId: id, decision }));
       }
+
       break;
     }
+
     case "webhook": {
       const secret = process.env.RESEND_WEBHOOK_SECRET;
       const account = process.env.WEBHOOK_ACCOUNT;
+
       if (!secret || !account) throw new Error("Webhook secret and fixed account are required");
+
       const server = createServer(async (request, response) => {
         try {
           if (request.method !== "POST" || request.url !== "/webhooks/resend") {
             response.writeHead(404).end();
+
             return;
           }
+
           const chunks: Buffer[] = [];
           let size = 0;
+
           for await (const chunk of request) {
             size += chunk.length;
+
             if (size > 262144) {
               response.writeHead(413).end();
+
               return;
             }
+
             chunks.push(Buffer.from(chunk));
           }
+
           const headers = new Headers();
+
           for (const [key, value] of Object.entries(request.headers))
             if (value) headers.set(key, Array.isArray(value) ? value.join(",") : value);
+
           const result = await webhook(
             pool,
             account,
@@ -153,12 +182,15 @@ try {
               body: Buffer.concat(chunks).toString("utf8"),
             }),
           );
+
           response.writeHead(result.status).end(await result.text());
         } catch {
           response.writeHead(503).end("Unavailable");
         }
       });
+
       server.listen(Number(process.env.WEBHOOK_PORT ?? 8787), "127.0.0.1");
+
       for (const signal of ["SIGINT", "SIGTERM"] as const)
         process.once(signal, () => {
           server.close(() => {
@@ -169,6 +201,7 @@ try {
       console.log(JSON.stringify({ event: "webhook_listening" }));
       break;
     }
+
     default:
       throw new Error("Choose setup, enqueue, worker, status, reconcile, or webhook");
   }

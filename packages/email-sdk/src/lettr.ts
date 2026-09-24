@@ -1,4 +1,12 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import {
+  type JsonValue,
+  isJsonNumber,
+  isStringMember,
+  jsonField,
+  jsonString,
+  responseJson,
+} from "./internal/decode.js";
 import { emailParts, sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -21,13 +29,10 @@ export type LettrAdapterOptions = {
   headers?: Record<string, string>;
 };
 
-type LettrSendResponse = {
-  message?: string;
-  data: {
-    request_id: string;
-    accepted: number;
-    rejected: number;
-  };
+type LettrSendData = {
+  requestId: string;
+  accepted: number;
+  rejected: number;
 };
 
 const DEFAULT_BASE_URL = "https://app.lettr.com/api";
@@ -69,11 +74,13 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
       definition.validate?.(message, context);
       assertLettrMessage(message);
       const scheduledAt = sendAtIso(message);
+
       const recipients = [
         ...arrayify(message.to),
         ...arrayify(message.cc),
         ...arrayify(message.bcc),
       ].map(emailAddressOf);
+
       const response = await fetcher(
         `${baseUrl}${scheduledAt ? "/emails/scheduled" : "/emails"}`,
         {
@@ -99,8 +106,10 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
         });
       }
 
-      const body: unknown = await response.json().catch(() => undefined);
-      if (!isLettrSendResponse(body)) {
+      const body = await responseJson(response).catch(() => undefined);
+      const data = lettrSendData(body);
+
+      if (!data) {
         throw new EmailAdapterError("Lettr returned an invalid success response.", {
           adapter: "lettr",
           retryable: false,
@@ -109,7 +118,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
         });
       }
 
-      const { request_id: requestId, accepted, rejected } = body.data;
+      const { requestId, accepted, rejected } = data;
+
       if (accepted + rejected !== recipients.length) {
         throw new EmailAdapterError(
           "Lettr returned recipient counts that did not match the request.",
@@ -166,23 +176,21 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
   };
 }
 
-function isLettrSendResponse(value: unknown): value is LettrSendResponse {
-  if (!value || typeof value !== "object") return false;
+function lettrSendData(body: JsonValue | undefined): LettrSendData | undefined {
+  const data = jsonField(body, "data");
+  const requestId = jsonString(data, "request_id");
+  const accepted = jsonField(data, "accepted");
+  const rejected = jsonField(data, "rejected");
 
-  const data = (value as { data?: unknown }).data;
-  if (!data || typeof data !== "object") return false;
+  if (!requestId || !isCount(accepted) || !isCount(rejected)) {
+    return undefined;
+  }
 
-  const response = data as Record<string, unknown>;
-  return (
-    typeof response.request_id === "string" &&
-    response.request_id.length > 0 &&
-    typeof response.accepted === "number" &&
-    Number.isInteger(response.accepted) &&
-    response.accepted >= 0 &&
-    typeof response.rejected === "number" &&
-    Number.isInteger(response.rejected) &&
-    response.rejected >= 0
-  );
+  return { requestId, accepted, rejected };
+}
+
+function isCount(value: JsonValue | undefined): value is number {
+  return isJsonNumber(value) && Number.isInteger(value) && value >= 0;
 }
 
 export function assertLettrMessage(message: EmailMessage) {
@@ -205,7 +213,7 @@ export function assertLettrMessage(message: EmailMessage) {
   }
 
   for (const recipient of [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)]) {
-    if (typeof recipient === "string" ? recipient.includes("<") : Boolean(recipient.name)) {
+    if (isStringMember(recipient) ? recipient.includes("<") : Boolean(recipient.name)) {
       throw new EmailValidationError(
         "lettr recipient fields only support plain email addresses.",
       );
@@ -224,6 +232,7 @@ export function assertLettrMessage(message: EmailMessage) {
 async function toLettrPayload(message: EmailMessage, scheduledAt?: string) {
   const from = emailParts(message.from);
   const replyTo = emailParts(arrayify(message.replyTo)[0] ?? "");
+
   const attachments = message.attachments?.length
     ? await Promise.all(message.attachments.map(toLettrAttachment))
     : undefined;
@@ -257,6 +266,7 @@ async function toLettrAttachment(attachment: EmailAttachment) {
 
 function optionalBareAddresses(addresses: EmailMessage["cc"]) {
   const values = arrayify(addresses).map(emailAddressOf);
+
   return values.length > 0 ? values : undefined;
 }
 

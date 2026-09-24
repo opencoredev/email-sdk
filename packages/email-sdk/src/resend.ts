@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -58,11 +59,11 @@ export function resend(
         });
       }
 
-      const body = (await response.json()) as { id?: string };
+      const body = await responseJson(response);
 
       return {
         adapter: "resend",
-        id: body.id,
+        id: jsonString(body, "id"),
         raw: body,
       };
     },

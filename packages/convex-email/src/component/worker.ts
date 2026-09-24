@@ -24,7 +24,7 @@ type QueuedEmail = {
   processingLease: number;
   message: ConvexEmailMessage;
   idempotencyKey?: string;
-  sendMetadata?: Record<string, unknown>;
+  sendMetadata?: Readonly<Record<string, string | number | boolean | null>>;
 };
 
 const markProcessingRef = (internal as any).lib.markProcessing as InternalMutationRef;

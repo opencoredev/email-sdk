@@ -37,6 +37,7 @@ describe("compat client", () => {
 
   test("translates retries into total maxAttempts", async () => {
     let calls = 0;
+
     const client = createEmailClient({
       providers: [
         {
@@ -67,6 +68,7 @@ describe("compat client", () => {
 
   test("translates sendBatch and message-level idempotency", async () => {
     const keys: Array<string | undefined> = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -79,6 +81,7 @@ describe("compat client", () => {
           },
           send(_message, context: { idempotencyKey?: string }) {
             keys.push(context.idempotencyKey);
+
             return { adapter: "legacy", id: "ok" };
           },
         },
@@ -93,6 +96,7 @@ describe("compat client", () => {
 
   test("translates legacy hook event fields", async () => {
     const events: string[] = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -132,6 +136,7 @@ describe("compat client", () => {
         return { pluginValue: "legacy" as const };
       },
     } satisfies EmailPlugin<{ pluginValue: "legacy" }>;
+
     const client = createEmailClient({ plugins: [plugin], telemetry: false });
 
     await expect(client.send(message)).resolves.toMatchObject({ provider: "plugin-adapter" });
@@ -140,6 +145,7 @@ describe("compat client", () => {
 
   test("preserves recipientVariables in sendBatch", async () => {
     const batches: unknown[] = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -149,6 +155,7 @@ describe("compat client", () => {
           },
           sendBulk(batch) {
             batches.push(batch.recipientVariables);
+
             return { provider: "legacy", messageId: "bulk_1" };
           },
         },

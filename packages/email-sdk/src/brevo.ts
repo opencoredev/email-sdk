@@ -50,8 +50,8 @@ export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { bas
     parseResponse(body) {
       return {
         adapter: "brevo",
-        id: firstString(body as Record<string, unknown>, ["messageId", "id"]),
-        messageId: firstString(body as Record<string, unknown>, ["messageId", "id"]),
+        id: firstString(body, ["messageId", "id"]),
+        messageId: firstString(body, ["messageId", "id"]),
         raw: body,
       };
     },

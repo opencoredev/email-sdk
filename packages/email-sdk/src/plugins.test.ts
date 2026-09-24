@@ -14,6 +14,7 @@ import { routingPlugin } from "./plugins-routing.js";
 import { timeoutPlugin } from "./plugins-timeout.js";
 import type { EmailAdapter, EmailPlugin } from "./types.js";
 import { failingAdapter, memoryAdapter } from "./testing.js";
+import { rejectionOf } from "../test-support/assertions.js";
 
 const message = {
   from: "hello@example.com",
@@ -25,6 +26,7 @@ const message = {
 describe("email plugins", () => {
   test("uses a plugin adapter as the only adapter", async () => {
     const provider = memoryAdapter("community");
+
     const client = createEmailClient({
       plugins: [adapterPlugin("community-adapter", provider)],
     });
@@ -37,6 +39,7 @@ describe("email plugins", () => {
 
   test("selects a plugin adapter as the default adapter", async () => {
     const provider = memoryAdapter("community");
+
     const client = createEmailClient({
       adapters: [memoryAdapter("primary")],
       defaultAdapter: "community",
@@ -51,6 +54,7 @@ describe("email plugins", () => {
 
   test("uses plugin adapters for fallback", async () => {
     const backup = memoryAdapter("backup");
+
     const client = createEmailClient({
       adapters: [
         failingAdapter(
@@ -90,6 +94,7 @@ describe("email plugins", () => {
 
   test("runs beforeSend middleware before message validation", async () => {
     const provider = memoryAdapter();
+
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
@@ -149,6 +154,7 @@ describe("email plugins", () => {
 
   test("runs plugin hooks before user hooks", async () => {
     const order: string[] = [];
+
     const client = createEmailClient({
       adapters: [memoryAdapter()],
       plugins: [
@@ -188,9 +194,9 @@ describe("email plugins", () => {
       ],
     });
 
-    const error = await client.send(message).catch((caught) => caught);
+    const error = await rejectionOf(client.send(message), EmailRouteError);
     expect(error).toBeInstanceOf(EmailRouteError);
-    expect((error as EmailRouteError).failures[0]?.adapter).toBe("failing");
+    expect(error.failures[0]?.adapter).toBe("failing");
   });
 
   test("rejects client extension key collisions", () => {
@@ -231,6 +237,7 @@ describe("email plugins", () => {
 
   test("applies send middleware to each batch item", async () => {
     const provider = memoryAdapter();
+
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
@@ -281,6 +288,7 @@ describe("email plugins", () => {
 
   test("captures plugin middleware errors separately from provider errors", async () => {
     const errors: unknown[] = [];
+
     const client = createEmailClient({
       adapters: [
         failingAdapter(
@@ -311,12 +319,14 @@ describe("email plugins", () => {
 
   test("does not double-register adapters added and returned by a plugin factory", async () => {
     const provider = memoryAdapter("factory");
+
     const client = createEmailClient({
       plugins: [
         {
           id: "factory-adapter",
           adapters(ctx) {
             ctx.addAdapter(provider);
+
             return [provider];
           },
         },
@@ -330,6 +340,7 @@ describe("email plugins", () => {
 
   test("built-in plugins allow custom ids", async () => {
     const provider = memoryAdapter();
+
     const client = createEmailClient({
       adapters: [provider],
       plugins: [
@@ -366,6 +377,7 @@ describe("email plugins", () => {
 
   test("observability callbacks run independently when one callback fails", async () => {
     const events: string[] = [];
+
     const client = createEmailClient({
       adapters: [memoryAdapter()],
       plugins: [
@@ -391,6 +403,7 @@ describe("email plugins", () => {
   test("routing plugin selects an adapter from the prepared message", async () => {
     const primary = memoryAdapter("primary");
     const transactional = memoryAdapter("transactional");
+
     const client = createEmailClient({
       adapters: [primary, transactional],
       plugins: [
@@ -414,6 +427,7 @@ describe("email plugins", () => {
   test("timeout plugin composes with caller cancellation", async () => {
     const caller = new AbortController();
     let preparedSignal: AbortSignal | undefined;
+
     const client = createEmailClient({
       adapters: [memoryAdapter()],
       plugins: [
@@ -444,6 +458,7 @@ describe("email plugins", () => {
   test("built-in and community plugins participate in personalized expanded sends", async () => {
     const provider = memoryAdapter("community");
     const observed: string[] = [];
+
     const client = createEmailClient({
       plugins: [
         adapterPlugin("community-adapter", provider),
