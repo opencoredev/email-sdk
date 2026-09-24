@@ -162,12 +162,21 @@ for (const file of sourceFiles) {
     continue;
   }
 
+  // Tracks multiline block comments so a directive on a line of its own inside one is still caught.
+  let inBlockComment = false;
+
   for (const [index, line] of text.split("\n").entries()) {
-    if (directivePattern.test(line) && /\/\/|\/\*/.test(line)) {
+    if (directivePattern.test(line) && (inBlockComment || /\/\/|\/\*/.test(line))) {
       failures.push(
         `${file}:${index + 1}: lint/type disable directives are not allowed; fix the code instead`,
       );
     }
+
+    const opened = line.lastIndexOf("/*");
+    const closed = line.lastIndexOf("*/");
+
+    if (opened > closed) inBlockComment = true;
+    else if (closed !== -1) inBlockComment = false;
   }
 }
 
