@@ -1,29 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Connect, ViteDevServer } from "vite";
+import { IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
 
-import { devJsonImports } from "./dev-json-imports";
+import { devJsonImports, devJsonImportsMiddleware } from "./dev-json-imports";
 
 function request(url: string, destination?: string, method = "GET") {
-  let middleware!: Connect.NextHandleFunction;
-  const configure = devJsonImports().configureServer;
-  if (typeof configure !== "function") throw new Error("Expected configureServer hook");
-  configure.call({} as never, {
-    middlewares: {
-      use(handler: Connect.NextHandleFunction) {
-        middleware = handler;
-      },
-    },
-  } as unknown as ViteDevServer);
-  const req = {
-    url,
-    method,
-    headers: destination === undefined ? {} : { "sec-fetch-dest": destination },
-  } as IncomingMessage;
+  const req = new IncomingMessage(new Socket());
+  req.url = url;
+  req.method = method;
+
+  if (destination !== undefined) req.headers["sec-fetch-dest"] = destination;
+
   const nextCalls: unknown[] = [];
-  middleware(req, {} as ServerResponse, (error?: unknown) => nextCalls.push(error));
+  devJsonImportsMiddleware(req, new ServerResponse(req), (error) => nextCalls.push(error));
   expect(nextCalls).toEqual([undefined]);
   expect(req.url).toBe(url);
+
   return req.headers["sec-fetch-dest"];
 }
 
@@ -60,6 +52,7 @@ describe("development JSON import classification", () => {
     ]) {
       expect(request(url)).toBeUndefined();
     }
+
     expect(request("/src/lib/docs-lastmod.generated.json?import", undefined, "POST")).toBeUndefined();
   });
 
@@ -76,5 +69,9 @@ describe("development JSON import classification", () => {
 
   test("does not apply to production builds", () => {
     expect(devJsonImports().apply).toBe("serve");
+  });
+
+  test("registers the middleware on the dev server", () => {
+    expect(devJsonImports().configureServer).toBeInstanceOf(Function);
   });
 });

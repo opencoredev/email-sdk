@@ -19,9 +19,11 @@ type MdxComponentOptions = {
   docsBasePath?: string;
 };
 
-function versionDocsHref(href: unknown, docsBasePath: string) {
-  if (typeof href !== "string" || docsBasePath === "/docs") return href;
+function versionDocsHref(href: string | undefined, docsBasePath: string) {
+  if (href === undefined || docsBasePath === "/docs") return href;
+
   if (href === "/docs") return docsBasePath;
+
   if (href.startsWith("/docs/")) return `${docsBasePath}${href.slice("/docs".length)}`;
 
   return href;
@@ -33,16 +35,13 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
   return {
     ...defaultMdxComponents,
     a: (props) => (
-      <defaultMdxComponents.a
-        {...props}
-        href={versionDocsHref(props.href, docsBasePath) as string}
-      />
+      <defaultMdxComponents.a {...props} href={versionDocsHref(props.href, docsBasePath)} />
     ),
     Card: (props) => (
       <defaultMdxComponents.Card
         {...props}
         className={["docs-card", props.className].filter(Boolean).join(" ")}
-        href={versionDocsHref(props.href, docsBasePath) as string}
+        href={versionDocsHref(props.href, docsBasePath)}
       />
     ),
     Accordion,

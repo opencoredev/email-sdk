@@ -30,11 +30,13 @@ export const Route = createFileRoute("/sitemap.xml")({
 
 function getSitemapEntries() {
   const publishedBlogPosts = getPublishedBlogPosts();
+
   const latestBlogUpdate =
     publishedBlogPosts.reduce(
       (latest, post) => (post.updatedAt > latest ? post.updatedAt : latest),
       "2026-06-01",
     ) || "2026-06-01";
+
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
@@ -138,6 +140,7 @@ function getSitemapEntries() {
   // near-duplicates that carry noindex and would dilute crawl priority.
   const docsSource = getDocsSource(latestDocsVersion);
   const lastmodByPath: Record<string, string> = docsLastmod;
+
   for (const page of docsSource.getPages()) {
     entries.push({
       loc: `${siteUrl}${page.url}`,
@@ -152,9 +155,11 @@ function getSitemapEntries() {
 
 function dedupeEntries(entries: SitemapEntry[]) {
   const seen = new Set<string>();
+
   return entries.filter((entry) => {
     if (seen.has(entry.loc)) return false;
     seen.add(entry.loc);
+
     return true;
   });
 }

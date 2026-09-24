@@ -38,6 +38,7 @@ function useBloom(): BloomLevel {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
   return mounted && resolvedTheme === "dark" ? "low" : "off";
 }
 
@@ -50,8 +51,10 @@ function useIsNarrow() {
     setNarrow(query.matches);
     const onChange = (event: MediaQueryListEvent) => setNarrow(event.matches);
     query.addEventListener("change", onChange);
+
     return () => query.removeEventListener("change", onChange);
   }, []);
+
   return narrow;
 }
 
@@ -69,6 +72,7 @@ export function StatCard({
   hint?: string;
 }) {
   const bloom = useBloom();
+
   return (
     <div className="flex flex-col justify-between gap-3 rounded-lg border border-fd-border bg-fd-card p-4">
       <div className="flex items-baseline justify-between gap-2">
@@ -151,6 +155,7 @@ export function VersionsDonut({ data }: { data: VersionDownloads[] }) {
   const bloom = useBloom();
   const config: ChartConfig = {};
   let colorIndex = 0;
+
   for (const entry of data) {
     config[entry.version] =
       entry.version === "other"
@@ -160,6 +165,7 @@ export function VersionsDonut({ data }: { data: VersionDownloads[] }) {
             color: versionColors[colorIndex++ % versionColors.length],
           };
   }
+
   const total = data.reduce((sum, entry) => sum + entry.downloads, 0);
 
   return (
@@ -201,12 +207,14 @@ const weekdayConfig: ChartConfig = { downloads: { label: "Avg downloads", color:
 export function WeekdayRadar({ data }: { data: DailyDownloads[] }) {
   const bloom = useBloom();
   const totals = WEEKDAYS.map(() => ({ sum: 0, days: 0 }));
+
   for (const entry of data) {
     // getUTCDay: 0 = Sunday; rotate so the axes run Mon..Sun.
     const index = (new Date(`${entry.day}T00:00:00Z`).getUTCDay() + 6) % 7;
     totals[index].sum += entry.downloads;
     totals[index].days += 1;
   }
+
   const rows = WEEKDAYS.map((weekday, index) => ({
     weekday,
     downloads: totals[index].days === 0 ? 0 : Math.round(totals[index].sum / totals[index].days),

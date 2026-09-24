@@ -35,7 +35,9 @@ export function getFieldSupport(key: ProviderKey): Partial<Record<MessageField, 
 
 export function getProvider(key: ProviderKey): Provider {
   const provider = providers.find((entry) => entry.key === key);
+
   if (!provider) throw new Error(`Unknown provider key: ${key}`);
+
   return provider;
 }
 
@@ -47,6 +49,7 @@ export function getProvider(key: ProviderKey): Provider {
 export function getFallbackGaps(from: ProviderKey, to: ProviderKey): MessageField[] {
   const fromSupport = getFieldSupport(from);
   const toSupport = getFieldSupport(to);
+
   return messageFields.filter((field) => fromSupport[field] && !toSupport[field]);
 }
 

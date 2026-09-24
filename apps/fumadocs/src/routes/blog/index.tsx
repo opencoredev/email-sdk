@@ -2,14 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 
 import { ArrowRight } from "@/components/icon";
-import { formatBlogDate, type BlogPost } from "@/lib/blog";
+import { formatBlogDate } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { getBlogPostsServerFn } from "@/lib/notra-runtime";
 import { appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 
 export const Route = createFileRoute("/blog/")({
   head: ({ loaderData }) => {
-    const posts = (loaderData as BlogPost[] | undefined) ?? [];
+    const posts = loaderData ?? [];
+
     const description =
       "TypeScript email notes for developers who care about provider choice, fallbacks, testing, and boring production behavior.";
 
@@ -85,7 +86,7 @@ export const Route = createFileRoute("/blog/")({
 });
 
 function BlogIndex() {
-  const posts = Route.useLoaderData() as BlogPost[];
+  const posts = Route.useLoaderData();
 
   return (
     <HomeLayout {...baseOptions()}>

@@ -5,9 +5,11 @@ import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { jetemail } from "../packages/email-sdk/src/jetemail.js";
 
 config({ path: ".env.local" });
+
 config();
 
 const baseUrl = process.env.JETEMAIL_BASE_URL ?? "https://api.jetemail.com";
+
 const apiKey = process.env.JETEMAIL_API_KEY;
 
 if (!apiKey) {
@@ -15,7 +17,9 @@ if (!apiKey) {
 }
 
 const result = await runDoctor({ adapter: "jetemail", credential: apiKey, live: true, baseUrl });
+
 console.log(JSON.stringify(result, null, 2));
+
 if (!result.ok) process.exit(1);
 
 if (process.env.JETEMAIL_LIVE_SEND !== "true") {
@@ -23,7 +27,9 @@ if (process.env.JETEMAIL_LIVE_SEND !== "true") {
 }
 
 const from = requiredEnv("JETEMAIL_TEST_FROM");
+
 const to = requiredEnv("JETEMAIL_TEST_TO");
+
 const email = createEmailClient({
   adapters: [
     jetemail({

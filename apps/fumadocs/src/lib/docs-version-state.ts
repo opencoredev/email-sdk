@@ -33,6 +33,7 @@ export function rememberDocsVersion(version: DocsVersion) {
 
 export function useSelectedDocsVersion() {
   const pathname = usePathname();
+
   const [selectedVersion, setSelectedVersion] = useState(
     () => getPathnameVersion(pathname) ?? latestDocsVersion,
   );
@@ -43,6 +44,7 @@ export function useSelectedDocsVersion() {
     if (pathnameVersion) {
       rememberDocsVersion(pathnameVersion);
       setSelectedVersion(pathnameVersion);
+
       return;
     }
 

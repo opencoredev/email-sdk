@@ -3,9 +3,16 @@ import { providers, type Provider } from "@/lib/providers";
 export const pricingVolumes = [1_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] as const;
 
 export type PricingVolume = (typeof pricingVolumes)[number];
+
 export type PricingCurrency = "USD" | "EUR";
-export type PricingStatusFilter = "all" | "public" | "free" | "variable";
-export type PricingSort = "provider" | "cost-asc" | "cost-desc";
+
+export const PRICING_STATUS_FILTERS = ["all", "public", "free", "variable"] as const;
+
+export type PricingStatusFilter = (typeof PRICING_STATUS_FILTERS)[number];
+
+export const PRICING_SORTS = ["provider", "cost-asc", "cost-desc"] as const;
+
+export type PricingSort = (typeof PRICING_SORTS)[number];
 
 export type PriceCell =
   | { kind: "money"; currency: PricingCurrency; cents: number; qualifier?: "minimum" }
@@ -29,19 +36,24 @@ const usd = (dollars: number): PriceCell => ({
   currency: "USD",
   cents: Math.round(dollars * 100),
 });
+
 const eur = (euros: number): PriceCell => ({
   kind: "money",
   currency: "EUR",
   cents: Math.round(euros * 100),
 });
+
 const minimum = (dollars: number): PriceCell => ({
   kind: "money",
   currency: "USD",
   cents: Math.round(dollars * 100),
   qualifier: "minimum",
 });
+
 const custom: PriceCell = { kind: "custom", label: "Custom" };
+
 const varies: PriceCell = { kind: "variable", label: "Varies" };
+
 const unavailable: PriceCell = { kind: "unavailable", label: "Unavailable" };
 
 const pricingByProvider = {
@@ -272,6 +284,7 @@ export function formatPrice(price: PriceCell): string {
 
 export function formatPricingVolume(volume: PricingVolume): string {
   if (volume === 1_000_000) return "1M";
+
   return `${volume / 1_000}K`;
 }
 
@@ -298,11 +311,15 @@ export function getAdapterPricingRows({
       }
 
       const price = getPrice(row, volume);
+
       if (status === "public") return price.kind === "money";
+
       if (status === "free") return price.kind === "money" && price.cents === 0;
+
       if (status === "variable") {
         return price.kind === "custom" || price.kind === "variable";
       }
+
       return true;
     })
     .sort((left, right) => comparePricingRows(left, right, volume, sort));
@@ -322,9 +339,11 @@ function comparePricingRows(
   const rightUsd = rightPrice.kind === "money" && rightPrice.currency === "USD";
 
   if (leftUsd !== rightUsd) return leftUsd ? -1 : 1;
+
   if (!leftUsd || !rightUsd) return left.provider.name.localeCompare(right.provider.name);
 
   const difference = leftPrice.cents - rightPrice.cents;
+
   return (sort === "cost-desc" ? -difference : difference) ||
     left.provider.name.localeCompare(right.provider.name);
 }

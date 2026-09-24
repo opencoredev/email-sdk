@@ -14,6 +14,7 @@ import { siteUrl } from "./shared";
 export function buildCompareDescription(pair: ComparePair) {
   const a = getProvider(pair.a);
   const b = getProvider(pair.b);
+
   return `${a.name} vs ${b.name} for transactional email: message-field support compared side by side (attachments, scheduling, metadata, and more), with code for both via one TypeScript SDK.`;
 }
 

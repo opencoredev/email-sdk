@@ -2,8 +2,16 @@ import { describe, expect, test } from "bun:test";
 
 import { chunkLoadGuardScript } from "./chunk-load-guard";
 
+// The guard reads only these members of the events it receives.
+type GuardEvent = {
+  reason?: Error;
+  preventDefault: () => void;
+};
+
+type GuardListener = (event: GuardEvent) => void;
+
 function installGuard() {
-  const listeners = new Map<string, EventListener[]>();
+  const listeners = new Map<string, GuardListener[]>();
   const storage = new Map<string, string>();
   let reloads = 0;
 
@@ -22,16 +30,16 @@ function installGuard() {
         storage.set(key, value);
       },
     },
-    addEventListener: (type: string, listener: EventListener) => {
+    addEventListener: (type: string, listener: GuardListener) => {
       listeners.set(type, [...(listeners.get(type) ?? []), listener]);
     },
   };
 
   new Function("window", chunkLoadGuardScript)(fakeWindow);
 
-  function dispatch(type: string, event: Record<string, unknown>) {
+  function dispatch(type: string, event: GuardEvent) {
     for (const listener of listeners.get(type) ?? []) {
-      listener(event as unknown as Event);
+      listener(event);
     }
   }
 
@@ -60,6 +68,7 @@ describe("chunk load guard", () => {
 
   test("reloads once for dynamic import promise failures", () => {
     const guard = installGuard();
+
     const event = {
       reason: new Error(
         "error loading dynamically imported module: https://email-sdk.dev/assets/create-adapter-old.js",

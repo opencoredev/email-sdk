@@ -4,8 +4,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 
 const root = resolve(process.argv[2] ?? ".");
+
 const extensions = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".md", ".mdx"]);
+
 const ignored = new Set([".git", ".next", ".output", ".turbo", "coverage", "dist", "node_modules"]);
+
 const patterns = [
   ["providers option", /\bproviders\s*:/g, "Rename to adapters."],
   ["defaultProvider option", /\bdefaultProvider\b/g, "Rename to defaultAdapter."],
@@ -21,6 +24,7 @@ const patterns = [
 ];
 
 const findings = [];
+
 await walk(root);
 
 if (findings.length === 0) {
@@ -29,7 +33,9 @@ if (findings.length === 0) {
 }
 
 console.log("# Email SDK migration audit\n");
+
 console.log(`Scanned: ${root}\n`);
+
 for (const finding of findings) {
   console.log(`- \`${finding.file}:${finding.line}\` **${finding.pattern}**: ${finding.guidance}`);
   console.log(`  - \`${finding.preview}\``);
@@ -39,10 +45,12 @@ async function walk(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && ignored.has(entry.name)) continue;
     const path = join(directory, entry.name);
+
     if (entry.isDirectory()) {
       await walk(path);
       continue;
     }
+
     if (!extensions.has(extname(entry.name))) continue;
     await scan(path);
   }
@@ -50,9 +58,11 @@ async function walk(directory) {
 
 async function scan(path) {
   const source = await readFile(path, "utf8");
+
   if (!source.includes("email-sdk") && !patterns.some(([, pattern]) => test(pattern, source))) return;
 
   const lines = source.split("\n");
+
   for (const [pattern, expression, guidance] of patterns) {
     for (const [index, line] of lines.entries()) {
       if (!test(expression, line)) continue;
@@ -69,5 +79,6 @@ async function scan(path) {
 
 function test(expression, value) {
   expression.lastIndex = 0;
+
   return expression.test(value);
 }

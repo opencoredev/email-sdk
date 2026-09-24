@@ -1,17 +1,20 @@
 import verification from "../adapter-verification.json";
 
-type LiveAdapter = keyof typeof verification.liveChecks;
+const liveChecksByAdapter = new Map(Object.entries(verification.liveChecks));
 
-const known = new Set(Object.keys(verification.liveChecks));
+const known = new Set(liveChecksByAdapter.keys());
 
 export function nonSendingEnvironment(env: Record<string, string | undefined>) {
   const environment = { ...env };
+
   for (const key of Object.keys(environment)) {
     if (key.endsWith("_LIVE_SEND")) delete environment[key];
   }
+
   for (const adapter of known) {
     environment[`${adapter.toUpperCase().replaceAll("-", "_")}_LIVE_SEND`] = "false";
   }
+
   return environment;
 }
 
@@ -20,16 +23,19 @@ async function main() {
     .slice(2)
     .flatMap((value) => value.split(/\s+/))
     .filter(Boolean);
+
   const environment = nonSendingEnvironment(process.env);
 
   for (const adapter of requested) {
-    if (!known.has(adapter)) {
+    const check = liveChecksByAdapter.get(adapter);
+
+    if (!check) {
       console.error(`Unknown live adapter check: ${adapter}`);
       process.exit(1);
     }
 
-    const check = verification.liveChecks[adapter as LiveAdapter];
     console.log(`Running non-sending ${adapter} authentication check...`);
+
     const child = Bun.spawn(check.command.split(" "), {
       env: environment,
       stdin: "ignore",
@@ -38,6 +44,7 @@ async function main() {
     });
 
     const exitCode = await child.exited;
+
     if (exitCode !== 0) process.exit(exitCode);
   }
 

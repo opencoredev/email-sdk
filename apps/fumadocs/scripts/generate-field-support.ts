@@ -13,5 +13,7 @@ import { join, resolve } from "node:path";
 import { SUPPORTED_MESSAGE_FIELDS } from "../../../packages/email-sdk/src/utils";
 
 const outputPath = join(resolve(import.meta.dir, ".."), "src/lib/field-support.generated.json");
+
 writeFileSync(outputPath, `${JSON.stringify(SUPPORTED_MESSAGE_FIELDS, null, 2)}\n`);
+
 console.log(`Wrote ${Object.keys(SUPPORTED_MESSAGE_FIELDS).length} adapters to ${outputPath}`);

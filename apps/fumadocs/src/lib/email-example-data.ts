@@ -95,3 +95,9 @@ export const emailExamples = {
 } as const;
 
 export type EmailExampleId = keyof typeof emailExamples;
+
+export function isEmailExampleId(id: string): id is EmailExampleId {
+  return Object.hasOwn(emailExamples, id);
+}
+
+export const emailExampleIds = Object.keys(emailExamples).filter(isEmailExampleId);

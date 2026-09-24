@@ -1,9 +1,11 @@
 import { z } from "zod";
 import registry from "../../../../adapter-verification.json";
 import published from "../../../../adapter-verification-evidence.json";
-import { ADAPTER_SUPPORT_ENTRIES } from "./adapter-support";
+import { ADAPTER_SUPPORT_ENTRIES, type AdapterSupportId } from "./adapter-support";
+import type { JsonValue } from "./json";
 
 export const EVIDENCE_STALE_DAYS = 30;
+
 export const EVIDENCE_KINDS = [
   "contract-test",
   "auth-probe-configured",
@@ -11,7 +13,9 @@ export const EVIDENCE_KINDS = [
   "send-verified",
   "delivery-verified",
 ] as const;
+
 export const EVIDENCE_OUTCOMES = ["pass", "fail", "inconclusive"] as const;
+
 // Kinds that describe a provider account interaction; they need a registered probe.
 export const PROBE_BACKED_KINDS = new Set<EvidenceKind>([
   "auth-probe-configured",
@@ -22,7 +26,7 @@ export const PROBE_BACKED_KINDS = new Set<EvidenceKind>([
 
 // Which packages/email-sdk/src/*.test.ts files import each adapter module.
 // scripts/check-adapter-verification.ts fails release:ci if this drifts from disk.
-export const CONTRACT_TEST_FILES: Record<string, readonly string[]> = {
+export const CONTRACT_TEST_FILES = {
   brevo: ["adapters.field-support.test.ts", "adapters.json-providers.test.ts", "adapters.scheduling.test.ts"],
   cloudflare: ["adapters.cloudflare.test.ts", "adapters.field-support.test.ts", "adapters.json-providers.test.ts"],
   iterable: ["adapters.field-support.test.ts", "adapters.sequenzy-iterable-zeptomail.test.ts"],
@@ -48,11 +52,22 @@ export const CONTRACT_TEST_FILES: Record<string, readonly string[]> = {
   sparkpost: ["adapters.field-support.test.ts", "adapters.scheduling.test.ts"],
   unosend: ["adapters.field-support.test.ts", "adapters.json-providers.test.ts", "adapters.unosend-ses-mailgun.test.ts"],
   zeptomail: ["adapters.json-providers.test.ts", "adapters.sequenzy-iterable-zeptomail.test.ts"],
-};
+} as const satisfies Record<AdapterSupportId, readonly string[]>;
+
+const contractTestFilesById = new Map<string, readonly string[]>(Object.entries(CONTRACT_TEST_FILES));
+
+const liveChecksById = new Map(Object.entries(registry.liveChecks));
+
+/** Return the contract test files that import an adapter, or none when the ID is unknown. */
+export function contractTestFilesFor(id: string): readonly string[] {
+  return contractTestFilesById.get(id) ?? [];
+}
 
 const CI_RUN_URL =
   /^https:\/\/github\.com\/opencoredev\/email-sdk\/actions\/runs\/[1-9]\d*(?:\/job\/[1-9]\d*)?$/;
+
 const MAINTAINER = /^maintainer:[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+
 // Reject anything that looks like a credential, raw provider payload, or address.
 const UNSANITIZED = [
   /[{}[\]]/,
@@ -99,36 +114,48 @@ export const evidenceSchema = z.strictObject({
 });
 
 export type VerificationEvidence = z.infer<typeof evidenceSchema>;
+
 export type EvidenceRecord = VerificationEvidence["records"][number];
+
 export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
+
 export type EvidenceOutcome = (typeof EVIDENCE_OUTCOMES)[number];
 
 export function parseEvidence(
-  input: unknown,
+  input: JsonValue,
   adapterIds: readonly string[] = ADAPTER_SUPPORT_ENTRIES.map(({ id }) => id),
   liveIds: readonly string[] = Object.keys(registry.liveChecks),
   now = new Date(),
 ): VerificationEvidence {
   const evidence = evidenceSchema.parse(input);
   const known = new Set(adapterIds);
+
   if (known.size !== adapterIds.length) throw new Error("Duplicate adapter IDs.");
+
   for (const id of liveIds) {
     if (!known.has(id)) throw new Error(`Unknown live adapter: ${id}`);
   }
+
   const seen = new Set<string>();
+
   for (const record of evidence.records) {
     if (!known.has(record.adapter)) throw new Error(`Unknown evidence adapter: ${record.adapter}`);
+
     if (PROBE_BACKED_KINDS.has(record.kind) && !liveIds.includes(record.adapter)) {
       throw new Error(`${record.kind} evidence requires a registered live check: ${record.adapter}`);
     }
-    if (record.kind === "contract-test" && !(record.adapter in CONTRACT_TEST_FILES)) {
+
+    if (record.kind === "contract-test" && !contractTestFilesById.has(record.adapter)) {
       throw new Error(`contract-test evidence requires a checked-in test file: ${record.adapter}`);
     }
+
     if (Date.parse(record.timestamp) > now.getTime()) throw new Error("Evidence cannot be future-dated.");
     const key = `${record.adapter}:${record.kind}:${record.timestamp}`;
+
     if (seen.has(key)) throw new Error(`Duplicate evidence: ${key}`);
     seen.add(key);
   }
+
   return evidence;
 }
 
@@ -141,25 +168,32 @@ const OUTCOME_LABEL: Record<EvidenceOutcome, string> = {
 export function evidenceState(record: EvidenceRecord | undefined, now = new Date()) {
   if (!record) return "No published run evidence";
   const stale = now.getTime() - Date.parse(record.timestamp) > EVIDENCE_STALE_DAYS * 86_400_000;
+
   return `${OUTCOME_LABEL[record.outcome]}${stale ? " · Stale" : ""}`;
 }
 
-export function verificationRows(input: unknown = published, now = new Date()) {
+export function verificationRows(input: JsonValue = published, now = new Date()) {
   const evidence = parseEvidence(input, undefined, undefined, now);
+
   return ADAPTER_SUPPORT_ENTRIES.map((adapter) => {
-    const check = registry.liveChecks[adapter.id as keyof typeof registry.liveChecks];
+    const check = liveChecksById.get(adapter.id);
+
     const latest = (kind: EvidenceKind) =>
       evidence.records
         .filter((record) => record.adapter === adapter.id && record.kind === kind)
         .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0];
+
     return {
       ...adapter,
-      contractTestFiles: CONTRACT_TEST_FILES[adapter.id] ?? [],
+      contractTestFiles: CONTRACT_TEST_FILES[adapter.id],
       check,
-      evidence: Object.fromEntries(EVIDENCE_KINDS.map((kind) => [kind, latest(kind)])) as Record<
-        EvidenceKind,
-        EvidenceRecord | undefined
-      >,
+      evidence: {
+        "contract-test": latest("contract-test"),
+        "auth-probe-configured": latest("auth-probe-configured"),
+        "auth-check": latest("auth-check"),
+        "send-verified": latest("send-verified"),
+        "delivery-verified": latest("delivery-verified"),
+      } satisfies Record<EvidenceKind, EvidenceRecord | undefined>,
     };
   });
 }

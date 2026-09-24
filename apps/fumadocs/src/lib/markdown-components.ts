@@ -1,6 +1,10 @@
 import communityPlugins from "../../content/community/plugins.json";
+import { communityEntrySchema } from "./community-registry";
+
+import { z } from "zod";
 
 import {
+  ADAPTER_CAPABILITY_KEYS,
   ADAPTER_SUPPORT_ENTRIES,
   ADAPTER_SUPPORT_FIELDS,
   ADAPTER_SUPPORT_TOTAL_LABEL,
@@ -15,7 +19,7 @@ import {
   pricingVolumes,
 } from "./adapter-pricing";
 import { EVIDENCE_KINDS, evidenceState, verificationRows } from "./adapter-verification";
-import { emailExampleCategories, emailExamples } from "./email-example-data";
+import { emailExampleCategories, emailExamples, isEmailExampleId } from "./email-example-data";
 import { providers } from "./providers";
 import { siteUrl } from "./shared";
 import { sponsors } from "./sponsors";
@@ -34,6 +38,7 @@ import { sponsors } from "./sponsors";
 // the JSX inside it (react-email samples) is real sample code, and these docs
 // components never appear inside fences.
 const FENCE_ANY = /(`{3,}|~{3,})/;
+
 const FENCE_ALL = /(`{3,}|~{3,})/g;
 
 export function renderComponentsAsMarkdown(
@@ -58,15 +63,18 @@ export function renderComponentsAsMarkdown(
   for (const rawLine of markdown.split("\n")) {
     if (collectingTable) {
       collectingTable.push(rawLine);
+
       if (rawLine.includes("/>")) {
         push(renderTypeTable(collectingTable.join("\n")));
         collectingTable = null;
       }
+
       continue;
     }
 
     if (inFence) {
       push(rawLine);
+
       if (FENCE_ANY.test(rawLine)) inFence = false;
       continue;
     }
@@ -80,6 +88,7 @@ export function renderComponentsAsMarkdown(
     // once (`` ```code``` ``) or fuse a fence onto a tag line.
     const fenceMarks = rawLine.match(FENCE_ALL)?.length ?? 0;
     let clearCalloutAfter = false;
+
     const transformed = transformProseLine(rawLine, currentVersion, {
       openCallout: () => {
         inCallout = true;
@@ -88,8 +97,11 @@ export function renderComponentsAsMarkdown(
         clearCalloutAfter = true;
       },
     });
+
     push(transformed);
+
     if (clearCalloutAfter) inCallout = false;
+
     if (fenceMarks % 2 === 1) inFence = true;
   }
 
@@ -107,22 +119,26 @@ function transformProseLine(line: string, currentVersion: boolean, state: LineSt
   out = out.replace(/<Callout\b([^>]*)>/g, (_tag, rawAttrs) => {
     state.openCallout();
     const attrs = parseStringAttrs(rawAttrs);
-    const title = attrs.title ?? (attrs.type === "warn" ? "Warning" : "Note");
+    const title = attrs.get("title") ?? (attrs.get("type") === "warn" ? "Warning" : "Note");
+
     return `\n**${title}**\n`;
   });
   out = out.replace(/<\/Callout>/g, () => {
     state.closeCallout();
+
     return "";
   });
 
   out = out.replace(/<Tab\b([^>]*)>/g, (_tag, rawAttrs) => {
-    const { value } = parseStringAttrs(rawAttrs);
+    const value = parseStringAttrs(rawAttrs).get("value");
+
     return `\n\n**${value ?? "Option"}**\n`;
   });
   out = out.replace(/<\/Tab>/g, "");
 
   out = out.replace(/<Accordion\b([^>]*)>/g, (_tag, rawAttrs) => {
-    const { title } = parseStringAttrs(rawAttrs);
+    const title = parseStringAttrs(rawAttrs).get("title");
+
     return `\n\n**${title ?? ""}**\n`;
   });
   out = out.replace(/<\/Accordion>/g, "");
@@ -157,6 +173,7 @@ function transformProseLine(line: string, currentVersion: boolean, state: LineSt
     [/<EmailExampleGallery\b[^>]*\/>/g, "/docs/ui", renderEmailGallery],
     [/<SponsorSpotlight\b[^>]*\/>/g, "/docs/adapters", renderSponsorSpotlight],
   ];
+
   for (const [pattern, docsPath, render] of dataComponents) {
     out = out.replace(pattern, () => (currentVersion ? render() : liveLink(docsPath)));
   }
@@ -171,7 +188,7 @@ function transformProseLine(line: string, currentVersion: boolean, state: LineSt
   return out;
 }
 
-type Attrs = Record<string, string>;
+type Attrs = ReadonlyMap<string, string>;
 
 // The processor entity-escapes prop values (`&#x22;` for quotes), so every
 // string attribute goes through this before use.
@@ -186,13 +203,15 @@ function decodeEntities(value: string) {
     .replace(/&amp;/g, "&");
 }
 
-function parseStringAttrs(source: string): Attrs {
-  const attrs: Attrs = {};
+function parseStringAttrs(source: string) {
+  const attrs = new Map<string, string>();
   const pattern = /(\w+)="([^"]*)"|(\w+)='([^']*)'/g;
   let match: RegExpExecArray | null;
+
   while ((match = pattern.exec(source))) {
-    attrs[match[1] ?? match[3]] = decodeEntities(match[2] ?? match[4]);
+    attrs.set(match[1] ?? match[3], decodeEntities(match[2] ?? match[4]));
   }
+
   return attrs;
 }
 
@@ -217,6 +236,7 @@ type TypeTableField = {
 // quotes entity-escaped — both unwrap to the same `{ ... }` field map.
 function renderTypeTable(tag: string) {
   const typeIndex = tag.indexOf("type=");
+
   if (typeIndex === -1) return tag;
 
   const valueStart = typeIndex + "type=".length;
@@ -225,10 +245,12 @@ function renderTypeTable(tag: string) {
 
   if (delimiter === "{") {
     const captured = captureBalanced(tag, valueStart, "{", "}");
+
     if (!captured) return tag;
     objectLiteral = decodeEntities(captured.text.slice(1, -1)).trim();
   } else if (delimiter === '"' || delimiter === "'") {
     const end = skipString(tag, valueStart);
+
     if (end === -1) return tag;
     objectLiteral = decodeEntities(tag.slice(valueStart + 1, end - 1)).trim();
   } else {
@@ -238,21 +260,27 @@ function renderTypeTable(tag: string) {
   if (!objectLiteral.startsWith("{") || !objectLiteral.endsWith("}")) return tag;
 
   const fields = parseFieldEntries(objectLiteral.slice(1, -1));
+
   if (fields.length === 0) return tag;
 
   const anyRequired = fields.some((field) => field.required === true);
   const anyDefault = fields.some((field) => field.default !== undefined);
 
   const header = ["Option", "Type"];
+
   if (anyRequired) header.push("Required");
+
   if (anyDefault) header.push("Default");
   header.push("Description");
 
   const rows = fields.map((field) => {
     const cells = [field.name, field.type ? `\`${field.type}\`` : ""];
+
     if (anyRequired) cells.push(field.required ? "Yes" : "No");
+
     if (anyDefault) cells.push(field.default !== undefined ? `\`${field.default}\`` : "");
     cells.push(field.description ?? "");
+
     return `| ${cells.map(escapeCell).join(" | ")} |`;
   });
 
@@ -270,16 +298,20 @@ function captureBalanced(src: string, start: number, open: string, close: string
 
     if (char === '"' || char === "'" || char === "`") {
       const end = skipString(src, i);
+
       if (end === -1) return undefined;
       i = end;
       continue;
     }
 
     if (char === open) depth += 1;
+
     if (char === close) {
       depth -= 1;
+
       if (depth === 0) return { text: src.slice(start, i + 1), end: i + 1 };
     }
+
     i += 1;
   }
 
@@ -289,14 +321,17 @@ function captureBalanced(src: string, start: number, open: string, close: string
 function skipString(src: string, start: number) {
   const quote = src[start];
   let i = start + 1;
+
   while (i < src.length) {
     if (src[i] === "\\") {
       i += 2;
       continue;
     }
+
     if (src[i] === quote) return i + 1;
     i += 1;
   }
+
   return -1;
 }
 
@@ -308,18 +343,22 @@ function parseFieldEntries(src: string): TypeTableField[] {
 
   while (i < src.length) {
     i = skipSeparators(src, i);
+
     if (i >= src.length) break;
 
     const key = readKey(src, i);
+
     if (!key) break;
     i = key.end;
 
     i = skipWhitespace(src, i);
+
     if (src[i] !== ":") break;
     i = skipWhitespace(src, i + 1);
 
     if (src[i] !== "{") break;
     const body = captureBalanced(src, i, "{", "}");
+
     if (!body) break;
     i = body.end;
 
@@ -335,19 +374,24 @@ function parseFieldProps(src: string) {
   const props: Partial<TypeTableField> = {};
 
   let i = 0;
+
   while (i < src.length) {
     i = skipSeparators(src, i);
+
     if (i >= src.length) break;
 
     const key = readKey(src, i);
+
     if (!key) break;
     i = key.end;
 
     i = skipWhitespace(src, i);
+
     if (src[i] !== ":") break;
     i = skipWhitespace(src, i + 1);
 
     const value = readValue(src, i);
+
     if (!value) break;
     i = value.end;
 
@@ -362,36 +406,50 @@ function parseFieldProps(src: string) {
 
 function skipWhitespace(src: string, i: number) {
   while (i < src.length && /\s/.test(src[i])) i += 1;
+
   return i;
 }
 
 function skipSeparators(src: string, i: number) {
   while (i < src.length && /[\s,]/.test(src[i])) i += 1;
+
   return i;
 }
 
 function readKey(src: string, i: number) {
   const char = src[i];
+
   if (char === '"' || char === "'" || char === "`") {
     const end = skipString(src, i);
+
     if (end === -1) return undefined;
+
     return { name: src.slice(i + 1, end - 1), end };
   }
+
   const match = /^[A-Za-z_$][\w$-]*/.exec(src.slice(i));
+
   if (!match) return undefined;
+
   return { name: match[0], end: i + match[0].length };
 }
 
 function readValue(src: string, i: number) {
   const char = src[i];
+
   if (char === '"' || char === "'" || char === "`") {
     const end = skipString(src, i);
+
     if (end === -1) return undefined;
+
     return { value: src.slice(i + 1, end - 1), end };
   }
+
   // Bare value (boolean, number, identifier): runs to the next `,` at depth 0.
   let end = i;
+
   while (end < src.length && src[end] !== "," && src[end] !== "}") end += 1;
+
   return { value: src.slice(i, end).trim(), end };
 }
 
@@ -421,18 +479,23 @@ function capabilityValue(capabilities: AdapterSupportCapabilities, key: keyof Ad
   const value = capabilities[key];
 
   if (key === "repeatedHeaders" || key === "scheduling") return value ? "Yes" : "No";
+
   if (key === "idempotency") {
     if (value === "message_id") return "Message-ID";
+
     return value === "native" ? "Native" : "None";
   }
+
   return value === "native" ? "Native" : "Expanded";
 }
 
 const sponsorNames = new Set(sponsors.map((sponsor) => sponsor.name));
+
 const liveCheckIds = new Set(verificationRows().filter((row) => row.check).map((row) => row.id));
 
 function renderProviderBadge(attrs: Attrs) {
-  const provider = providers.find((item) => item.key === attrs.adapter);
+  const provider = providers.find((item) => item.key === attrs.get("adapter"));
+
   if (!provider) return "";
 
   const notes = [
@@ -455,11 +518,14 @@ function renderProviderGrid() {
 function renderFieldSupport() {
   const rows = ADAPTER_SUPPORT_ENTRIES.map((entry: AdapterSupportEntry) => {
     const unsupported = getUnsupportedFields(entry);
+
     const unsupportedCell =
       unsupported.length === 0
         ? "All normalized fields"
         : unsupported.map((field) => FIELD_LABELS[field]).join(", ");
+
     const limitsCell = (entry.limits ?? []).join("; ");
+
     return `| [${entry.label}](${entry.setupHref}) | ${unsupportedCell} | ${limitsCell} |`;
   });
 
@@ -467,7 +533,8 @@ function renderFieldSupport() {
 }
 
 function renderCapabilitySupport() {
-  const capabilityKeys = Object.keys(CAPABILITY_LABELS) as (keyof AdapterSupportCapabilities)[];
+  const capabilityKeys = ADAPTER_CAPABILITY_KEYS;
+
   const rows = ADAPTER_SUPPORT_ENTRIES.map(
     (entry) =>
       `| [${entry.label}](${entry.setupHref}) | ${capabilityKeys.map((key) => capabilityValue(entry.capabilities, key)).join(" | ")} |`,
@@ -479,15 +546,18 @@ function renderCapabilitySupport() {
 function renderPricing() {
   const header = `| Provider | Model | ${pricingVolumes.map(formatPricingVolume).join(" | ")} |`;
   const separator = `| --- | --- | ${pricingVolumes.map(() => "---").join(" | ")} |`;
+
   const rows = adapterPricing.map(
     (row) =>
       `| [${row.provider.name}](${row.provider.docs}) | ${row.model} | ${row.prices.map(formatPrice).join(" | ")} |`,
   );
+
   const notes = adapterPricing
     .map((row) => {
       const sources = row.sources
         .map((source) => `[${source.label}](${source.href})`)
         .join(", ");
+
       return `- ${row.provider.name}: ${row.note} Source: ${sources}.`;
     })
     .join("\n");
@@ -506,6 +576,7 @@ const EVIDENCE_COLUMN_LABELS: Record<(typeof EVIDENCE_KINDS)[number], string> = 
 function renderVerification() {
   const rows = verificationRows();
   const configured = rows.filter((row) => row.check).length;
+
   const published = rows.reduce(
     (count, row) => count + Object.values(row.evidence).filter(Boolean).length,
     0,
@@ -516,12 +587,16 @@ function renderVerification() {
       if (kind === "contract-test") {
         return row.contractTestFiles.length > 0 ? row.contractTestFiles.join(", ") : "None";
       }
+
       if (kind === "auth-probe-configured") {
         return row.check ? `Configured: ${row.check.probe}` : "Not configured";
       }
+
       const record = row.evidence[kind];
+
       return record ? `${evidenceState(record)} (${record.timestamp.slice(0, 10)})` : "None";
     });
+
     return `| [${row.label}](${row.setupHref}) | ${cells.map(escapeCell).join(" | ")} |`;
   });
 
@@ -532,19 +607,9 @@ function renderVerification() {
 
 // region other components
 
-type CommunityEntry = {
-  name: string;
-  package: string;
-  kind: string;
-  status: string;
-  description: string;
-  href: string;
-  repo: string;
-  maintainer: string;
-};
-
 function renderCommunityRegistry() {
-  const entries = communityPlugins as CommunityEntry[];
+  const entries = z.array(communityEntrySchema).parse(communityPlugins);
+
   if (entries.length === 0) {
     return "No community plugins are listed yet. Community packages are listed by pull request after their registry entry passes the static checks.";
   }
@@ -558,27 +623,35 @@ function renderCommunityRegistry() {
 }
 
 function renderPackageInstall(attrs: Attrs) {
-  const packageName = attrs.packageName ?? "@opencoredev/email-sdk";
+  const packageName = attrs.get("packageName") ?? "@opencoredev/email-sdk";
 
   return `\n\n\`\`\`bash\nnpm install ${packageName}\nbun add ${packageName}\npnpm add ${packageName}\nyarn add ${packageName}\n\`\`\`\n\n`;
 }
 
 function renderCard(attrs: Attrs) {
-  const { title, href, description } = attrs;
+  const title = attrs.get("title");
+  const href = attrs.get("href");
+  const description = attrs.get("description");
+
   if (!title || !href) return "";
+
   return `- [${title}](${href})${description ? `: ${description}` : ""}`;
 }
 
 function renderSponsorSpotlight() {
   const list = sponsors.map((sponsor) => `[${sponsor.name}](${sponsor.href})`).join(", ");
+
   return `\n\nSponsored by ${list}.\n\n`;
 }
 
 function renderEmailExample(attrs: Attrs, currentVersion: boolean) {
-  const example = emailExamples[attrs.id as keyof typeof emailExamples];
-  if (!example) return "";
+  const id = attrs.get("id");
+
+  if (!id || !isEmailExampleId(id)) return "";
+  const example = emailExamples[id];
 
   const header = `**Email preview: ${example.title}.** Subject: "${example.subject}". Preview text: "${example.preview}".`;
+
   const pointer = currentVersion
     ? "The rendered email is on the HTML version of this page."
     : `The rendered email is at ${siteUrl}${example.path}.`;
@@ -591,6 +664,7 @@ function renderEmailGallery() {
     const items = Object.entries(emailExamples)
       .filter(([, example]) => example.category === category.key)
       .map(([, example]) => `- [${example.title}](${example.path}): ${example.description}`);
+
     return `### ${category.title}\n\n${items.join("\n")}`;
   });
 

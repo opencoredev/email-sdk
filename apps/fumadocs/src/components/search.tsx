@@ -1,4 +1,5 @@
 "use client";
+
 import { create } from "@orama/orama";
 import { useDocsSearch } from "fumadocs-core/search/client";
 import {
@@ -24,6 +25,7 @@ function initOrama() {
 
 export default function DefaultSearchDialog(props: SharedProps) {
   const { locale } = useI18n(); // (optional) for i18n
+
   const { search, setSearch, query } = useDocsSearch({
     type: "static",
     initOrama,

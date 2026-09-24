@@ -65,7 +65,16 @@ const richMessage: EmailMessage = {
   idempotencyKey: "email-sdk-launch-smoke",
 };
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
+/** A JSON response body a mocked provider API returns. */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+
+function jsonResponse(body: JsonValue, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json", "x-message-id": "msg_header" },
@@ -73,15 +82,19 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
   });
 }
 
-function fetchOk(body: unknown = { id: "msg_123", message_id: "msg_123", messageId: "msg_123" }) {
+function fetchOk(body: JsonValue = { id: "msg_123", message_id: "msg_123", messageId: "msg_123" }) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
-  const fetcher = (async (
-    input: Parameters<typeof fetch>[0],
-    init?: Parameters<typeof fetch>[1],
-  ) => {
-    calls.push({ url: String(input), init });
-    return jsonResponse(body);
-  }) as unknown as typeof fetch;
+
+  // Bun's `typeof fetch` also carries `preconnect`; forward the real one so the
+  // stub satisfies the full type without an assertion.
+  const fetcher: typeof fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      calls.push({ url: String(input), init });
+
+      return jsonResponse(body);
+    },
+    { preconnect: fetch.preconnect },
+  );
 
   return { fetcher, calls };
 }
@@ -90,6 +103,7 @@ describe("example app client pipeline", () => {
   test("sends with memory adapters, defaults, observability, capture, and agent tools", async () => {
     const memory = memoryProvider("primary");
     const events: EmailObservabilityEvent[] = [];
+
     const email = createEmailClient({
       adapters: [memory],
       plugins: [
@@ -110,6 +124,7 @@ describe("example app client pipeline", () => {
 
     const response = await email.send(simpleMessage);
     const tools = createEmailAgentTools(email);
+
     const toolResponse = await tools.sendEmail.execute({
       from: "agent@example.com",
       to: "user@example.com",
@@ -138,18 +153,23 @@ describe("example app client pipeline", () => {
 
   test("handles retry, fallback, per-send fallback disabling, withAdapter, and batches", async () => {
     let attempts = 0;
+
     const retrying: EmailProvider = {
       name: "retrying",
       send() {
         attempts += 1;
+
         if (attempts === 1) {
           throw new EmailProviderError("retry me", { provider: "retrying", retryable: true });
         }
+
         return { provider: "retrying", id: "ok" };
       },
     };
+
     const backup = memoryProvider("backup");
     const captureStore = createEmailCaptureStore();
+
     const email = createEmailClient({
       adapters: [retrying, failingProvider("primary"), backup],
       defaultAdapter: "retrying",

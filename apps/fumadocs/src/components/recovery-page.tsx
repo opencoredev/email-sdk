@@ -1,5 +1,6 @@
 import type { ErrorComponentProps, NotFoundRouteProps } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { z } from "zod";
 
 import {
   ArrowRight,
@@ -97,8 +98,10 @@ export function RootRecoveryShell({
   );
 }
 
-export function classifyRecoveryError(error: unknown): RecoveryKind {
-  const message = getErrorMessage(error);
+// Thrown values reach the error page untyped: route loaders and third-party code
+// can throw strings or plain objects, not only Error instances.
+export function classifyRecoveryError(cause: unknown): RecoveryKind {
+  const message = getErrorMessage(cause);
 
   if (
     /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Loading chunk [\w-]+ failed/i.test(
@@ -119,15 +122,21 @@ export function classifyRecoveryError(error: unknown): RecoveryKind {
   return "runtime";
 }
 
-export function getErrorMessage(error: unknown) {
-  if (error == null) return "No error details were provided.";
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message || error.name || "Unknown error";
-  if (typeof error === "object" && "message" in error) {
-    return String((error as { message?: unknown }).message ?? "Unknown error");
-  }
+const thrownMessageSchema = z.union([
+  z.string(),
+  z
+    .object({ message: z.unknown() })
+    .refine((value) => "message" in value)
+    .transform(({ message }) => String(message ?? "Unknown error")),
+]);
 
-  return String(error);
+export function getErrorMessage(cause: unknown) {
+  if (cause == null) return "No error details were provided.";
+
+  if (cause instanceof Error) return cause.message || cause.name || "Unknown error";
+  const parsed = thrownMessageSchema.safeParse(cause);
+
+  return parsed.success ? parsed.data : String(cause);
 }
 
 function getRecoveryCopy(kind: RecoveryKind): RecoveryCopy {

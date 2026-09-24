@@ -5,6 +5,7 @@ import {
   type EvidenceKind,
   type EvidenceRecord,
 } from "../lib/adapter-verification";
+import type { JsonValue } from "../lib/json";
 
 const COLUMNS: Record<EvidenceKind, string> = {
   "contract-test": "Contract tests",
@@ -14,13 +15,15 @@ const COLUMNS: Record<EvidenceKind, string> = {
   "delivery-verified": "Verified delivery",
 };
 
-export function AdapterVerification({ evidence, now }: { evidence?: unknown; now?: Date }) {
+export function AdapterVerification({ evidence, now }: { evidence?: JsonValue; now?: Date }) {
   const rows = verificationRows(evidence, now);
   const configured = rows.filter((row) => row.check).length;
+
   const published = rows.reduce(
     (count, row) => count + Object.values(row.evidence).filter(Boolean).length,
     0,
   );
+
   return (
     <div className="not-prose my-6 min-w-0 space-y-4">
       <p className="text-sm text-fd-muted-foreground">
@@ -89,6 +92,7 @@ export function AdapterVerification({ evidence, now }: { evidence?: unknown; now
 
 function ContractTests({ files }: { files: readonly string[] }) {
   if (files.length === 0) return <p>No contract tests found</p>;
+
   return (
     <>
       <p>Contract tests exist</p>
@@ -105,6 +109,7 @@ function ContractTests({ files }: { files: readonly string[] }) {
 
 function RunEvidence({ record, now }: { record?: EvidenceRecord; now?: Date }) {
   const isCi = record?.source.startsWith("https://");
+
   return (
     <div className="space-y-1 text-xs text-fd-muted-foreground">
       <p className={record?.outcome === "fail" ? "font-medium text-fd-foreground" : undefined}>

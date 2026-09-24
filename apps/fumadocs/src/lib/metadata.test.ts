@@ -7,6 +7,7 @@ import { appDescription, llmsOverview, siteOgImageUrl } from "@/lib/shared";
 
 const findByName = (name: string) =>
   siteMeta.filter((meta) => "name" in meta && meta.name === name);
+
 const findByProperty = (property: string) =>
   siteMeta.filter((meta) => "property" in meta && meta.property === property);
 
@@ -68,18 +69,22 @@ describe("homepage product explanation", () => {
       readFileSync(new URL("../../../../packages/email-sdk/README.md", import.meta.url), "utf8"),
       readFileSync(new URL("../../content/docs/index.mdx", import.meta.url), "utf8"),
     ];
+
     expect(appDescription.startsWith("Email for TypeScript apps.")).toBe(true);
     expect(siteTitle).toContain("Email for TypeScript apps.");
     expect(siteImageAlt).toContain("Email for TypeScript apps.");
+
     for (const text of [appDescription, ...readmes]) {
       expect(text).toContain("Email for TypeScript apps.");
       expect(text).toContain("existing provider account");
       expect(text).not.toMatch(/guarantee[sd]? (inbox )?delivery|99\.\d+%|testimonial/i);
     }
+
     for (const text of readmes) {
       expect(text).toContain("23 provider API");
       expect(text).toContain("24 adapters total");
     }
+
     expect(llmsOverview).toContain("24 adapters total");
     const webpage = homeStructuredData["@graph"].find((node) => node["@type"] === "WebPage");
     expect(webpage?.speakable.cssSelector).toEqual(["#landing-heading", "#landing-summary"]);
@@ -95,6 +100,7 @@ describe("homepage product explanation", () => {
     const software = homeStructuredData["@graph"].find((node) => node["@type"] === "SoftwareApplication");
     expect(software?.runtimePlatform).toEqual(["Node.js 20+", "Bun 1.1+"]);
     const webpage = homeStructuredData["@graph"].find((node) => node["@type"] === "WebPage");
+
     for (const selector of webpage?.speakable.cssSelector ?? []) {
       expect(home).toContain(`id="${selector.slice(1)}"`);
     }
@@ -104,6 +110,7 @@ describe("homepage product explanation", () => {
 describe("documentation structured data", () => {
   test("describes current docs as a canonical TechArticle with breadcrumbs", () => {
     const canonicalUrl = "https://email-sdk.dev/docs/adapters/resend";
+
     const structuredData = buildDocsStructuredData({
       canonicalUrl,
       dateModified: "2026-07-22",
@@ -142,6 +149,7 @@ describe("supported provider structured data", () => {
 
   test("names every registered adapter in the supported providers FAQ answer", () => {
     const faq = homeStructuredData["@graph"].find((node) => node["@type"] === "FAQPage");
+
     const answer = faq?.mainEntity.find((question) =>
       question.name.includes("Which email providers"),
     )?.acceptedAnswer.text;

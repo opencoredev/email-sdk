@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import registry from "../adapter-verification.json";
+import type { JsonValue } from "../apps/fumadocs/src/lib/json";
 import { contractTestFilesOnDisk, validateAdapterVerification } from "./check-adapter-verification";
 
 const record = {
@@ -12,7 +13,8 @@ const record = {
   source: "maintainer:leo",
   summary: "Authenticated against the provider account without sending.",
 };
-const withRecords = (...records: unknown[]) => ({ schemaVersion: 1, records });
+
+const withRecords = (...records: JsonValue[]) => ({ schemaVersion: 1, records });
 
 test("checked-in registry and empty evidence match SDK membership", () => {
   const result = validateAdapterVerification();
@@ -24,11 +26,13 @@ test("checked-in registry carries only probe metadata, never results or dates", 
   for (const check of Object.values(registry.liveChecks)) {
     expect(Object.keys(check).sort()).toEqual(["command", "probe", "secret"]);
   }
+
   expect(JSON.stringify(registry)).not.toMatch(/\d{4}-\d{2}-\d{2}|lastRun|passed|verifiedAt/i);
 });
 
 test("registry rejects fields implying a passing run or date", () => {
   const base = registry.liveChecks.resend;
+
   for (const check of [
     { ...base, lastPassedAt: "2026-01-01" },
     { ...base, status: "passed" },
@@ -38,6 +42,7 @@ test("registry rejects fields implying a passing run or date", () => {
       validateAdapterVerification(withRecords(), { schemaVersion: 1, liveChecks: { resend: check } }),
     ).toThrow();
   }
+
   expect(() =>
     validateAdapterVerification(withRecords(), { schemaVersion: 1, liveChecks: { unknown: base } }),
   ).toThrow(/Unknown live adapter/);
@@ -45,19 +50,19 @@ test("registry rejects fields implying a passing run or date", () => {
 
 test("contract test membership in the docs table matches packages/email-sdk/src on disk", () => {
   const onDisk = contractTestFilesOnDisk(["resend", "smtp", "brevo", "nonexistent"]);
-  expect(onDisk.resend).toEqual([
+  expect(onDisk.get("resend")).toEqual([
     "adapters.field-support.test.ts",
     "adapters.resend-postmark-sendgrid.test.ts",
     "adapters.scheduling.test.ts",
     "core.telemetry-volume.test.ts",
   ]);
-  expect(onDisk.smtp).toEqual(["smtp.test.ts"]);
-  expect(onDisk.brevo).toEqual([
+  expect(onDisk.get("smtp")).toEqual(["smtp.test.ts"]);
+  expect(onDisk.get("brevo")).toEqual([
     "adapters.field-support.test.ts",
     "adapters.json-providers.test.ts",
     "adapters.scheduling.test.ts",
   ]);
-  expect(onDisk.nonexistent).toEqual([]);
+  expect(onDisk.get("nonexistent")).toEqual([]);
 });
 
 test("validator fails closed on invalid and unknown evidence", () => {
@@ -68,11 +73,13 @@ test("validator fails closed on invalid and unknown evidence", () => {
 
 test("registry/evidence consistency: probe-backed kinds require a configured probe", () => {
   expect(validateAdapterVerification(withRecords(record)).records).toHaveLength(1);
+
   for (const kind of ["auth-probe-configured", "auth-check", "send-verified", "delivery-verified"]) {
     expect(() => validateAdapterVerification(withRecords({ ...record, adapter: "postmark", kind }))).toThrow(
       /requires a registered live check/,
     );
   }
+
   expect(validateAdapterVerification(withRecords({ ...record, adapter: "postmark", kind: "contract-test" })).records).toHaveLength(1);
   expect(() => validateAdapterVerification(withRecords({ ...record, adapter: "not-an-adapter" }))).toThrow(
     /Unknown evidence adapter/,

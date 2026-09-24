@@ -7,14 +7,17 @@ import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
 // hand, so each new adapter left the structured data one provider short of the
 // code. Derive them from the adapter registry instead.
 const supportedProviderNames = providers.map((provider) => provider.name);
+
 const supportedProviderSentence = new Intl.ListFormat("en", {
   style: "long",
   type: "conjunction",
 }).format(supportedProviderNames);
 
 export const siteTitle = `${appName} - Email for TypeScript apps.`;
+
 export const siteImageAlt =
   "Email SDK: Email for TypeScript apps. Alpine background with an illustrative send example.";
+
 export const siteKeywords =
   "email SDK, TypeScript email SDK, transactional email SDK, unified email API, Resend SDK, SendGrid SDK, Postmark SDK, Mailgun SDK, Unosend SDK, AWS SES SDK, Cloudflare Email Sending SDK, SMTP TypeScript";
 

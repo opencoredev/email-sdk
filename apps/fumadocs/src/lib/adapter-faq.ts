@@ -19,7 +19,9 @@ function listFieldLabels(fields: readonly AdapterSupportField[]) {
 
 export function getAdapterSupportEntry(docsPath: string): AdapterSupportEntry | undefined {
   const match = /^adapters\/([^/]+)\.mdx$/.exec(docsPath);
+
   if (!match) return undefined;
+
   return ADAPTER_SUPPORT_ENTRIES.find((entry) => entry.id === match[1]);
 }
 
@@ -27,6 +29,7 @@ export function buildAdapterFaq(entry: AdapterSupportEntry) {
   const provider = providers.find((candidate) => candidate.key === entry.id);
   const supported = ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] === true);
   const unsupported = getUnsupportedFields(entry);
+
   const idempotencyAnswer = {
     native: `Yes. The ${entry.label} adapter passes an idempotency key to the provider, so ${entry.label} deduplicates repeated sends on its side.`,
     message_id: `Partially. The ${entry.label} adapter derives a stable Message-ID from the idempotency key, but the receiving server decides whether to deduplicate.`,

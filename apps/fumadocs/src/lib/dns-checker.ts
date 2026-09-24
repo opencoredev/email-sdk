@@ -32,6 +32,7 @@ export type ProviderHint = {
 };
 
 const DOMAIN_RE = /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9_-]{1,63}(?<!-))+$/i;
+
 export const SELECTOR_RE = /^[a-z0-9._-]{1,63}$/i;
 
 // Selectors the big transactional providers actually publish, probed alongside
@@ -81,7 +82,9 @@ export function normalizeDomainInput(input: string): string | null {
     .split("/")[0]
     .split(":")[0]
     .replace(/\.$/, "");
+
   if (!domain || domain.length > 253 || !DOMAIN_RE.test(domain)) return null;
+
   return domain;
 }
 
@@ -97,6 +100,7 @@ export function parseSpf(txtRecords: string[]): RecordCheck {
       message: "No SPF record found.",
       fix: 'Publish a TXT record starting with v=spf1 that lists your email provider, e.g. "v=spf1 include:amazonses.com -all".',
     });
+
     return { record: null, findings };
   }
 
@@ -110,6 +114,7 @@ export function parseSpf(txtRecords: string[]): RecordCheck {
 
   const record = spfRecords[0].trim();
   const allMatch = record.match(/([-~+?])?all\b/i);
+
   if (!allMatch) {
     findings.push({
       status: "warn",
@@ -118,6 +123,7 @@ export function parseSpf(txtRecords: string[]): RecordCheck {
     });
   } else {
     const qualifier = allMatch[1] ?? "+";
+
     if (qualifier === "+") {
       findings.push({
         status: "fail",
@@ -143,6 +149,7 @@ export function parseSpf(txtRecords: string[]): RecordCheck {
   const lookupCount = (
     record.match(/\b(include:|a\b|a:|mx\b|mx:|ptr\b|ptr:|exists:|redirect=)/gi) ?? []
   ).length;
+
   if (lookupCount > 10) {
     findings.push({
       status: "fail",
@@ -169,17 +176,21 @@ export function parseDmarc(txtRecords: string[]): RecordCheck {
       message: "No DMARC record found at _dmarc.<domain>.",
       fix: 'Publish a TXT record at _dmarc.<domain>, e.g. "v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com" to start monitoring.',
     });
+
     return { record: null, findings };
   }
 
   const record = dmarcRecords[0].trim();
   const tags = new Map<string, string>();
+
   for (const part of record.split(";")) {
     const [key, ...rest] = part.split("=");
+
     if (key && rest.length > 0) tags.set(key.trim().toLowerCase(), rest.join("=").trim());
   }
 
   const policy = tags.get("p")?.toLowerCase();
+
   if (!policy) {
     findings.push({
       status: "fail",
@@ -205,6 +216,7 @@ export function parseDmarc(txtRecords: string[]): RecordCheck {
   }
 
   const pct = tags.get("pct");
+
   if (pct && pct !== "100") {
     findings.push({
       status: "warn",
@@ -216,13 +228,14 @@ export function parseDmarc(txtRecords: string[]): RecordCheck {
   return { record, findings };
 }
 
-export function parseMx(mxRecords: string[]): { hosts: string[]; findings: CheckFinding[] } {
+export function parseMx(mxRecords: string[]) {
   const hosts = mxRecords
-    .map((record) => {
+    .flatMap((record) => {
       const [priority, host] = record.trim().split(/\s+/);
-      return { priority: Number(priority), host: (host ?? "").replace(/\.$/, "") };
+      const normalizedHost = (host ?? "").replace(/\.$/, "");
+
+      return normalizedHost ? [{ priority: Number(priority), host: normalizedHost }] : [];
     })
-    .filter((entry) => entry.host)
     .sort((a, b) => a.priority - b.priority)
     .map((entry) => `${entry.priority} ${entry.host}`);
 
@@ -249,10 +262,12 @@ export function parseMx(mxRecords: string[]): { hosts: string[]; findings: Check
 export function findProviderHints(spfRecord: string | null): ProviderHint[] {
   if (!spfRecord) return [];
   const hints = new Map<string, ProviderHint>();
+
   for (const provider of SPF_INCLUDE_PROVIDERS) {
     if (spfRecord.toLowerCase().includes(provider.match)) {
       hints.set(provider.name, { name: provider.name, docsPath: provider.docsPath });
     }
   }
+
   return [...hints.values()];
 }

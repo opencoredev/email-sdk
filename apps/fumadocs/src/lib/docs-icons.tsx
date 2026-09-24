@@ -43,6 +43,8 @@ const docsIcons = {
   Wrench: Wrench01Icon,
 } satisfies Record<string, IconData>;
 
+const docsIconsByName = new Map<string, IconData>(Object.entries(docsIcons));
+
 export function resolveDocsIcon(icon: string | undefined) {
   if (!icon) {
     return undefined;
@@ -68,10 +70,11 @@ export function resolveDocsIcon(icon: string | undefined) {
     );
   }
 
-  const iconData = docsIcons[icon as keyof typeof docsIcons];
+  const iconData = docsIconsByName.get(icon);
 
   if (!iconData) {
     console.warn(`[docs-icons] Unknown icon detected: ${icon}.`);
+
     return undefined;
   }
 

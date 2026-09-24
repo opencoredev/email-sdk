@@ -1,14 +1,21 @@
 import { config } from "dotenv";
+import { z } from "zod";
 
 import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { graph } from "../packages/email-sdk/src/graph.js";
 
+const tokenResponseSchema = z.object({ access_token: z.string() });
+
 config({ path: ".env.local" });
+
 config();
 
 const tenantId = requiredEnv("MS_GRAPH_TENANT_ID");
+
 const clientId = requiredEnv("MS_GRAPH_CLIENT_ID");
+
 const clientSecret = requiredEnv("MS_GRAPH_CLIENT_SECRET");
+
 const user = requiredEnv("MS_GRAPH_USER");
 
 await verifyToken(tenantId, clientId, clientSecret);
@@ -18,6 +25,7 @@ if (process.env.MS_GRAPH_LIVE_SEND !== "true") {
 }
 
 const to = requiredEnv("MS_GRAPH_TEST_TO");
+
 const email = createEmailClient({
   adapters: [graph({ tenantId, clientId, clientSecret, user, saveToSentItems: false })],
 });
@@ -52,15 +60,14 @@ async function verifyToken(tenantId: string, clientId: string, clientSecret: str
       }),
     },
   );
-  const tokenBody = (await tokenResponse.json().catch(() => ({}))) as {
-    access_token?: unknown;
-  };
+
+  const tokenBody = tokenResponseSchema.safeParse(await tokenResponse.json().catch(() => null));
 
   if (!tokenResponse.ok) {
     fail(`Graph token request failed with HTTP ${tokenResponse.status}.`);
   }
 
-  if (typeof tokenBody.access_token !== "string") {
+  if (!tokenBody.success) {
     fail("Graph token response did not contain an access_token.");
   }
 

@@ -1,8 +1,10 @@
 export const appName = "Email SDK";
+
 export const appDescription =
   "Email for TypeScript apps. Send transactional email with your existing provider account, validate messages, test without sending, and inspect failures in a server-side SDK.";
 
 export const docsRoute = "/docs";
+
 export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev").replace(
   /\/$/,
   "",
@@ -39,7 +41,9 @@ Install the package, import the adapter for the provider whose credentials the a
 - Gate agent-initiated sends behind explicit human approval. Run the CLI \`doctor\` and \`send --dry-run\` before any live send. The CLI sends if \`--dry-run\` is omitted; only the standalone first-send starter requires an explicit \`--send\` flag.`;
 
 export const siteOgImagePath = "/og/email-sdk.png";
+
 export const siteOgImageVersion = import.meta.env.VITE_OG_IMAGE_VERSION || "dev";
+
 export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}?v=${encodeURIComponent(
   siteOgImageVersion,
 )}`;

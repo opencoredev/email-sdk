@@ -8,8 +8,10 @@ function unscopedCommandLines(source: string): number[] {
   const violations: number[] = [];
   let fence: string | undefined;
   let executable = false;
+
   for (const [index, line] of source.split("\n").entries()) {
     const marker = line.match(/^\s*(`{3,}|~{3,})(.*)$/);
+
     if (marker) {
       if (!fence) {
         fence = marker[1]!;
@@ -18,12 +20,15 @@ function unscopedCommandLines(source: string): number[] {
         fence = undefined;
         executable = false;
       }
+
       continue;
     }
+
     if (executable && !/^\s*#/.test(line) && /\b(?:npx|bunx)\s+email-sdk(?=\s|$)/.test(line)) {
       violations.push(index + 1);
     }
   }
+
   return violations;
 }
 
@@ -31,9 +36,11 @@ test("current docs executable fences use the scoped CLI package", () => {
   // Only current docs are scanned; docs-v snapshots are historical.
   const files = [...new Bun.Glob("**/*.{md,mdx}").scanSync(docsRoot)].sort();
   expect(files.length).toBeGreaterThan(0);
+
   const violations = files.flatMap((file) =>
     unscopedCommandLines(readFileSync(join(docsRoot, file), "utf8")).map((line) => `${file}:${line}`),
   );
+
   expect(violations).toEqual([]);
 });
 

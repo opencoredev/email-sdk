@@ -29,6 +29,7 @@ describe("og sponsor row", () => {
 
     for (const [index, slot] of slots.entries()) {
       const next = slots[index + 1];
+
       if (!next) continue;
       const clearance = next.x - next.radius - slot.labelEndX;
       expect(clearance).toBeGreaterThanOrEqual(sponsorRowGeometry.minClearance - 0.001);
@@ -46,6 +47,7 @@ describe("og sponsor row", () => {
       "Neon",
       "Notra",
     ];
+
     const short = sponsorRowLayout(fittingNames);
     const long = sponsorRowLayout([...fittingNames, "Zernio", "Customer.io"]);
 
