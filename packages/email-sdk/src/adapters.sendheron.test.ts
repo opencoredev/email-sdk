@@ -53,6 +53,19 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.fromName).toBeUndefined();
   });
 
+  test("SendHeron converts text when html is an empty string", async () => {
+    const capture = jsonCapture({ id: "heron_empty_html", status: "sent" }, { status: 201 });
+
+    await sendheron({ apiKey: "sh_key", fetch: capture.fetch }).send(
+      { from: "hello@example.com", to: "ada@example.com", subject: "Hi", html: "", text: "Hello" },
+      context,
+    );
+
+    expect(capture.calls[0]?.json.html).toBe(
+      '<pre style="white-space:pre-wrap;font-family:inherit">Hello</pre>',
+    );
+  });
+
   test("SendHeron gives a per-send idempotency key precedence over static headers", async () => {
     const capture = jsonCapture({ id: "heron_idem", status: "sent" }, { status: 201 });
 

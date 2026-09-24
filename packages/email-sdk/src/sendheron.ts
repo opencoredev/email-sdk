@@ -108,8 +108,9 @@ async function toSendheronPayload(message: EmailMessage) {
     to: arrayify(message.to).map(emailAddressOf)[0],
     subject: message.subject,
     // SendHeron has no plain-text field and requires html, so a text-only message is
-    // escaped into a preformatted block instead of being refused.
-    html: message.html ?? textToHtml(message.text ?? ""),
+    // escaped into a preformatted block instead of being refused. An empty html string
+    // counts as missing so it does not hide the text body.
+    html: message.html || textToHtml(message.text ?? ""),
     from: from.email,
     fromName: from.name,
     replyTo,
