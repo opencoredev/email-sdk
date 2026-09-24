@@ -23,6 +23,7 @@ import type { IncomingMessage } from "node:http";
 import { request } from "node:https";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
+import type { Readable } from "node:stream";
 
 import type { ConvexEmailAttachment } from "../shared/types.js";
 
@@ -77,14 +78,13 @@ export async function fetchAttachment(
 ): Promise<ArrayBuffer> {
   const resolveHost = options.resolveHost ?? resolveHostAddresses;
   const transport = options.transport ?? httpsTransport;
+  let url = safeAttachmentUrl(value, filename);
   const controller = new AbortController();
 
   const timeout = setTimeout(
     () => controller.abort(),
     options.timeoutMs ?? ATTACHMENT_FETCH_TIMEOUT_MS,
   );
-
-  let url = safeAttachmentUrl(value, filename);
 
   try {
     for (let redirects = 0; redirects <= MAX_ATTACHMENT_REDIRECTS; redirects += 1) {
@@ -111,6 +111,14 @@ export async function fetchAttachment(
       if (!response.ok) {
         await response.body?.cancel();
         throw new Error(`Failed to fetch email attachment "${filename}" from ${value}.`);
+      }
+
+      const encoding = response.headers.get("content-encoding");
+
+      // The request asks for identity; node:https would hand compressed bytes straight to the email.
+      if (encoding && encoding.toLowerCase() !== "identity") {
+        await response.body?.cancel();
+        throw new Error(`Attachment "${filename}" was sent with unsupported content encoding "${encoding}".`);
       }
 
       return await readAttachmentBody(response, filename);
@@ -261,7 +269,7 @@ export const httpsTransport: AttachmentTransport = ({ url, addresses, signal }) 
         agent: false,
         lookup: pinnedLookup(addresses),
         signal,
-        headers: { accept: "*/*" },
+        headers: { accept: "*/*", "accept-encoding": "identity" },
       },
       (incoming) => {
         try {
@@ -300,12 +308,23 @@ function toResponse(incoming: IncomingMessage) {
   return new Response(bodyStream(incoming), { status, headers });
 }
 
-function bodyStream(incoming: IncomingMessage) {
+/** Pauses the socket whenever the stream queue is full, so the size cap bounds buffered memory. */
+export function bodyStream(incoming: Readable) {
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      incoming.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+      incoming.pause();
+
+      incoming.on("data", (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk));
+
+        if ((controller.desiredSize ?? 0) <= 0) incoming.pause();
+      });
+
       incoming.on("end", () => controller.close());
       incoming.on("error", (error) => controller.error(error));
+    },
+    pull() {
+      incoming.resume();
     },
     cancel() {
       incoming.destroy();

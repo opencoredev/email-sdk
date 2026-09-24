@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { LookupAddress } from "node:dns";
+import { PassThrough } from "node:stream";
 
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_REDIRECTS,
+  bodyStream,
   fetchAttachment,
   isPublicAddress,
   pinnedLookup,
@@ -258,6 +260,18 @@ describe("fetchAttachment", () => {
     );
   });
 
+  test("rejects a compressed body instead of attaching encoded bytes", async () => {
+    const { resolveHost } = resolverFrom({ "files.example.test": [publicV4] });
+
+    const { transport } = recordingTransport(
+      () => new Response("compressed", { headers: { "content-encoding": "gzip" } }),
+    );
+
+    await expect(
+      fetchAttachment("https://files.example.test/a.txt", "a.txt", { resolveHost, transport }),
+    ).rejects.toThrow('Attachment "a.txt" was sent with unsupported content encoding "gzip".');
+  });
+
   test("times out when the body stalls after the response headers", async () => {
     const { resolveHost } = resolverFrom({ "files.example.test": [publicV4] });
 
@@ -291,6 +305,24 @@ describe("fetchAttachment", () => {
       }),
     ).rejects.toThrow('Fetching email attachment "a.txt" timed out.');
     expect(requests).toHaveLength(0);
+  });
+});
+
+describe("bodyStream", () => {
+  test("pauses the socket while the stream queue is full", async () => {
+    const incoming = new PassThrough();
+    const stream = bodyStream(incoming);
+
+    for (let index = 0; index < 5; index += 1) incoming.write(`chunk-${index};`);
+    incoming.end();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(incoming.isPaused()).toBe(true);
+    expect(incoming.readableLength).toBeGreaterThan(0);
+
+    await expect(new Response(stream).text()).resolves.toBe(
+      "chunk-0;chunk-1;chunk-2;chunk-3;chunk-4;",
+    );
   });
 });
 
