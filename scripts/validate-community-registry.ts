@@ -23,22 +23,21 @@ const packageJsonSchema = z.object({
   bin: z.union([z.string(), z.record(z.string(), z.string())]).optional(),
 });
 
+// Only the audited version is parsed strictly, so malformed metadata on unrelated
+// historical versions cannot block the audit.
 const registryResponseSchema = z.object({
   "dist-tags": z.object({ latest: z.string().optional() }).optional(),
-  versions: z
-    .record(
-      z.string(),
-      z.object({
-        repository: repositorySchema.optional(),
-        dist: z
-          .object({
-            tarball: z.string().optional(),
-            fileCount: z.number().optional(),
-            unpackedSize: z.number().optional(),
-          })
-          .optional(),
-      }),
-    )
+  versions: z.record(z.string(), z.unknown()).optional(),
+});
+
+const versionMetadataSchema = z.object({
+  repository: repositorySchema.optional(),
+  dist: z
+    .object({
+      tarball: z.string().optional(),
+      fileCount: z.number().optional(),
+      unpackedSize: z.number().optional(),
+    })
     .optional(),
 });
 
@@ -159,11 +158,29 @@ async function auditPackage(entry: CommunityEntry) {
     return;
   }
 
-  const versionMetadata = metadata.versions?.[version];
-  const tarball = versionMetadata?.dist?.tarball;
+  const rawVersionMetadata = metadata.versions?.[version];
 
-  if (!versionMetadata || !tarball) {
+  if (rawVersionMetadata === undefined) {
     fail(`${label}: npm package version ${version} was not found.`);
+
+    return;
+  }
+
+  const parsedVersionMetadata = versionMetadataSchema.safeParse(rawVersionMetadata);
+
+  if (!parsedVersionMetadata.success) {
+    fail(
+      `${label}: npm metadata for version ${version} is invalid: ${parsedVersionMetadata.error.message}`,
+    );
+
+    return;
+  }
+
+  const versionMetadata = parsedVersionMetadata.data;
+  const tarball = versionMetadata.dist?.tarball;
+
+  if (!tarball) {
+    fail(`${label}: npm package version ${version} has no tarball.`);
 
     return;
   }
@@ -189,7 +206,15 @@ async function auditPackage(entry: CommunityEntry) {
     return;
   }
 
-  const packageJson = packageJsonSchema.parse(JSON.parse(packageJsonFile));
+  const parsedPackageJson = parsePackageJson(packageJsonFile);
+
+  if (!parsedPackageJson.success) {
+    fail(`${label}: package/package.json is invalid: ${parsedPackageJson.error}`);
+
+    return;
+  }
+
+  const packageJson = parsedPackageJson.data;
 
   const installScripts = ["preinstall", "install", "postinstall"].filter(
     (script) => packageJson.scripts?.[script],
@@ -214,6 +239,25 @@ async function auditPackage(entry: CommunityEntry) {
   }
 
   scanTarballFiles(label, files);
+}
+
+function parsePackageJson(source: string) {
+  let json: unknown;
+
+  try {
+    json = JSON.parse(source);
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const parsed = packageJsonSchema.safeParse(json);
+
+  return parsed.success
+    ? { success: true as const, data: parsed.data }
+    : { success: false as const, error: parsed.error.message };
 }
 
 function scanTarballFiles(label: string, files: Map<string, string>) {
