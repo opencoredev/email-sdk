@@ -46,7 +46,7 @@ await email.send({
 
 ## Adapters
 
-Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
+Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SendHeron, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 
