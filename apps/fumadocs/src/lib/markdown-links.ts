@@ -7,6 +7,7 @@ import { siteUrl } from "./shared";
 // site-root link to an absolute URL. Protocol-relative targets (//host/path)
 // already resolve, so they are left alone.
 const rootRelativeMarkdownLink = /\]\((\/(?!\/))/g;
+
 const rootRelativeHref = /href="(\/(?!\/))/g;
 
 export function absolutizeSiteLinks(markdown: string) {

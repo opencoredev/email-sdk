@@ -40,8 +40,11 @@ const options: EmailClientOptions<[typeof plugin]> = {
   },
   plugins: [plugin],
 };
+
 const client: EmailClient<{ legacyExtension: true }> = createEmailClient(options);
+
 const sendOptions: SendOptions = { provider: "legacy", retries: 1 };
+
 const batch: SendBatchItem[] = [
   {
     from: "hello@example.com",
@@ -53,10 +56,17 @@ const batch: SendBatchItem[] = [
 ];
 
 const response: Promise<EmailProviderResponse> = client.send(batch[0]!, sendOptions);
+
 const batchResponse: Promise<SendBatchResult[]> = client.sendBatch(batch, sendOptions);
+
 const legacyExtension: true = client.legacyExtension;
+
 new EmailProviderError("failed", { provider: "legacy" });
+
 new EmailProviderNotFoundError("legacy");
+
 void response;
+
 void batchResponse;
+
 void legacyExtension;

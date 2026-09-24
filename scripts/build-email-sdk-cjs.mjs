@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageDir = resolve(fileURLToPath(new URL("..", import.meta.url)), "packages/email-sdk");
+
 const packageJson = JSON.parse(await readFile(resolve(packageDir, "package.json"), "utf8"));
 
 const entrypoints = Object.values(packageJson.exports)

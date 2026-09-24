@@ -19,6 +19,7 @@ export const Route = createFileRoute("/rss.xml")({
 
 function renderRssFeed() {
   const posts = getPublishedBlogPosts();
+
   const items = posts.map((post) => {
     const url = `${siteUrl}${getBlogPostUrl(post.slug)}`;
     const escapedUrl = escapeXml(url);
@@ -38,6 +39,7 @@ function renderRssFeed() {
     (latest, post) => (!latest || post.updatedAt > latest.updatedAt ? post : latest),
     undefined,
   );
+
   const latestUpdatedAt = latestPost?.updatedAt ?? "2026-06-01";
 
   return `<?xml version="1.0" encoding="UTF-8"?>

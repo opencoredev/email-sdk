@@ -8,8 +8,8 @@ import {
   sendAtUnixSeconds,
   sendgridAttachments,
 } from "./payloads.js";
-import type { EmailAddress, EmailMessage, EmailAdapter } from "./types.js";
-import { arrayify, assertMaxItems, hasRecipientVariables } from "./utils.js";
+import type { EmailMessage, EmailAdapter } from "./types.js";
+import { arrayify, assertMaxItems, emailAddressOf, hasRecipientVariables } from "./utils.js";
 
 export type SendGridAdapterOptions = {
   apiKey: string;
@@ -47,7 +47,7 @@ export function sendgrid(
       return {
         adapter: "sendgrid",
         id:
-          firstString(body as Record<string, unknown>, ["id", "message_id"]) ??
+          firstString(body, ["id", "message_id"]) ??
           response.headers.get("x-message-id") ??
           undefined,
         raw: body,
@@ -59,9 +59,12 @@ export function sendgrid(
     ...provider,
     async sendPersonalized(input, context) {
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddress(recipient.to), recipient.variables]),
+        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
       );
+
       const result = await provider.send(
+        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
+        // them. recipientVariables is the legacy extension read by sendgridPersonalizations.
         {
           ...input.message,
           to: input.recipients.map((recipient) => recipient.to),
@@ -69,19 +72,14 @@ export function sendgrid(
         } as EmailMessage,
         context,
       );
+
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddress(recipient.to)),
+        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },
   };
-}
-
-function emailAddress(address: EmailAddress) {
-  return typeof address === "string"
-    ? (address.match(/<([^>]+)>/)?.[1] ?? address).trim()
-    : address.email;
 }
 
 // With recipientVariables, emit one personalization per recipient so SendGrid substitutes

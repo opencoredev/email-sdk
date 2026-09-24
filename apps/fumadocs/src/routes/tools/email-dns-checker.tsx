@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
+import { z } from "zod";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import type { CheckFinding, DnsCheckResult } from "@/lib/dns-checker";
@@ -9,16 +10,24 @@ import { baseOptions } from "@/lib/layout.shared";
 import { appName, siteUrl } from "@/lib/shared";
 
 const pageTitle = `Free Email DNS Checker — SPF, DKIM & DMARC Lookup - ${appName}`;
+
 const pageDescription =
   "Check any domain's email DNS setup in seconds: SPF record validation, DKIM selector lookup, DMARC policy check, and MX records — free, no signup, with fixes explained.";
+
 const canonicalUrl = `${siteUrl}/tools/email-dns-checker`;
 
-type CheckerSearch = { domain?: string };
+// A shared link can carry any query value; keep only a string domain, capped at
+// the 253-character DNS name limit, and drop anything else.
+const checkerSearchSchema = z.object({
+  domain: z
+    .string()
+    .transform((value) => value.slice(0, 253))
+    .optional()
+    .catch(undefined),
+});
 
 export const Route = createFileRoute("/tools/email-dns-checker")({
-  validateSearch: (search: Record<string, unknown>): CheckerSearch => ({
-    domain: typeof search.domain === "string" ? search.domain.slice(0, 253) : undefined,
-  }),
+  validateSearch: (search) => checkerSearchSchema.parse(search),
   head: () => ({
     meta: [
       { title: pageTitle },
@@ -62,6 +71,7 @@ function DnsCheckerPage() {
   async function runCheck(target: string) {
     setLoading(true);
     setError(null);
+
     try {
       const checked = await checkEmailDnsServerFn({ data: { domain: target } });
       setResult(checked);
@@ -74,16 +84,22 @@ function DnsCheckerPage() {
     }
   }
 
-  useEffect(() => {
+  // Check a shared ?domain= link once on mount. Later search changes come from
+  // runCheck itself, so they must not trigger another check.
+  const runInitialCheck = useEffectEvent(() => {
     if (search.domain && !autoRan.current) {
       autoRan.current = true;
       void runCheck(search.domain);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  useEffect(() => {
+    runInitialCheck();
   }, []);
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
+
     if (domain.trim()) void runCheck(domain);
   }
 
@@ -280,6 +296,7 @@ function StatusBadge({ status }: { status: CheckFinding["status"] }) {
     warn: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
     fail: "bg-red-500/15 text-red-600 dark:text-red-400",
   } as const;
+
   return (
     <span
       className={`mt-0.5 h-fit shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ${styles[status]}`}

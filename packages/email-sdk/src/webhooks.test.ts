@@ -4,9 +4,13 @@ import { normalizeWebhookEvent, verifyMailgunWebhook, verifyResendWebhook } from
 import type { WebhookProvider } from "./webhooks.js";
 
 const now = 1731705121000;
+
 const timestamp = String(now / 1000);
+
 const key = "test-signing-key";
+
 const secret = `whsec_${Buffer.from(key).toString("base64")}`;
+
 function resend(body = '{"type":"email.delivered","data":{"email_id":"é✉️"}}', time = timestamp) {
   return {
     body, secret, now,
@@ -16,8 +20,10 @@ function resend(body = '{"type":"email.delivered","data":{"email_id":"é✉️"}
     },
   };
 }
+
 function mailgun(event = "delivered", time: string | number = timestamp) {
   const token = "a".repeat(50);
+
   return {
     secret: key, now,
     body: JSON.stringify({ signature: { timestamp: time, token, signature: createHmac("sha256", key).update(`${time}${token}`).digest("hex") }, "event-data": { event } }),
@@ -52,6 +58,7 @@ describe("webhook verification", () => {
       expect(await verifyResendWebhook(resend("{}", time))).toBe(false);
       expect(await verifyMailgunWebhook(mailgun("delivered", time))).toBe(false);
     }
+
     expect(await verifyResendWebhook(resend("{}", String(+timestamp - 300)))).toBe(true);
     expect(await verifyMailgunWebhook({ ...mailgun(), toleranceSeconds: -1 })).toBe(false);
     expect(await verifyResendWebhook({ ...resend(), now: NaN })).toBe(false);
@@ -62,13 +69,16 @@ describe("webhook verification", () => {
       const input = resend();
       expect(await verifyResendWebhook({ ...input, headers: { ...input.headers, "svix-signature": signature } })).toBe(false);
     }
+
     for (const body of ["null", "[]", "1", '"string"', "true", "{"]) {
       expect(await verifyResendWebhook(resend(body))).toBe(false);
       expect(await verifyMailgunWebhook({ ...mailgun(), body })).toBe(false);
     }
+
     for (const value of ["", "whsec_!!!", []]) {
       expect(await verifyResendWebhook({ ...resend(), secret: value })).toBe(false);
     }
+
     expect(await verifyResendWebhook({ ...resend(), headers: {} })).toBe(false);
   });
   test("Mailgun authenticates timestamp/token, explicitly not event-data", async () => {
@@ -111,6 +121,7 @@ describe("webhook normalization", () => {
     for (const [Type, status] of [["HardBounce", "bounced"], ["BadEmailAddress", "bounced"], ["ManuallyDeactivated", "bounced"], ["Transient", undefined], ["SoftBounce", undefined], ["DnsError", undefined]]) {
       expect((await normalizeWebhookEvent({ provider: "postmark", body: JSON.stringify({ RecordType: "Bounce", Type }) })).status).toBe(status);
     }
+
     for (const severity of ["permanent", "temporary", undefined]) {
       const result = await normalizeWebhookEvent({ provider: "mailgun", body: JSON.stringify({ "event-data": { id: "event", event: "failed", severity, message: { headers: { "message-id": "m" } } } }) });
       expect(result).toMatchObject({ deliveryId: "event", providerMessageId: "m", type: "failed" });
@@ -134,7 +145,9 @@ describe("webhook normalization", () => {
     expect((await normalizeWebhookEvent({ ...input, provider: "mailgun" })).deliveryId).not.toBe(first.deliveryId);
   });
   test("rejects unsupported providers and non-object JSON", async () => {
+    // SAFETY: deliberately unsupported provider to exercise the runtime guard.
     await expect(normalizeWebhookEvent({ provider: "smtp" as WebhookProvider, body: "{}" })).rejects.toThrow("Unsupported webhook");
+
     for (const body of ["null", "[]", "true", "0", '"text"', "invalid"]) {
       await expect(normalizeWebhookEvent({ provider: "resend", body })).rejects.toThrow();
     }

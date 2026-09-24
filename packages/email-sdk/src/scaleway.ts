@@ -54,7 +54,7 @@ export function scaleway(
     parseResponse(body) {
       return {
         adapter: "scaleway",
-        id: firstString(body as Record<string, unknown>, ["id", "email_id"]),
+        id: firstString(body, ["id", "email_id"]),
         raw: body,
       };
     },
@@ -67,6 +67,7 @@ function scalewayHeaders(message: EmailMessage) {
       key: header.name,
       value: header.value,
     })) ?? [];
+
   const replyTo = formatAddresses(message.replyTo).join(", ");
 
   if (replyTo) {

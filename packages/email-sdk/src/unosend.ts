@@ -1,5 +1,7 @@
 import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { jsonField, jsonString } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import {
   base64Attachments,
   commonHeadersObject,
@@ -17,29 +19,10 @@ export type UnosendAdapterOptions = {
   fetch?: typeof fetch;
 };
 
-type UnosendSendResponse = {
-  success?: boolean;
-  data?: {
-    id?: string;
-    from?: string;
-    to?: string[];
-    status?: string;
-    created_at?: string;
-  };
-  error?: {
-    code?: string;
-    message?: string;
-    status?: number;
-    details?: unknown;
-  };
-  id?: string;
-  status?: string;
-};
-
 export function unosend(
   options: UnosendAdapterOptions,
 ): EmailAdapter<"unosend", { baseUrl: string }> {
-  return jsonProvider<"unosend", UnosendSendResponse>({
+  return jsonProvider({
     name: "unosend",
     baseUrl: options.baseUrl ?? "https://api.unosend.co",
     endpoint: "/emails",
@@ -70,15 +53,14 @@ export function unosend(
       };
     },
     parseResponse(body) {
-      if (body.success !== true) {
+      if (jsonField(body, "success") !== true) {
         throw new EmailAdapterError(unosendErrorMessage(body), {
           adapter: "unosend",
           retryable: false,
         });
       }
 
-      const record = (body.data ?? body) as Record<string, unknown>;
-      const id = firstString(record, ["id"]);
+      const id = firstString(jsonField(body, "data") ?? body, ["id"]);
 
       return {
         adapter: "unosend",
@@ -99,6 +81,8 @@ function optionalReplyTo(message: EmailMessage) {
   return formatAddresses(message.replyTo)[0];
 }
 
-function unosendErrorMessage(body: UnosendSendResponse) {
-  return body.error?.message ? `unosend failed: ${body.error.message}` : "unosend failed.";
+function unosendErrorMessage(body: JsonValue) {
+  const message = jsonString(jsonField(body, "error"), "message");
+
+  return message ? `unosend failed: ${message}` : "unosend failed.";
 }

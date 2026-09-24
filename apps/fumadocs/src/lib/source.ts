@@ -17,9 +17,11 @@ import {
   docsV065,
 } from "collections/server";
 import { loader } from "fumadocs-core/source";
+import { z } from "zod";
 
 import communityPlugins from "../../content/community/plugins.json";
 import { buildAdapterFaq, getAdapterSupportEntry } from "./adapter-faq";
+import { communityEntrySchema } from "./community-registry";
 import { resolveDocsIcon } from "./docs-icons";
 import { renderComponentsAsMarkdown } from "./markdown-components";
 import { absolutizeSiteLinks } from "./markdown-links";
@@ -27,76 +29,91 @@ import { docsRoute, siteUrl } from "./shared";
 import { type DocsVersion, docsVersions, getDocsVersionBase, latestDocsVersion } from "./versions";
 
 const v120DocsVersion = docsVersions.find((version) => version.collection === "docsV120");
+
 if (!v120DocsVersion) {
   throw new Error("Missing docs source config for v1.2.0");
 }
 
 const v110DocsVersion = docsVersions.find((version) => version.collection === "docsV110");
+
 if (!v110DocsVersion) {
   throw new Error("Missing docs source config for v1.1.0");
 }
 
 const v101DocsVersion = docsVersions.find((version) => version.collection === "docsV101");
+
 if (!v101DocsVersion) {
   throw new Error("Missing docs source config for v1.0.1");
 }
 
 const v100DocsVersion = docsVersions.find((version) => version.collection === "docsV100");
+
 if (!v100DocsVersion) {
   throw new Error("Missing docs source config for v1.0.0");
 }
 
 const v020DocsVersion = docsVersions.find((version) => version.collection === "docsV020");
+
 if (!v020DocsVersion) {
   throw new Error("Missing docs source config for v0.2.0");
 }
 
 const v021DocsVersion = docsVersions.find((version) => version.collection === "docsV021");
+
 if (!v021DocsVersion) {
   throw new Error("Missing docs source config for v0.2.1");
 }
 
 const v030DocsVersion = docsVersions.find((version) => version.collection === "docsV030");
+
 if (!v030DocsVersion) {
   throw new Error("Missing docs source config for v0.3.0");
 }
 
 const v040DocsVersion = docsVersions.find((version) => version.collection === "docsV040");
+
 if (!v040DocsVersion) {
   throw new Error("Missing docs source config for v0.4.0");
 }
 
 const v050DocsVersion = docsVersions.find((version) => version.collection === "docsV050");
+
 if (!v050DocsVersion) {
   throw new Error("Missing docs source config for v0.5.0");
 }
 
 const v060DocsVersion = docsVersions.find((version) => version.collection === "docsV060");
+
 if (!v060DocsVersion) {
   throw new Error("Missing docs source config for v0.6.0");
 }
 
 const v061DocsVersion = docsVersions.find((version) => version.collection === "docsV061");
+
 if (!v061DocsVersion) {
   throw new Error("Missing docs source config for v0.6.1");
 }
 
 const v062DocsVersion = docsVersions.find((version) => version.collection === "docsV062");
+
 if (!v062DocsVersion) {
   throw new Error("Missing docs source config for v0.6.2");
 }
 
 const v063DocsVersion = docsVersions.find((version) => version.collection === "docsV063");
+
 if (!v063DocsVersion) {
   throw new Error("Missing docs source config for v0.6.3");
 }
 
 const v064DocsVersion = docsVersions.find((version) => version.collection === "docsV064");
+
 if (!v064DocsVersion) {
   throw new Error("Missing docs source config for v0.6.4");
 }
 
 const v065DocsVersion = docsVersions.find((version) => version.collection === "docsV065");
+
 if (!v065DocsVersion) {
   throw new Error("Missing docs source config for v0.6.5");
 }
@@ -195,12 +212,15 @@ export function markdownPathToSlugs(segs: string[]) {
 
   const out = [...segs];
   out[out.length - 1] = out[out.length - 1].replace(/\.md$/, "");
+
   if (out[out.length - 1] === "index") out.pop();
+
   return out;
 }
 
 export function slugsToMarkdownPath(slugs: string[], version: DocsVersion = latestDocsVersion) {
   const segments = [...slugs];
+
   if (segments.length === 0) {
     segments.push("index.md");
   } else {
@@ -215,6 +235,7 @@ export function slugsToMarkdownPath(slugs: string[], version: DocsVersion = late
 
 export function getPageMarkdownUrl(slugs: string[]) {
   const segments = [...slugs];
+
   if (segments.length === 0) {
     segments.push("index.md");
   } else {
@@ -232,13 +253,9 @@ export async function getLLMText(
   version: DocsVersion = latestDocsVersion,
 ) {
   const docsBasePath = getDocsVersionBase(version);
-  const getText = Reflect.get(page.data, "getText");
-  if (typeof getText !== "function") {
-    throw new Error(`Page ${page.url} does not expose generated Markdown text`);
-  }
 
   const processed = absolutizeSiteLinks(
-    renderComponentsAsMarkdown(await getText.call(page.data, "processed"), {
+    renderComponentsAsMarkdown(await page.data.getText("processed"), {
       currentVersion: version.current,
     })
       .replaceAll("](/docs/", `](${docsBasePath}/`)
@@ -260,31 +277,24 @@ ${markdown}${faq}`;
 // the current registry data so agents can answer "is there a community adapter
 // for X?" without evaluating components.
 const COMMUNITY_REGISTRY_PAGE = "plugins/community.mdx";
-const communityRegistryTag = /<CommunityPluginRegistry[^>]*\/?>\s*/;
 
-type CommunityPluginEntry = {
-  name: string;
-  package: string;
-  kind: string;
-  status: string;
-  description: string;
-  href: string;
-  repo: string;
-  maintainer: string;
-};
+const communityRegistryTag = /<CommunityPluginRegistry[^>]*\/?>\s*/;
 
 function inlineCommunityRegistry(markdown: string, pagePath: string) {
   if (!pagePath.endsWith(COMMUNITY_REGISTRY_PAGE)) return markdown;
 
   const registryMarkdown = renderCommunityRegistryMarkdown();
+
   if (communityRegistryTag.test(markdown)) {
     return markdown.replace(communityRegistryTag, `${registryMarkdown}\n\n`);
   }
+
   return `${markdown}\n\n${registryMarkdown}\n`;
 }
 
 function renderCommunityRegistryMarkdown() {
-  const entries = communityPlugins as CommunityPluginEntry[];
+  const entries = z.array(communityEntrySchema).parse(communityPlugins);
+
   if (entries.length === 0) {
     return "No community plugins are listed yet. Community packages are listed by pull request after their registry entry passes the static checks.";
   }

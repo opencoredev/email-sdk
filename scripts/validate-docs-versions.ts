@@ -10,7 +10,9 @@ import {
 } from "../apps/fumadocs/src/lib/versions";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+
 const fumadocsRoot = join(repoRoot, "apps/fumadocs");
+
 const errors: string[] = [];
 
 function fail(message: string) {
@@ -22,11 +24,16 @@ function readRepoFile(path: string) {
 }
 
 const sourceConfig = readRepoFile("apps/fumadocs/source.config.ts");
+
 const sourceLoader = readRepoFile("apps/fumadocs/src/lib/source.ts");
+
 const docsRoute = readRepoFile("apps/fumadocs/src/routes/docs/$.tsx");
+
 const changelog = readRepoFile("packages/email-sdk/CHANGELOG.md");
+
 const latestPublishedVersion =
   process.env.EMAIL_SDK_VALIDATE_DOCS_PACKAGE_VERSION ?? packageJsonVersion;
+
 const currentDocsVersion = `v${currentDocsMajorVersion}`;
 
 if (!/^\d+\.\d+\.\d+$/.test(latestPublishedVersion)) {
@@ -37,6 +44,7 @@ if (!/^\d+\.\d+\.\d+$/.test(latestPublishedVersion)) {
 }
 
 const latest = docsVersions.find((version) => version.current);
+
 if (!latest) {
   fail("docsVersions must include a current version.");
 } else {
@@ -55,11 +63,13 @@ if (!latest) {
       `packages/email-sdk/package.json is ${latestPublishedVersion}, but current docs still track ${currentDocsVersion}.`,
     );
   }
+
   if (publishedMajor === currentDocsMajorVersion && currentDocsPublishedVersion !== latestPublishedVersion) {
     fail(
       `${latestPublishedVersion} should publish the ${currentDocsVersion} docs line, but the docs config does not expose it as the current published docs version.`,
     );
   }
+
   if (publishedMajor < currentDocsMajorVersion && currentDocsPublishedVersion !== undefined) {
     fail(
       `${latestPublishedVersion} must not be treated as a published package for the unreleased ${currentDocsVersion} docs line.`,
@@ -68,6 +78,7 @@ if (!latest) {
 }
 
 const versionsBySlug = new Map<string, (typeof docsVersions)[number]>();
+
 const collections = new Set<string>();
 
 for (const version of docsVersions) {
@@ -76,18 +87,22 @@ for (const version of docsVersions) {
   if (versionsBySlug.has(slug)) {
     fail(`Duplicate docs version slug: ${slug}`);
   }
+
   versionsBySlug.set(slug, version);
 
   if (collections.has(version.collection)) {
     fail(`Duplicate docs version collection: ${version.collection}`);
   }
+
   collections.add(version.collection);
 
   if (version.current) {
     if (version.href !== "/docs") fail(`Current docs href must be /docs, got ${version.href}.`);
+
     if (version.contentPath !== "content/docs") {
       fail(`Current docs contentPath must be content/docs, got ${version.contentPath}.`);
     }
+
     continue;
   }
 
@@ -98,32 +113,41 @@ for (const version of docsVersions) {
   if (version.href !== expectedHref) {
     fail(`${version.version} href must be ${expectedHref}, got ${version.href}.`);
   }
+
   if (version.contentPath !== expectedContentPath) {
     fail(`${version.version} contentPath must be ${expectedContentPath}, got ${version.contentPath}.`);
   }
+
   if (!existsSync(contentDir)) {
     fail(`${version.version} content directory is missing: apps/fumadocs/${version.contentPath}`);
   }
+
   if (!existsSync(join(contentDir, "index.mdx"))) {
     fail(`${version.version} archive is missing index.mdx.`);
   }
+
   if (!sourceConfig.includes(`export const ${version.collection}`)) {
     fail(`${version.version} is missing export const ${version.collection} in source.config.ts.`);
   }
+
   if (!sourceConfig.includes(`dir: "${version.contentPath}"`)) {
     fail(`${version.version} source.config.ts entry must point at ${version.contentPath}.`);
   }
+
   if (!sourceLoader.includes(`${version.collection}: loader(`)) {
     fail(`${version.version} is missing a ${version.collection} loader in src/lib/source.ts.`);
   }
+
   if (!docsRoute.includes(`browserCollections.${version.collection}`)) {
     fail(`${version.version} is missing a browser loader in src/routes/docs/$.tsx.`);
   }
 }
 
 const archiveDir = join(fumadocsRoot, "content/docs-v");
+
 for (const dirent of readdirSync(archiveDir, { withFileTypes: true })) {
   if (!dirent.isDirectory()) continue;
+
   if (!versionsBySlug.has(dirent.name)) {
     fail(`Archived docs folder ${dirent.name} is not listed in docsVersions.`);
   }
@@ -131,12 +155,15 @@ for (const dirent of readdirSync(archiveDir, { withFileTypes: true })) {
 
 const changelogVersions = Array.from(changelog.matchAll(/^##\s+(\d+\.\d+\.\d+)/gm), (match) => {
   const version = match[1];
+
   if (!version) throw new Error("Unexpected changelog version match without a version.");
+
   return version;
 });
 
 for (const version of changelogVersions) {
   if (version === latestPublishedVersion) continue;
+
   if (!versionsBySlug.has(version)) {
     fail(`CHANGELOG.md includes ${version}, but docsVersions has no v${version} archive.`);
   }
@@ -144,6 +171,7 @@ for (const version of changelogVersions) {
 
 if (errors.length > 0) {
   console.error("Docs version validation failed:");
+
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }

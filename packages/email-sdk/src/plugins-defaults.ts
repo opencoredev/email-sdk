@@ -55,7 +55,7 @@ function withSendOptionDefaults(
   _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailSendOptions | undefined {
-  const metadata = mergeUnknownMetadata(options.sendMetadata, sendOptions?.metadata);
+  const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 
   if (!sendOptions && !metadata && !idempotencyKey) {
@@ -113,7 +113,7 @@ function mergeMetadata(
   };
 }
 
-function mergeUnknownMetadata(
+function mergeSendMetadata(
   defaults: EmailSendOptions["metadata"] | undefined,
   value: EmailSendOptions["metadata"] | undefined,
 ) {

@@ -16,6 +16,20 @@ import {
   isReportableSendError,
   normalizeAdapterName,
 } from "./telemetry.js";
+import { stubFetch } from "../test-support/fetch.js";
+
+type CapturedPropertyValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly string[]
+  | readonly ExceptionListItem[];
+
+type CapturedProperties = {
+  $exception_list?: ExceptionListItem[];
+  [key: string]: CapturedPropertyValue | undefined;
+};
 
 type CapturedRequest = {
   url: string;
@@ -23,16 +37,18 @@ type CapturedRequest = {
     api_key: string;
     event: string;
     distinct_id: string;
-    properties: Record<string, unknown>;
+    properties: CapturedProperties;
   };
 };
 
 function fetchCapture() {
   const calls: CapturedRequest[] = [];
-  const fetchFn = (async (url: URL | RequestInfo, init?: RequestInit) => {
+
+  const fetchFn = stubFetch(async (url: URL | RequestInfo, init?: RequestInit) => {
     calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+
     return new Response("{}", { status: 200 });
-  }) as typeof fetch;
+  });
 
   return { calls, fetchFn };
 }
@@ -47,6 +63,7 @@ describe("telemetry opt-out", () => {
     async (value) => {
       const { calls, fetchFn } = fetchCapture();
       const notices: string[] = [];
+
       const telemetry = createTelemetry({
         env: { EMAIL_SDK_TELEMETRY: value },
         fetch: fetchFn,
@@ -85,6 +102,7 @@ describe("telemetry opt-out", () => {
 describe("telemetry capture", () => {
   test("posts installation-scoped events to PostHog with common properties", async () => {
     const { calls, fetchFn } = fetchCapture();
+
     const telemetry = createTelemetry({
       env: {},
       fetch: fetchFn,
@@ -131,20 +149,24 @@ describe("telemetry capture", () => {
       notify: () => {},
     }).capture("client created");
 
-    expect(first.calls[0]?.body.distinct_id).toBe(second.calls[0]?.body.distinct_id as string);
+    expect(first.calls[0]?.body.distinct_id).toBe(second.calls[0]?.body.distinct_id);
   });
 
   test("flush waits for in-flight captures", async () => {
     const calls: CapturedRequest[] = [];
     let release: (() => void) | undefined;
+
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const fetchFn = (async (url: URL | RequestInfo, init?: RequestInit) => {
+
+    const fetchFn = stubFetch(async (url: URL | RequestInfo, init?: RequestInit) => {
       await gate;
       calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+
       return new Response("{}", { status: 200 });
-    }) as typeof fetch;
+    });
+
     const telemetry = createTelemetry({
       env: {},
       fetch: fetchFn,
@@ -165,7 +187,7 @@ describe("telemetry capture", () => {
   test("never throws when delivery fails", async () => {
     const telemetry = createTelemetry({
       env: {},
-      fetch: (() => Promise.reject(new Error("offline"))) as unknown as typeof fetch,
+      fetch: stubFetch(() => Promise.reject(new Error("offline"))),
       configDir: tempConfigDir(),
       notify: () => {},
     });
@@ -180,6 +202,7 @@ describe("telemetry notice", () => {
   test("prints the opt-out notice once and persists the marker", () => {
     const configDir = tempConfigDir();
     const notices: string[] = [];
+
     const options = {
       env: {},
       fetch: fetchCapture().fetchFn,
@@ -193,15 +216,18 @@ describe("telemetry notice", () => {
     expect(notices).toEqual([TELEMETRY_NOTICE]);
     expect(notices[0]).toContain("EMAIL_SDK_TELEMETRY=0");
 
+    // SAFETY: createTelemetry wrote this state file above, and it always records noticeShown.
     const state = JSON.parse(readFileSync(join(configDir, "telemetry.json"), "utf8")) as {
       noticeShown: boolean;
     };
+
     expect(state.noticeShown).toBe(true);
   });
 });
 
 function exceptionTelemetry() {
   const { calls, fetchFn } = fetchCapture();
+
   const telemetry = createTelemetry({
     env: {},
     fetch: fetchFn,
@@ -216,11 +242,20 @@ type ExceptionListItem = {
   type: string;
   value: string;
   mechanism: { handled: boolean; type: string; synthetic: boolean };
-  stacktrace?: { type: string; frames: Array<Record<string, unknown>> };
+  stacktrace?: { type: string; frames: ExceptionFrame[] };
+};
+
+type ExceptionFrame = {
+  platform: string;
+  function: string;
+  filename: string;
+  lineno?: number;
+  colno?: number;
+  in_app: boolean;
 };
 
 function exceptionList(call: CapturedRequest | undefined) {
-  return (call?.body.properties.$exception_list ?? []) as ExceptionListItem[];
+  return call?.body.properties.$exception_list ?? [];
 }
 
 describe("telemetry exceptions", () => {
@@ -459,6 +494,7 @@ describe("telemetry exceptions", () => {
 
   test("does nothing when telemetry is disabled", async () => {
     const { calls, fetchFn } = fetchCapture();
+
     const telemetry = createTelemetry({
       env: { EMAIL_SDK_TELEMETRY: "0" },
       fetch: fetchFn,
@@ -508,6 +544,7 @@ describe("detectCiVendor", () => {
     expect(detectCiVendor({ VERCEL: "1" })).toBeUndefined();
 
     const { calls, fetchFn } = fetchCapture();
+
     const telemetry = createTelemetry({
       env: { GITHUB_ACTIONS: "true" },
       fetch: fetchFn,

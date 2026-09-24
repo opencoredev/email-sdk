@@ -9,8 +9,10 @@ import {
   verificationRows,
   type EvidenceRecord,
 } from "./adapter-verification";
+import type { JsonValue } from "./json";
 
 const now = new Date("2026-08-01T00:00:00Z");
+
 const record: EvidenceRecord = {
   adapter: "resend",
   kind: "auth-check",
@@ -21,8 +23,11 @@ const record: EvidenceRecord = {
   source: "https://github.com/opencoredev/email-sdk/actions/runs/123",
   summary: "Authenticated against the provider account without sending.",
 };
-const fixture = (value: unknown) => ({ schemaVersion: 1, records: [value] });
-const parse = (input: unknown) => parseEvidence(input, undefined, undefined, now);
+
+const fixture = (value: JsonValue) => ({ schemaVersion: 1, records: [value] });
+
+const parse = (input: JsonValue) => parseEvidence(input, undefined, undefined, now);
+
 const empty = { schemaVersion: 1, records: [] };
 
 describe("adapter verification evidence", () => {
@@ -47,6 +52,7 @@ describe("adapter verification evidence", () => {
     expect(html).toContain('role="region"');
     expect(html).not.toContain("Source run");
     expect(html).not.toContain("<time");
+
     for (const title of ["Contract tests", "Configured auth probe", "Dated auth check", "Verified send", "Verified delivery"]) {
       expect(html).toContain(title);
     }
@@ -56,15 +62,18 @@ describe("adapter verification evidence", () => {
     const failed = renderToStaticMarkup(
       createElement(AdapterVerification, { evidence: fixture({ ...record, outcome: "fail", timestamp: "2026-01-01T00:00:00Z" }), now }),
     );
+
     expect(failed).toContain("Failed · Stale");
     expect(failed).toContain('dateTime="2026-01-01T00:00:00Z"');
     expect(failed).toContain(record.source);
     expect(failed).toContain("Source run · ");
     expect(failed).toContain(record.summary);
     expect(failed).toContain(`Scope: ${record.scope}`);
+
     const maintainer = renderToStaticMarkup(
       createElement(AdapterVerification, { evidence: fixture({ ...record, outcome: "inconclusive", source: "maintainer:leo" }), now }),
     );
+
     expect(maintainer).toContain("Inconclusive");
     expect(maintainer).toContain("Source: maintainer:leo");
     expect(maintainer).not.toContain("href=\"maintainer");
@@ -83,6 +92,7 @@ describe("adapter verification evidence", () => {
       { schemaVersion: 1, records: [{ ...record, timestamp: "2026-07-01T00:00:00Z" }, { ...record, outcome: "fail" }] },
       now,
     );
+
     const resend = rows.find((row) => row.id === "resend");
     expect(resend?.evidence["auth-check"]?.outcome).toBe("fail");
     expect(resend?.evidence["send-verified"]).toBeUndefined();
@@ -92,9 +102,11 @@ describe("adapter verification evidence", () => {
 
   test("rejects unknown adapters and inconsistent registry membership", () => {
     expect(() => parse(fixture({ ...record, adapter: "unknown" }))).toThrow(/Unknown evidence adapter/);
+
     for (const kind of ["auth-probe-configured", "auth-check", "send-verified", "delivery-verified"]) {
       expect(() => parse(fixture({ ...record, adapter: "smtp", kind }))).toThrow(/requires a registered live check/);
     }
+
     expect(parse(fixture({ ...record, adapter: "smtp", kind: "contract-test" })).records).toHaveLength(1);
     expect(() => parseEvidence(empty, ["resend"], ["unknown"], now)).toThrow(/Unknown live adapter/);
     expect(() => parseEvidence(empty, ["resend", "resend"], [], now)).toThrow(/Duplicate adapter IDs/);
@@ -102,13 +114,13 @@ describe("adapter verification evidence", () => {
 
   test("rejects each missing required field", () => {
     for (const field of Object.keys(record)) {
-      const { [field as keyof EvidenceRecord]: _omitted, ...rest } = record;
+      const rest = Object.fromEntries(Object.entries(record).filter(([key]) => key !== field));
       expect(() => parse(fixture(rest))).toThrow();
     }
   });
 
   test("rejects invalid kind, outcome, timestamp, commit, scope, and unknown keys", () => {
-    for (const changes of [
+    const invalidChanges: { readonly [key: string]: JsonValue }[] = [
       { kind: "verified" },
       { kind: "auth" },
       { outcome: "passed" },
@@ -121,9 +133,12 @@ describe("adapter verification evidence", () => {
       { scope: "" },
       { payload: { apiKey: "never-publish" } },
       { response: "200 OK" },
-    ]) {
+    ];
+
+    for (const changes of invalidChanges) {
       expect(() => parse(fixture({ ...record, ...changes }))).toThrow();
     }
+
     expect(() => parse({ schemaVersion: 1, records: [record, record] })).toThrow(/Duplicate evidence/);
   });
 
@@ -141,6 +156,7 @@ describe("adapter verification evidence", () => {
     ]) {
       expect(() => parse(fixture({ ...record, source }))).toThrow();
     }
+
     expect(parse(fixture(record)).records).toHaveLength(1);
     expect(parse(fixture({ ...record, source: "maintainer:leo" })).records).toHaveLength(1);
     expect(parse(fixture({ ...record, source: "https://github.com/opencoredev/email-sdk/actions/runs/12/job/34" })).records).toHaveLength(1);

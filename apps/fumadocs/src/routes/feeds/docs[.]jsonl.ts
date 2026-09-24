@@ -14,8 +14,10 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
     handlers: {
       GET() {
         const lastmodByPath: Record<string, string> = docsLastmod;
+
         const lines = source.getPages().map((page) => {
           const url = `${siteUrl}${page.url}`;
+
           const entity = {
             "@context": "https://schema.org",
             "@type": "TechArticle",
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
 
         const compareLines = comparePairs.map((pair) => {
           const url = `${siteUrl}/compare/${pair.slug}`;
+
           return JSON.stringify({
             "@context": "https://schema.org",
             "@type": "TechArticle",

@@ -17,6 +17,7 @@ export function timeoutPlugin(options: EmailTimeoutPluginOptions): EmailPlugin {
       {
         beforeSend(event) {
           const timeout = AbortSignal.timeout(options.timeoutMs);
+
           const signal = event.options?.signal
             ? AbortSignal.any([event.options.signal, timeout])
             : timeout;

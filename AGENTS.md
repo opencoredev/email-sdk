@@ -36,10 +36,11 @@ Before merging release-sensitive SDK or CLI work, run:
 bun run release:ci
 ```
 
-That runs type checks, tests, community registry + docs version validation,
+That runs the anti-slop lint gate, type checks, tests, community registry + docs version validation,
 build, and npm package dry-run.
 
-Lint guidance lives in [Local Checks](#local-checks) below.
+Lint guidance lives in [Local Checks](#local-checks) and
+[Anti-slop Lint](#anti-slop-lint-never-disable) below.
 
 For a quick local CLI smoke test:
 
@@ -58,8 +59,38 @@ bunx oxlint <path>
 
 Do not run `bun run check` casually: it runs `oxfmt --write` across the whole
 repo, which reformats roughly 170 files that have drifted from the formatter.
-CI does not enforce formatting or linting, so a repo-wide reformat only adds
-noise to your diff.
+CI does not enforce formatting, so a repo-wide reformat only adds noise to
+your diff.
+
+## Anti-slop Lint (never disable)
+
+Oxlint runs the vendored [anti-slop](https://github.com/dmmulroy/anti-slop)
+plugin from `tools/oxlint/anti-slop/`, with every rule at `"error"`.
+`bun run lint` (first step of `release:ci`, so CI fails on it) runs oxlint with
+`--deny-warnings` and then `scripts/check-lint-policy.ts`, which fails when:
+
+- a plugin rule or `oxc/no-accumulating-spread` is missing or below `"error"`
+- `.oxlintrc.json` gains `overrides`, a nested oxlint config appears, or an
+  ignore pattern is not on the script's allowlist
+- any source file contains `oxlint-disable`, `eslint-disable`, `@ts-ignore`,
+  or `@ts-nocheck`
+- a vendored plugin file changes without a refreshed `checksums.json`
+
+These rules are not negotiable, for humans or agents:
+
+- Never disable, downgrade, ignore, or override an anti-slop rule, and never
+  add a disable comment, even for one line. Fix the code.
+- Never edit `check-lint-policy.ts`, the allowlists in it, or `checksums.json`
+  to get a change through. Changes to the gate itself need Leo's explicit
+  approval in the PR description.
+- Fix findings honestly. Parse unknown input at the boundary (zod) instead of
+  scattering `typeof` checks; replace open dictionaries with real types; put a
+  `// SAFETY:` comment that states the actual invariant above any unavoidable
+  `as` assertion. Do not launder types through `any`, `unknown`, or chained
+  casts to satisfy a rule.
+- `require-readable-spacing` is autofixable: `bunx oxlint --fix <path>`.
+- To update the vendored plugin, follow `tools/oxlint/anti-slop/UPSTREAM.md`
+  and keep `oxlint` and `@oxlint/plugins` pinned to the same exact version.
 
 When adding or changing a provider adapter, verify it against a live account. These scripts read provider credentials from the repo-root `.env.local`, then `.env`, then your shell environment:
 
@@ -179,7 +210,7 @@ point Homebrew at the new release.
 
 ## CI and Publishing
 
-- Depot CI lives in `.depot/workflows/ci.yml`.
+- CI lives in `.github/workflows/ci.yml` and runs `bun run release:ci` on Tenki runners.
 - 2026-07-06: Turbo >=2.9.17 ignores `peerDependencies` when building the
   package graph (vercel/turborepo#13025), so convex-email's
   `@opencoredev/email-sdk` peer range no longer creates the

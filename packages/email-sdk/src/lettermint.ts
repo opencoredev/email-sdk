@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
   builtInAdapterDefinition,
@@ -23,11 +24,6 @@ export type LettermintAdapterOptions = {
   headers?: Record<string, string>;
 };
 
-type LettermintResponse = {
-  message_id?: string;
-  status?: string;
-};
-
 export function lettermint(
   options: LettermintAdapterOptions,
 ): EmailAdapter<"lettermint", { baseUrl: string }> {
@@ -39,6 +35,10 @@ export function lettermint(
     ...builtInAdapterDefinition("lettermint"),
     raw: { baseUrl },
     async send(message, context) {
+      const idempotencyHeaders = context.idempotencyKey
+        ? { "Idempotency-Key": context.idempotencyKey }
+        : undefined;
+
       const response = await fetcher(`${baseUrl}/send`, {
         method: "POST",
         signal: context.signal,
@@ -49,7 +49,7 @@ export function lettermint(
           ...options.headers,
           // Spread after options.headers so a per-send idempotency key stays authoritative
           // and is never shadowed by a static Idempotency-Key passed at construction time.
-          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
+          ...idempotencyHeaders,
         },
         body: JSON.stringify(await toLettermintPayload(message, options.route)),
       });
@@ -63,11 +63,11 @@ export function lettermint(
         });
       }
 
-      const body = (await response.json().catch(() => ({}))) as LettermintResponse;
+      const body = await readJsonBody(response);
 
       return {
         adapter: "lettermint",
-        id: body.message_id,
+        id: jsonString(body, "message_id"),
         raw: body,
       };
     },
@@ -85,6 +85,7 @@ async function toLettermintPayload(message: EmailMessage, route?: string) {
   const cc = formatAddresses(message.cc);
   const bcc = formatAddresses(message.bcc);
   const replyTo = formatAddresses(message.replyTo);
+
   const attachments = message.attachments?.length
     ? await Promise.all(message.attachments.map(toLettermintAttachment))
     : undefined;

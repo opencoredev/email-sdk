@@ -1,4 +1,5 @@
 import {
+  ADAPTER_CAPABILITY_KEYS,
   ADAPTER_SUPPORT_ENTRIES,
   ADAPTER_SUPPORT_FIELDS,
   ADAPTER_SUPPORT_TOTAL_LABEL,
@@ -39,6 +40,7 @@ function capabilityValue(capabilities: AdapterSupportCapabilities, key: keyof Ad
 
   if (key === "idempotency") {
     if (value === "message_id") return "Message-ID";
+
     return value === "native" ? "Native" : "None";
   }
 
@@ -111,7 +113,7 @@ function CapabilityRow({ entry }: { entry: AdapterSupportEntry }) {
           </a>
         </div>
         <dl className="grid min-w-0 flex-1 gap-x-5 gap-y-2 text-sm sm:grid-cols-2">
-          {(Object.keys(CAPABILITY_LABELS) as (keyof AdapterSupportCapabilities)[]).map((key) => (
+          {ADAPTER_CAPABILITY_KEYS.map((key) => (
             <div className="flex justify-between gap-3" key={key}>
               <dt className="text-fd-muted-foreground">{CAPABILITY_LABELS[key]}</dt>
               <dd className="font-medium text-fd-foreground">{capabilityValue(entry.capabilities, key)}</dd>

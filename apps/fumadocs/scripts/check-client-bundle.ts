@@ -38,6 +38,7 @@ const assetsDir = process.argv[2]
 
 if (!assetsDir) {
   console.error("[check-client-bundle] no client assets directory found; looked in:");
+
   for (const dir of candidateDirs) console.error(`  - ${dir}`);
   process.exit(1);
 }
@@ -52,6 +53,7 @@ if (markerChunks.length > 1) {
   console.error(
     `[check-client-bundle] fumadocs framework context ("${CONTEXT_MARKER}") is bundled into ${markerChunks.length} client chunks — RootProvider and consumers would use different context instances and every page would crash at hydration:`,
   );
+
   for (const file of markerChunks) console.error(`  - ${file}`);
   console.error(
     "[check-client-bundle] the module graph is duplicated. Check for two physical fumadocs-core installs first (scripts/check-module-identity.ts), then for a bundler chunking regression.",

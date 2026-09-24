@@ -49,10 +49,13 @@ export type SponsorRowSlot = {
   fontSize: number;
 };
 
-export function sponsorRowLayout(names: readonly string[]): {
+export type SponsorRowLayout = {
+  /** Shrink factor applied to every slot so the row fits the canvas. */
   scale: number;
   slots: SponsorRowSlot[];
-} {
+};
+
+export function sponsorRowLayout(names: readonly string[]): SponsorRowLayout {
   const { startX, rightEdge, radius, labelOffset, fontSize, minClearance, minScale } =
     sponsorRowGeometry;
 
@@ -64,6 +67,7 @@ export function sponsorRowLayout(names: readonly string[]): {
   const scalable = slotsWidth + gapCount * radius;
   const available = rightEdge - startX - gapCount * minClearance;
   const scale = Math.min(1, available / scalable);
+
   if (scale < minScale) {
     throw new Error(
       `[og] sponsor row no longer fits: ${names.length} sponsors need more than ${rightEdge - startX}px`,
@@ -71,10 +75,13 @@ export function sponsorRowLayout(names: readonly string[]): {
   }
 
   let x = startX;
+
   const slots = names.map((name, index) => {
     const previous = slotWidths[index - 1];
+
     if (previous !== undefined) x += previous * scale + radius * scale + minClearance;
     const labelX = x + labelOffset * scale;
+
     return {
       name,
       x,

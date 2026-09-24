@@ -1,12 +1,13 @@
 import { EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
 import { apiAddresses, formatAddress } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import { isFunctionMember } from "./internal/decode.js";
+import type { EmailAdapter, EmailMessage, EmailMetadataRecord } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
 
 export type IterableDataFields =
-  | Record<string, unknown>
-  | ((message: EmailMessage) => Record<string, unknown>);
+  | EmailMetadataRecord
+  | ((message: EmailMessage) => EmailMetadataRecord);
 
 export type IterableAdapterOptions = {
   apiKey: string;
@@ -73,5 +74,5 @@ function resolveDataFields(dataFields: IterableDataFields | undefined, message: 
     return {};
   }
 
-  return typeof dataFields === "function" ? dataFields(message) : dataFields;
+  return isFunctionMember(dataFields) ? dataFields(message) : dataFields;
 }

@@ -57,7 +57,7 @@ export function mailersend(
         adapter: "mailersend",
         id:
           response.headers.get("x-message-id") ??
-          firstString(body as Record<string, unknown>, ["message_id", "id"]),
+          firstString(body, ["message_id", "id"]),
         raw: body,
       };
     },

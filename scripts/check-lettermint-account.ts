@@ -5,9 +5,11 @@ import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { lettermint } from "../packages/email-sdk/src/lettermint.js";
 
 config({ path: ".env.local" });
+
 config();
 
 const baseUrl = process.env.LETTERMINT_BASE_URL ?? "https://api.lettermint.co/v1";
+
 const apiToken = process.env.LETTERMINT_API_TOKEN;
 
 if (!apiToken) {
@@ -20,7 +22,9 @@ const result = await runDoctor({
   live: true,
   baseUrl,
 });
+
 console.log(JSON.stringify(result, null, 2));
+
 if (!result.ok) process.exit(1);
 
 if (process.env.LETTERMINT_LIVE_SEND !== "true") {
@@ -28,7 +32,9 @@ if (process.env.LETTERMINT_LIVE_SEND !== "true") {
 }
 
 const from = requiredEnv("LETTERMINT_TEST_FROM");
+
 const to = requiredEnv("LETTERMINT_TEST_TO");
+
 const email = createEmailClient({
   adapters: [
     lettermint({

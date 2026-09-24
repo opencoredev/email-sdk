@@ -22,8 +22,10 @@ describe("adapter pricing", () => {
   test("sorts numeric USD prices before EUR and non-numeric prices", () => {
     for (const sort of ["cost-asc", "cost-desc"] as const) {
       const rows = getAdapterPricingRows({ volume: 500_000, sort });
+
       const firstNonUsd = rows.findIndex((row) => {
         const price = getPrice(row, 500_000);
+
         return price.kind !== "money" || price.currency !== "USD";
       });
 
@@ -31,6 +33,7 @@ describe("adapter pricing", () => {
       expect(
         rows.slice(firstNonUsd).some((row) => {
           const price = getPrice(row, 500_000);
+
           return price.kind === "money" && price.currency === "USD";
         }),
       ).toBe(false);

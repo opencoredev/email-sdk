@@ -15,6 +15,7 @@ import type { BlogPost } from "../src/lib/blog-types";
 import { mapNotraPost, type NotraPostInput } from "./notra-content";
 
 const outputFile = join(import.meta.dirname, "../src/lib/notra-posts.generated.ts");
+
 const pageSize = 100;
 
 async function fetchPublishedPosts(notra: Notra): Promise<NotraPostInput[]> {
@@ -29,9 +30,10 @@ async function fetchPublishedPosts(notra: Notra): Promise<NotraPostInput[]> {
       page,
     });
 
-    posts.push(...(response.posts as NotraPostInput[]));
+    posts.push(...response.posts);
 
     const nextPage = response.pagination?.nextPage;
+
     if (!nextPage) break;
     page = nextPage;
   }
@@ -67,6 +69,7 @@ async function main(): Promise<void> {
       "[notra] NOTRA_API_KEY is not set — skipping fetch and keeping the existing blog snapshot.",
     );
     ensureFileExists();
+
     return;
   }
 
@@ -80,6 +83,7 @@ async function main(): Promise<void> {
 
     for (const raw of rawPosts) {
       const mapped = mapNotraPost(raw, seenSlugs);
+
       if (!mapped) continue;
 
       posts.push(mapped.post);

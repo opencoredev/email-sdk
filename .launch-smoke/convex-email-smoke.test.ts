@@ -7,11 +7,11 @@ import componentHelpers, { memoryAdapter, registerConvexEmail } from "@opencored
 
 describe("convex-email package exports", () => {
   test("resolves public client, component config, and test helpers", () => {
-    expect(typeof ConvexEmail).toBe("function");
-    expect(typeof generatedComponent).toBe("object");
-    expect(typeof convexEmail).toBe("object");
+    expect(ConvexEmail).toBeInstanceOf(Function);
+    expect(generatedComponent).toBeDefined();
+    expect(convexEmail).toBeInstanceOf(Object);
     expect(memoryAdapter("mailbox")).toEqual({ kind: "memory", name: "mailbox" });
-    expect(typeof registerConvexEmail).toBe("function");
-    expect(typeof componentHelpers.registerConvexEmail).toBe("function");
+    expect(registerConvexEmail).toBeInstanceOf(Function);
+    expect(componentHelpers.registerConvexEmail).toBeInstanceOf(Function);
   });
 });

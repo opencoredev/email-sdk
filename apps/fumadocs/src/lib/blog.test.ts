@@ -139,6 +139,7 @@ describe("mapNotraPost", () => {
       notraPost({ markdown: null, content: "https://cdn.usenotra.com/posts/post_1.png" }),
       new Set(),
     );
+
     expect(mapped).toBeNull();
   });
 });
@@ -152,6 +153,7 @@ describe("getBlogPostMetaTitle", () => {
     const long = getBlogPostMetaTitle(
       "An extremely long blog post title that goes well beyond the search snippet limit",
     );
+
     expect(long.endsWith(" - Email SDK")).toBe(true);
     expect(long.length).toBeLessThanOrEqual(68);
   });

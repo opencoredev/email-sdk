@@ -1,3 +1,4 @@
+import { isStringMember } from "./internal/decode.js";
 import type { EmailAddress, EmailMessage, RecipientVariables } from "./types.js";
 import {
   arrayify,
@@ -16,7 +17,7 @@ export function simpleAddress(address: string) {
 }
 
 export function emailParts(address: string | { email: string; name?: string }) {
-  if (typeof address !== "string") {
+  if (!isStringMember(address)) {
     return address;
   }
 
@@ -60,6 +61,7 @@ export function optionalSingleApiAddress(
   }
 
   assertMaxItems(adapter, field, values, 1);
+
   return values[0];
 }
 
@@ -69,6 +71,7 @@ export function stringAddresses(addresses: EmailMessage["to"]) {
 
 export function optionalStringAddresses(addresses: EmailMessage["cc"]) {
   const formatted = formatAddresses(addresses);
+
   return formatted.length > 0 ? formatted : undefined;
 }
 
@@ -137,6 +140,7 @@ export function recipientVariableEntries(message: LegacyRecipientMessage): Recip
 
   return arrayify(message.to).map((to) => {
     const address = emailAddressOf(to);
+
     return { to, address, variables: lookup.get(address.toLowerCase()) ?? {} };
   });
 }
@@ -162,6 +166,9 @@ export function expandRecipientMessage(
     idempotencyKey: _idempotencyKey,
     ...base
   } = message;
+
+  // SAFETY: `message` is an EmailMessage, so it has html or text. Each is substituted only
+  // when present, so the result keeps the same html-or-text shape.
   return {
     ...base,
     to: entry.to,
@@ -181,6 +188,7 @@ export function sendAtIso(message: EmailMessage) {
 
 export function sendAtUnixSeconds(message: EmailMessage) {
   const date = sendAtDate(message);
+
   return date === undefined ? undefined : Math.floor(date.getTime() / 1000);
 }
 
@@ -192,12 +200,14 @@ export function sendAtRfc2822(message: EmailMessage) {
 export function sendAtIsoUtcSeconds(message: EmailMessage) {
   // SparkPost's start_time grammar is YYYY-MM-DDTHH:MM:SS±HH:MM — no milliseconds, no "Z".
   const date = sendAtDate(message);
+
   return date === undefined ? undefined : `${date.toISOString().slice(0, 19)}+00:00`;
 }
 
 export function sendAtUtcDateTime(message: EmailMessage) {
   // Mailchimp Transactional's send_at grammar is "YYYY-MM-DD HH:MM:SS" in UTC.
   const date = sendAtDate(message);
+
   return date === undefined ? undefined : date.toISOString().slice(0, 19).replace("T", " ");
 }
 

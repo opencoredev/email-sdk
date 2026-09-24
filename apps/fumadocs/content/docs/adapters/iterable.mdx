@@ -54,7 +54,7 @@ export const email = createEmailClient({
     dataFields: {
       description:
         "Extra template fields, as a static object or a function of the message. Merged in before the normalized fields, so subject/html/text/from win on conflicts.",
-      type: "Record<string, unknown> | (message) => Record<string, unknown>",
+      type: "EmailMetadataRecord | (message) => EmailMetadataRecord",
     },
     sendAt: {
       description:

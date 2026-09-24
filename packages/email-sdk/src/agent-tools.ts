@@ -1,13 +1,22 @@
-import type { EmailClient, EmailMessage } from "./types.js";
+import type { JsonObject } from "./internal/decode.js";
+
+import type { EmailClient, EmailMessage, EmailSendResult } from "./types.js";
+
+export type { JsonObject, JsonValue } from "./internal/decode.js";
 
 export type EmailAgentTool = {
   name: string;
   description: string;
-  parameters: Record<string, unknown>;
-  execute(input: EmailMessage & { adapter?: string; provider?: string }): Promise<unknown>;
+  /** JSON Schema describing the tool input. */
+  parameters: JsonObject;
+  execute(input: EmailMessage & { adapter?: string; provider?: string }): Promise<EmailSendResult>;
 };
 
-export function createEmailAgentTools(client: EmailClient): { sendEmail: EmailAgentTool } {
+export type EmailAgentTools = {
+  sendEmail: EmailAgentTool;
+};
+
+export function createEmailAgentTools(client: EmailClient): EmailAgentTools {
   return {
     sendEmail: {
       name: "send_email",
@@ -31,6 +40,7 @@ export function createEmailAgentTools(client: EmailClient): { sendEmail: EmailAg
       async execute(input) {
         const { adapter, provider, ...message } = input;
         const selectedAdapter = adapter ?? provider;
+
         return client.send(message, selectedAdapter ? { adapter: selectedAdapter } : undefined);
       },
     },

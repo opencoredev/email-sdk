@@ -20,7 +20,7 @@ describe("convex-email testing helpers", () => {
   });
 
   test("exports component registration helpers", () => {
-    expect(typeof registerConvexEmail).toBe("function");
+    expect(registerConvexEmail).toBeInstanceOf(Function);
     expect(schema).toBeDefined();
     expect(Object.keys(modules)).toContain("./component/lib.ts");
   });

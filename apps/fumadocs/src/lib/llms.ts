@@ -40,6 +40,7 @@ ${pairs}`;
 // exactly as fresh as the sitemap and RSS entries built from the same source.
 function blogSection() {
   const posts = getPublishedBlogPosts();
+
   if (posts.length === 0) return "";
 
   const items = posts

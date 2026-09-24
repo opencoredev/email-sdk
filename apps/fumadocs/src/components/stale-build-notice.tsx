@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 
 import { RefreshCw, X } from "@/components/icon";
-import { currentBuildInfo, isOutdatedBuild, type BuildInfo } from "@/lib/build-info";
+import { z } from "zod";
+
+import { currentBuildInfo, isOutdatedBuild } from "@/lib/build-info";
 
 const checkIntervalMs = 5 * 60 * 1000;
+
+const deployedBuildInfoSchema = z.object({ buildId: z.string().optional() });
 
 async function fetchBuildInfo() {
   const response = await fetch(`/api/build-info?t=${Date.now()}`, {
@@ -17,7 +21,9 @@ async function fetchBuildInfo() {
     return undefined;
   }
 
-  return (await response.json()) as Partial<BuildInfo>;
+  const parsed = deployedBuildInfoSchema.safeParse(await response.json());
+
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function StaleBuildNotice() {
@@ -30,6 +36,7 @@ export function StaleBuildNotice() {
     async function checkBuild() {
       try {
         const deployed = await fetchBuildInfo();
+
         if (canceled) return;
 
         if (isOutdatedBuild(currentBuildInfo.buildId, deployed?.buildId)) {

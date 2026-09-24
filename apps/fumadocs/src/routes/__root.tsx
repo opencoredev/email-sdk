@@ -10,6 +10,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { RootProvider } from "fumadocs-ui/provider/tanstack";
 import * as React from "react";
 
+import { LaunchBanner } from "@/components/launch-banner";
 import { AppErrorPage, NotFoundPage, RootRecoveryShell } from "@/components/recovery-page";
 import SearchDialog from "@/components/search";
 import { StaleBuildNotice } from "@/components/stale-build-notice";
@@ -86,6 +87,7 @@ function RootComponent() {
       </head>
       <body className="flex flex-col min-h-screen">
         <RootProvider search={{ SearchDialog }}>
+          <LaunchBanner />
           <Outlet />
           <StaleBuildNotice />
         </RootProvider>

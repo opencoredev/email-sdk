@@ -6,6 +6,7 @@ import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 
 const pageTitle = `Free email tools - ${appName}`;
+
 const pageDescription =
   "Free tools for developers who send email: check SPF, DKIM, DMARC, and MX records for any domain, and compare transactional email providers side by side.";
 

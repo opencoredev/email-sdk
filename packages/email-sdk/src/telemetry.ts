@@ -10,16 +10,29 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "./errors.js";
+import {
+  isFunctionMember,
+  isObjectLike,
+  isStringMember,
+  jsonField,
+  jsonString,
+  parseJsonStrict,
+} from "./internal/decode.js";
 import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 
 const POSTHOG_HOST = "https://us.i.posthog.com";
+
 // Public write-only project key. It can only ingest events, never read data.
 const POSTHOG_PROJECT_KEY = "phc_D62r4m5ivBr6LPCBqjKHg8GL6QTxT57LTzKrmkg5hNZS";
+
 const CAPTURE_TIMEOUT_MS = 3_000;
 
 const MAX_EXCEPTIONS_PER_PROCESS = 5;
+
 const MAX_CAUSE_CHAIN = 3;
+
 const MAX_STACK_FRAMES = 20;
+
 const MAX_MESSAGE_LENGTH = 300;
 
 export const TELEMETRY_NOTICE = `@opencoredev/email-sdk collects opt-out usage telemetry using a stable installation identifier: adapter names, command names, success/failure counts, and redacted error reports. Email content, addresses, and credentials are never collected. Opt out with EMAIL_SDK_TELEMETRY=0 or DO_NOT_TRACK=1. Details: https://github.com/opencoredev/email-sdk#telemetry`;
@@ -61,7 +74,7 @@ export type Telemetry = {
   /** Resolves once the event is delivered or dropped. Never rejects. */
   capture(event: TelemetryEventName, properties?: TelemetryProperties): Promise<void>;
   /** Reports a redacted error to PostHog error tracking. Never rejects. */
-  captureException(error: unknown, context: CaptureExceptionContext): Promise<void>;
+  captureException(cause: unknown, context: CaptureExceptionContext): Promise<void>;
   /** Resolves once every in-flight capture has settled. Never rejects. */
   flush(): Promise<void>;
 };
@@ -81,25 +94,32 @@ export function normalizeAdapterName(name: string | undefined) {
  * Usage mistakes (invalid message input, unregistered adapter names) are expected
  * caller errors, not SDK defects, so they stay out of error reports.
  */
-export function isReportableSendError(error: unknown) {
+export function isReportableSendError(cause: unknown) {
   return (
-    !(error instanceof EmailValidationError) &&
-    !(error instanceof EmailAdapterNotFoundError) &&
-    !(error instanceof EmailProviderNotFoundError)
+    !(cause instanceof EmailValidationError) &&
+    !(cause instanceof EmailAdapterNotFoundError) &&
+    !(cause instanceof EmailProviderNotFoundError)
   );
 }
 
 export function detectCiVendor(env: Record<string, string | undefined>) {
   if (env.GITHUB_ACTIONS) return "github_actions";
+
   if (env.GITLAB_CI) return "gitlab";
+
   if (env.CIRCLECI) return "circleci";
+
   if (env.JENKINS_URL) return "jenkins";
+
   if (env.TRAVIS) return "travis";
+
   if (env.BUILDKITE) return "buildkite";
+
   // Deliberately no VERCEL check: VERCEL=1 is set in production serverless
   // runtimes too, so it would mislabel live sends as CI. Vercel builds still set
   // CI=1 and fall through to "generic" below.
   if (env.CI === "true" || env.CI === "1") return "generic";
+
   return undefined;
 }
 
@@ -119,6 +139,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   const configDir =
     options.configDir ?? join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "email-sdk");
+
   const state = loadTelemetryState(configDir);
 
   if (!state.noticeShown) {
@@ -127,6 +148,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   }
 
   const ciVendor = detectCiVendor(env);
+
   const commonProperties = {
     sdk_version: options.sdkVersion ?? readSdkVersion(),
     node_version: process.versions.node,
@@ -147,7 +169,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const seenErrorClasses = new Set<string>();
   let exceptionBudget = MAX_EXCEPTIONS_PER_PROCESS;
 
-  async function deliver(event: string, properties?: Record<string, unknown>) {
+  async function deliver(event: string, properties?: TelemetryProperties | ExceptionProperties) {
     try {
       const response = await fetcher(`${POSTHOG_HOST}/capture/`, {
         method: "POST",
@@ -185,25 +207,25 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     capture(event, properties) {
       return enqueue(deliver(event, properties));
     },
-    captureException(error, context) {
+    captureException(cause, context) {
       // Hostile error shapes (throwing getters, non-standard fields) must never
       // turn error reporting into an error source itself.
       try {
-        const isErrorObject = typeof error === "object" && error !== null;
+        const errorObject = isObjectLike(cause) ? cause : undefined;
 
-        if (isErrorObject && seenErrorObjects.has(error)) {
+        if (errorObject && seenErrorObjects.has(errorObject)) {
           return Promise.resolve();
         }
 
-        const exceptionList = buildExceptionList(error, context.handled);
+        const exceptionList = buildExceptionList(cause, context.handled);
         const head = exceptionList[0];
 
         if (!head) {
           return Promise.resolve();
         }
 
-        const errorCode = error instanceof EmailSdkError ? error.code : "unknown";
-        const classKey = `${head.type}:${error instanceof EmailSdkError ? error.code : head.value.slice(0, 60)}`;
+        const errorCode = cause instanceof EmailSdkError ? cause.code : "unknown";
+        const classKey = `${head.type}:${cause instanceof EmailSdkError ? cause.code : head.value.slice(0, 60)}`;
 
         if (seenErrorClasses.has(classKey) || exceptionBudget <= 0) {
           return Promise.resolve();
@@ -211,14 +233,14 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
         // Mark the object seen only once it is actually reported, so a budget or
         // class-duplicate bail-out never silently consumes a distinct error.
-        if (isErrorObject) {
-          seenErrorObjects.add(error);
+        if (errorObject) {
+          seenErrorObjects.add(errorObject);
         }
 
         seenErrorClasses.add(classKey);
         exceptionBudget -= 1;
 
-        const properties: Record<string, unknown> = {
+        const properties: ExceptionProperties = {
           $exception_list: exceptionList,
           $exception_level: "error",
           error_name: head.type,
@@ -229,9 +251,9 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
           command: context.command,
         };
 
-        if (error instanceof EmailSdkError) {
+        if (cause instanceof EmailSdkError) {
           // Redacted messages vary; the stable name:code pair keeps issue grouping useful.
-          properties.$exception_fingerprint = `${head.type}:${error.code}`;
+          properties.$exception_fingerprint = `${head.type}:${cause.code}`;
         }
 
         return enqueue(deliver("$exception", properties));
@@ -250,6 +272,7 @@ let sharedTelemetry: Telemetry | undefined;
 
 export function getTelemetry(): Telemetry {
   sharedTelemetry ??= createTelemetry();
+
   return sharedTelemetry;
 }
 
@@ -315,6 +338,18 @@ type ExceptionFrame = {
   in_app: boolean;
 };
 
+type ExceptionProperties = {
+  $exception_list: ExceptionListItem[];
+  $exception_level: "error";
+  $exception_fingerprint?: string;
+  error_name: string;
+  error_code: string;
+  source: TelemetrySource;
+  handled: boolean;
+  adapter?: string;
+  command?: string;
+};
+
 type ExceptionListItem = {
   type: string;
   value: string;
@@ -322,10 +357,10 @@ type ExceptionListItem = {
   stacktrace?: { type: "raw"; frames: ExceptionFrame[] };
 };
 
-function buildExceptionList(error: unknown, handled: boolean): ExceptionListItem[] {
+function buildExceptionList(cause: unknown, handled: boolean): ExceptionListItem[] {
   const items: ExceptionListItem[] = [];
   const visited = new Set<unknown>();
-  let current: unknown = error;
+  let current = cause;
 
   while (
     current !== undefined &&
@@ -336,6 +371,7 @@ function buildExceptionList(error: unknown, handled: boolean): ExceptionListItem
     visited.add(current);
 
     const currentError = current instanceof Error ? current : undefined;
+
     const item: ExceptionListItem = {
       type: currentError ? sanitizeErrorName(currentError.name) : "Error",
       value: redactErrorMessage(currentError ? currentError.message : String(current)),
@@ -357,9 +393,10 @@ function buildExceptionList(error: unknown, handled: boolean): ExceptionListItem
 
 const STACK_LINE_PATTERN = /^\s*at (?:(.*?) \()?((?:file:\/\/)?[^()]+?):(\d+):(\d+)\)?\s*$/;
 
-function parseStackFrames(stack: unknown): ExceptionFrame[] {
-  // Error.prototype.stack is non-standard; subclasses can put anything here.
-  if (typeof stack !== "string") {
+function parseStackFrames(stack: string | undefined): ExceptionFrame[] {
+  // Error.prototype.stack is non-standard; subclasses can put anything here, so the
+  // declared string type is checked at runtime.
+  if (!isStringMember(stack)) {
     return [];
   }
 
@@ -438,10 +475,10 @@ const SAFE_ERROR_NAMES = new Set([
   "DOMException",
 ]);
 
-function sanitizeErrorName(name: unknown): string {
+function sanitizeErrorName(name: string): string {
   // Error.prototype.name is writable and untyped at runtime; subclasses can
-  // assign anything, including non-strings.
-  if (typeof name !== "string" || !name) {
+  // assign anything, including non-strings, so the declared type is checked.
+  if (!isStringMember(name) || !name) {
     return "Error";
   }
 
@@ -449,19 +486,24 @@ function sanitizeErrorName(name: unknown): string {
 }
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
 // Any scheme://… so SMTP/AMQP/DB connection strings with embedded credentials are
 // scrubbed too, not just http(s).
 const URL_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
+
 // Lookarounds (not \b) anchor the full token alphabet: \b sits between word and
 // non-word chars, so it would skip trailing base64 padding like "==" and leak it.
 const TOKEN_PATTERN = /(?<![A-Za-z0-9+/_=-])[A-Za-z0-9+/_=-]{24,}(?![A-Za-z0-9+/_=-])/g;
+
 // Matches both separators so other users' home paths are caught on Windows
 // (\Users\name) as well as macOS/Linux (/Users|/home). The current user's exact
 // home is already collapsed by the homedir() split above.
 const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
+
 // After a home dir collapses to "~", the remaining segments still name real files
 // ("~/Documents/payroll.xlsx"), so they are consumed too — both separators.
 const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
+
 // Key=value credentials ("password=hunter2", "api_key=sk_live_…"), value up to
 // whitespace or a quote. Quoted values are already covered by the quote passes.
 const KEY_VALUE_SECRET_PATTERN =
@@ -508,21 +550,15 @@ type TelemetryState = {
 
 function loadTelemetryState(configDir: string): TelemetryState {
   try {
-    const parsed = JSON.parse(
-      readFileSync(join(configDir, "telemetry.json"), "utf8"),
-    ) as Partial<TelemetryState> & { anonymousId?: unknown };
+    const parsed = parseJsonStrict(readFileSync(join(configDir, "telemetry.json"), "utf8"));
 
     const installationId =
-      typeof parsed.installationId === "string" && parsed.installationId
-        ? parsed.installationId
-        : typeof parsed.anonymousId === "string" && parsed.anonymousId
-          ? parsed.anonymousId
-          : undefined;
+      jsonString(parsed, "installationId") || jsonString(parsed, "anonymousId") || undefined;
 
     if (installationId) {
       return {
         installationId,
-        noticeShown: parsed.noticeShown === true,
+        noticeShown: jsonField(parsed, "noticeShown") === true,
       };
     }
   } catch {
@@ -545,18 +581,18 @@ function persistTelemetryState(configDir: string, state: TelemetryState) {
 }
 
 function captureTimeoutSignal() {
-  return typeof AbortSignal.timeout === "function"
+  return isFunctionMember(AbortSignal.timeout)
     ? AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
     : undefined;
 }
 
 function readSdkVersion() {
   try {
-    const packageJson = JSON.parse(
+    const packageJson = parseJsonStrict(
       readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
-    ) as { version?: string };
+    );
 
-    return packageJson.version ?? "unknown";
+    return jsonString(packageJson, "version") ?? "unknown";
   } catch {
     return "unknown";
   }

@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { jsonString, responseJson } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
 import {
   builtInAdapterDefinition,
@@ -54,16 +55,13 @@ export function postmark(
         });
       }
 
-      const body = (await response.json()) as {
-        MessageID?: string;
-        SubmittedAt?: string;
-        To?: string;
-      };
+      const body = await responseJson(response);
+      const to = jsonString(body, "To");
 
       return {
         adapter: "postmark",
-        id: body.MessageID,
-        accepted: body.To ? [body.To] : undefined,
+        id: jsonString(body, "MessageID"),
+        accepted: to ? [to] : undefined,
         raw: body,
       };
     },
@@ -113,5 +111,6 @@ function firstPostmarkTag(tags: readonly EmailTag[] | undefined) {
   assertMaxItems("postmark", "tag", tags, 1);
 
   const [first] = tags;
+
   return first ? `${first.name}:${first.value}` : undefined;
 }

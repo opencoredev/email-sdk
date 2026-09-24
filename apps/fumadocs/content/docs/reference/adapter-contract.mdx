@@ -51,7 +51,7 @@ type EmailAdapterContext = EmailAdapterValidationContext & {
   attempt: number;
   signal?: AbortSignal;
   idempotencyKey?: string;
-  metadata?: Readonly<Record<string, unknown>>;
+  metadata?: EmailSendMetadata;
 };
 ```
 

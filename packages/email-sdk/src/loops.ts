@@ -53,7 +53,7 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
     parseResponse(body) {
       return {
         adapter: "loops",
-        id: firstString(body as Record<string, unknown>, ["id", "transactionalId"]),
+        id: firstString(body, ["id", "transactionalId"]),
         raw: body,
       };
     },

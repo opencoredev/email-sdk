@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient, type EmailPlugin } from "./compat.js";
+import { toLegacyProvider } from "./compat/adapters.js";
 import { EmailAdapterError } from "./errors.js";
 
 const message = {
@@ -37,6 +38,7 @@ describe("compat client", () => {
 
   test("translates retries into total maxAttempts", async () => {
     let calls = 0;
+
     const client = createEmailClient({
       providers: [
         {
@@ -67,6 +69,7 @@ describe("compat client", () => {
 
   test("translates sendBatch and message-level idempotency", async () => {
     const keys: Array<string | undefined> = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -79,6 +82,7 @@ describe("compat client", () => {
           },
           send(_message, context: { idempotencyKey?: string }) {
             keys.push(context.idempotencyKey);
+
             return { adapter: "legacy", id: "ok" };
           },
         },
@@ -93,6 +97,7 @@ describe("compat client", () => {
 
   test("translates legacy hook event fields", async () => {
     const events: string[] = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -132,6 +137,7 @@ describe("compat client", () => {
         return { pluginValue: "legacy" as const };
       },
     } satisfies EmailPlugin<{ pluginValue: "legacy" }>;
+
     const client = createEmailClient({ plugins: [plugin], telemetry: false });
 
     await expect(client.send(message)).resolves.toMatchObject({ provider: "plugin-adapter" });
@@ -140,6 +146,7 @@ describe("compat client", () => {
 
   test("preserves recipientVariables in sendBatch", async () => {
     const batches: unknown[] = [];
+
     const client = createEmailClient({
       providers: [
         {
@@ -149,6 +156,7 @@ describe("compat client", () => {
           },
           sendBulk(batch) {
             batches.push(batch.recipientVariables);
+
             return { provider: "legacy", messageId: "bulk_1" };
           },
         },
@@ -165,5 +173,31 @@ describe("compat client", () => {
 
     expect(results[0]).toMatchObject({ ok: true, response: { provider: "legacy" } });
     expect(batches).toEqual([{ "user@example.com": { name: "Ada" } }]);
+  });
+
+  test("legacy sendBulk calls a native sendPersonalized with the adapter as receiver", async () => {
+    const adapter = {
+      name: "stateful",
+      capabilities: {
+        repeatedHeaders: true,
+        idempotency: "none" as const,
+        scheduling: false,
+        personalized: "native" as const,
+      },
+      bulkId: "bulk_stateful",
+      send() {
+        return { adapter: "stateful" };
+      },
+      sendPersonalized() {
+        return { adapter: "stateful", id: this.bulkId, accepted: [], rejected: [] };
+      },
+    };
+
+    const result = await toLegacyProvider(adapter).sendBulk?.(
+      { ...message, recipientVariables: { "user@example.com": { name: "Ada" } } },
+      { adapter: "stateful", operation: "personalized", attempt: 1 },
+    );
+
+    expect(result).toMatchObject({ provider: "stateful", messageId: "bulk_stateful" });
   });
 });

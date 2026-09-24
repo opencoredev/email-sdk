@@ -21,7 +21,7 @@ import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { baseOptions } from "@/lib/layout.shared";
 import { buildDocsStructuredData, siteImageAlt } from "@/lib/metadata";
 import { appName, gitConfig, siteOgImageUrl, siteUrl } from "@/lib/shared";
-import { getDocsSource, slugsToMarkdownPath, source } from "@/lib/source";
+import { getDocsSource, slugsToMarkdownPath } from "@/lib/source";
 import {
   type DocsVersionCollection,
   getDocsVersionBase,
@@ -30,40 +30,39 @@ import {
   resolveDocsVersionedSlugs,
 } from "@/lib/versions";
 
-type DocsLoaderData = {
-  title: string;
-  description?: string;
-  path: string;
-  markdownUrl: string;
-  versionCollection: DocsVersionCollection;
-  contentPath: string;
-  docsBasePath: string;
-  pageTree: Awaited<ReturnType<typeof source.serializePageTree>>;
-};
-
 export const Route = createFileRoute("/docs/$")({
-  head: ({ loaderData }) => {
-    const data = loaderData as DocsLoaderData | undefined;
+  loader: async ({ params }) => {
+    const slugs = params._splat?.split("/").filter(Boolean) ?? [];
+    const data = await loader({ data: slugs });
+    await getClientLoader(data.versionCollection).preload(data.path);
+
+    return data;
+  },
+  head: ({ loaderData: data }) => {
     const title = data?.title
       ? data.title === appName
         ? `${appName} Documentation - TypeScript email SDK`
         : `${data.title} - ${appName}`
       : appName;
+
     const description =
       data?.description ?? "Email SDK documentation for TypeScript email adapters.";
+
     const docsPath = data?.path.replace(/\/?index\.mdx$/, "").replace(/\.mdx$/, "");
+
     const canonicalPath = data?.docsBasePath
       ? docsPath
         ? `${data.docsBasePath}/${docsPath}`
         : data.docsBasePath
       : "/docs";
+
     const canonicalUrl = `${siteUrl}${canonicalPath}`;
     // Old-version docs stay reachable (version picker, inbound links) but must
     // not compete with current docs in search; "follow" preserves link equity.
     const isCurrentVersion = !data || data.docsBasePath === "/docs";
-    const dateModified = data
-      ? ((docsLastmod as Record<string, string>)[data.path] ?? "2026-06-01")
-      : "2026-06-01";
+
+    const dateModified = data ? (docsLastmodByPath.get(data.path) ?? "2026-06-01") : "2026-06-01";
+
     const adapterEntry = data ? getAdapterSupportEntry(data.path) : undefined;
 
     return {
@@ -111,13 +110,9 @@ export const Route = createFileRoute("/docs/$")({
     };
   },
   component: Page,
-  loader: async ({ params }) => {
-    const slugs = params._splat?.split("/").filter(Boolean) ?? [];
-    const data = await loader({ data: slugs });
-    await getClientLoader(data.versionCollection).preload(data.path);
-    return data;
-  },
 });
+
+const docsLastmodByPath = new Map<string, string>(Object.entries(docsLastmod));
 
 const loader = createServerFn({
   method: "GET",
@@ -127,14 +122,17 @@ const loader = createServerFn({
   .handler(async ({ data: slugs }) => {
     const resolved = resolveDocsVersionedSlugs(slugs);
     const movedPage = resolved.version.current ? getLatestDocsRedirect(resolved.slugs) : undefined;
+
     if (movedPage) {
       throw redirect({
         href: `/docs/${movedPage}`,
         statusCode: 308,
       });
     }
+
     const docsSource = getDocsSource(resolved.version);
     const page = docsSource.getPage(resolved.slugs);
+
     if (!page) {
       throw resolveMissingVersionedDocsPage(resolved);
     }
@@ -155,6 +153,7 @@ function resolveMissingVersionedDocsPage(resolved: ReturnType<typeof resolveDocs
   if (resolved.version.current) return notFound();
 
   const latestPage = getDocsSource(latestDocsVersion).getPage(resolved.slugs);
+
   if (latestPage) {
     const docsPath = resolved.slugs.length > 0 ? `/docs/${resolved.slugs.join("/")}` : "/docs";
 
@@ -233,6 +232,7 @@ function getClientLoader(collection: DocsVersionCollection) {
 
 function AdapterFaq({ path }: { path: string }) {
   const entry = getAdapterSupportEntry(path);
+
   if (!entry) return null;
 
   return (
@@ -250,7 +250,8 @@ function AdapterFaq({ path }: { path: string }) {
 
 function Page() {
   const { contentPath, docsBasePath, markdownUrl, pageTree, path, versionCollection } =
-    useFumadocsLoader(Route.useLoaderData() as DocsLoaderData);
+    useFumadocsLoader(Route.useLoaderData());
+
   const contentLoader = getClientLoader(versionCollection);
 
   return (

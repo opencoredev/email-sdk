@@ -56,10 +56,12 @@ const versionedDocsPages = docsVersions.flatMap((version) => {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+
   const ogImageVersion =
     env.VITE_OG_IMAGE_VERSION ||
     env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
     new Date().toISOString().slice(0, 10).replaceAll("-", "");
+
   const buildId = env.VITE_EMAIL_SDK_BUILD_ID || env.VERCEL_GIT_COMMIT_SHA || ogImageVersion;
 
   return {

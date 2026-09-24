@@ -73,7 +73,7 @@ Exactly one source is required. String content is raw by default and is encoded 
 type EmailTag = { name: string; value: string };
 ```
 
-Tags and message metadata are provider-facing fields. Unsupported routes reject them. Send-option metadata is a separate `Record<string, unknown>` used as lifecycle context.
+Tags and message metadata are provider-facing fields. Unsupported routes reject them. Send-option metadata is a separate `EmailSendMetadata` object used as lifecycle context.
 
 ## Scheduled sends
 

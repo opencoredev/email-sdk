@@ -65,7 +65,8 @@ export function FullCompareTable({ providers: allProviders }: { providers: reado
         </thead>
         <tbody>
           {allProviders.map((provider) => {
-            const support = getFieldSupport(provider.key as ProviderKey);
+            const support = getFieldSupport(provider.key);
+
             return (
               <tr key={provider.key} className="border-b border-fd-border">
                 <td className="py-2 pr-4 font-medium">{provider.name}</td>

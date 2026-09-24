@@ -10,13 +10,24 @@ import {
   formatPricingVolume,
   getAdapterPricingRows,
   pricingVolumes,
+  PRICING_SORTS,
+  PRICING_STATUS_FILTERS,
   type PricingSort,
   type PricingStatusFilter,
   type PricingVolume,
 } from "@/lib/adapter-pricing";
 
 const defaultVolume: PricingVolume = 50_000;
+
 const defaultSort: PricingSort = "cost-asc";
+
+function parsePricingStatusFilter(value: string): PricingStatusFilter {
+  return PRICING_STATUS_FILTERS.find((option) => option === value) ?? "all";
+}
+
+function parsePricingSort(value: string): PricingSort {
+  return PRICING_SORTS.find((option) => option === value) ?? defaultSort;
+}
 
 export function AdapterPricing() {
   const [query, setQuery] = useState("");
@@ -28,6 +39,7 @@ export function AdapterPricing() {
     () => getAdapterPricingRows({ query, status, volume, sort }),
     [query, status, volume, sort],
   );
+
   const hasFilters =
     query !== "" || volume !== defaultVolume || status !== "all" || sort !== defaultSort;
 
@@ -68,7 +80,7 @@ export function AdapterPricing() {
             Availability
             <select
               className="h-10 min-w-44 rounded-md border border-fd-border bg-fd-background px-3 text-sm text-fd-foreground outline-none focus-visible:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-primary/20"
-              onChange={(event) => setStatus(event.target.value as PricingStatusFilter)}
+              onChange={(event) => setStatus(parsePricingStatusFilter(event.target.value))}
               value={status}
             >
               <option value="all">All prices</option>
@@ -82,7 +94,7 @@ export function AdapterPricing() {
             Sort rows
             <select
               className="h-10 min-w-44 rounded-md border border-fd-border bg-fd-background px-3 text-sm text-fd-foreground outline-none focus-visible:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-primary/20"
-              onChange={(event) => setSort(event.target.value as PricingSort)}
+              onChange={(event) => setSort(parsePricingSort(event.target.value))}
               value={sort}
             >
               <option value="provider">Provider A–Z</option>
@@ -99,6 +111,7 @@ export function AdapterPricing() {
           <div className="grid grid-cols-3 gap-1 rounded-lg border border-fd-border bg-fd-background p-1 sm:grid-cols-6">
             {pricingVolumes.map((option) => {
               const selected = option === volume;
+
               return (
                 <button
                   aria-pressed={selected}
@@ -152,6 +165,7 @@ export function AdapterPricing() {
               </th>
               {pricingVolumes.map((option) => {
                 const selected = option === volume;
+
                 return (
                   <th
                     aria-current={selected ? "true" : undefined}
@@ -211,6 +225,7 @@ export function AdapterPricing() {
                 </td>
                 {row.prices.map((price, index) => {
                   const selected = pricingVolumes[index] === volume;
+
                   return (
                     <td
                       className={`px-3 py-3 text-right font-medium tabular-nums ${

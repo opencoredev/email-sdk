@@ -5,9 +5,11 @@ import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { sequenzy } from "../packages/email-sdk/src/sequenzy.js";
 
 config({ path: ".env.local" });
+
 config();
 
 const baseUrl = process.env.SEQUENZY_BASE_URL ?? "https://api.sequenzy.com/api/v1";
+
 const apiKey = process.env.SEQUENZY_API_KEY;
 
 if (!apiKey) {
@@ -15,7 +17,9 @@ if (!apiKey) {
 }
 
 const result = await runDoctor({ adapter: "sequenzy", credential: apiKey, live: true, baseUrl });
+
 console.log(JSON.stringify(result, null, 2));
+
 if (!result.ok) process.exit(1);
 
 if (process.env.SEQUENZY_LIVE_SEND !== "true") {
@@ -23,7 +27,9 @@ if (process.env.SEQUENZY_LIVE_SEND !== "true") {
 }
 
 const from = requiredEnv("SEQUENZY_TEST_FROM");
+
 const to = requiredEnv("SEQUENZY_TEST_TO");
+
 const email = createEmailClient({
   adapters: [
     sequenzy({

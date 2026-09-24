@@ -5,6 +5,16 @@ type DocsEntry = (typeof ADAPTER_SUPPORT_ENTRIES)[number];
 
 type Field = (typeof ADAPTER_SUPPORT_FIELDS)[number];
 
+type SdkFieldSupport = { readonly [F in Field]?: boolean };
+
+const sdkFieldsById = new Map<string, SdkFieldSupport>(Object.entries(SUPPORTED_MESSAGE_FIELDS));
+
+const sdkCapabilitiesById = new Map(Object.entries(BUILT_IN_ADAPTER_CAPABILITIES));
+
+function isField(value: string): value is Field {
+  return ADAPTER_SUPPORT_FIELDS.some((field) => field === value);
+}
+
 const errors: string[] = [];
 
 function fail(message: string) {
@@ -17,6 +27,7 @@ function sameArray(left: readonly string[], right: readonly string[]) {
 
 function requireIncludes(entry: DocsEntry, text: string) {
   const limits = entry.limits ?? [];
+
   if (!limits.some((limit) => limit.includes(text))) {
     fail(`${entry.id} is missing audited caveat containing: ${text}`);
   }
@@ -24,12 +35,16 @@ function requireIncludes(entry: DocsEntry, text: string) {
 
 function entry(id: string) {
   const found = ADAPTER_SUPPORT_ENTRIES.find((candidate) => candidate.id === id);
+
   if (!found) fail(`Missing docs entry for ${id}.`);
+
   return found;
 }
 
 const sdkIds = Object.keys(SUPPORTED_MESSAGE_FIELDS);
+
 const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
+
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
 if (ADAPTER_SUPPORT_ENTRIES.length !== 25) {
@@ -45,34 +60,37 @@ if (!sameArray(docsIds, sdkIds)) {
 }
 
 const expectedFields = ["cc", "bcc", "replyTo", "headers", "attachments", "tags", "metadata", "sendAt"];
+
 if (!sameArray(ADAPTER_SUPPORT_FIELDS, expectedFields)) {
   fail(`Field ordering changed. Docs: ${ADAPTER_SUPPORT_FIELDS.join(", ")}`);
 }
 
 for (const docsEntry of ADAPTER_SUPPORT_ENTRIES) {
-  const sdkFields = SUPPORTED_MESSAGE_FIELDS[docsEntry.id as keyof typeof SUPPORTED_MESSAGE_FIELDS];
+  const sdkFields = sdkFieldsById.get(docsEntry.id);
+
   if (!sdkFields) continue;
 
   for (const field of ADAPTER_SUPPORT_FIELDS) {
     const docsSupports = docsEntry.fields[field] === true;
-    const sdkSupports = sdkFields[field as keyof typeof sdkFields] === true;
+    const sdkSupports = sdkFields[field] === true;
+
     if (docsSupports !== sdkSupports) {
       fail(`${docsEntry.id}.${field} docs=${docsSupports} sdk=${sdkSupports}`);
     }
   }
 
-  for (const field of Object.keys(docsEntry.fields)) {
-    if (!ADAPTER_SUPPORT_FIELDS.includes(field as Field)) {
+  for (const [field, value] of Object.entries(docsEntry.fields)) {
+    if (!isField(field)) {
       fail(`${docsEntry.id} contains invalid field key: ${field}`);
     }
-    if (docsEntry.fields[field as Field] !== true) {
+
+    if (value !== true) {
       fail(`${docsEntry.id}.${field} must be represented by true or omitted.`);
     }
   }
 
-  const sdkCapabilities = BUILT_IN_ADAPTER_CAPABILITIES[
-    docsEntry.id as keyof typeof BUILT_IN_ADAPTER_CAPABILITIES
-  ];
+  const sdkCapabilities = sdkCapabilitiesById.get(docsEntry.id);
+
   if (!sdkCapabilities) continue;
 
   for (const key of ["repeatedHeaders", "idempotency", "scheduling", "personalized"] as const) {
@@ -85,39 +103,66 @@ for (const docsEntry of ADAPTER_SUPPORT_ENTRIES) {
 }
 
 const oneReplyTo = ["brevo", "cloudflare", "unosend", "sequenzy", "mailersend", "plunk", "mailtrap", "lettr"];
+
 for (const id of oneReplyTo) requireIncludes(entry(id), "one reply-to");
 
 const oneNormalRecipient = ["iterable", "loops", "primitive"];
+
 for (const id of oneNormalRecipient) requireIncludes(entry(id), "Normal send accepts one to recipient");
 
 requireIncludes(entry("jetemail"), "Requires a from display name");
+
 requireIncludes(entry("jetemail"), "50 to, 50 cc, 50 bcc, and 50 reply-to");
+
 requireIncludes(entry("cloudflare"), "50 combined to, cc, and bcc");
+
 requireIncludes(entry("cloudflare"), "plain strings and {email} objects are valid");
+
 requireIncludes(entry("sequenzy"), "50 to recipients");
+
 requireIncludes(entry("postmark"), "one tag");
+
 requireIncludes(entry("lettermint"), "one tag");
+
 requireIncludes(entry("lettr"), "one tag");
+
 requireIncludes(entry("lettr"), "50 combined to, cc, and bcc");
+
 requireIncludes(entry("lettr"), "plain strings and {email} objects are valid");
+
 requireIncludes(entry("lettr"), "inline attachments");
+
 requireIncludes(entry("mailtrap"), "one tag");
+
 requireIncludes(entry("scaleway"), "headers already include Reply-To");
+
 requireIncludes(entry("smtp"), "ASCII envelope addresses and header names");
+
 requireIncludes(entry("graph"), "x- prefixed custom headers");
+
 requireIncludes(entry("graph"), "5 custom headers");
+
 requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
+
 requireIncludes(entry("sendgrid"), "1,000 recipients");
+
 requireIncludes(entry("mailgun"), "1,000 recipients");
+
 requireIncludes(entry("sendgrid"), "Tag names are discarded");
+
 requireIncludes(entry("mailgun"), "Tag names are discarded");
+
 requireIncludes(entry("mailersend"), "Tag names are discarded");
+
 requireIncludes(entry("postmark"), "flattens one name:value tag");
+
 requireIncludes(entry("mailchimp"), "yyyy-mm-dd HH:MM:ss");
+
 requireIncludes(entry("sparkpost"), "YYYY-MM-DDTHH:mm:ss±HH:mm");
 
 if (errors.length > 0) {
   console.error(`Adapter support docs drift check failed with ${errors.length} issue${errors.length === 1 ? "" : "s"}:`);
+
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }

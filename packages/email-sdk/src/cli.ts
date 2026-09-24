@@ -6,6 +6,7 @@ import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
+import { isStringMember, jsonString, parseJsonStrict } from "./internal/decode.js";
 import { runDoctor } from "./doctor.js";
 import { graph } from "./graph.js";
 import { iterable } from "./iterable.js";
@@ -41,8 +42,11 @@ import { unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
+
 type AdapterFactory = (flags: CliFlags) => EmailAdapter;
+
 type SupportedAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
+
 type PackageInfo = {
   name: string;
   version: string;
@@ -225,64 +229,68 @@ const factories = {
     }),
 } satisfies Record<ProviderName, AdapterFactory>;
 
-const envFlagNames: Record<string, string> = {
-  RESEND_API_KEY: "api-key",
-  POSTMARK_SERVER_TOKEN: "server-token",
-  SENDGRID_API_KEY: "api-key",
-  CLOUDFLARE_API_TOKEN: "api-token",
-  CLOUDFLARE_ACCOUNT_ID: "account-id",
-  MS_GRAPH_TENANT_ID: "tenant-id",
-  MS_GRAPH_CLIENT_ID: "client-id",
-  MS_GRAPH_CLIENT_SECRET: "client-secret",
-  MS_GRAPH_USER: "user",
-  MS_GRAPH_TOKEN_URL: "token-url",
-  MS_GRAPH_SCOPE: "scope",
-  UNOSEND_API_KEY: "api-key",
-  ITERABLE_API_KEY: "api-key",
-  ITERABLE_CAMPAIGN_ID: "campaign-id",
-  AWS_ACCESS_KEY_ID: "access-key-id",
-  AWS_SECRET_ACCESS_KEY: "secret-access-key",
-  AWS_REGION: "region",
-  MAILGUN_API_KEY: "api-key",
-  MAILGUN_DOMAIN: "domain",
-  MAILERSEND_API_KEY: "api-key",
-  BREVO_API_KEY: "api-key",
-  MAILCHIMP_API_KEY: "api-key",
-  SPARKPOST_API_KEY: "api-key",
-  LOOPS_API_KEY: "api-key",
-  LOOPS_TRANSACTIONAL_ID: "transactional-id",
-  SEQUENZY_API_KEY: "api-key",
-  JETEMAIL_API_KEY: "api-key",
-  LETTERMINT_API_TOKEN: "api-token",
-  LETTR_API_KEY: "api-key",
-  PRIMITIVE_API_KEY: "api-key",
-  PLUNK_API_KEY: "api-key",
-  MAILTRAP_API_KEY: "api-key",
-  SCALEWAY_SECRET_KEY: "secret-key",
-  SCALEWAY_PROJECT_ID: "project-id",
-  ZEPTOMAIL_TOKEN: "token",
-  MAILPACE_API_KEY: "api-key",
-  SMTP_HOST: "host",
-};
+const envFlagNames = new Map<string, string>([
+  ["RESEND_API_KEY", "api-key"],
+  ["POSTMARK_SERVER_TOKEN", "server-token"],
+  ["SENDGRID_API_KEY", "api-key"],
+  ["CLOUDFLARE_API_TOKEN", "api-token"],
+  ["CLOUDFLARE_ACCOUNT_ID", "account-id"],
+  ["MS_GRAPH_TENANT_ID", "tenant-id"],
+  ["MS_GRAPH_CLIENT_ID", "client-id"],
+  ["MS_GRAPH_CLIENT_SECRET", "client-secret"],
+  ["MS_GRAPH_USER", "user"],
+  ["MS_GRAPH_TOKEN_URL", "token-url"],
+  ["MS_GRAPH_SCOPE", "scope"],
+  ["UNOSEND_API_KEY", "api-key"],
+  ["ITERABLE_API_KEY", "api-key"],
+  ["ITERABLE_CAMPAIGN_ID", "campaign-id"],
+  ["AWS_ACCESS_KEY_ID", "access-key-id"],
+  ["AWS_SECRET_ACCESS_KEY", "secret-access-key"],
+  ["AWS_REGION", "region"],
+  ["MAILGUN_API_KEY", "api-key"],
+  ["MAILGUN_DOMAIN", "domain"],
+  ["MAILERSEND_API_KEY", "api-key"],
+  ["BREVO_API_KEY", "api-key"],
+  ["MAILCHIMP_API_KEY", "api-key"],
+  ["SPARKPOST_API_KEY", "api-key"],
+  ["LOOPS_API_KEY", "api-key"],
+  ["LOOPS_TRANSACTIONAL_ID", "transactional-id"],
+  ["SEQUENZY_API_KEY", "api-key"],
+  ["JETEMAIL_API_KEY", "api-key"],
+  ["LETTERMINT_API_TOKEN", "api-token"],
+  ["LETTR_API_KEY", "api-key"],
+  ["PRIMITIVE_API_KEY", "api-key"],
+  ["PLUNK_API_KEY", "api-key"],
+  ["MAILTRAP_API_KEY", "api-key"],
+  ["SCALEWAY_SECRET_KEY", "secret-key"],
+  ["SCALEWAY_PROJECT_ID", "project-id"],
+  ["ZEPTOMAIL_TOKEN", "token"],
+  ["MAILPACE_API_KEY", "api-key"],
+  ["SMTP_HOST", "host"],
+]);
 
 async function main(command: string | undefined, flags: CliFlags) {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp();
+
     return;
   }
 
   if (command === "version" || command === "--version" || command === "-v") {
     await printVersion(flags);
+
     return;
   }
 
   if (command === "adapters" || command === "providers") {
     printAdapters(flags);
+
     return;
   }
 
   if (command === "doctor") {
     await doctor(flags);
+
     return;
   }
 
@@ -308,6 +316,7 @@ async function main(command: string | undefined, flags: CliFlags) {
         2,
       ),
     );
+
     return;
   }
 
@@ -327,18 +336,20 @@ function createProvider(name: string, flags: CliFlags): EmailAdapter {
   return factories[name](flags);
 }
 
-function dryRunFlags(name: string, flags: CliFlags): CliFlags {
+function dryRunFlags(name: string, flags: CliFlags) {
   if (!isProviderName(name)) {
     fail(`Unsupported adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
   }
+
   const defaults = Object.fromEntries(
     providerDocs
       .find((adapter) => adapter.name === name)!
       .env.map((environmentName) => [
-        envFlagNames[environmentName],
+        envFlagNames.get(environmentName),
         environmentName.endsWith("CAMPAIGN_ID") ? "1" : "dry-run",
       ]),
   );
+
   return { ...defaults, ...flags };
 }
 
@@ -361,6 +372,7 @@ function printAdapters(flags: CliFlags) {
 
   if (json) {
     console.log(JSON.stringify(providerDocs, null, 2));
+
     return;
   }
 
@@ -377,12 +389,14 @@ async function doctor(flags: CliFlags) {
   const providerName =
     selectedAdapter(flags) ??
     providerDocs.find((item) => item.env.every((name) => process.env[name]?.trim()))?.name;
+
   const provider = providerDocs.find((item) => item.name === providerName);
   const missing = provider?.env.filter((name) => !hasEnvOrFlag(flags, name)) ?? [];
   const live = truthyFlag(flags, "live");
   const from = flags.from === undefined ? undefined : (stringFlag(flags, "from") ?? "");
   const credentialEnv = provider?.name === "graph" ? "MS_GRAPH_CLIENT_SECRET" : provider?.env[0];
-  const credentialFlag = credentialEnv ? envFlagNames[credentialEnv] : undefined;
+  const credentialFlag = credentialEnv ? envFlagNames.get(credentialEnv) : undefined;
+
   const result = await runDoctor({
     adapter: provider?.name ?? "unknown",
     configured: Boolean(provider) && missing.length === 0,
@@ -405,9 +419,11 @@ async function doctor(flags: CliFlags) {
     tokenUrl: provider?.name === "graph" ? stringFlag(flags, "token-url") ?? process.env.MS_GRAPH_TOKEN_URL : undefined,
     scope: provider?.name === "graph" ? stringFlag(flags, "scope") ?? process.env.MS_GRAPH_SCOPE : undefined,
   });
+
   if (!provider)
     result.checks.configuration.message =
       "Select a supported adapter with --adapter or set its required environment variables. Run `email-sdk adapters` for options.";
+
   if (truthyFlag(flags, "json")) {
     console.log(JSON.stringify(result, null, 2));
   } else if (result.ok && !live) {
@@ -415,16 +431,19 @@ async function doctor(flags: CliFlags) {
   } else {
     if (missing.length > 0)
       console.error(`Missing environment for ${result.adapter}: ${missing.join(", ")}`);
+
     for (const [name, item] of Object.entries(result.checks)) {
       console.log(`${name}: ${item.status} — ${item.message}`);
     }
   }
+
   if (!result.ok) process.exitCode = 1;
 }
 
 function hasEnvOrFlag(flags: CliFlags, env: string) {
-  const flag = envFlagNames[env];
+  const flag = envFlagNames.get(env);
   const value = flag && flags[flag] !== undefined ? stringFlag(flags, flag) : process.env[env];
+
   return Boolean(value?.trim());
 }
 
@@ -433,6 +452,7 @@ async function printVersion(flags: CliFlags) {
 
   if (truthyFlag(flags, "json")) {
     console.log(JSON.stringify(packageInfo, null, 2));
+
     return;
   }
 
@@ -441,13 +461,13 @@ async function printVersion(flags: CliFlags) {
 
 async function readPackageInfo(): Promise<PackageInfo> {
   try {
-    const packageJson = JSON.parse(
+    const packageJson = parseJsonStrict(
       await readFile(new URL("../package.json", import.meta.url), "utf8"),
-    ) as Partial<PackageInfo> | undefined;
+    );
 
     return {
-      name: packageJson?.name ?? "@opencoredev/email-sdk",
-      version: packageJson?.version ?? "0.0.0",
+      name: jsonString(packageJson, "name") ?? "@opencoredev/email-sdk",
+      version: jsonString(packageJson, "version") ?? "0.0.0",
     };
   } catch {
     return {
@@ -457,7 +477,7 @@ async function readPackageInfo(): Promise<PackageInfo> {
   }
 }
 
-function parseFlags(args: string[]): CliFlags {
+function parseFlags(args: string[]) {
   const flags: CliFlags = {};
 
   for (let index = 0; index < args.length; index += 1) {
@@ -497,11 +517,13 @@ function setFlag(flags: CliFlags, key: string, value: string | true) {
 
   if (current === undefined) {
     flags[key] = value;
+
     return;
   }
 
   if (Array.isArray(current)) {
     current.push(String(value));
+
     return;
   }
 
@@ -546,7 +568,7 @@ function stringFlag(flags: CliFlags, name: string) {
     return value.at(-1);
   }
 
-  return typeof value === "string" ? value : undefined;
+  return isStringMember(value) ? value : undefined;
 }
 
 function stringFlags(flags: CliFlags, name: string) {
@@ -556,7 +578,7 @@ function stringFlags(flags: CliFlags, name: string) {
     return value;
   }
 
-  return typeof value === "string" ? [value] : [];
+  return isStringMember(value) ? [value] : [];
 }
 
 function selectedAdapter(flags: CliFlags) {
@@ -565,6 +587,7 @@ function selectedAdapter(flags: CliFlags) {
 
 function truthyFlag(flags: CliFlags, name: string) {
   const value = flags[name];
+
   return value === true || value === "true" || value === "1";
 }
 
@@ -590,38 +613,58 @@ function booleanEnv(name: string) {
 
 async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
   const messagePath = stringFlag(flags, "message");
+
+  // SAFETY: The message file is caller-authored input that is only shaped here. The client
+  // validates the assembled message (sender, recipients, subject, content, and adapter fields)
+  // before any adapter sends it.
   const fromFile = messagePath
     ? (JSON.parse(await readFile(messagePath, "utf8")) as Partial<EmailMessage>)
     : {};
+
   const message: Partial<EmailMessage> = { ...fromFile };
 
   if (stringFlag(flags, "from")) message.from = stringFlag(flags, "from")!;
+
   if (stringFlag(flags, "to")) message.to = splitAddresses(requiredFlag(flags, "to"));
+
   if (stringFlag(flags, "subject")) message.subject = stringFlag(flags, "subject")!;
+
   if (stringFlag(flags, "text")) message.text = stringFlag(flags, "text");
+
   if (stringFlag(flags, "html")) message.html = stringFlag(flags, "html");
+
   if (stringFlag(flags, "cc")) message.cc = splitAddresses(requiredFlag(flags, "cc"));
+
   if (stringFlag(flags, "bcc")) message.bcc = splitAddresses(requiredFlag(flags, "bcc"));
+
   if (stringFlag(flags, "reply-to"))
     message.replyTo = splitAddresses(requiredFlag(flags, "reply-to"));
+
   if (stringFlag(flags, "send-at"))
+    // SAFETY: sendAt is checked as an RFC 3339 timestamp when the client validates the message.
     message.sendAt = stringFlag(flags, "send-at") as EmailMessage["sendAt"];
 
   const headers = parseHeaders(stringFlags(flags, "header"));
+
   if (headers.length > 0) message.headers = headers;
 
   const tags = parseTags(stringFlags(flags, "tag"));
+
   if (tags.length > 0) message.tags = tags;
 
   const metadata = parseMetadata(stringFlags(flags, "metadata"));
+
   if (Object.keys(metadata).length > 0) message.metadata = metadata;
 
   const attachments = parseAttachments([
     ...stringFlags(flags, "attachment"),
     ...stringFlags(flags, "attach"),
   ]);
+
   if (attachments.length > 0) message.attachments = attachments;
 
+  // SAFETY: Required fields may still be missing here; the client's message validation
+  // rejects an incomplete message with an EmailValidationError before sending.
   return message as EmailMessage;
 }
 
@@ -650,6 +693,7 @@ function parseHeaders(values: string[]): EmailHeader[] {
 function parseTags(values: string[]): EmailTag[] {
   return values.map((value) => {
     const [name, tagValue] = splitPair(value, "tag");
+
     return { name, value: tagValue };
   });
 }
@@ -817,7 +861,9 @@ async function captureCliRun(input: {
 }
 
 const startedAt = Date.now();
+
 const [cliCommand, ...cliArgs] = process.argv.slice(2);
+
 const cliFlags = parseFlags(cliArgs);
 
 // Tag every telemetry event from this process (client created, email sent,
