@@ -1,5 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
-import { isJsonObject, jsonString, readJson } from "./internal/decode.js";
+import { jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import { emailParts, sendAtIso } from "./payloads.js";
@@ -99,6 +99,7 @@ async function toSendheronPayload(message: EmailMessage) {
   const cc = arrayify(message.cc).map(emailAddressOf);
   const bcc = arrayify(message.bcc).map(emailAddressOf);
   const replyTo = arrayify(message.replyTo).map(emailAddressOf)[0];
+
   const attachments = message.attachments?.length
     ? await Promise.all(message.attachments.map(toSendheronAttachment))
     : undefined;
@@ -142,17 +143,17 @@ function textToHtml(text: string) {
 // means the idempotency key already belongs to another request, whose outcome is unknown here.
 function sendheronDelivery(status: number): "not_sent" | "unknown" {
   if (status === 409) return "unknown";
+
   return status < 500 || status === 503 ? "not_sent" : "unknown";
 }
 
 function sendheronErrorMessage(status: number, body: JsonValue | undefined) {
-  if (isJsonObject(body)) {
-    const { message, description } = body;
+  // `message` is SendHeron's stable error key; `description` is the human-readable text.
+  const message = jsonString(body, "message");
+  const description = jsonString(body, "description");
 
-    // `message` is SendHeron's stable error key; `description` is the human-readable text.
-    if (typeof message === "string" && typeof description === "string") {
-      return `SendHeron failed with ${status}: ${description} (${message})`;
-    }
+  if (message !== undefined && description !== undefined) {
+    return `SendHeron failed with ${status}: ${description} (${message})`;
   }
 
   return httpErrorMessage("SendHeron", status, body);

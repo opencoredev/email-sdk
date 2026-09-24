@@ -314,12 +314,15 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
   const work = async () => {
     const first = await request(probe.path);
+
     if (adapter === "sendheron" && first.status === 404) {
       checks.authentication = validAuthentication(adapter, first.body)
         ? authenticated()
         : uncertain();
+
       return;
     }
+
     checks.authentication = httpFailure(first.status, adapter, first.body) ?? uncertain();
 
     if (first.status !== 200 || adapter === "jetemail") return;

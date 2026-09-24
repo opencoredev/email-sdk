@@ -145,7 +145,9 @@ requireIncludes(entry("graph"), "5 custom headers");
 requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
 
 requireIncludes(entry("sendheron"), "without display names");
+
 requireIncludes(entry("sendheron"), "no attachments with sendAt");
+
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 
 requireIncludes(entry("mailgun"), "1,000 recipients");

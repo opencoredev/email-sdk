@@ -246,6 +246,7 @@ describe("doctor safe probes", () => {
 
   test("SendHeron treats emailSending.notFound on a placeholder send as authenticated", async () => {
     let calls = 0;
+
     const result = await runDoctor({
       ...options,
       adapter: "sendheron",
@@ -258,9 +259,11 @@ describe("doctor safe probes", () => {
         expect(init.body).toBeUndefined();
         expect(init.redirect).toBe("error");
         expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${credential}`);
+
         return json({ statusCode: 404, message: "emailSending.notFound", error: "NOT_FOUND" }, 404);
       },
     });
+
     expect(calls).toBe(1);
     expect(result.ok).toBe(true);
     expect(result.checks.authentication.status).toBe("passed");
@@ -278,6 +281,7 @@ describe("doctor safe probes", () => {
       adapter: "sendheron",
       fetch: async () => json(body, status),
     });
+
     expect(result.checks.authentication.status).toBe(expected);
     expect(result.ok).toBe(false);
     expect(JSON.stringify(result)).not.toContain("private-account-id");

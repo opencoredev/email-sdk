@@ -542,6 +542,7 @@ const SENDHERON_ATTACHMENT_TYPES = new Set([
   "text/plain",
   "application/zip",
 ]);
+
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 
 const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
@@ -688,6 +689,7 @@ export function validateBuiltInAdapter(
       1000,
     );
   }
+
   if (adapter === "sendheron") {
     const cc = arrayify(message.cc);
     const bcc = arrayify(message.bcc);
@@ -695,8 +697,9 @@ export function validateBuiltInAdapter(
     assertMaxItems(adapter, "cc", cc, 50);
     assertMaxItems(adapter, "bcc", bcc, 50);
     assertMaxItems(adapter, "replyTo", replyTo, 1);
+
     for (const address of [...to, ...cc, ...bcc, ...replyTo]) {
-      if (typeof address === "string" ? address.includes("<") : Boolean(address.name)) {
+      if (isStringMember(address) ? address.includes("<") : Boolean(address.name)) {
         throw new EmailValidationError(
           "sendheron recipient and replyTo fields only support plain email addresses.",
         );
@@ -705,13 +708,16 @@ export function validateBuiltInAdapter(
 
     const attachments = message.attachments ?? [];
     assertMaxItems(adapter, "attachment", attachments, 10);
+
     if (attachments.length > 0 && message.sendAt !== undefined) {
       throw new EmailValidationError("sendheron cannot schedule a message with attachments.");
     }
+
     for (const attachment of attachments) {
       if (attachment.disposition === "inline" || attachment.contentId) {
         throw new EmailValidationError("sendheron does not support inline attachments.");
       }
+
       if (!attachment.contentType || !SENDHERON_ATTACHMENT_TYPES.has(attachment.contentType)) {
         throw new EmailValidationError(
           `sendheron requires an attachment contentType from its allowlist: ${[
@@ -721,6 +727,7 @@ export function validateBuiltInAdapter(
       }
     }
   }
+
   if (adapter === "smtp") {
     for (const address of [
       message.from,

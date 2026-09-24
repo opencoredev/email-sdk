@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { sendheron } from "./sendheron.js";
+import type { JsonValue } from "./internal/decode.js";
 import {
   base64,
   context,
@@ -75,15 +76,13 @@ describe("provider payloads", () => {
     const fetcher: typeof fetch = async () =>
       new Response(responseBody, { status: 201, headers: { "content-type": "application/json" } });
 
-    const error = await sendheron({ apiKey: "sh_key", fetch: fetcher })
-      .send(
-        { from: "hello@example.com", to: "ada@example.com", subject: "Hi", html: "<p>Hi</p>" },
-        context,
-      )
-      .catch((caught: unknown) => caught);
+    const sent = sendheron({ apiKey: "sh_key", fetch: fetcher }).send(
+      { from: "hello@example.com", to: "ada@example.com", subject: "Hi", html: "<p>Hi</p>" },
+      context,
+    );
 
-    expect(error).toBeInstanceOf(EmailAdapterError);
-    expect(error).toMatchObject({ retryable: false, delivery: "unknown", status: 201 });
+    await expect(sent).rejects.toBeInstanceOf(EmailAdapterError);
+    await expect(sent).rejects.toMatchObject({ retryable: false, delivery: "unknown", status: 201 });
   });
 
   test("SendHeron treats a suppressed send as not sent and never retryable", async () => {
@@ -107,7 +106,7 @@ describe("provider payloads", () => {
   });
 
   test("SendHeron surfaces stable error keys with delivery state", async () => {
-    const send = (body: unknown, status: number) =>
+    const send = (body: JsonValue, status: number) =>
       sendheron({ apiKey: "sh_key", fetch: jsonCapture(body, { status }).fetch }).send(
         { from: "hello@example.com", to: "ada@example.com", subject: "Hi", html: "<p>Hi</p>" },
         context,
@@ -143,6 +142,7 @@ describe("provider payloads", () => {
   test("SendHeron rejects shapes its API cannot represent before fetch", async () => {
     const capture = jsonCapture({ id: "heron_never", status: "sent" }, { status: 201 });
     const adapter = sendheron({ apiKey: "sh_key", fetch: capture.fetch });
+
     const base: EmailMessage = {
       from: "hello@example.com",
       to: "ada@example.com",
@@ -198,6 +198,7 @@ describe("provider payloads", () => {
       { id: "heron_sched", sendAt: "2026-07-10T12:30:00.000Z", status: "SCHEDULED" },
       { status: 201 },
     );
+
     const scheduled = await sendheron({ apiKey: "sh_key", fetch: sendheronCapture.fetch }).send(
       {
         from: "hello@example.com",
@@ -208,6 +209,7 @@ describe("provider payloads", () => {
       },
       context,
     );
+
     expect(sendheronCapture.calls[0]?.json.sendAt).toBe("2026-07-10T12:30:00.000Z");
     expect(scheduled.id).toBe("heron_sched");
   });
