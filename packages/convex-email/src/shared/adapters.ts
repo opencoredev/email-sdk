@@ -177,9 +177,17 @@ export type ConvexEmailAdapterRegistry = typeof CONVEX_EMAIL_ADAPTERS;
 
 export type ConvexEmailAdapterKind = keyof ConvexEmailAdapterRegistry;
 
-export const CONVEX_EMAIL_ADAPTER_KINDS = Object.keys(
+const adapterFieldsByKind = new Map<string, ConvexAdapterFields>(
+  Object.entries(CONVEX_EMAIL_ADAPTERS),
+);
+
+export function isConvexEmailAdapterKind(kind: string): kind is ConvexEmailAdapterKind {
+  return adapterFieldsByKind.has(kind);
+}
+
+export const CONVEX_EMAIL_ADAPTER_KINDS: ConvexEmailAdapterKind[] = Object.keys(
   CONVEX_EMAIL_ADAPTERS,
-) as ConvexEmailAdapterKind[];
+).filter(isConvexEmailAdapterKind);
 
 type ConvexAdapterEnvName<TFields> = {
   [K in keyof TFields]: TFields[K] extends { env: infer TEnv extends string } ? TEnv : never;
@@ -195,16 +203,27 @@ export type ConvexEmailEnvVar = {
 }[ConvexEmailAdapterKind];
 
 /** The same set at runtime, sorted so docs and the declared environment stay stable. */
-export const CONVEX_EMAIL_ENV_VARS = [
-  ...new Set(
-    Object.values(CONVEX_EMAIL_ADAPTERS as Record<string, ConvexAdapterFields>).flatMap((fields) =>
-      Object.values(fields).flatMap((field) => (field.env ? [field.env] : [])),
-    ),
-  ),
-].sort() as ConvexEmailEnvVar[];
+export const CONVEX_EMAIL_ENV_VARS = collectEnvVars();
+
+function collectEnvVars(): ConvexEmailEnvVar[] {
+  const names = new Set<string>();
+
+  for (const fields of adapterFieldsByKind.values()) {
+    for (const field of Object.values(fields)) {
+      if (field.env) {
+        names.add(field.env);
+      }
+    }
+  }
+
+  // SAFETY: every name comes from the `env` of a field in CONVEX_EMAIL_ADAPTERS, and
+  // ConvexEmailEnvVar is defined as exactly the union of those `env` literals. The loop widens
+  // them to string only because Object.values loses the per-adapter literal types.
+  return [...names].sort() as ConvexEmailEnvVar[];
+}
 
 export function adapterFields(kind: string): ConvexAdapterFields | undefined {
-  return (CONVEX_EMAIL_ADAPTERS as Record<string, ConvexAdapterFields>)[kind];
+  return adapterFieldsByKind.get(kind);
 }
 
 const declaredEnvVars = new Set<string>(CONVEX_EMAIL_ENV_VARS);

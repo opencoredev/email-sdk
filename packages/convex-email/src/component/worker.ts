@@ -1,49 +1,39 @@
 "use node";
 
-import { EmailAdapterError, EmailRouteError, EmailSdkError } from "@opencoredev/email-sdk";
+import {
+  EmailAdapterError,
+  EmailRouteError,
+  EmailSdkError,
+  type EmailSendResult,
+} from "@opencoredev/email-sdk";
 import { normalizeWebhookEvent as normalizeSdkWebhook } from "@opencoredev/email-sdk/webhooks";
-import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 
-import { internal } from "./_generated/api.js";
-import { internalAction } from "./_generated/server.js";
+import { action, internalAction } from "./_generated/server.js";
+import {
+  handleWebhookArgs,
+  handleWebhookReturns,
+  internalFunctions,
+  processEmailArgs,
+} from "./functionRefs.js";
 import { buildEmailClient, hydrateAttachments } from "./providers.js";
-import type { ConvexEmailAdapterConfig, ConvexEmailMessage } from "../shared/types.js";
+import type { ConvexEmailProviderFailure } from "../shared/types.js";
 
-type InternalMutationRef = FunctionReference<
-  "mutation",
-  "internal",
-  Record<string, unknown>,
-  unknown
->;
-type QueuedEmail = {
-  adapters: ConvexEmailAdapterConfig[];
-  adapter?: string;
-  fallbackAdapters: string[];
-  processingLease: number;
-  message: ConvexEmailMessage;
-  idempotencyKey?: string;
-  sendMetadata?: Readonly<Record<string, string | number | boolean | null>>;
-};
-
-const markProcessingRef = (internal as any).lib.markProcessing as InternalMutationRef;
-const recordProviderAttemptRef = (internal as any).lib.recordProviderAttempt as InternalMutationRef;
-const markSentRef = (internal as any).lib.markSent as InternalMutationRef;
-const markFailedOrRetryRef = (internal as any).lib.markFailedOrRetry as InternalMutationRef;
-const recordWebhookRef = (internal as any).lib.recordWebhook as InternalMutationRef;
+const lib = internalFunctions.lib;
 
 export const processEmail = internalAction({
-  args: { emailId: v.id("emails") },
+  args: processEmailArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
-    const email = (await ctx.runMutation(markProcessingRef, {
-      emailId: args.emailId,
-    })) as QueuedEmail | null;
+    const email = await ctx.runMutation(lib.markProcessing, { emailId: args.emailId });
 
     if (!email) {
       return null;
     }
+
+    const processingLease = email.processingLease ?? 0;
 
     try {
       if (email.adapters.length === 0) {
@@ -51,19 +41,21 @@ export const processEmail = internalAction({
       }
 
       const client = buildEmailClient({
-        adapters: email.adapters as ConvexEmailAdapterConfig[],
+        adapters: email.adapters,
         defaultAdapter: email.adapter,
         fallbackAdapters: email.fallbackAdapters,
         async recordAttempt(event) {
-          await ctx.runMutation(recordProviderAttemptRef, {
+          await ctx.runMutation(lib.recordProviderAttempt, {
             emailId: args.emailId,
-            processingLease: email.processingLease,
+            processingLease,
             adapter: event.adapter,
             attempt: event.attempt,
           });
         },
       });
+
       const message = await hydrateAttachments(email.message);
+
       const response = await client.send(message, {
         adapter: email.adapter,
         fallback: { adapters: email.fallbackAdapters, onUnknownDelivery: "stop" },
@@ -71,19 +63,20 @@ export const processEmail = internalAction({
         metadata: email.sendMetadata,
       });
 
-      await ctx.runMutation(markSentRef, {
+      await ctx.runMutation(lib.markSent, {
         emailId: args.emailId,
-        processingLease: email.processingLease,
-        response,
+        processingLease,
+        response: sendResultRecord(response),
       });
     } catch (error) {
       const providerFailure = providerFailureMetadata(error);
-      await ctx.runMutation(markFailedOrRetryRef, {
+
+      await ctx.runMutation(lib.markFailedOrRetry, {
         emailId: args.emailId,
-        processingLease: email.processingLease,
+        processingLease,
         error: stringifyError(error),
         retryable: providerFailure?.retryable ?? isRetryableFailure(error),
-        ...(providerFailure ? { providerFailure } : {}),
+        providerFailure,
       });
     }
 
@@ -91,63 +84,82 @@ export const processEmail = internalAction({
   },
 });
 
-export const handleWebhook = internalAction({
-  args: {
-    provider: v.string(),
-    headers: v.record(v.string(), v.string()),
-    body: v.string(),
-  },
-  returns: v.object({ ok: v.boolean(), duplicate: v.optional(v.boolean()) }),
+/**
+ * Public inside the component so the host app can call it through `components.<name>`; component
+ * functions are never reachable by browser clients directly. The app's `registerRoutes()` verifies
+ * the provider signature before it calls this action.
+ */
+export const handleWebhook = action({
+  args: handleWebhookArgs,
+  returns: handleWebhookReturns,
   handler: async (ctx, args) => {
     const parsed = await parseProviderWebhook(args.provider, args.body, args.headers);
 
-    return (await ctx.runMutation(recordWebhookRef, {
+    return await ctx.runMutation(lib.recordWebhook, {
       provider: args.provider,
       deliveryId: parsed.deliveryId,
       providerMessageId: parsed.providerMessageId,
       event: parsed.event,
       payload: parsed.payload,
-    })) as { ok: boolean; duplicate?: boolean };
+    });
   },
 });
 
-function stringifyError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+/** Keeps only the acknowledgement fields; the raw provider response is not stored. */
+function sendResultRecord(response: EmailSendResult) {
+  return {
+    adapter: response.adapter,
+    id: response.id,
+    accepted: response.accepted ? [...response.accepted] : undefined,
+    rejected: response.rejected ? [...response.rejected] : undefined,
+  };
 }
 
-function isRetryableFailure(error: unknown) {
-  return error instanceof EmailSdkError ? error.retryable : true;
+function stringifyError(cause: unknown) {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
-function providerFailureMetadata(error: unknown) {
+function isRetryableFailure(cause: unknown) {
+  return cause instanceof EmailSdkError ? cause.retryable : true;
+}
+
+function providerFailureMetadata(cause: unknown): ConvexEmailProviderFailure | undefined {
   const failure =
-    error instanceof EmailRouteError
-      ? error.failures.at(-1)
-      : error instanceof EmailAdapterError
-        ? error
+    cause instanceof EmailRouteError
+      ? cause.failures.at(-1)
+      : cause instanceof EmailAdapterError
+        ? cause
         : undefined;
 
   if (!failure) {
     return undefined;
   }
 
-  return {
+  const metadata: ConvexEmailProviderFailure = {
     adapter: failure.adapter,
     retryable: failure.retryable,
     delivery: failure.delivery,
-    ...(failure.requestId ? { requestId: failure.requestId } : {}),
-    ...(failure.acceptedCount !== undefined
-      ? { acceptedCount: failure.acceptedCount }
-      : {}),
-    ...(failure.rejectedCount !== undefined
-      ? { rejectedCount: failure.rejectedCount }
-      : {}),
   };
+
+  if (failure.requestId) {
+    metadata.requestId = failure.requestId;
+  }
+
+  if (failure.acceptedCount !== undefined) {
+    metadata.acceptedCount = failure.acceptedCount;
+  }
+
+  if (failure.rejectedCount !== undefined) {
+    metadata.rejectedCount = failure.rejectedCount;
+  }
+
+  return metadata;
 }
 
 async function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
   if (provider === "resend" || provider === "postmark" || provider === "mailgun") {
     const parsed = await normalizeSdkWebhook({ provider, body, headers });
+
     return {
       deliveryId: parsed.deliveryId,
       providerMessageId: parsed.providerMessageId,
@@ -155,47 +167,93 @@ async function parseProviderWebhook(provider: string, body: string, headers: Rec
       payload: parsed.payload,
     };
   }
+
   return parseGenericWebhook(provider, body);
 }
 
-function parseGenericWebhook(provider: string, body: string) {
-  const payload = parseJson(body);
+/** A field that is read only when it holds a string; anything else counts as absent. */
+const looseString = z.string().optional().catch(undefined);
 
-  const record = payload as Record<string, unknown>;
-  const eventData =
-    typeof record["event-data"] === "object" && record["event-data"]
-      ? (record["event-data"] as Record<string, unknown>)
-      : undefined;
+// Postmark's dedupe id arrives as a numeric uppercase `ID`; accept numbers as well as strings.
+const looseId = z
+  .union([z.string(), z.number().transform(String)])
+  .optional()
+  .catch(undefined);
+
+// Mailgun nests the event under `event-data`, with the original Message-ID in its message headers.
+const genericEventData = z.object({
+  event: looseString,
+  severity: looseString,
+  id: looseString,
+  message: z
+    .object({
+      headers: z.object({ "message-id": looseString }).optional().catch(undefined),
+    })
+    .optional()
+    .catch(undefined),
+});
+
+/** The fields the generic webhook path understands, across the providers it has seen. */
+const genericWebhookFields = z
+  .object({
+    event: looseString,
+    type: looseString,
+    RecordType: looseString,
+    Type: looseString,
+    id: looseString,
+    ID: looseId,
+    eventId: looseString,
+    webhookId: looseString,
+    deliveryId: looseString,
+    messageId: looseString,
+    message_id: looseString,
+    MessageID: looseString,
+    "event-data": genericEventData.optional().catch(undefined),
+  })
+  .catch({});
+
+const jsonPayload = z.json();
+
+function parseGenericWebhook(provider: string, body: string) {
+  const payload = parseJsonPayload(body);
+  const record = genericWebhookFields.parse(payload);
+  const eventData = record["event-data"];
+
   const event = normalizeWebhookEvent(
-    stringValue(record.event) ??
-      stringValue(record.type) ??
-      stringValue(record.RecordType) ??
-      stringValue(eventData?.event),
+    record.event ?? record.type ?? record.RecordType ?? eventData?.event,
     {
       // Mailgun marks failure events with event-data.severity: "permanent" | "temporary".
-      severity: stringValue(eventData?.severity),
+      severity: eventData?.severity,
       // Postmark bounce webhooks carry the bounce class in Type (e.g. "HardBounce", "Transient").
-      bounceType: stringValue(record.Type),
+      bounceType: record.Type,
     },
   );
 
   return {
     deliveryId:
-      stringValue(record.id) ??
-      idValue(record.ID) ??
-      stringValue(record.eventId) ??
-      stringValue(record.webhookId) ??
-      stringValue(record.deliveryId) ??
-      stringValue(eventData?.id) ??
+      record.id ??
+      record.ID ??
+      record.eventId ??
+      record.webhookId ??
+      record.deliveryId ??
+      eventData?.id ??
       deterministicDeliveryId(provider, body),
     providerMessageId:
-      stringValue(record.messageId) ??
-      stringValue(record.message_id) ??
-      stringValue(record.MessageID) ??
-      eventDataMessageId(eventData),
+      record.messageId ??
+      record.message_id ??
+      record.MessageID ??
+      eventData?.message?.headers?.["message-id"],
     event,
     payload,
   };
+}
+
+function parseJsonPayload(body: string) {
+  try {
+    return jsonPayload.parse(JSON.parse(body));
+  } catch {
+    return { raw: body };
+  }
 }
 
 // Postmark bounce Types that indicate a permanent/hard failure. Everything else
@@ -238,6 +296,7 @@ function normalizeWebhookEvent(
           ? "bounced"
           : event;
       }
+
       return "bounced";
     case "bounced":
     case "permanent_fail":
@@ -251,41 +310,6 @@ function normalizeWebhookEvent(
     default:
       return event;
   }
-}
-
-// Mailgun nests the original Message-ID under event-data.message.headers["message-id"].
-function eventDataMessageId(eventData: Record<string, unknown> | undefined) {
-  if (!eventData || typeof eventData.message !== "object" || !eventData.message) {
-    return undefined;
-  }
-
-  const message = eventData.message as Record<string, unknown>;
-  if (typeof message.headers !== "object" || !message.headers) {
-    return undefined;
-  }
-
-  return stringValue((message.headers as Record<string, unknown>)["message-id"]);
-}
-
-function parseJson(body: string) {
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    return { raw: body };
-  }
-}
-
-function stringValue(value: unknown) {
-  return typeof value === "string" ? value : undefined;
-}
-
-// Postmark's dedupe id arrives as a numeric uppercase `ID`; accept numbers as well as strings.
-function idValue(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  return typeof value === "number" && Number.isFinite(value) ? String(value) : undefined;
 }
 
 function deterministicDeliveryId(provider: string, body: string) {

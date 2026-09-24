@@ -1,10 +1,18 @@
-import type { EmailSendResult } from "@opencoredev/email-sdk";
-import type { FunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
-import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
+import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import {
+  internalFunctions,
+  markFailedOrRetryArgs,
+  markProcessingArgs,
+  markProcessingReturns,
+  markSentArgs,
+  recordProviderAttemptArgs,
+  recordWebhookArgs,
+  sweepArgs,
+} from "./functionRefs.js";
 import type {
   ConvexEmailConfig,
   ConvexEmailProviderFailure,
@@ -13,27 +21,24 @@ import type {
 import {
   vCancelEmailArgs,
   vEmailConfig,
-  vEmailProviderFailure,
   vListEmailEventsArgs,
   vRetryEmailArgs,
   vSendBatchEmailsArgs,
   vSendEmailArgs,
   vStatusArgs,
+  vEmailWebhookResult,
   vStoredEmail,
   vStoredEmailEvent,
 } from "../shared/validators.js";
 
 const configKey = "default";
-type ProcessEmailRef = FunctionReference<
-  "action",
-  "internal",
-  { emailId: Id<"emails"> },
-  null
->;
-const internalApi = internal as unknown as { worker: { processEmail: ProcessEmailRef } };
-const processEmailRef = internalApi.worker.processEmail;
+
+const processEmailRef = internalFunctions.worker.processEmail;
+
 const processingTimeoutMs = 10 * 60 * 1_000;
+
 const cleanupBatchSize = 50;
+
 const maxBatchSize = 100;
 
 export const enqueue = mutation({
@@ -67,9 +72,11 @@ export const enqueueOwnedBatch = mutation({
 
     const config = await readConfig(ctx);
     const ids: string[] = [];
+
     for (const message of args.messages) {
       ids.push(await enqueueEmail(ctx, message, config, args.ownerId));
     }
+
     return ids;
   },
 });
@@ -101,7 +108,9 @@ export const status = query({
   args: vStatusArgs,
   returns: v.union(vStoredEmail, v.null()),
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.emailId as Id<"emails">);
+    const emailId = ctx.db.normalizeId("emails", args.emailId);
+
+    return emailId ? await ctx.db.get(emailId) : null;
   },
 });
 
@@ -109,9 +118,15 @@ export const listEvents = query({
   args: vListEmailEventsArgs,
   returns: v.array(vStoredEmailEvent),
   handler: async (ctx, args) => {
+    const emailId = ctx.db.normalizeId("emails", args.emailId);
+
+    if (!emailId) {
+      return [];
+    }
+
     return await ctx.db
       .query("emailEvents")
-      .withIndex("by_emailId_and_createdAt", (q) => q.eq("emailId", args.emailId as Id<"emails">))
+      .withIndex("by_emailId_and_createdAt", (q) => q.eq("emailId", emailId))
       .order("asc")
       .collect();
   },
@@ -121,20 +136,20 @@ export const cancel = mutation({
   args: vCancelEmailArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const emailId = args.emailId as Id<"emails">;
-    const email = await ctx.db.get(emailId);
+    const emailId = ctx.db.normalizeId("emails", args.emailId);
+    const email = emailId ? await ctx.db.get(emailId) : null;
 
     if (!email || email.status !== "queued") {
       return false;
     }
 
     const now = Date.now();
-    await ctx.db.patch(emailId, {
+    await ctx.db.patch(email._id, {
       status: "canceled",
       updatedAt: now,
       terminalAt: now,
     });
-    await insertEvent(ctx, { emailId, type: "canceled" });
+    await insertEvent(ctx, { emailId: email._id, type: "canceled" });
 
     return true;
   },
@@ -144,15 +159,15 @@ export const retry = mutation({
   args: vRetryEmailArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const emailId = args.emailId as Id<"emails">;
-    const email = await ctx.db.get(emailId);
+    const emailId = ctx.db.normalizeId("emails", args.emailId);
+    const email = emailId ? await ctx.db.get(emailId) : null;
 
     if (!email || email.status !== "failed") {
       return false;
     }
 
     const now = Date.now();
-    await ctx.db.patch(emailId, {
+    await ctx.db.patch(email._id, {
       status: "queued",
       attemptCount: 0,
       nextAttemptAt: now,
@@ -163,7 +178,7 @@ export const retry = mutation({
       updatedAt: now,
     });
     await insertEvent(ctx, {
-      emailId,
+      emailId: email._id,
       type: "retry_scheduled",
       payload: {
         manual: true,
@@ -171,7 +186,7 @@ export const retry = mutation({
       },
       createdAt: now,
     });
-    await ctx.scheduler.runAfter(0, processEmailRef, { emailId });
+    await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
 
     return true;
   },
@@ -219,8 +234,8 @@ export const getConfig = query({
 });
 
 export const markProcessing = internalMutation({
-  args: { emailId: v.id("emails") },
-  returns: v.union(v.any(), v.null()),
+  args: markProcessingArgs,
+  returns: markProcessingReturns,
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
@@ -245,17 +260,12 @@ export const markProcessing = internalMutation({
       adapter: email.adapter,
     });
 
-    return { ...email, status: "processing", attemptCount, processingLease };
+    return { ...email, status: "processing" as const, attemptCount, processingLease };
   },
 });
 
 export const recordProviderAttempt = internalMutation({
-  args: {
-    emailId: v.id("emails"),
-    processingLease: v.number(),
-    adapter: v.string(),
-    attempt: v.number(),
-  },
+  args: recordProviderAttemptArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
@@ -269,6 +279,7 @@ export const recordProviderAttempt = internalMutation({
     }
 
     const now = Date.now();
+
     const attemptedAdapters = email.attemptedAdapters.includes(args.adapter)
       ? email.attemptedAdapters
       : [...email.attemptedAdapters, args.adapter];
@@ -293,11 +304,7 @@ export const recordProviderAttempt = internalMutation({
 });
 
 export const markSent = internalMutation({
-  args: {
-    emailId: v.id("emails"),
-    processingLease: v.number(),
-    response: v.any(),
-  },
+  args: markSentArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
@@ -310,7 +317,7 @@ export const markSent = internalMutation({
       return false;
     }
 
-    const response = args.response as EmailSendResult;
+    const response = args.response;
     const now = Date.now();
 
     await ctx.db.patch(args.emailId, {
@@ -339,13 +346,7 @@ export const markSent = internalMutation({
 });
 
 export const markFailedOrRetry = internalMutation({
-  args: {
-    emailId: v.id("emails"),
-    processingLease: v.number(),
-    error: v.string(),
-    retryable: v.boolean(),
-    providerFailure: v.optional(vEmailProviderFailure),
-  },
+  args: markFailedOrRetryArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
@@ -368,7 +369,7 @@ export const markFailedOrRetry = internalMutation({
 });
 
 export const processDueEmails = internalMutation({
-  args: { limit: v.optional(v.number()) },
+  args: sweepArgs,
   returns: v.number(),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -380,6 +381,7 @@ export const processDueEmails = internalMutation({
         q.eq("status", "queued").lte("nextAttemptAt", now),
       )
       .take(args.limit ?? 25);
+
     const staleProcessing = await ctx.db
       .query("emails")
       .withIndex("by_status_and_updatedAt", (q) =>
@@ -390,6 +392,7 @@ export const processDueEmails = internalMutation({
     for (const email of due) {
       await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
     }
+
     for (const email of staleProcessing) {
       if (email.idempotencyKey) {
         await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
@@ -409,7 +412,7 @@ export const processDueEmails = internalMutation({
 });
 
 export const cleanupExpiredEmails = internalMutation({
-  args: { limit: v.optional(v.number()) },
+  args: sweepArgs,
   returns: v.number(),
   handler: async (ctx, args) => {
     return await cleanupExpiredEmailRecords(ctx, Date.now(), args.limit ?? cleanupBatchSize);
@@ -417,14 +420,8 @@ export const cleanupExpiredEmails = internalMutation({
 });
 
 export const recordWebhook = internalMutation({
-  args: {
-    provider: v.string(),
-    deliveryId: v.string(),
-    providerMessageId: v.optional(v.string()),
-    event: v.optional(v.string()),
-    payload: v.any(),
-  },
-  returns: v.object({ ok: v.boolean(), duplicate: v.optional(v.boolean()) }),
+  args: recordWebhookArgs,
+  returns: vEmailWebhookResult,
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("webhookDeliveries")
@@ -445,6 +442,7 @@ export const recordWebhook = internalMutation({
           )
           .first()
       : null;
+
     const now = Date.now();
 
     await ctx.db.insert("webhookDeliveries", {
@@ -474,7 +472,7 @@ export const recordWebhook = internalMutation({
 });
 
 async function enqueueEmail(
-  ctx: any,
+  ctx: MutationCtx,
   args: ConvexEmailSendArgs,
   preloadedConfig?: ConvexEmailConfig,
   ownerId?: string,
@@ -485,23 +483,24 @@ async function enqueueEmail(
     const existing = ownerId
       ? await ctx.db
           .query("emails")
-          .withIndex("by_ownerId_and_idempotencyKey", (q: any) =>
+          .withIndex("by_ownerId_and_idempotencyKey", (q) =>
             q.eq("ownerId", ownerId).eq("idempotencyKey", idempotencyKey),
           )
           .first()
       : await ctx.db
           .query("emails")
-          .withIndex("by_idempotencyKey", (q: any) => q.eq("idempotencyKey", idempotencyKey))
+          .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
           .first();
 
     if (existing) {
-      return existing._id as string;
+      return existing._id;
     }
   }
 
   const config = preloadedConfig ?? (await readConfig(ctx));
   const now = Date.now();
   const message = applyConfigToMessage(args, config);
+
   const emailId = await ctx.db.insert("emails", {
     status: "queued",
     message,
@@ -536,18 +535,19 @@ async function enqueueEmail(
   });
   await ctx.scheduler.runAfter(0, processEmailRef, { emailId });
 
-  return emailId as string;
+  return emailId;
 }
 
-async function readConfig(ctx: any): Promise<ConvexEmailConfig> {
+async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
   const config = await getConfigDoc(ctx);
+
   return config ?? {};
 }
 
-async function getConfigDoc(ctx: any) {
+async function getConfigDoc(ctx: QueryCtx) {
   return await ctx.db
     .query("config")
-    .withIndex("by_key", (q: any) => q.eq("key", configKey))
+    .withIndex("by_key", (q) => q.eq("key", configKey))
     .first();
 }
 
@@ -602,8 +602,8 @@ function applyConfigToMessage(args: ConvexEmailSendArgs, config: ConvexEmailConf
 }
 
 async function markEmailFailedOrRetry(
-  ctx: any,
-  email: any,
+  ctx: MutationCtx,
+  email: Doc<"emails">,
   error: string,
   options: {
     immediate?: boolean;
@@ -611,16 +611,18 @@ async function markEmailFailedOrRetry(
     providerFailure?: ConvexEmailProviderFailure;
   } = {},
 ) {
-  if (!email || email.status === "sent" || email.status === "canceled") {
+  if (email.status === "sent" || email.status === "canceled") {
     return;
   }
 
   const now = Date.now();
+  const providerFailure = options.providerFailure;
 
   if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate
       ? 0
       : Math.min(email.retryBaseMs * 2 ** Math.max(email.attemptCount - 1, 0), 60_000);
+
     const nextAttemptAt = now + delayMs;
 
     await ctx.db.patch(email._id, {
@@ -629,16 +631,18 @@ async function markEmailFailedOrRetry(
       lastError: error,
       updatedAt: now,
     });
+    const payload: RetryScheduledPayload = { delayMs, nextAttemptAt };
+
+    if (providerFailure) {
+      payload.providerFailure = providerFailure;
+    }
+
     await insertEvent(ctx, {
       emailId: email._id,
       type: "retry_scheduled",
       attempt: email.attemptCount,
       error,
-      payload: {
-        delayMs,
-        nextAttemptAt,
-        ...(options.providerFailure ? { providerFailure: options.providerFailure } : {}),
-      },
+      payload,
     });
 
     if (options.immediate) {
@@ -653,29 +657,31 @@ async function markEmailFailedOrRetry(
   await ctx.db.patch(email._id, {
     status: "failed",
     lastError: error,
-    ...(options.providerFailure
-      ? {
-          providerFailure: options.providerFailure,
-          providerMessageId: options.providerFailure.requestId,
-        }
-      : {}),
     updatedAt: now,
     terminalAt: now,
   });
+
+  if (providerFailure) {
+    await ctx.db.patch(email._id, {
+      providerFailure,
+      providerMessageId: providerFailure.requestId,
+    });
+  }
+
   await insertEvent(ctx, {
     emailId: email._id,
     type: "failed",
-    adapter: options.providerFailure?.adapter,
+    adapter: providerFailure?.adapter,
     attempt: email.attemptCount,
-    providerMessageId: options.providerFailure?.requestId,
+    providerMessageId: providerFailure?.requestId,
     error,
-    payload: options.providerFailure ? { providerFailure: options.providerFailure } : undefined,
+    payload: providerFailure ? { providerFailure } : undefined,
   });
 }
 
 async function applyDeliveryStatus(
-  ctx: any,
-  email: { _id: Id<"emails">; deliveryStatus?: string },
+  ctx: MutationCtx,
+  email: Doc<"emails">,
   event: string | undefined,
   now: number,
 ) {
@@ -707,7 +713,7 @@ async function applyDeliveryStatus(
   }
 }
 
-async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) {
+async function cleanupExpiredEmailRecords(ctx: MutationCtx, now: number, limit: number) {
   const config = await readConfig(ctx);
 
   if (!config.cleanupAfterDays || config.cleanupAfterDays <= 0) {
@@ -715,13 +721,15 @@ async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) 
   }
 
   const cutoff = now - config.cleanupAfterDays * 24 * 60 * 60 * 1_000;
+
   const expiredCandidates = await ctx.db
     .query("emails")
-    .withIndex("by_terminalAt", (q: any) => q.gt("terminalAt", 0).lt("terminalAt", cutoff))
+    .withIndex("by_terminalAt", (q) => q.gt("terminalAt", 0).lt("terminalAt", cutoff))
     .take(limit);
+
   const expired = expiredCandidates.filter(
-    (email: any) =>
-      typeof email.terminalAt === "number" &&
+    (email) =>
+      email.terminalAt !== undefined &&
       email.terminalAt < cutoff &&
       (email.status === "sent" || email.status === "failed" || email.status === "canceled"),
   );
@@ -729,54 +737,47 @@ async function cleanupExpiredEmailRecords(ctx: any, now: number, limit: number) 
   for (const email of expired) {
     const events = await ctx.db
       .query("emailEvents")
-      .withIndex("by_emailId_and_createdAt", (q: any) => q.eq("emailId", email._id))
+      .withIndex("by_emailId_and_createdAt", (q) => q.eq("emailId", email._id))
       .take(1_000);
+
     const deliveries = await ctx.db
       .query("webhookDeliveries")
-      .withIndex("by_emailId", (q: any) => q.eq("emailId", email._id))
+      .withIndex("by_emailId", (q) => q.eq("emailId", email._id))
       .take(1_000);
 
     for (const event of events) {
       await ctx.db.delete(event._id);
     }
+
     for (const delivery of deliveries) {
       await ctx.db.delete(delivery._id);
     }
+
     await ctx.db.delete(email._id);
   }
 
   return expired.length;
 }
 
-async function insertEvent(
-  ctx: any,
-  event: {
-    emailId: Id<"emails">;
-    type:
-      | "queued"
-      | "processing"
-      | "provider_attempt"
-      | "sent"
-      | "retry_scheduled"
-      | "failed"
-      | "canceled"
-      | "webhook";
-    adapter?: string;
-    attempt?: number;
-    providerMessageId?: string;
-    payload?: unknown;
-    error?: string;
-    createdAt?: number;
-  },
-) {
+type RetryScheduledPayload = {
+  delayMs: number;
+  nextAttemptAt: number;
+  providerFailure?: ConvexEmailProviderFailure;
+};
+
+type NewEmailEvent = Omit<Doc<"emailEvents">, "_id" | "_creationTime" | "createdAt"> & {
+  createdAt?: number;
+};
+
+async function insertEvent(ctx: MutationCtx, event: NewEmailEvent) {
   await ctx.db.insert("emailEvents", {
     ...event,
     createdAt: event.createdAt ?? Date.now(),
   });
 }
 
-async function markEmailTerminalFailed(ctx: any, email: any, error: string) {
-  if (!email || email.status === "sent" || email.status === "canceled") {
+async function markEmailTerminalFailed(ctx: MutationCtx, email: Doc<"emails">, error: string) {
+  if (email.status === "sent" || email.status === "canceled") {
     return;
   }
 

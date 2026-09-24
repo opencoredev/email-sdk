@@ -208,26 +208,51 @@ Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and funct
 
 ## Webhooks
 
-Register webhook routes from `convex/http.ts`. Verify signatures or shared secrets in the app-mounted route before forwarding to the component.
+Register webhook routes from `convex/http.ts`. `registerRoutes()` requires a `verify` function and throws without one. Each provider route runs `verify` against the raw request before anything reaches the component, and a failed check returns `401`.
 
 ```ts
 import { httpRouter } from "convex/server";
+import {
+  mailgunWebhookVerifier,
+  postmarkBasicAuthVerifier,
+  resendWebhookVerifier,
+  verifyByProvider,
+} from "@opencoredev/convex-email";
 import { email } from "./email";
 
 const http = httpRouter();
 email.registerRoutes(http, {
   pathPrefix: "/email",
-  providers: ["resend"],
-  verify: ({ headers }) => {
-    return headers["x-webhook-secret"] === process.env.EMAIL_WEBHOOK_SECRET;
-  },
+  providers: ["resend", "mailgun", "postmark"],
+  verify: verifyByProvider({
+    resend: resendWebhookVerifier({ secret: process.env.RESEND_WEBHOOK_SECRET! }),
+    mailgun: mailgunWebhookVerifier({ secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY! }),
+    postmark: postmarkBasicAuthVerifier({
+      username: process.env.POSTMARK_WEBHOOK_USER!,
+      password: process.env.POSTMARK_WEBHOOK_PASSWORD!,
+    }),
+  }),
 });
 
 export default http;
 ```
 
-This creates `POST /email/webhooks/resend` and records duplicate deliveries idempotently.
-Omitting `verify` is only suitable for local development; public routes should always verify provider signatures or a shared secret.
+This creates `POST /email/webhooks/resend`, `/email/webhooks/mailgun`, and `/email/webhooks/postmark`, and records duplicate deliveries idempotently.
+
+The built-in verifiers use `@opencoredev/email-sdk/webhooks`:
+
+- `resendWebhookVerifier({ secret, toleranceSeconds? })` checks the Svix signature Resend sends.
+- `mailgunWebhookVerifier({ secret, toleranceSeconds?, signatureField? })` checks Mailgun's HMAC signature with your webhook signing key.
+- `postmarkBasicAuthVerifier({ username, password })` checks the HTTP basic auth credentials you configure on the Postmark webhook URL.
+- `verifyByProvider({ ... })` dispatches to one verifier per provider and rejects providers it has no verifier for.
+
+Each helper rejects requests for a different provider, so a Resend verifier never accepts a request on the Mailgun route. For any other provider, pass your own function. It receives `{ provider, request, body, headers }` and returns a boolean or a promise of one:
+
+```ts
+verify: ({ headers }) => headers["x-webhook-secret"] === process.env.EMAIL_WEBHOOK_SECRET,
+```
+
+For local development only, `unsafeAllowUnverifiedWebhooks: true` registers the routes without verification and logs a warning. Never deploy that configuration.
 
 When a webhook matches a stored email by provider message id, the component records a `webhook` event and normalizes the provider's event name onto the email's `deliveryStatus`: delivered, bounced, or complained. Only permanent failures count as `bounced`: Mailgun `failed` events map to `bounced` only when `severity` is `"permanent"`, and Postmark `Bounce` records only when `Type` is a permanent class (`HardBounce`, `BadEmailAddress`, `ManuallyDeactivated`). Soft/temporary failures stay in the event history without touching `deliveryStatus`, because the provider retries them and the message may still deliver.
 
@@ -309,4 +334,4 @@ Convex Email Ops is not a campaign builder, contact database, template editor, h
 
 `sendBatch` accepts at most 100 messages per mutation. Split larger batches in your app so Convex mutation limits stay predictable.
 
-URL attachments are fetched server-side only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected; fetch the content in your app first if you need a custom attachment source.
+URL attachments are fetched server-side only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected. The component resolves the hostname before every request, refuses the fetch if any resolved address is private, loopback, link-local, or otherwise non-public, and connects only to the addresses it checked, so DNS rebinding cannot swap in an internal target. Redirects are followed manually, at most 3 hops, and each hop goes through the same checks. Downloads are capped at 10 MiB. Fetch the content in your app first if you need a custom attachment source.
