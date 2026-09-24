@@ -1,6 +1,7 @@
 import { jsonSchema, tool } from "ai";
 import type { Tool } from "ai";
 
+import { isFunction, isObjectLike, isString } from "./internal/decode.js";
 import type { EmailAddress, EmailClient } from "./types.js";
 
 type SendEmailBody = { text: string; html?: string } | { text?: string; html: string };
@@ -85,11 +86,13 @@ export function createEmailTools({
           },
         );
 
-        return {
-          status: "sent",
-          adapter: result.adapter,
-          ...(result.id === undefined ? {} : { id: result.id }),
-        } satisfies SendEmailOutput;
+        const output: SendEmailOutput = { status: "sent", adapter: result.adapter };
+
+        if (result.id !== undefined) {
+          output.id = result.id;
+        }
+
+        return output;
       } catch {
         abortSignal?.throwIfAborted();
         throw new Error("Email could not be sent.");
@@ -104,16 +107,19 @@ export function createEmailTools({
 }
 
 function isSendEmailInput(value: unknown): value is SendEmailInput {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  if (!isObjectLike(value) || isFunction(value) || Array.isArray(value)) return false;
 
   if (Object.keys(value).some((key) => !sendEmailInputKeys.has(key))) return false;
 
   if (!("to" in value) || !isRecipientInput(value.to)) return false;
+
   if (!("subject" in value) || !isNonEmptyString(value.subject)) return false;
 
   const text = "text" in value ? value.text : undefined;
   const html = "html" in value ? value.html : undefined;
+
   if (text !== undefined && !isNonEmptyString(text)) return false;
+
   if (html !== undefined && !isNonEmptyString(html)) return false;
 
   return text !== undefined || html !== undefined;
@@ -127,5 +133,5 @@ function isRecipientInput(value: unknown): value is string | string[] {
 }
 
 function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
+  return isString(value) && value.length > 0;
 }

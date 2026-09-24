@@ -1,4 +1,5 @@
 import { firstString, jsonProvider } from "./http.js";
+import { jsonField } from "./internal/decode.js";
 import {
   apiAddress,
   base64Attachments,
@@ -61,8 +62,7 @@ export function sparkpost(
       };
     },
     parseResponse(body) {
-      const record = body as Record<string, unknown>;
-      const results = record.results as Record<string, unknown> | undefined;
+      const results = jsonField(body, "results");
 
       return {
         adapter: "sparkpost",

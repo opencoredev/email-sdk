@@ -2,15 +2,20 @@ import { mkdir, readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 
 const appRoot = new URL("..", import.meta.url).pathname;
+
 const docsRoot = join(appRoot, "content/docs/ui");
+
 const outputRoot = join(appRoot, "public/r");
+
 const check = process.argv.includes("--check");
+
 const categories = ["account", "product", "commerce"];
 
 const pages = (
   await Promise.all(
     categories.map(async (category) => {
       const directory = join(docsRoot, category);
+
       return (await readdir(directory))
         .filter((file) => file.endsWith(".mdx"))
         .map((file) => join(directory, file));
@@ -21,6 +26,7 @@ const pages = (
 await mkdir(outputRoot, { recursive: true });
 
 const expectedFiles = new Set<string>();
+
 let failed = false;
 
 for (const pagePath of pages) {
@@ -37,6 +43,7 @@ for (const pagePath of pages) {
   const [, target, content] = code;
   const registryTarget = target.replace(/^src\//, "");
   const outputPath = join(outputRoot, `${slug}.json`);
+
   const registryItem = {
     $schema: "https://ui.shadcn.com/schema/registry-item.json",
     name: slug,
@@ -58,11 +65,13 @@ for (const pagePath of pages) {
       },
     ],
   };
+
   const expected = `${JSON.stringify(registryItem, null, 2)}\n`;
   expectedFiles.add(`${slug}.json`);
 
   if (check) {
     const current = await Bun.file(outputPath).text().catch(() => "");
+
     if (current !== expected) {
       console.error(`[email-registry] stale: ${relative(appRoot, outputPath)}`);
       failed = true;
@@ -90,6 +99,7 @@ if (check) {
 
 function frontmatterValue(source: string, key: string) {
   const match = source.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+
   if (!match) {
     throw new Error(`Missing ${key} frontmatter`);
   }

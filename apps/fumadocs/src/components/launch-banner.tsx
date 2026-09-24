@@ -9,7 +9,8 @@ const promo = { project: "social-sdk", placement: "banner" };
 
 // Fumadocs owns the close button, so catch its click as it bubbles.
 function onBannerClick(event: MouseEvent<HTMLDivElement>) {
-  if ((event.target as Element).closest("button")) posthog.capture("cross_promo_dismissed", promo);
+  if (event.target instanceof Element && event.target.closest("button"))
+    posthog.capture("cross_promo_dismissed", promo);
 }
 
 export function LaunchBanner() {

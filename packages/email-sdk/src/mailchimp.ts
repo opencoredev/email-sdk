@@ -54,9 +54,7 @@ export function mailchimp(
       };
     },
     parseResponse(body) {
-      const first = Array.isArray(body)
-        ? (body[0] as Record<string, unknown> | undefined)
-        : undefined;
+      const first = Array.isArray(body) ? body[0] : undefined;
 
       return {
         adapter: "mailchimp",

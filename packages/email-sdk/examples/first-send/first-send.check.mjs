@@ -9,6 +9,7 @@ process.env.EMAIL_SDK_TELEMETRY = "0";
 const throwingFetch = () => {
   throw new Error("unexpected network request");
 };
+
 const noNetwork = { baseUrl: "http://127.0.0.1:9", fetch: throwingFetch };
 
 test("default command validates without credentials and never calls transport", async () => {
@@ -63,6 +64,7 @@ test("CLI refusal exits 1 without leaking credentials", () => {
     env: { ...process.env, EMAIL_SDK_TELEMETRY: "0", RESEND_API_KEY: "re_private_do_not_log", EMAIL_FROM: "", EMAIL_TO: "" },
     encoding: "utf8",
   });
+
   assert.equal(result.status, 1);
   assert.match(result.stderr, /EMAIL_FROM and EMAIL_TO/);
   assert.ok(!`${result.stdout}${result.stderr}`.includes("re_private_do_not_log"));
@@ -72,6 +74,7 @@ test("fixture scope rejects remote origins and real credentials", async () => {
   for (const baseUrl of ["https://api.resend.com", "http://localhost:1234", "http://127.0.0.1:1234/path", "http://user:pass@127.0.0.1:1234"]) {
     await assert.rejects(run({ env: {}, fixture: { baseUrl } }), /Fixtures require/);
   }
+
   await assert.rejects(
     run({ env: { RESEND_API_KEY: "re_do_not_forward" }, fixture: { baseUrl: "http://127.0.0.1:1234" } }),
     /reject real credentials/,
@@ -80,18 +83,22 @@ test("fixture scope rejects remote origins and real credentials", async () => {
 
 test("explicit send posts once to the loopback fixture and returns its receipt", async () => {
   let requests = 0;
+
   const server = createServer(async (request, response) => {
     requests++;
     assert.equal(request.url, "/emails");
     assert.equal(request.method, "POST");
     assert.equal(request.headers.authorization, "Bearer re_fixture_only");
     let body = "";
+
     for await (const chunk of request) body += chunk;
     assert.equal(JSON.parse(body).subject, "Your first Email SDK message");
     response.writeHead(200, { "Content-Type": "application/json" });
     response.end(JSON.stringify({ id: "fixture-id" }));
   });
+
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
+
   try {
     const fixture = { baseUrl: `http://127.0.0.1:${server.address().port}` };
     const env = { EMAIL_FROM: "hello@example.com", EMAIL_TO: "test@example.com" };

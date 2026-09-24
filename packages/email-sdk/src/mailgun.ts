@@ -1,7 +1,9 @@
 import { EmailAdapterError } from "./errors.js";
+import { jsonString } from "./internal/decode.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
+  emailAddressOf,
   builtInAdapterDefinition,
   arrayify,
   assertMaxItems,
@@ -33,14 +35,19 @@ export function mailgun(
     body.set("subject", message.subject);
 
     for (const to of formatAddresses(message.to)) body.append("to", to);
+
     for (const cc of formatAddresses(message.cc)) body.append("cc", cc);
+
     for (const bcc of formatAddresses(message.bcc)) body.append("bcc", bcc);
+
     for (const replyTo of formatAddresses(message.replyTo)) body.append("h:Reply-To", replyTo);
+
     for (const header of headersToArray(message.headers) ?? []) {
       body.append(`h:${header.name}`, header.value);
     }
 
     if (message.text) body.set("text", message.text);
+
     if (message.html) body.set("html", message.html);
 
     // Mailgun batch sending: %recipient.key% tokens in the body are substituted per
@@ -60,13 +67,16 @@ export function mailgun(
     }
 
     const deliveryTime = sendAtRfc2822(message);
+
     if (deliveryTime) body.set("o:deliverytime", deliveryTime);
 
     for (const attachment of message.attachments ?? []) {
       const bytes = await attachmentToBytes(attachment);
+
       const blob = new Blob([bytes], {
         type: attachment.contentType ?? "application/octet-stream",
       });
+
       body.append(
         attachment.disposition === "inline" ? "inline" : "attachment",
         blob,
@@ -75,6 +85,7 @@ export function mailgun(
     }
 
     const fetcher = options.fetch ?? fetch;
+
     const response = await fetcher(`${baseUrl}/v3/${options.domain}/messages`, {
       method: "POST",
       signal: context.signal,
@@ -94,8 +105,7 @@ export function mailgun(
       });
     }
 
-    const record = responseBody as Record<string, unknown>;
-    const id = typeof record.id === "string" ? record.id : undefined;
+    const id = jsonString(responseBody, "id");
 
     return {
       adapter: "mailgun",
@@ -111,9 +121,12 @@ export function mailgun(
     send,
     async sendPersonalized(input, context) {
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddress(recipient.to), recipient.variables]),
+        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
       );
+
       const result = await send(
+        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
+        // them. recipientVariables is the legacy extension read by the Mailgun form builder.
         {
           ...input.message,
           to: input.recipients.map((recipient) => recipient.to),
@@ -121,17 +134,14 @@ export function mailgun(
         } as EmailMessage,
         context,
       );
+
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddress(recipient.to)),
+        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },
   };
 }
 
-function emailAddress(address: import("./types.js").EmailAddress) {
-  return typeof address === "string"
-    ? (address.match(/<([^>]+)>/)?.[1] ?? address).trim()
-    : address.email;
-}
+

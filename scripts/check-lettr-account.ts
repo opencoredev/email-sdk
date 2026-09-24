@@ -5,9 +5,11 @@ import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { lettr } from "../packages/email-sdk/src/lettr.js";
 
 config({ path: ".env.local" });
+
 config();
 
 const baseUrl = process.env.LETTR_BASE_URL ?? "https://app.lettr.com/api";
+
 const apiKey = process.env.LETTR_API_KEY;
 
 if (!apiKey) {
@@ -15,7 +17,9 @@ if (!apiKey) {
 }
 
 const result = await runDoctor({ adapter: "lettr", credential: apiKey, live: true, baseUrl });
+
 console.log(JSON.stringify(result, null, 2));
+
 if (!result.ok) process.exit(1);
 
 if (process.env.LETTR_LIVE_SEND !== "true") {
@@ -23,7 +27,9 @@ if (process.env.LETTR_LIVE_SEND !== "true") {
 }
 
 const from = requiredEnv("LETTR_TEST_FROM");
+
 const to = requiredEnv("LETTR_TEST_TO");
+
 const email = createEmailClient({
   adapters: [
     lettr({

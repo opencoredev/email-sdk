@@ -1,30 +1,12 @@
 import { ExternalLink, PackageCheck, ShieldCheck, ShieldQuestion } from "@/components/icon";
 
+import { z } from "zod";
+
+import { communityEntrySchema, type CommunityEntry } from "@/lib/community-registry";
+
 import communityPlugins from "../../content/community/plugins.json";
 
-type CommunityEntry = {
-  name: string;
-  package: string;
-  kind: "adapter" | "plugin" | "hybrid";
-  status: "community" | "verified" | "official";
-  description: string;
-  href: string;
-  repo: string;
-  maintainer: string;
-  pluginId?: string;
-  adapter?: string;
-  verifiedVersion?: string;
-  verification?: {
-    reviewedAt: string;
-    reviewedBy: string;
-    provenance: boolean;
-    noInstallScripts: boolean;
-    runtimeDependencies: number;
-    notes?: string;
-  };
-};
-
-const entries = communityPlugins as CommunityEntry[];
+const entries = z.array(communityEntrySchema).parse(communityPlugins);
 
 export function CommunityPluginRegistry() {
   if (entries.length === 0) {

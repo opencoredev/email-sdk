@@ -9,20 +9,17 @@ Provider webhooks are public HTTP endpoints. The application owns the URL and si
 
 ```ts title="convex/http.ts"
 import { httpRouter } from "convex/server";
+import { resendWebhookVerifier, verifyByProvider } from "@opencoredev/convex-email";
 import { email } from "./email";
-import { verifyResendWebhook } from "@opencoredev/email-sdk/webhooks";
 
 const http = httpRouter();
 
 email.registerRoutes(http, {
   pathPrefix: "/email",
   providers: ["resend"],
-  verify: async ({ body, headers }) =>
-    verifyResendWebhook({
-      body,
-      headers,
-      secret: process.env.RESEND_WEBHOOK_SECRET!,
-    }),
+  verify: verifyByProvider({
+    resend: resendWebhookVerifier({ secret: process.env.RESEND_WEBHOOK_SECRET! }),
+  }),
 });
 
 export default http;
@@ -30,8 +27,23 @@ export default http;
 
 This registers `POST /email/webhooks/resend` on your deployment's `.convex.site` domain.
 
-<Callout type="warn" title="Never omit verification in production">
-`verify` receives the provider name, original `Request`, raw body, and normalized headers. Verify the raw request with the provider's official algorithm before the component sees it. A shared header comparison is acceptable for a private development tunnel, not for an internet-facing production endpoint.
+`verify` is required. `registerRoutes()` throws when it is missing, and a request that fails verification gets a `401` before the component sees it.
+
+## Verifiers
+
+The component ships verifier helpers built on the SDK's [webhook verification](/docs/reference/webhooks):
+
+| Helper | Checks |
+| --- | --- |
+| `resendWebhookVerifier({ secret, toleranceSeconds? })` | Resend (Svix) signature and timestamp |
+| `mailgunWebhookVerifier({ secret, toleranceSeconds?, signatureField? })` | Mailgun HMAC over timestamp and token |
+| `postmarkBasicAuthVerifier({ username, password })` | Basic auth credentials you set on the Postmark webhook URL |
+| `verifyByProvider({ ... })` | Dispatches by provider name and rejects providers without a verifier |
+
+Each helper rejects requests for a different provider. You can also pass your own function: `verify` receives the provider name, original `Request`, raw body, and normalized headers, and returns `true` to accept.
+
+<Callout type="warn" title="Unverified routes are for local development only">
+`unsafeAllowUnverifiedWebhooks: true` registers routes without verification and logs a warning. Anyone who can reach the URL can then forge delivery events. Never deploy it.
 </Callout>
 
 ## What the component stores
@@ -54,9 +66,7 @@ Bounces and complaints remain sticky against a late delivered event. When both a
 
 The component reuses the SDK's [webhook normalizer](/docs/reference/webhooks) for Resend, Postmark, and Mailgun JSON objects. Invalid JSON, `null`, arrays, and primitive payloads from these providers are rejected. Other providers retain the component's generic compatibility path when they expose a provider message id and event name; test their exact payload shape before relying on normalized `deliveryStatus`.
 
-Normalization support is not verification support. The SDK exports Resend and Mailgun verifiers, but no Postmark verifier. Mailgun authenticates only timestamp plus token, not the event body; use HTTPS and persistent token replay protection. See the [verification reference](/docs/reference/webhooks) for key rotation, timestamp tolerance, and Mailgun's body-integrity limitation.
-
-The component's `verify` callback remains optional for compatibility; no authentication is performed when it is omitted. Always configure it on public routes. Return `false` to reject a request before it reaches the component.
+Normalization support is not verification support. The SDK exports Resend and Mailgun signature verifiers. Postmark does not sign webhooks, so protect its URL with Basic auth credentials and `postmarkBasicAuthVerifier`. Mailgun authenticates only timestamp plus token, not the event body; use HTTPS and persistent token replay protection. See the [verification reference](/docs/reference/webhooks) for key rotation, timestamp tolerance, and Mailgun's body-integrity limitation.
 
 ## Test locally
 

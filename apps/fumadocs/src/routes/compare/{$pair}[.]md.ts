@@ -11,6 +11,7 @@ export const Route = createFileRoute("/compare/{$pair}.md")({
     handlers: {
       GET({ params }) {
         const pair = getComparePair(params.pair ?? "");
+
         if (!pair) {
           return new Response("Not found", { status: 404 });
         }

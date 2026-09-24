@@ -13,6 +13,7 @@ class FakeNode {
 
     child.parentNode = this;
     this.children.push(child);
+
     return child;
   }
 
@@ -26,6 +27,7 @@ class FakeNode {
 
     this.children = this.children.filter((item) => item !== child);
     child.parentNode = null;
+
     return child;
   }
 
@@ -48,6 +50,7 @@ class FakeNode {
     const referenceIndex = this.children.indexOf(referenceNode);
     newNode.parentNode = this;
     this.children.splice(referenceIndex, 0, newNode);
+
     return newNode;
   }
 }

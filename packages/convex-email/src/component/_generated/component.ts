@@ -1,3 +1,8 @@
-import type { AnyApi } from "convex/server";
+import type { ConvexEmailComponentApi } from "../../shared/componentApi.js";
 
-export type ComponentApi = AnyApi;
+/**
+ * Committed stub for the component's app-facing API. Its types derive from the component's own
+ * validators in `shared/componentApi.ts`.
+ */
+export type ComponentApi<Name extends string | undefined = string | undefined> =
+  ConvexEmailComponentApi<Name>;

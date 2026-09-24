@@ -3,7 +3,6 @@
 import {
   createEmailClient,
   type EmailAdapter,
-  type EmailAttachment,
   type EmailHeader,
   type EmailMessage,
 } from "@opencoredev/email-sdk";
@@ -23,7 +22,10 @@ import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
 import { plunk } from "@opencoredev/email-sdk/plunk";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
-import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+import {
+  observabilityPlugin,
+  type EmailObservabilityEvent,
+} from "@opencoredev/email-sdk/plugins/observability";
 import { postmark } from "@opencoredev/email-sdk/postmark";
 import { primitive } from "@opencoredev/email-sdk/primitive";
 import { resend } from "@opencoredev/email-sdk/resend";
@@ -35,28 +37,29 @@ import { smtp } from "@opencoredev/email-sdk/smtp";
 import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
 import { unosend } from "@opencoredev/email-sdk/unosend";
 import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
+import { z } from "zod";
 
 import { env, type Env } from "./_generated/server.js";
+import { hydrateAttachment, type AttachmentFetchOptions } from "./attachments.js";
 import {
   adapterFields,
-  CONVEX_EMAIL_ADAPTERS,
+  CONVEX_EMAIL_ADAPTER_KINDS,
   isDeclaredEnvVar,
   type ConvexAdapterField,
-  type ConvexAdapterFields,
   type ConvexEmailEnvVar,
 } from "../shared/adapters.js";
 import type {
   ConvexEmailAdapterConfig,
   ConvexEmailAdapterKind,
-  ConvexEmailAttachment,
   ConvexEmailMessage,
+  ConvexEmailMetadataValue,
 } from "../shared/types.js";
 
 export type BuildEmailClientOptions = {
   adapters: ConvexEmailAdapterConfig[];
   defaultAdapter?: string;
   fallbackAdapters?: string[];
-  log?: (event: unknown) => void;
+  log?: (event: EmailObservabilityEvent) => void;
   recordAttempt?: (event: { adapter: string; attempt: number }) => void | Promise<void>;
 };
 
@@ -92,7 +95,11 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
   });
 }
 
-type ResolvedAdapterOptions = Record<string, unknown>;
+/** Any value an adapter config field can hold, inline or parsed from the environment. */
+type AdapterOptionValue = string | number | boolean | Readonly<Record<string, ConvexEmailMetadataValue>>;
+
+/** Email SDK adapter options keyed by registry field name. */
+type ResolvedAdapterOptions = Record<string, AdapterOptionValue>;
 
 type AdapterFactory = (
   options: ResolvedAdapterOptions,
@@ -104,8 +111,20 @@ type AdapterFactory = (
  * is every adapter that does not need option reshaping.
  */
 function fromOptions<TOptions>(create: (options: TOptions) => EmailAdapter): AdapterFactory {
+  // SAFETY: resolveAdapterOptions only emits keys declared for this adapter in
+  // CONVEX_EMAIL_ADAPTERS, typed by each field's `type`, and throws when a `required` field is
+  // missing. The registry mirrors each Email SDK adapter's option names and value types, which
+  // adapters.test.ts exercises by constructing every adapter from resolved options.
   return (options) => create(options as TOptions);
 }
+
+const smtpOptions = z.object({
+  host: z.string(),
+  port: z.number().optional(),
+  secure: z.boolean().optional(),
+  user: z.string().optional(),
+  pass: z.string().optional(),
+});
 
 /**
  * The only place an adapter constructor is named. Field names, defaults, and the wire format all
@@ -135,13 +154,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   ses: fromOptions(ses),
   // SMTP is the one reshaped adapter: credentials resolve as flat fields but nest under `auth`.
   smtp: (options, config) => {
-    const resolved = options as {
-      host: string;
-      port?: number;
-      secure?: boolean;
-      user?: string;
-      pass?: string;
-    };
+    const resolved = smtpOptions.parse(options);
 
     return smtp({
       name: config.name,
@@ -172,27 +185,29 @@ function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
  * Turns stored adapter config into Email SDK options: inline values win, otherwise the field is
  * read from the component environment under its configured or default variable name.
  */
-export function resolveAdapterOptions(config: ConvexEmailAdapterConfig): ResolvedAdapterOptions {
+export function resolveAdapterOptions(config: ConvexEmailAdapterConfig) {
   const fields = adapterFields(config.kind);
 
   if (!fields) {
     throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
   }
 
-  const values = config as unknown as Record<string, unknown>;
-  const options: ResolvedAdapterOptions = {};
+  const values = new Map<string, AdapterConfigValue>(Object.entries(config));
+  const options = new Map<string, AdapterOptionValue>();
 
   for (const [key, field] of Object.entries(fields)) {
-    const inline = field.inline ? values[key] : undefined;
+    const inline = field.inline ? values.get(key) : undefined;
+
     if (inline !== undefined) {
-      options[key] = inline;
+      options.set(key, inline);
       continue;
     }
 
     const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
     const fromEnv = name ? readEnvField(name, field) : undefined;
+
     if (fromEnv !== undefined) {
-      options[key] = fromEnv;
+      options.set(key, fromEnv);
       continue;
     }
 
@@ -205,13 +220,23 @@ export function resolveAdapterOptions(config: ConvexEmailAdapterConfig): Resolve
     }
   }
 
-  return options;
+  return Object.fromEntries(options);
 }
 
-function envNameFor(kind: string, values: Record<string, unknown>, key: string, fallback: string) {
-  const override = values[`${key}Env`];
+/** Every value type a stored adapter config can carry, across all adapter kinds. */
+type AdapterConfigValue = AdapterOptionValue | undefined;
 
-  if (typeof override !== "string" || !override) {
+const envOverride = z.string().min(1).optional().catch(undefined);
+
+function envNameFor(
+  kind: string,
+  values: ReadonlyMap<string, AdapterConfigValue>,
+  key: string,
+  fallback: string,
+) {
+  const override = envOverride.parse(values.get(`${key}Env`));
+
+  if (override === undefined) {
     return fallback;
   }
 
@@ -231,8 +256,8 @@ function envNameFor(kind: string, values: Record<string, unknown>, key: string, 
     );
   }
 
-  for (const [ownerKind, fields] of Object.entries(CONVEX_EMAIL_ADAPTERS)) {
-    for (const [ownerKey, field] of Object.entries(fields as ConvexAdapterFields)) {
+  for (const ownerKind of CONVEX_EMAIL_ADAPTER_KINDS) {
+    for (const [ownerKey, field] of Object.entries(adapterFields(ownerKind) ?? {})) {
       if (field.env === override && field.restrictEnvToField &&
         (kind !== ownerKind || key !== ownerKey)) {
         throw new Error(`Convex environment variable ${override} is restricted to ${ownerKind}.${ownerKey}.`);
@@ -245,6 +270,7 @@ function envNameFor(kind: string, values: Record<string, unknown>, key: string, 
 
 function readEnvField(name: string, field: ConvexAdapterField) {
   const value = componentEnv[name];
+
   if (!value) {
     return undefined;
   }
@@ -261,10 +287,16 @@ function readEnvField(name: string, field: ConvexAdapterField) {
   }
 }
 
-export async function hydrateAttachments(message: ConvexEmailMessage): Promise<EmailMessage> {
+export async function hydrateAttachments(
+  message: ConvexEmailMessage,
+  options: AttachmentFetchOptions = {},
+): Promise<EmailMessage> {
   const attachments = message.attachments
-    ? await Promise.all(message.attachments.map(hydrateAttachment))
+    ? await Promise.all(
+        message.attachments.map((attachment) => hydrateAttachment(attachment, options)),
+      )
     : undefined;
+
   const headers = normalizeHeaders(message.headers);
   const { idempotencyKey: _, ...envelope } = message;
   const hydrated = { ...envelope, headers, attachments };
@@ -272,126 +304,12 @@ export async function hydrateAttachments(message: ConvexEmailMessage): Promise<E
   if (message.html !== undefined) {
     return { ...hydrated, html: message.html };
   }
+
   if (message.text !== undefined) {
     return { ...hydrated, text: message.text };
   }
 
   throw new Error("Email message requires `html` or `text` content.");
-}
-
-async function hydrateAttachment(attachment: ConvexEmailAttachment): Promise<EmailAttachment> {
-  const { url, ...base } = attachment;
-
-  if (attachment.content !== undefined) {
-    return { ...base, content: attachment.content };
-  }
-  if (!url) {
-    throw new Error(`Attachment "${attachment.filename}" requires \`content\` or \`url\`.`);
-  }
-
-  return { ...base, content: await fetchAttachment(url, attachment.filename) };
-}
-
-const MAX_ATTACHMENT_REDIRECTS = 3;
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const ATTACHMENT_FETCH_TIMEOUT_MS = 10_000;
-
-async function fetchAttachment(value: string, filename: string): Promise<ArrayBuffer> {
-  let url = safeAttachmentUrl(value, filename);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ATTACHMENT_FETCH_TIMEOUT_MS);
-
-  try {
-    for (let redirects = 0; redirects <= MAX_ATTACHMENT_REDIRECTS; redirects += 1) {
-      const response = await fetch(url, { redirect: "manual", signal: controller.signal });
-
-      if (isRedirect(response.status)) {
-        if (redirects === MAX_ATTACHMENT_REDIRECTS) {
-          throw new Error(`Attachment "${filename}" exceeded the redirect limit.`);
-        }
-
-        const location = response.headers.get("location");
-        if (!location) {
-          throw new Error(`Attachment "${filename}" redirect is missing a location.`);
-        }
-
-        url = safeRedirectTarget(location, url, filename);
-        continue;
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch email attachment "${filename}" from ${value}.`);
-      }
-
-      const content = await readAttachmentBody(response, filename);
-      return content;
-    }
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(`Fetching email attachment "${filename}" timed out.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  throw new Error(`Attachment "${filename}" exceeded the redirect limit.`);
-}
-
-function isRedirect(status: number) {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
-}
-
-function safeRedirectTarget(location: string, base: URL, filename: string) {
-  try {
-    return safeAttachmentUrl(new URL(location, base).toString(), filename);
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error(`Attachment "${filename}" redirect has an invalid URL.`);
-    }
-    throw error;
-  }
-}
-
-async function readAttachmentBody(response: Response, filename: string): Promise<ArrayBuffer> {
-  const contentLength = response.headers.get("content-length");
-  if (contentLength && Number(contentLength) > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`Attachment "${filename}" exceeds the ${MAX_ATTACHMENT_BYTES}-byte size limit.`);
-  }
-
-  if (!response.body) {
-    return new ArrayBuffer(0);
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      size += value.byteLength;
-      if (size > MAX_ATTACHMENT_BYTES) {
-        await reader.cancel();
-        throw new Error(`Attachment "${filename}" exceeds the ${MAX_ATTACHMENT_BYTES}-byte size limit.`);
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const content = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    content.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return content.buffer;
 }
 
 function normalizeHeaders(
@@ -400,47 +318,12 @@ function normalizeHeaders(
   if (!headers) {
     return undefined;
   }
+
   if (Array.isArray(headers)) {
     return headers;
   }
 
   return Object.entries(headers).map(([name, value]) => ({ name, value }));
-}
-
-function safeAttachmentUrl(value: string, filename: string) {
-  let url: URL;
-
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error(`Attachment "${filename}" has an invalid URL.`);
-  }
-
-  if (url.protocol !== "https:") {
-    throw new Error(`Attachment "${filename}" URL must use https.`);
-  }
-  if (url.username || url.password) {
-    throw new Error(`Attachment "${filename}" URL cannot include credentials.`);
-  }
-
-  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-
-  if (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local") ||
-    hostname.endsWith(".internal") ||
-    hostname === "metadata.google.internal" ||
-    isIpAddressLiteral(hostname)
-  ) {
-    throw new Error(`Attachment "${filename}" URL host is not allowed.`);
-  }
-
-  return url;
-}
-
-function isIpAddressLiteral(hostname: string) {
-  return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
 }
 
 function withName<TAdapter extends EmailAdapter>(adapter: TAdapter, name: string | undefined) {
@@ -453,9 +336,11 @@ function withName<TAdapter extends EmailAdapter>(adapter: TAdapter, name: string
 
 function parseNumberEnv(name: string, value: string) {
   const parsed = Number(value);
+
   if (!Number.isFinite(parsed)) {
     throw new Error(`Convex environment variable ${name} must be a number.`);
   }
+
   return parsed;
 }
 
@@ -465,4 +350,5 @@ const componentEnv: Record<string, string | undefined> = env;
 // `Env` type generated from it) covers every credential the adapter registry can read. Adding an
 // adapter without declaring its variables fails the build here instead of at send time.
 type AssertNever<T extends never> = T;
+
 export type DeclaredEnvCoversRegistry = AssertNever<Exclude<ConvexEmailEnvVar, keyof Env>>;

@@ -10,6 +10,7 @@ import { appName, siteUrl } from "@/lib/shared";
 import { providers } from "@/lib/providers";
 
 const pageTitle = `Compare transactional email providers - ${appName}`;
+
 const pageDescription =
   "Side-by-side comparisons of transactional email providers — Resend, Postmark, SendGrid, Mailgun, AWS SES, Brevo, and more — based on the message fields each API actually supports.";
 

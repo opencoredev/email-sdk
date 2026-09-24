@@ -1,7 +1,10 @@
 import nodemailer from "nodemailer";
 import type { SendMailOptions, SentMessageInfo } from "nodemailer";
+import type Mail from "nodemailer/lib/mailer/index.js";
+import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 
 import { EmailAbortError, EmailAdapterError } from "./errors.js";
+import { isStringMember } from "./internal/decode.js";
 import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
@@ -24,7 +27,7 @@ export type SmtpAdapterOptions = {
   defaults?: {
     replyTo?: string;
   };
-  tls?: Record<string, unknown>;
+  tls?: SMTPTransport.Options["tls"];
   requireTLS?: boolean;
   allowInsecureAuth?: boolean;
   name?: string;
@@ -35,6 +38,7 @@ export type SmtpAdapterOptions = {
 export function smtp<const Name extends string = "smtp">(
   options: SmtpAdapterOptions & { name?: Name },
 ): EmailAdapter<Name, { host: string; port: number }> {
+  // SAFETY: Name defaults to "smtp", so the fallback matches Name whenever options.name is absent.
   const name = (options.name ?? "smtp") as Name;
   const port = options.port ?? (options.secure ? 465 : 587);
 
@@ -49,12 +53,9 @@ export function smtp<const Name extends string = "smtp">(
       validateBuiltInAdapter("smtp", message);
 
       let mail: SendMailOptions;
+
       try {
-        mail = (await toNodemailerMessage(
-          message,
-          options.defaults,
-          context.idempotencyKey,
-        )) as SendMailOptions;
+        mail = await toNodemailerMessage(message, options.defaults, context.idempotencyKey);
       } catch (error) {
         throw new EmailAdapterError(
           error instanceof Error ? error.message : "SMTP message preparation failed.",
@@ -78,6 +79,7 @@ export function smtp<const Name extends string = "smtp">(
 
       try {
         const response = await sendMailWithSignal(transport, mail, context.signal);
+
         return {
           adapter: name,
           id: parseQueueIdentifier(response.response) ?? context.idempotencyKey ?? response.messageId,
@@ -99,6 +101,7 @@ export function smtp<const Name extends string = "smtp">(
     },
   };
 }
+
 function parseQueueIdentifier(response: string | undefined) {
   return response?.match(/\bqueued\s+as\s+([^\s]+)/i)?.[1];
 }
@@ -112,19 +115,21 @@ function sendMailWithSignal(
 
   return new Promise<SentMessageInfo>((resolve, reject) => {
     let settled = false;
+
     const onAbort = () => {
       if (settled) return;
       settled = true;
       transport.close();
       reject(new EmailAbortError(signal?.reason));
     };
+
     signal?.addEventListener("abort", onAbort, { once: true });
     transport.sendMail(mail).then(
       (response) => {
         if (settled) return;
         settled = true;
         signal?.removeEventListener("abort", onAbort);
-        resolve(response as SentMessageInfo);
+        resolve(response);
       },
       (error) => {
         if (settled) return;
@@ -140,7 +145,7 @@ async function toNodemailerMessage(
   message: EmailMessage,
   defaults: SmtpAdapterOptions["defaults"],
   idempotencyKey?: string,
-) {
+): Promise<SendMailOptions> {
   const to = formatAddresses(message.to);
   const cc = formatAddresses(message.cc);
   const bcc = formatAddresses(message.bcc);
@@ -165,27 +170,39 @@ async function toNodemailerMessage(
   };
 }
 
-async function toNodemailerAttachment(attachment: EmailAttachment) {
-  let content: string | Buffer | undefined = "content" in attachment
-    ? typeof attachment.content === "string"
-      ? attachment.content
-      : attachment.content instanceof ArrayBuffer
-        ? Buffer.from(new Uint8Array(attachment.content))
-        : attachment.content instanceof Uint8Array
-          ? Buffer.from(attachment.content)
-          : undefined
-    : undefined;
+async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail.Attachment> {
+  const content = "content" in attachment ? await nodemailerContent(attachment.content) : undefined;
 
-  if ("content" in attachment && attachment.content instanceof Blob) {
-    content = Buffer.from(await attachment.content.arrayBuffer());
-  }
-
-  return {
+  const result: Mail.Attachment = {
     filename: attachment.filename,
-    ...(content !== undefined ? { content } : { path: attachment.path }),
     contentType: attachment.contentType,
     cid: attachment.contentId,
     contentDisposition: attachment.disposition,
-    ...(attachment.contentEncoding === "base64" ? { encoding: "base64" as const } : {}),
   };
+
+  if (content === undefined) {
+    result.path = attachment.path;
+  } else {
+    result.content = content;
+  }
+
+  if (attachment.contentEncoding === "base64") {
+    result.encoding = "base64";
+  }
+
+  return result;
+}
+
+async function nodemailerContent(
+  content: EmailAttachment["content"],
+): Promise<string | Buffer | undefined> {
+  if (isStringMember(content)) return content;
+
+  if (content instanceof ArrayBuffer) return Buffer.from(new Uint8Array(content));
+
+  if (content instanceof Uint8Array) return Buffer.from(content);
+
+  if (content instanceof Blob) return Buffer.from(await content.arrayBuffer());
+
+  return undefined;
 }

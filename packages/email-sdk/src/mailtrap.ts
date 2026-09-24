@@ -1,4 +1,5 @@
 import { firstString, jsonProvider } from "./http.js";
+import { isJsonString, jsonArray } from "./internal/decode.js";
 import {
   apiAddress,
   apiAddresses,
@@ -54,9 +55,8 @@ export function mailtrap(
       };
     },
     parseResponse(body) {
-      const record = body as Record<string, unknown>;
-      const messageIds = Array.isArray(record.message_ids) ? record.message_ids : [];
-      const messageId = messageIds.find((value) => typeof value === "string") as string | undefined;
+      const record = body;
+      const messageId = jsonArray(record, "message_ids").find(isJsonString);
 
       return {
         adapter: "mailtrap",

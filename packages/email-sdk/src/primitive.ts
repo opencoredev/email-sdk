@@ -1,4 +1,6 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { isJsonString, jsonField, jsonString, readJsonBody } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
   builtInAdapterDefinition,
@@ -20,18 +22,6 @@ export type PrimitiveAdapterOptions = {
   headers?: Record<string, string>;
 };
 
-type PrimitiveResponse = {
-  success?: boolean;
-  data?: {
-    id?: string;
-    status?: string;
-    accepted?: string[];
-    rejected?: string[];
-    queue_id?: string | null;
-    request_id?: string;
-  };
-};
-
 export function primitive(
   options: PrimitiveAdapterOptions,
 ): EmailAdapter<"primitive", { baseUrl: string }> {
@@ -43,17 +33,23 @@ export function primitive(
     ...builtInAdapterDefinition("primitive"),
     raw: { baseUrl },
     async send(message, context) {
+      const idempotencyHeaders = context.idempotencyKey
+        ? { "Idempotency-Key": context.idempotencyKey }
+        : undefined;
+
+      const headers = {
+        Authorization: `Bearer ${options.apiKey}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+        // Spread after options.headers so a per-send idempotency key stays authoritative
+        // and is never shadowed by a static Idempotency-Key passed at construction time.
+        ...idempotencyHeaders,
+      };
+
       const response = await fetcher(`${baseUrl}/send-mail`, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          "Content-Type": "application/json",
-          ...options.headers,
-          // Spread after options.headers so a per-send idempotency key stays authoritative
-          // and is never shadowed by a static Idempotency-Key passed at construction time.
-          ...(context.idempotencyKey ? { "Idempotency-Key": context.idempotencyKey } : {}),
-        },
+        headers,
         body: JSON.stringify(await toPrimitivePayload(message)),
       });
 
@@ -66,14 +62,14 @@ export function primitive(
         });
       }
 
-      const body = (await response.json().catch(() => ({}))) as PrimitiveResponse;
-      const data = body.data ?? {};
+      const body = await readJsonBody(response);
+      const data = jsonField(body, "data");
 
       return {
         adapter: "primitive",
-        id: data.id,
-        accepted: data.accepted,
-        rejected: data.rejected,
+        id: jsonString(data, "id"),
+        accepted: optionalStringList(data, "accepted"),
+        rejected: optionalStringList(data, "rejected"),
         raw: body,
       };
     },
@@ -120,19 +116,22 @@ async function toPrimitiveAttachment(attachment: EmailAttachment) {
   };
 }
 
-function primitiveErrorMessage(status: number, body: unknown) {
-  if (body && typeof body === "object") {
-    const error = (body as Record<string, unknown>).error;
+function optionalStringList(value: JsonValue | undefined, key: string) {
+  const field = jsonField(value, key);
 
-    if (error && typeof error === "object") {
-      const { code, message } = error as Record<string, unknown>;
+  return Array.isArray(field) ? field.filter(isJsonString) : undefined;
+}
 
-      if (typeof message === "string") {
-        return typeof code === "string"
-          ? `Primitive failed with ${status}: ${message} (${code})`
-          : `Primitive failed with ${status}: ${message}`;
-      }
-    }
+function primitiveErrorMessage(status: number, body: JsonValue | undefined) {
+  const error = jsonField(body, "error");
+  const message = jsonString(error, "message");
+
+  if (message !== undefined) {
+    const code = jsonString(error, "code");
+
+    return code !== undefined
+      ? `Primitive failed with ${status}: ${message} (${code})`
+      : `Primitive failed with ${status}: ${message}`;
   }
 
   return httpErrorMessage("Primitive", status, body);

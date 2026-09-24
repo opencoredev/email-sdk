@@ -2,6 +2,39 @@ import type { EmailSdkError } from "./errors.js";
 
 export type MaybePromise<T> = T | Promise<T>;
 
+export type EmailMetadataValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Date
+  | readonly EmailMetadataValue[]
+  | { readonly [key: string]: EmailMetadataValue };
+
+export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue };
+
+/**
+ * Augment this interface to give send-option metadata your own shape. The SDK forwards it
+ * unchanged to hooks, plugins, and adapter contexts.
+ *
+ * ```ts
+ * import "@opencoredev/email-sdk";
+ *
+ * declare module "@opencoredev/email-sdk" {
+ *   interface EmailMetadataRegister {
+ *     metadata: { tenantId: string; traceId?: string };
+ *   }
+ * }
+ * ```
+ */
+export interface EmailMetadataRegister {}
+
+/** Send-option metadata: the registered shape, or `EmailMetadataRecord` when none is registered. */
+export type EmailSendMetadata = EmailMetadataRegister extends { metadata: infer Metadata extends object }
+  ? Metadata
+  : EmailMetadataRecord;
+
 export type EmailAddress =
   | string
   | {
@@ -83,7 +116,7 @@ export type EmailAdapterContext = EmailAdapterValidationContext & {
   attempt: number;
   signal?: AbortSignal;
   idempotencyKey?: string;
-  metadata?: Readonly<Record<string, unknown>>;
+  metadata?: EmailSendMetadata;
 };
 
 export type EmailSendResult<Name extends string = string, Raw = unknown> = {
@@ -141,7 +174,7 @@ export type EmailSendOptions<Name extends string = string> = {
   retry?: EmailRetryConfig;
   signal?: AbortSignal;
   idempotencyKey?: string;
-  metadata?: Readonly<Record<string, unknown>>;
+  metadata?: EmailSendMetadata;
 };
 
 export type EmailValidationWarning = {
@@ -183,7 +216,7 @@ export type EmailHookEvent = {
   adapter: string;
   message: EmailMessage;
   attempt: number;
-  metadata?: Readonly<Record<string, unknown>>;
+  metadata?: EmailSendMetadata;
 };
 
 export type EmailAfterSendEvent = EmailHookEvent & {
@@ -307,10 +340,13 @@ export type EmailProvider<TRaw = unknown> = EmailAdapter<string, TRaw> & {
     context: EmailAdapterContext,
   ): MaybePromise<EmailSendResult>;
 };
+
 /** @deprecated Internal migration alias. */
 export type EmailProviderContext = EmailAdapterContext;
+
 /** @deprecated Internal migration alias. */
 export type EmailProviderResponse = EmailSendResult;
+
 /** @deprecated Internal migration alias. */
 export type SendOptions = EmailSendOptions & {
   provider?: string;
@@ -318,7 +354,9 @@ export type SendOptions = EmailSendOptions & {
   fallbackProviders?: readonly string[];
   retries?: number;
 };
+
 /** @deprecated Internal migration alias. */
 export type SendBatchItem = EmailSendItem;
+
 /** @deprecated Internal migration alias. */
 export type SendBatchResult = EmailSendSettledResult;

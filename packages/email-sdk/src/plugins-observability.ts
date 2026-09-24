@@ -1,5 +1,6 @@
 import type {
   EmailAfterSendEvent,
+  EmailSendMetadata,
   EmailErrorEvent,
   EmailMessage,
   EmailPlugin,
@@ -13,7 +14,7 @@ export type EmailObservabilityEvent =
       attempt: number;
       message: RedactedEmailMessage;
       responseId?: string;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     }
   | {
       type: "email.retry";
@@ -23,7 +24,7 @@ export type EmailObservabilityEvent =
       delayMs: number;
       message: RedactedEmailMessage;
       error: unknown;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     }
   | {
       type: "email.error";
@@ -31,7 +32,7 @@ export type EmailObservabilityEvent =
       attempt: number;
       message: RedactedEmailMessage;
       error: unknown;
-      metadata?: Record<string, unknown>;
+      metadata?: EmailSendMetadata;
     };
 
 export type RedactedEmailMessage = {

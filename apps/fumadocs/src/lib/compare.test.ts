@@ -14,6 +14,7 @@ describe("compare pairs", () => {
   test("slugs are unique and match their provider keys", () => {
     const slugs = comparePairs.map((pair) => pair.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
+
     for (const pair of comparePairs) {
       expect(pair.slug).toBe(`${pair.a}-vs-${pair.b}`);
     }

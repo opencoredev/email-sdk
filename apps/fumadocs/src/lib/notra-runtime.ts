@@ -16,6 +16,7 @@ export type BlogPostDetail = {
 // the client bundle; the API key stays server-side.
 async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<string, string> }> {
   const apiKey = process.env.NOTRA_API_KEY?.trim();
+
   if (!apiKey) return { posts: [], bodies: {} };
 
   const [{ Notra }, { mapNotraPost }] = await Promise.all([
@@ -34,9 +35,11 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
       limit: 100,
       page,
     });
-    raw.push(...(response.posts as NotraPostInput[]));
+
+    raw.push(...response.posts);
 
     const nextPage = response.pagination?.nextPage;
+
     if (!nextPage) break;
     page = nextPage;
   }
@@ -47,6 +50,7 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
 
   for (const item of raw) {
     const mapped = mapNotraPost(item, seenSlugs);
+
     if (!mapped) continue;
 
     posts.push(mapped.post);
@@ -54,11 +58,13 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
   }
 
   posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+
   return { posts, bodies };
 }
 
 export const getBlogPostsServerFn = createServerFn({ method: "GET" }).handler(async () => {
   const { posts } = await fetchBlogData();
+
   return [...localBlogPosts, ...posts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 });
 
@@ -67,10 +73,12 @@ export const getBlogPostServerFn = createServerFn({ method: "GET" })
   .handler(async ({ data: slug }): Promise<BlogPostDetail | null> => {
     const { getLocalBlogPostDetail } = await import("./local-blog-runtime");
     const localDetail = getLocalBlogPostDetail(slug);
+
     if (localDetail) return localDetail;
 
     const { posts, bodies } = await fetchBlogData();
     const post = posts.find((item) => item.slug === slug);
+
     if (!post) return null;
 
     return { post, html: bodies[post.slug] ?? "" };

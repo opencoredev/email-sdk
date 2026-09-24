@@ -3,7 +3,8 @@ import verification from "../adapter-verification.json";
 const liveAdapters = Object.keys(verification.liveChecks).sort();
 
 export function selectLiveAdapters(files: string[]): string[] {
-  if (files.some((file) => sharedAdapterFiles.has(file))) return liveAdapters;
+  if (files.some(isSharedAdapterFile)) return liveAdapters;
+
   return liveAdapters.filter((adapter) =>
     files.some(
       (file) =>
@@ -36,6 +37,7 @@ async function main() {
     .split("\n")
     .map((file) => file.trim())
     .filter(Boolean);
+
   console.log(selectLiveAdapters(files).join(" "));
 }
 
@@ -51,9 +53,23 @@ const sharedAdapterFiles = new Set([
   "packages/email-sdk/src/payloads.ts",
   "packages/email-sdk/src/types.ts",
   "packages/email-sdk/src/utils.ts",
-  "packages/email-sdk/src/adapters.test.ts",
   "adapter-verification.json",
   ".depot/workflows/ci.yml",
 ]);
+
+// Directories split out of core.ts, plus the shared adapter test fixtures.
+const sharedAdapterPrefixes = [
+  "packages/email-sdk/src/core/",
+  "packages/email-sdk/src/internal/",
+  "packages/email-sdk/test-support/",
+];
+
+function isSharedAdapterFile(file: string): boolean {
+  return (
+    sharedAdapterFiles.has(file) ||
+    sharedAdapterPrefixes.some((prefix) => file.startsWith(prefix)) ||
+    /^packages\/email-sdk\/src\/adapters\.[\w-]+\.test\.ts$/.test(file)
+  );
+}
 
 if (import.meta.main) await main();

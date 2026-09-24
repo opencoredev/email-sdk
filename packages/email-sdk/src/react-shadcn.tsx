@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { isStringMember } from "./internal/decode.js";
+
 export type ShadcnEmailTheme = {
   background: string;
   foreground: string;
@@ -54,6 +56,7 @@ const darkTheme: ShadcnEmailTheme = {
 
 export function createShadcnEmailTheme(input: ShadcnEmailThemeInput = {}): ShadcnEmailTheme {
   const { mode = "light", ...overrides } = input;
+
   return {
     ...(mode === "dark" ? darkTheme : lightTheme),
     ...overrides,
@@ -76,7 +79,7 @@ export function ShadcnEmail({
   bodyStyle,
   ...props
 }: ShadcnEmailProps) {
-  const resolvedTheme = createShadcnEmailTheme(typeof theme === "string" ? { mode: theme } : theme);
+  const resolvedTheme = createShadcnEmailTheme(isStringMember(theme) ? { mode: theme } : theme);
 
   return (
     <ThemeContext.Provider value={resolvedTheme}>

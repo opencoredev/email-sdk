@@ -5,6 +5,7 @@ import { MockLanguageModelV4 } from "ai/test";
 
 import { createEmailTools, emailToolApproval } from "./ai.js";
 import type { EmailClient, EmailMessage, SendOptions } from "./types.js";
+import type { JsonObject } from "../test-support/json.js";
 
 type SendCall = {
   message: EmailMessage;
@@ -16,7 +17,7 @@ const usage = {
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 };
 
-function modelForEmailCall(input: Record<string, unknown> = {}) {
+function modelForEmailCall(input: JsonObject = {}) {
   return new MockLanguageModelV4({
     doGenerate: [
       {
@@ -51,9 +52,11 @@ function recordingClient(
   result: { adapter: string; id?: string } = { adapter: "recording", id: "msg_1" },
 ) {
   const calls: SendCall[] = [];
+
   const client = {
     async send(message: EmailMessage, options?: SendOptions) {
       calls.push({ message, options });
+
       return result;
     },
   } satisfies Pick<EmailClient, "send">;
@@ -107,6 +110,7 @@ describe("createEmailTools", () => {
     const { client } = recordingClient();
     const email = createEmailTools({ client, from: "sender@example.com" });
     const validate = asSchema(email.tools.sendEmail.inputSchema).validate;
+
     if (!validate) throw new Error("Expected sendEmail input validation.");
 
     expect(await validate({ to: "user@example.com", subject: "Missing body" })).toMatchObject({
@@ -133,6 +137,7 @@ describe("createEmailTools", () => {
       "tags",
       "recipientVariables",
     ];
+
     for (const field of excludedFields) {
       expect(
         await validate({
@@ -202,6 +207,7 @@ describe("createEmailTools", () => {
 
     expect(calls).toHaveLength(0);
     const request = first.content.find((part) => part.type === "tool-approval-request");
+
     if (!request || request.type !== "tool-approval-request") {
       throw new Error("Expected an email tool approval request.");
     }
@@ -213,6 +219,7 @@ describe("createEmailTools", () => {
         approved: true,
       },
     ];
+
     messages.push(...first.responseMessages, { role: "tool", content: approvals });
 
     const second = await generateText({
@@ -256,7 +263,9 @@ describe("createEmailTools", () => {
       toolApproval: email.toolApproval,
       messages,
     });
+
     const request = first.content.find((part) => part.type === "tool-approval-request");
+
     if (!request || request.type !== "tool-approval-request") {
       throw new Error("Expected an email tool approval request.");
     }
@@ -307,6 +316,7 @@ describe("createEmailTools", () => {
         };
       },
     } satisfies Pick<EmailClient, "send">;
+
     const email = createEmailTools({ client, from: "sender@example.com" });
 
     const output = await email.tools.sendEmail.execute?.(
@@ -323,6 +333,7 @@ describe("createEmailTools", () => {
         throw new Error("secret provider response with user@example.com");
       },
     } satisfies Pick<EmailClient, "send">;
+
     const email = createEmailTools({ client, from: "sender@example.com" });
 
     await expect(
@@ -337,11 +348,13 @@ describe("createEmailTools", () => {
     const abortController = new AbortController();
     const abortError = new DOMException("The operation was aborted.", "AbortError");
     abortController.abort(abortError);
+
     const client = {
       async send() {
         throw new Error("adapter work stopped");
       },
     } satisfies Pick<EmailClient, "send">;
+
     const email = createEmailTools({ client, from: "sender@example.com" });
 
     await expect(
@@ -358,6 +371,7 @@ describe("createEmailTools", () => {
         throw new Error("secret raw provider payload for user@example.com");
       },
     } satisfies Pick<EmailClient, "send">;
+
     const email = createEmailTools({ client, from: "sender@example.com" });
     const model = modelForEmailCall();
     const messages: ModelMessage[] = [{ role: "user", content: "Send the welcome email" }];
@@ -368,7 +382,9 @@ describe("createEmailTools", () => {
       toolApproval: email.toolApproval,
       messages,
     });
+
     const request = first.content.find((part) => part.type === "tool-approval-request");
+
     if (!request || request.type !== "tool-approval-request") {
       throw new Error("Expected an email tool approval request.");
     }
@@ -390,6 +406,7 @@ describe("createEmailTools", () => {
       toolApproval: email.toolApproval,
       messages,
     });
+
     const serialized = JSON.stringify(second.responseMessages);
 
     expect(serialized).toContain("Email could not be sent.");

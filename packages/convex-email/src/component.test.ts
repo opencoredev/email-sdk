@@ -3,18 +3,8 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient, hydrateAttachments } from "./component/providers.js";
-
-const originalFetch = globalThis.fetch;
-const originalSetTimeout = globalThis.setTimeout;
-
-const modules = {
-  "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
-  "./component/_generated/server.ts": () => import("./component/_generated/server.js"),
-  "./component/lib.ts": () => import("./component/lib.js"),
-  "./component/providers.ts": () => import("./component/providers.js"),
-  "./component/worker.ts": () => import("./component/worker.js"),
-};
+import { buildEmailClient } from "./component/providers.js";
+import { modules } from "./testing.js";
 
 function createTest() {
   return convexTest(schema, modules);
@@ -45,6 +35,7 @@ async function sendToSent(t: TestConvex<typeof schema>) {
   await flushScheduled(t);
 
   const status = await t.query(api.lib.status, { emailId });
+
   if (status?.status !== "sent" || !status.providerMessageId) {
     throw new Error("Expected the memory adapter send to reach sent.");
   }
@@ -59,12 +50,11 @@ describe("convex-email component", () => {
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
-    globalThis.fetch = originalFetch;
-    globalThis.setTimeout = originalSetTimeout;
   });
 
   test("queues a memory-adapter email and records sent status", async () => {
     const t = createTest();
+
     const emailId = await t.mutation(api.lib.enqueue, {
       ...message,
       adapters: [{ kind: "memory" }],
@@ -87,6 +77,7 @@ describe("convex-email component", () => {
 
   test("marks emails failed when no adapter can be built", async () => {
     const t = createTest();
+
     const emailId = await t.mutation(api.lib.enqueue, {
       ...message,
       adapters: [],
@@ -107,6 +98,7 @@ describe("convex-email component", () => {
 
   test("manually retries a failed email and records a new retry cycle", async () => {
     const t = createTest();
+
     const emailId = await t.mutation(api.lib.enqueue, {
       ...message,
       adapters: [],
@@ -140,12 +132,14 @@ describe("convex-email component", () => {
 
   test("returns the existing email id for duplicate idempotency keys", async () => {
     const t = createTest();
+
     const firstId = await t.mutation(api.lib.enqueue, {
       ...message,
       idempotencyKey: "welcome:ada@example.com",
       adapters: [{ kind: "memory" }],
       adapter: "memory",
     });
+
     const secondId = await t.mutation(api.lib.enqueue, {
       ...message,
       subject: "Duplicate",
@@ -159,7 +153,8 @@ describe("convex-email component", () => {
 
   test("scopes public API idempotency keys to their stamped owner", async () => {
     const t = createTest();
-    const enqueueOwned = (api.lib as any).enqueueOwned;
+    const enqueueOwned = api.lib.enqueueOwned;
+
     const email = {
       ...message,
       idempotencyKey: "welcome",
@@ -177,7 +172,8 @@ describe("convex-email component", () => {
 
   test("enqueues owner-stamped batches atomically and preserves the batch limit", async () => {
     const t = createTest();
-    const enqueueOwnedBatch = (api.lib as any).enqueueOwnedBatch;
+    const enqueueOwnedBatch = api.lib.enqueueOwnedBatch;
+
     const email = {
       ...message,
       adapters: [{ kind: "memory" }],
@@ -195,6 +191,7 @@ describe("convex-email component", () => {
       ownerId: "user_1",
       messages: [email, { ...email, to: "grace@example.com" }],
     });
+
     expect(ids).toHaveLength(2);
     expect((await t.query(api.lib.status, { emailId: ids[0] }))?.ownerId).toBe("user_1");
   });
@@ -205,6 +202,7 @@ describe("convex-email component", () => {
     await t.mutation(api.lib.setConfig, {
       config: { defaultFrom: "Ops <ops@example.com>" },
     });
+
     const ids = await t.mutation(api.lib.enqueueBatch, {
       messages: [
         { to: "a@example.com", subject: "One", text: "1", adapters: [{ kind: "memory" }], adapter: "memory" },
@@ -226,6 +224,7 @@ describe("convex-email component", () => {
 
   test("deduplicates idempotency keys inside one batch", async () => {
     const t = createTest();
+
     const ids = await t.mutation(api.lib.enqueueBatch, {
       messages: [
         { ...message, idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
@@ -260,6 +259,7 @@ describe("convex-email component", () => {
         defaultFrom: "Ops <ops@example.com>",
       },
     });
+
     const emailId = await t.mutation(api.lib.enqueue, {
       to: "real@example.com",
       cc: "cc@example.com",
@@ -318,6 +318,7 @@ describe("convex-email component", () => {
 
   test("cancels queued emails and refuses everything else", async () => {
     const t = createTest();
+
     const emailId = await t.mutation(api.lib.enqueue, {
       ...message,
       adapters: [{ kind: "memory" }],
@@ -371,6 +372,7 @@ describe("convex-email component", () => {
     process.env.LETTR_API_KEY = "test-key";
     globalThis.fetch = async () => {
       requests += 1;
+
       return Response.json({
         data: { request_id: "lttr_partial", accepted: 1, rejected: 1 },
       });
@@ -429,6 +431,7 @@ describe("convex-email component", () => {
     process.env.LETTR_API_KEY = "test-key";
     globalThis.fetch = async () => {
       requests += 1;
+
       return Response.json({ message: "Email transmission failed." }, { status: 502 });
     };
 
@@ -478,6 +481,7 @@ describe("convex-email component", () => {
 
   test("rejects non-object webhook JSON for known providers", async () => {
     const t = createTest();
+
     for (const provider of ["resend", "postmark", "mailgun"]) {
       for (const body of ["null", "[]", "true", "malformed"]) {
         await expect(t.action(api.worker.handleWebhook, { provider, body, headers: {} })).rejects.toThrow();
@@ -501,6 +505,7 @@ describe("convex-email component", () => {
 
   test("records duplicate webhook deliveries idempotently", async () => {
     const t = createTest();
+
     const args = {
       provider: "resend",
       headers: { "svix-id": "evt_duplicate" },
@@ -516,6 +521,7 @@ describe("convex-email component", () => {
 
   test("deduplicates generic webhooks without provider delivery ids", async () => {
     const t = createTest();
+
     const args = {
       provider: "postmark",
       headers: {},
@@ -668,6 +674,7 @@ describe("convex-email component", () => {
       headers: {},
       body: JSON.stringify({ RecordType: "Bounce", Type: "HardBounce", ID: 4242 }),
     });
+
     const second = await t.action(api.worker.handleWebhook, {
       provider: "postmark",
       headers: {},
@@ -793,109 +800,13 @@ describe("convex-email component", () => {
     ).not.toThrow();
   });
 
-  test("rejects unsafe attachment URLs before server-side fetch", async () => {
-    await expect(
-      hydrateAttachments({
-        ...message,
-        attachments: [{ filename: "metadata.txt", url: "http://169.254.169.254/latest" }],
-      }),
-    ).rejects.toThrow('Attachment "metadata.txt" URL must use https.');
-
-    await expect(
-      hydrateAttachments({
-        ...message,
-        attachments: [{ filename: "loopback.txt", url: "https://127.0.0.1/private" }],
-      }),
-    ).rejects.toThrow('Attachment "loopback.txt" URL host is not allowed.');
-  });
-
-  test("validates every redirect before fetching a remote attachment", async () => {
-    const requests: Array<{ url: string; init?: RequestInit }> = [];
-    globalThis.fetch = async (input, init) => {
-      requests.push({ url: String(input), init });
-      if (requests.length === 1) {
-        return new Response(null, {
-          status: 302,
-          headers: { location: "https://cdn.example.test/attachment.txt" },
-        });
-      }
-      return new Response("attachment");
-    };
-
-    const hydrated = await hydrateAttachments({
-      ...message,
-      attachments: [{ filename: "attachment.txt", url: "https://files.example.test/attachment.txt" }],
-    });
-
-    expect(requests.map((request) => request.url)).toEqual([
-      "https://files.example.test/attachment.txt",
-      "https://cdn.example.test/attachment.txt",
-    ]);
-    expect(requests.every((request) => request.init?.redirect === "manual")).toBe(true);
-    expect(requests.every((request) => request.init?.signal instanceof AbortSignal)).toBe(true);
-    expect(new TextDecoder().decode(hydrated.attachments?.[0]?.content as ArrayBuffer)).toBe(
-      "attachment",
-    );
-  });
-
-  test("rejects unsafe redirect targets without requesting them", async () => {
-    let calls = 0;
-    globalThis.fetch = async () => {
-      calls += 1;
-      return new Response(null, {
-        status: 302,
-        headers: { location: "https://127.0.0.1/private" },
-      });
-    };
-
-    await expect(
-      hydrateAttachments({
-        ...message,
-        attachments: [{ filename: "private.txt", url: "https://files.example.test/private.txt" }],
-      }),
-    ).rejects.toThrow('Attachment "private.txt" URL host is not allowed.');
-    expect(calls).toBe(1);
-  });
-
-  test("rejects remote attachments that exceed the size limit", async () => {
-    globalThis.fetch = async () =>
-      new Response(new Uint8Array(10 * 1024 * 1024 + 1), { headers: { "content-type": "text/plain" } });
-
-    await expect(
-      hydrateAttachments({
-        ...message,
-        attachments: [{ filename: "large.txt", url: "https://files.example.test/large.txt" }],
-      }),
-    ).rejects.toThrow('Attachment "large.txt" exceeds the 10485760-byte size limit.');
-  });
-
-  test("times out when a remote attachment body stalls after response headers", async () => {
-    globalThis.setTimeout = ((callback: (...args: never[]) => void, _delay?: number, ...args: never[]) =>
-      originalSetTimeout(callback, 0, ...args)) as typeof setTimeout;
-    globalThis.fetch = async (_input, init) => {
-      const signal = init?.signal as AbortSignal;
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          signal.addEventListener("abort", () => controller.error(new Error("aborted")));
-        },
-      });
-      return new Response(body);
-    };
-
-    await expect(
-      hydrateAttachments({
-        ...message,
-        attachments: [{ filename: "stalled.txt", url: "https://files.example.test/stalled.txt" }],
-      }),
-    ).rejects.toThrow('Fetching email attachment "stalled.txt" timed out.');
-  });
-
   test("recovers emails stuck in processing", async () => {
     const t = createTest();
     const originalNow = Date.now;
     const startedAt = 1_000;
 
     Date.now = () => startedAt;
+
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
@@ -929,6 +840,7 @@ describe("convex-email component", () => {
     const startedAt = 1_000;
 
     Date.now = () => startedAt;
+
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
@@ -937,6 +849,7 @@ describe("convex-email component", () => {
         adapter: "memory",
         maxAttempts: 2,
       });
+
       const staleWorker = await t.mutation(api.lib.markProcessing, { emailId });
 
       Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
@@ -1000,12 +913,14 @@ describe("convex-email component", () => {
 
   test("keeps processing leases monotonic across manual retries", async () => {
     const t = createTest();
+
     const emailId = await t.mutation(api.lib.enqueue, {
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
       maxAttempts: 1,
     });
+
     const firstWorker = await t.mutation(api.lib.markProcessing, { emailId });
 
     await t.mutation(api.lib.markFailedOrRetry, {
@@ -1027,6 +942,7 @@ describe("convex-email component", () => {
     const startedAt = 1_000;
 
     Date.now = () => startedAt;
+
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
@@ -1059,16 +975,19 @@ describe("convex-email component", () => {
     const createdAt = 1_000;
 
     Date.now = () => createdAt;
+
     try {
       await t.mutation(api.lib.setConfig, {
         config: { cleanupAfterDays: 1 },
       });
+
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
         maxAttempts: 1,
       });
+
       await flushScheduled(t);
 
       Date.now = () => createdAt + 2 * 24 * 60 * 60 * 1_000;
@@ -1090,10 +1009,12 @@ describe("convex-email component", () => {
     const createdAt = 1_000;
 
     Date.now = () => createdAt;
+
     try {
       await t.mutation(api.lib.setConfig, {
         config: { cleanupAfterDays: 1 },
       });
+
       const emailId = await t.mutation(api.lib.enqueue, {
         ...message,
         adapters: [{ kind: "memory" }],
@@ -1118,16 +1039,19 @@ describe("convex-email component", () => {
     const createdAt = 1_000;
 
     Date.now = () => createdAt;
+
     try {
       await t.mutation(api.lib.setConfig, {
         config: { cleanupAfterDays: 1 },
       });
+
       const terminalEmailId = await t.mutation(api.lib.enqueue, {
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
         maxAttempts: 1,
       });
+
       await flushScheduled(t);
 
       for (let index = 0; index < 60; index += 1) {

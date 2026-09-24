@@ -37,7 +37,7 @@ export function mailpace(
     parseResponse(body) {
       return {
         adapter: "mailpace",
-        id: firstString(body as Record<string, unknown>, ["id", "message_id"]),
+        id: firstString(body, ["id", "message_id"]),
         raw: body,
       };
     },

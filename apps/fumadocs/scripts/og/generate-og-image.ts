@@ -14,24 +14,30 @@ import { sponsors } from "../../src/lib/sponsors";
 import { sponsorLabelFontFile, sponsorRowGeometry, sponsorRowLayout } from "./sponsor-row";
 
 const ogDir = import.meta.dirname;
+
 const publicDir = join(ogDir, "../../public");
+
 const outputFile = join(publicDir, "og/email-sdk.png");
 
 const width = 1200;
+
 const height = 630;
+
 const adapterCount = providers.length;
 
-const mimeTypes: Record<string, string> = {
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-};
+const mimeTypes = new Map([
+  [".svg", "image/svg+xml"],
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
+]);
 
 function toDataUri(filePath: string): string {
-  const mime = mimeTypes[extname(filePath).toLowerCase()];
+  const mime = mimeTypes.get(extname(filePath).toLowerCase());
+
   if (!mime) throw new Error(`Unsupported image type for OG embedding: ${filePath}`);
+
   return `data:${mime};base64,${readFileSync(filePath).toString("base64")}`;
 }
 
@@ -40,6 +46,7 @@ function escapeXml(text: string): string {
 }
 
 const heroImage = toDataUri(join(publicDir, "landing/alpine-hero.png"));
+
 const gmailMark = toDataUri(join(publicDir, "landing/gmail.png"));
 
 const codeColors = {
@@ -79,12 +86,15 @@ function codeSvg(): string {
   const y = 112;
   const lineHeight = 31;
   const firstLineY = y + 53;
+
   const lines = codeLines
     .map((tokens, index) => {
       if (tokens.length === 0) return "";
+
       const spans = tokens
         .map(([color, text]) => `<tspan fill="${codeColors[color]}">${escapeXml(text)}</tspan>`)
         .join("");
+
       return `<text x="${x + 26}" y="${firstLineY + index * lineHeight}" font-family="Liberation Mono" font-size="15" xml:space="preserve">${spans}</text>`;
     })
     .join("\n");
@@ -99,6 +109,7 @@ function codeSvg(): string {
 function inboxSvg(): string {
   const x = 748;
   const y = 330;
+
   return `
     <path d="M915 294V329" stroke="#ffffff" stroke-opacity="0.4" stroke-width="2"/>
     <path d="M908 321L915 329L922 321" stroke="#ffffff" stroke-opacity="0.58" stroke-width="2" fill="none"/>
@@ -113,11 +124,11 @@ function inboxSvg(): string {
     </g>`;
 }
 
-const sponsorLogoSizes: Record<string, number> = {
-  Primitive: 32,
-  Neon: 25,
-  Sequenzy: 27,
-};
+const sponsorLogoSizes = new Map([
+  ["Primitive", 32],
+  ["Neon", 25],
+  ["Sequenzy", 27],
+]);
 
 function sponsorRowSvg(): string {
   const { cy } = sponsorRowGeometry;
@@ -126,8 +137,9 @@ function sponsorRowSvg(): string {
   return slots
     .map((slot, index) => {
       const sponsor = sponsors[index]!;
-      const size = (sponsorLogoSizes[sponsor.name] ?? 28) * scale;
+      const size = (sponsorLogoSizes.get(sponsor.name) ?? 28) * scale;
       const logo = toDataUri(join(publicDir, sponsor.logo));
+
       return `
         <g>
           <circle cx="${slot.x}" cy="${cy}" r="${slot.radius}" fill="#f5f5f4" stroke="#ffffff" stroke-opacity="0.72"/>
@@ -198,11 +210,14 @@ function render(svg: string): Buffer {
     },
     fitTo: { mode: "width", value: width },
   });
+
   return resvg.render().asPng();
 }
 
 const png = render(buildSvg());
+
 writeFileSync(outputFile, png);
+
 console.log(
   `[og] wrote ${outputFile} (${(png.length / 1024).toFixed(1)} KiB, ${adapterCount} adapters, ${sponsors.length} sponsors)`,
 );

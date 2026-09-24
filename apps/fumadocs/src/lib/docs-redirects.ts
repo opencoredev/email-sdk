@@ -18,6 +18,8 @@ const latestDocsRedirects = {
   guides: "guides/schedule-email",
 } as const;
 
+const latestDocsRedirectsByPath = new Map<string, string>(Object.entries(latestDocsRedirects));
+
 export function getLatestDocsRedirect(slugs: readonly string[]) {
-  return latestDocsRedirects[slugs.join("/") as keyof typeof latestDocsRedirects];
+  return latestDocsRedirectsByPath.get(slugs.join("/"));
 }

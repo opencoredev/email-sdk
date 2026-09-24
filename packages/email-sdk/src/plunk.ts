@@ -1,4 +1,6 @@
 import { firstString, jsonProvider } from "./http.js";
+import { jsonArray, jsonField, jsonString } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import {
   apiAddress,
   apiAddresses,
@@ -45,7 +47,8 @@ export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { bas
     },
     fetch: options.fetch,
     parseResponse(body) {
-      const record = body as Record<string, unknown>;
+      const record = body;
+
       return {
         adapter: "plunk",
         id: plunkEmailId(record) ?? firstString(record, ["id", "emailId"]),
@@ -55,26 +58,12 @@ export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { bas
   });
 }
 
-function plunkEmailId(record: Record<string, unknown>) {
-  const data = record.data;
+function plunkEmailId(record: JsonValue) {
+  for (const email of jsonArray(jsonField(record, "data"), "emails")) {
+    const id = jsonString(email, "email");
 
-  if (!data || typeof data !== "object") {
-    return undefined;
-  }
-
-  const emails = (data as Record<string, unknown>).emails;
-
-  if (!Array.isArray(emails)) {
-    return undefined;
-  }
-
-  for (const email of emails) {
-    if (email && typeof email === "object") {
-      const id = (email as Record<string, unknown>).email;
-
-      if (typeof id === "string") {
-        return id;
-      }
+    if (id !== undefined) {
+      return id;
     }
   }
 

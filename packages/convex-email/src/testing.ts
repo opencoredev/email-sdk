@@ -7,6 +7,8 @@ import type { ConvexEmailAdapterConfig } from "./shared/types.js";
 const modules = {
   "./component/_generated/api.ts": () => import("./component/_generated/api.js"),
   "./component/_generated/server.ts": () => import("./component/_generated/server.js"),
+  "./component/attachments.ts": () => import("./component/attachments.js"),
+  "./component/functionRefs.ts": () => import("./component/functionRefs.js"),
   "./component/lib.ts": () => import("./component/lib.js"),
   "./component/providers.ts": () => import("./component/providers.js"),
   "./component/worker.ts": () => import("./component/worker.js"),

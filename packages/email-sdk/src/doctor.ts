@@ -1,3 +1,12 @@
+import {
+  type JsonValue,
+  isJsonBoolean,
+  isJsonObject,
+  jsonField,
+  jsonString,
+  parseJsonStrict,
+} from "./internal/decode.js";
+
 export type DoctorStatus =
   | "passed"
   | "failed"
@@ -13,11 +22,13 @@ export type DoctorStatus =
   | "not_ready";
 
 export type DoctorCheck = { status: DoctorStatus; message: string };
+
 export type DoctorResult = {
   ok: boolean;
   adapter: string;
   checks: { configuration: DoctorCheck; authentication: DoctorCheck; sender: DoctorCheck };
 };
+
 export type DoctorOptions = {
   adapter: string;
   credential?: string;
@@ -46,20 +57,30 @@ const probes = {
 class TransportFailure extends Error {}
 
 type ProbeName = keyof typeof probes;
+
+function isProbeName(name: string): name is ProbeName {
+  return Object.prototype.hasOwnProperty.call(probes, name);
+}
+
 const check = (status: DoctorStatus, message: string): DoctorCheck => ({ status, message });
+
 const skipped = () => check("not_requested", "Not requested.");
+
 const uncertain = () =>
   check(
     "inconclusive",
     "The provider returned an invalid or inconclusive response. Check provider status and verify the key in the provider dashboard.",
   );
+
 const senderUncertain = () =>
   check(
     "inconclusive",
     "Sender readiness could not be confirmed. Inspect domain verification and sending capability in the Resend dashboard.",
   );
+
 const blocked = () =>
   check("blocked", "Fix configuration and authentication before checking sender readiness.");
+
 const authenticated = () =>
   check(
     "passed",
@@ -68,6 +89,7 @@ const authenticated = () =>
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
   const configured = options.configured ?? Boolean(options.credential?.trim());
+
   const checks: DoctorResult["checks"] = {
     configuration: configured
       ? check(
@@ -83,6 +105,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
       : skipped(),
     sender: options.from !== undefined ? blocked() : skipped(),
   };
+
   const finish = (): DoctorResult => ({
     ok: Object.values(checks).every(
       (item) => item.status === "passed" || item.status === "not_requested",
@@ -90,77 +113,100 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     adapter: options.adapter,
     checks,
   });
+
   if (options.from !== undefined && !options.live) {
     checks.configuration = check(
       "failed",
       "--from requires --live. Omit --from for configuration-only checks.",
     );
+
     return finish();
   }
+
   const domain = options.from !== undefined ? senderDomain(options.from) : undefined;
+
   if (options.from !== undefined && !domain) {
     checks.sender = check(
       "failed",
       "Provide one valid sender mailbox with --from, optionally with a display name.",
     );
   }
+
   if (!options.live || !configured) return finish();
-  if (!Object.prototype.hasOwnProperty.call(probes, options.adapter)) {
+
+  const adapterName = options.adapter;
+
+  if (!isProbeName(adapterName)) {
     checks.authentication = check(
       "unsupported",
       "No safe live authentication probe is available for this adapter. Verify credentials in its dashboard.",
     );
+
     if (domain)
       checks.sender = check(
         "unsupported",
         "Sender readiness is supported only for Resend. Verify the sender in the provider dashboard.",
       );
+
     return finish();
   }
-  const adapter = options.adapter as ProbeName;
+
+  const adapter = adapterName;
   const probe = probes[adapter];
   const base = adapter === "graph" ? "graph" : safeBase(options.baseUrl, probe.base);
+
   if (!base) {
     checks.configuration = check(
       "failed",
       "Use the fixed HTTPS provider base URL or an explicit numeric-loopback fixture URL. Redirects are not followed.",
     );
+
     return finish();
   }
+
   if (!options.credential?.trim()) {
     checks.configuration = check(
       "failed",
       "Provide the adapter API credential before requesting a live check.",
     );
+
     return finish();
   }
+
   if (domain && adapter !== "resend") {
     checks.sender = check(
       "unsupported",
       "Sender readiness is supported only for Resend. Verify the sender in the provider dashboard.",
     );
   }
+
   const controller = new AbortController();
   const timeout = Math.max(1, Math.min(options.timeoutMs ?? 10_000, 30_000));
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
       reject(new Error("timeout"));
     }, timeout);
   });
+
   if (adapter === "graph") {
     const tokenUrl = graphTokenUrl(options.tokenUrl, options.tenantId);
+
     if (!tokenUrl || !options.tenantId?.trim() || !options.clientId?.trim()) {
       checks.configuration = check(
         "failed",
         "Provide valid Graph tenant, client, and token endpoint configuration before requesting a live check.",
       );
       clearTimeout(timer);
+
       return finish();
     }
+
     const work = async () => {
       let response: Response;
+
       try {
         response = await (options.fetch ?? fetch)(tokenUrl, {
           method: "POST",
@@ -177,7 +223,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
       } catch {
         throw new TransportFailure();
       }
+
       controller.signal.throwIfAborted();
+
       if (response.status !== 200) {
         void response.body?.cancel().catch(() => {});
         checks.authentication =
@@ -186,14 +234,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
             : response.status === 429
               ? check("rate_limited", "Graph rate limited the authentication check (HTTP 429). Retry later; this does not prove the credentials are invalid.")
               : uncertain();
+
         return;
       }
+
       const body = await boundedJson(response, controller.signal);
       checks.authentication =
-        isRecord(body) && typeof body.access_token === "string" && body.access_token.length > 0
+        jsonString(body, "access_token")
           ? authenticated()
           : uncertain();
     };
+
     try {
       await Promise.race([work(), deadline]);
     } catch (error) {
@@ -206,66 +257,87 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
       clearTimeout(timer);
       controller.abort();
     }
+
     if (domain) checks.sender = check("unsupported", "Graph sender readiness is not checked by this non-sending probe.");
+
     return finish();
   }
+
   const request = async (path: string) => {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (adapter === "lettermint") headers["x-lettermint-token"] = options.credential!;
-    else headers.Authorization = `Bearer ${options.credential}`;
+    const headers = new Headers({ Accept: "application/json" });
+
+    if (adapter === "lettermint") headers.set("x-lettermint-token", options.credential!);
+    else headers.set("Authorization", `Bearer ${options.credential}`);
     const validation = adapter === "jetemail";
-    if (validation) headers["Content-Type"] = "application/json";
+
+    if (validation) headers.set("Content-Type", "application/json");
     let response: Response;
+
     try {
-      response = await (options.fetch ?? fetch)(`${base}${path}`, {
+      const init: RequestInit = {
         method: validation ? "POST" : "GET",
         headers,
-        ...(validation ? { body: "{}" } : {}),
         redirect: "error",
         signal: controller.signal,
-      });
+      };
+
+      if (validation) init.body = "{}";
+      response = await (options.fetch ?? fetch)(`${base}${path}`, init);
     } catch {
       throw new TransportFailure();
     }
+
     controller.signal.throwIfAborted();
+
     if (
       (response.status !== 200 && !(adapter === "resend" && response.status === 401)) ||
       validation
     ) {
       void response.body?.cancel().catch(() => {});
+
       return { status: response.status, body: undefined };
     }
+
     const body = await boundedJson(response, controller.signal);
     controller.signal.throwIfAborted();
+
     return { status: response.status, body };
   };
+
   const work = async () => {
     const first = await request(probe.path);
     checks.authentication = httpFailure(first.status, adapter, first.body) ?? uncertain();
+
     if (first.status !== 200 || adapter === "jetemail") return;
+
     if (!validAuthentication(adapter, first.body)) return;
     checks.authentication = authenticated();
+
     if (adapter !== "resend" || !domain) return;
     checks.sender = senderUncertain();
     let body = first.body;
     const cursors = new Set<string>();
+
     // Bound pagination and use only encoded cursors, never provider-supplied URLs.
     for (let page = 0; page < 10; page++) {
-      if (!isRecord(body) || !Array.isArray(body.data) || !body.data.every(validDomain)) return;
-      const target = body.data.find((item) => item.name.toLowerCase() === domain);
+      const domains = jsonField(body, "data");
+
+      if (!Array.isArray(domains) || !domains.every(validDomain)) return;
+      const target = domains.find((item) => domainName(item)?.toLowerCase() === domain);
+
       if (target) {
+        const status = jsonString(target, "status");
+        const sending = jsonString(jsonField(target, "capabilities"), "sending");
+
         if (
-          typeof target.status !== "string" ||
-          !["not_started", "pending", "verified", "failed", "temporary_failure"].includes(
-            target.status,
-          ) ||
-          !isRecord(target.capabilities) ||
-          typeof target.capabilities.sending !== "string" ||
-          !["enabled", "disabled"].includes(target.capabilities.sending)
+          status === undefined ||
+          !["not_started", "pending", "verified", "failed", "temporary_failure"].includes(status) ||
+          sending === undefined ||
+          !["enabled", "disabled"].includes(sending)
         )
           return;
         checks.sender =
-          target.status === "verified" && target.capabilities.sending === "enabled"
+          status === "verified" && sending === "enabled"
             ? check(
                 "passed",
                 "Sender domain is verified with sending enabled. This does not guarantee delivery or key-level sending permission.",
@@ -274,29 +346,40 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
                 "not_ready",
                 "Verify the sender domain DNS and enable its sending capability in the Resend dashboard.",
               );
+
         return;
       }
-      if (body.has_more === false) {
+
+      const hasMore = jsonField(body, "has_more");
+
+      if (hasMore === false) {
         checks.sender = check(
           "not_ready",
           "Sender domain was not found. Add and verify the exact sender domain in Resend.",
         );
+
         return;
       }
-      if (body.has_more !== true || page === 9) return;
-      const cursor: unknown = body.data.at(-1)?.id;
-      if (typeof cursor !== "string" || !cursor || cursor.length > 256 || cursors.has(cursor))
+
+      if (hasMore !== true || page === 9) return;
+      const cursor = jsonString(domains.at(-1), "id");
+
+      if (cursor === undefined || !cursor || cursor.length > 256 || cursors.has(cursor))
         return;
       cursors.add(cursor);
       const next = await request(`/domains?limit=100&after=${encodeURIComponent(cursor)}`);
       const failure = httpFailure(next.status, adapter, next.body);
+
       if (failure) {
         checks.sender = failure.status === "inconclusive" ? senderUncertain() : failure;
+
         return;
       }
+
       body = next.body;
     }
   };
+
   try {
     await Promise.race([work(), deadline]);
   } catch (error) {
@@ -311,6 +394,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
             "The live check failed at the network or redirect transport layer. Check connectivity, TLS, proxy settings, and the fixed provider URL; redirects are not followed.",
           )
         : uncertain();
+
     if (checks.authentication.status === "passed") {
       if (domain && adapter === "resend")
         checks.sender = failure.status === "inconclusive" ? senderUncertain() : failure;
@@ -319,69 +403,88 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     clearTimeout(timer);
     controller.abort();
   }
+
   return finish();
 }
 
-function httpFailure(status: number, adapter: ProbeName, body: unknown): DoctorCheck | undefined {
+function httpFailure(
+  status: number,
+  adapter: ProbeName,
+  body: JsonValue | undefined,
+): DoctorCheck | undefined {
   if (status === 200) return undefined;
+
   if (status === 429)
     return check(
       "rate_limited",
       "The provider rate limited the live check (HTTP 429). Wait before retrying and reduce request frequency; this does not prove the key is invalid.",
     );
+
   if (
     adapter === "resend" &&
     status === 401 &&
-    isRecord(body) &&
-    body.name === "restricted_api_key"
+    jsonField(body, "name") === "restricted_api_key"
   ) {
     return check(
       "insufficient_permissions",
       "This Resend key is restricted to sending. Use a Full access key for domain inspection or verify sender readiness in the dashboard.",
     );
   }
+
   if (status === 401)
     return check(
       "invalid_credentials",
       "The provider rejected the credentials. Check the loaded key or rotate it in the provider dashboard.",
     );
+
   if (status === 403)
     return check(
       "insufficient_permissions",
       "The provider denied this probe. Check key scopes, account restrictions, and IP allowlists; this does not prove the key is invalid.",
     );
+
   return uncertain();
 }
 
-function validAuthentication(adapter: ProbeName, body: unknown): boolean {
+function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): boolean {
   if (adapter === "lettermint") return body === 200;
-  if (!isRecord(body)) return false;
-  if (adapter === "resend") return Array.isArray(body.data) && typeof body.has_more === "boolean";
+
+  if (!isJsonObject(body)) return false;
+
+  if (adapter === "resend") return Array.isArray(body.data) && isJsonBoolean(body.has_more);
+
   if (adapter === "sequenzy") return body.success === true && Array.isArray(body.companies);
+
   if (adapter === "primitive")
-    return body.success === true && isRecord(body.data) && typeof body.data.id === "string";
+    return body.success === true && jsonString(body.data, "id") !== undefined;
+
   if (adapter === "lettr")
     return (
       body.message === "API key is valid." &&
-      isRecord(body.data) &&
-      Number.isInteger(body.data.team_id) &&
-      typeof body.data.timestamp === "string"
+      Number.isInteger(jsonField(body.data, "team_id")) &&
+      jsonString(body.data, "timestamp") !== undefined
     );
+
   return false;
 }
 
 function safeBase(value: string | undefined, expected: string): string | undefined {
   if (value === undefined) return expected;
+
   try {
     const url = new URL(value);
+
     if (url.username || url.password || url.search || url.hash) return;
     const normalized = url.href.replace(/\/$/, "");
+
     if (normalized === expected) return expected;
+
     if (["127.0.0.1", "[::1]"].includes(url.hostname) && ["http:", "https:"].includes(url.protocol))
       return normalized;
   } catch {
     /* Invalid URLs are configuration failures. */
   }
+
   return undefined;
 }
 
@@ -389,12 +492,18 @@ function graphTokenUrl(value: string | undefined, tenantId: string | undefined):
   const fallback = tenantId?.trim()
     ? `https://login.microsoftonline.com/${encodeURIComponent(tenantId.trim())}/oauth2/v2.0/token`
     : undefined;
+
   if (value === undefined) return fallback;
+
   try {
     const url = new URL(value);
+
     if (url.username || url.password || url.search || url.hash) return;
+
     if (["127.0.0.1", "[::1]"].includes(url.hostname) && ["http:", "https:"].includes(url.protocol)) return url.href;
+
     if (url.protocol !== "https:" || !["login.microsoftonline.com", "login.microsoftonline.us", "login.chinacloudapi.cn", "login.microsoftonline.de"].includes(url.hostname)) return;
+
     return url.href;
   } catch {
     return;
@@ -405,11 +514,15 @@ function senderDomain(value: string): string | undefined {
   if (/[\r\n]/.test(value)) return;
   const mailbox = value.trim().match(/^(?:[^<>]+\s*<([^<>]+)>|([^<>]+))$/);
   const address = mailbox?.[1] ?? mailbox?.[2];
+
   if (!address || address.length > 254) return;
+
   const match = address.match(
     /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)$/,
   );
+
   const local = address.split("@")[0]!;
+
   if (
     !match ||
     local.startsWith(".") ||
@@ -419,45 +532,55 @@ function senderDomain(value: string): string | undefined {
     match[1]!.split(".").some((label) => label.length > 63)
   )
     return;
+
   return match[1]!.toLowerCase();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function domainName(value: JsonValue): string | undefined {
+  return jsonString(value, "name");
 }
 
-function validDomain(value: unknown): value is Record<string, unknown> & { name: string } {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    Boolean(senderDomain(`probe@${value.name}`))
-  );
+function validDomain(value: JsonValue): boolean {
+  const name = domainName(value);
+
+  return name !== undefined && Boolean(senderDomain(`probe@${name}`));
 }
 
-async function boundedJson(response: Response, signal: AbortSignal): Promise<unknown> {
+async function boundedJson(
+  response: Response,
+  signal: AbortSignal,
+): Promise<JsonValue | undefined> {
   const reader = response.body?.getReader();
+
   if (!reader) return undefined;
+
   const cancel = () => {
     void reader.cancel().catch(() => {});
   };
+
   signal.addEventListener("abort", cancel, { once: true });
   const decoder = new TextDecoder();
   let text = "";
   let size = 0;
+
   try {
     while (true) {
       let chunk: Awaited<ReturnType<typeof reader.read>>;
+
       try {
         chunk = await reader.read();
       } catch {
         throw new TransportFailure();
       }
+
       if (chunk.done) break;
       size += chunk.value.byteLength;
+
       if (size > 1_048_576) throw new Error("response limit");
       text += decoder.decode(chunk.value, { stream: true });
     }
-    return JSON.parse(text + decoder.decode()) as unknown;
+
+    return parseJsonStrict(text + decoder.decode());
   } finally {
     signal.removeEventListener("abort", cancel);
     void reader.cancel().catch(() => {});

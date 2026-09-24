@@ -28,7 +28,9 @@ export type MappedPost = {
 };
 
 const readWordsPerMinute = 200;
+
 const excerptMaxLength = 155;
+
 const slugMaxLength = 80;
 
 // Mirrors `getBlogPostImageUrl` in src/lib/blog.ts. Kept in sync by hand because
@@ -59,11 +61,13 @@ export function dedupeSlug(slug: string, seen: Set<string>): string {
   }
 
   seen.add(candidate);
+
   return candidate;
 }
 
 export function toDateKey(value: string): string {
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
 
   return date.toISOString().slice(0, 10);
@@ -116,13 +120,18 @@ export function excerptFromMarkdown(markdown: string, maxLength = excerptMaxLeng
       inFence = !inFence;
       continue;
     }
+
     if (inFence) continue;
+
     if (!line) {
       if (paragraph) break;
       continue;
     }
+
     if (/^#{1,6}\s/.test(line)) continue;
+
     if (line.startsWith("![")) continue;
+
     if (/^([-*+]|\d+\.|>)\s+/.test(line)) {
       paragraph += `${paragraph ? " " : ""}${line.replace(/^([-*+]|\d+\.|>)\s+/, "")}`;
       continue;
@@ -190,11 +199,13 @@ export function mapNotraPost(input: NotraPostInput, seenSlugs: Set<string>): Map
   if (input.status !== "published") return null;
 
   const title = input.title?.trim();
+
   if (!title) return null;
 
   // Image-type posts have `markdown: null` (their `content` is an image URL,
   // not prose). The blog can only render Markdown bodies, so skip them.
   const markdown = input.markdown;
+
   if (markdown === null) return null;
   // Always slugify, even an explicit Notra slug: a value like "release/notes"
   // would otherwise break the single-segment /blog/$slug route, the OG image

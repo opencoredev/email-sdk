@@ -1,11 +1,17 @@
 import emailSdkPackage from "../../../../packages/email-sdk/package.json";
 
 export const sdkPackageName = emailSdkPackage.name;
+
 export const latestPublishedVersion = emailSdkPackage.version;
+
 export const currentDocsMajorVersion = 2;
+
 export const docsVersion = `v${currentDocsMajorVersion}`;
+
 export const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
+
 export const docsVersionRoutePrefix = "v";
+
 export const docsVersionStorageKey = "email-sdk-docs-version";
 
 export function getCurrentDocsPublishedVersion(packageVersion: string) {
@@ -220,6 +226,7 @@ export function resolveDocsVersionedSlugs(slugs: string[]) {
   }
 
   const version = getDocsVersionBySlug(slugs[1]);
+
   if (!version) {
     return {
       version: latestDocsVersion,
@@ -236,10 +243,12 @@ export function resolveDocsVersionedSlugs(slugs: string[]) {
 export function getDocsVersionHref(version: DocsVersion, pathname = "/docs") {
   const cleanPathname = pathname.split(/[?#]/, 1)[0] ?? "/docs";
   const docsPath = cleanPathname.startsWith("/docs") ? cleanPathname : "/docs";
+
   const slugs = docsPath
     .replace(/^\/docs\/?/, "")
     .split("/")
     .filter(Boolean);
+
   const resolved = resolveDocsVersionedSlugs(slugs);
   const pageSlugs = resolved.slugs.join("/");
 
@@ -248,6 +257,7 @@ export function getDocsVersionHref(version: DocsVersion, pathname = "/docs") {
   }
 
   const versionBase = getDocsVersionBase(version);
+
   return pageSlugs ? `${versionBase}/${pageSlugs}` : versionBase;
 }
 

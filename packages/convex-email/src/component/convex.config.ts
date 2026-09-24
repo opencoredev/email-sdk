@@ -1,7 +1,10 @@
 import { defineComponent } from "convex/server";
 import { v } from "convex/values";
+import type { VString } from "convex/values";
 
 import type { ConvexEmailEnvVar } from "../shared/adapters.js";
+
+type OptionalEnvValidator = VString<string | undefined, "optional">;
 
 /**
  * Every adapter credential the component may read. The list stays spelled out so `convex codegen`
@@ -56,6 +59,6 @@ const env = {
   SPARKPOST_API_KEY: v.optional(v.string()),
   UNOSEND_API_KEY: v.optional(v.string()),
   ZEPTOMAIL_TOKEN: v.optional(v.string()),
-} satisfies Record<ConvexEmailEnvVar, unknown>;
+} satisfies Record<ConvexEmailEnvVar, OptionalEnvValidator>;
 
 export default defineComponent("convexEmail", { env });

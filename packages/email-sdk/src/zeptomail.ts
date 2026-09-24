@@ -45,7 +45,7 @@ export function zeptomail(
     parseResponse(body) {
       return {
         adapter: "zeptomail",
-        id: firstString(body as Record<string, unknown>, ["request_id", "messageId", "id"]),
+        id: firstString(body, ["request_id", "messageId", "id"]),
         raw: body,
       };
     },

@@ -6,6 +6,8 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "./errors.js";
+import { causeString, isJsonObject, isJsonString, isStringMember, readJson } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import type {
   EmailAddress,
   EmailAdapter,
@@ -29,6 +31,8 @@ export function normalizeAdapterResult<Name extends string>(
   result: LegacyEmailSendResult,
 ): EmailSendResult<Name> {
   return {
+    // SAFETY: an adapter reports its own name; legacy adapters report it as `provider`.
+    // Either way the value names the adapter registered under `Name`.
     adapter: (result.adapter || result.provider || adapter) as Name,
     id: result.id ?? result.messageId,
     accepted: result.accepted,
@@ -42,11 +46,15 @@ export function arrayify<T>(value: OneOrMany<T> | undefined): T[] {
     return [];
   }
 
-  return Array.isArray(value) ? [...value] : [value as T];
+  return isList(value) ? [...value] : [value];
+}
+
+function isList<T>(value: OneOrMany<T>): value is readonly T[] {
+  return Array.isArray(value);
 }
 
 export function formatAddress(address: EmailAddress): string {
-  if (typeof address === "string") {
+  if (isStringMember(address)) {
     return address;
   }
 
@@ -62,38 +70,49 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
 }
 
 export function emailAddressOf(address: EmailAddress): string {
-  if (typeof address !== "string") {
+  if (!isStringMember(address)) {
     return address.email;
   }
 
   const match = address.match(/<([^>]+)>/);
+
   return (match?.[1] ?? address).trim();
 }
 
-export function headersToObject(
-  headers: EmailMessage["headers"],
-): Record<string, string> | undefined {
+/**
+ * Legacy messages may still carry headers as a name-to-value object instead of the
+ * `EmailHeader[]` list the v1 types declare.
+ */
+type HeaderInput = EmailMessage["headers"] | Readonly<Record<string, string>>;
+
+function isHeaderList(headers: NonNullable<HeaderInput>): headers is readonly EmailHeader[] {
+  return Array.isArray(headers);
+}
+
+export function headersToObject(headers: HeaderInput): Record<string, string> | undefined {
   if (!headers) {
     return undefined;
   }
 
-  if (!Array.isArray(headers)) {
-    return headers as unknown as Record<string, string>;
+  if (!isHeaderList(headers)) {
+    return { ...headers };
   }
+
   return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
-export function headersToArray(headers: EmailMessage["headers"]): EmailHeader[] | undefined {
+export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined {
   if (!headers) {
     return undefined;
   }
 
-  if (!Array.isArray(headers)) {
-    return Object.entries(headers as unknown as Record<string, string>).map(([name, value]) => ({
+  if (!isHeaderList(headers)) {
+    return Object.entries(headers).map(([name, value]) => ({
       name,
       value,
     }));
   }
+
   return [...headers];
 }
 
@@ -116,7 +135,7 @@ export function assertMessage(message: EmailMessage) {
 
   for (const attachment of message.attachments ?? []) {
     const hasContent = attachment.content !== undefined;
-    const hasPath = typeof attachment.path === "string" && attachment.path.length > 0;
+    const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
 
     if (hasContent === hasPath) {
       throw new EmailValidationError(
@@ -134,7 +153,7 @@ export function assertMessage(message: EmailMessage) {
 // with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
 export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
   if (
-    typeof sendAt === "string" &&
+    isStringMember(sendAt) &&
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(sendAt)
   ) {
     throw new EmailValidationError(
@@ -159,13 +178,19 @@ type LegacyRecipientMessage = EmailMessage & {
   recipientVariables?: RecipientVariables;
 };
 
+function recipientVariablesOf(message: LegacyRecipientMessage): RecipientVariables | undefined {
+  return message.recipientVariables;
+}
+
 export function hasRecipientVariables(message: EmailMessage): boolean {
-  const recipientVariables = (message as LegacyRecipientMessage).recipientVariables;
+  const recipientVariables = recipientVariablesOf(message);
+
   return Boolean(recipientVariables && Object.keys(recipientVariables).length > 0);
 }
 
 export function assertRecipientVariables(message: EmailMessage) {
-  const recipientVariables = (message as LegacyRecipientMessage).recipientVariables;
+  const recipientVariables = recipientVariablesOf(message);
+
   if (!hasRecipientVariables(message)) {
     return;
   }
@@ -217,33 +242,31 @@ export function assertRecipientVariables(message: EmailMessage) {
   }
 }
 
-export async function readErrorBody(response: Response): Promise<unknown> {
+/** Read an error response body: parsed JSON for JSON responses, otherwise the raw text. */
+export async function readErrorBody(response: Response): Promise<JsonValue | undefined> {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    return response.json().catch(() => undefined);
+    return readJson(response).catch(() => undefined);
   }
 
   return response.text().catch(() => undefined);
 }
 
-export function httpErrorMessage(provider: string, status: number, body: unknown) {
-  if (body && typeof body === "object") {
-    const record = body as Record<string, unknown>;
-    const message = record.message ?? record.Message ?? record.error ?? record.ErrorCode;
+export function httpErrorMessage(provider: string, status: number, body: JsonValue | undefined) {
+  if (isJsonObject(body)) {
+    const message = body.message ?? body.Message ?? body.error ?? body.ErrorCode;
 
-    if (typeof message === "string") {
+    if (isJsonString(message)) {
       return `${provider} failed with ${status}: ${message}`;
     }
 
-    if (Array.isArray(record.errors)) {
-      const nestedMessage = record.errors
-        .map((error) =>
-          error && typeof error === "object"
-            ? (error as Record<string, unknown>).message
-            : undefined,
-        )
-        .find((value): value is string => typeof value === "string");
+    const errors = body.errors;
+
+    if (Array.isArray(errors)) {
+      const nestedMessage = errors
+        .map((error: JsonValue) => (isJsonObject(error) ? error.message : undefined))
+        .find(isJsonString);
 
       if (nestedMessage) {
         return `${provider} failed with ${status}: ${nestedMessage}`;
@@ -258,30 +281,30 @@ export function isRetryableStatus(status: number) {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
 }
 
-export function toProviderError(provider: string, error: unknown) {
-  if (error instanceof EmailAbortError || error instanceof EmailValidationError) {
-    return error;
+export function toProviderError(provider: string, cause: unknown) {
+  if (cause instanceof EmailAbortError || cause instanceof EmailValidationError) {
+    return cause;
   }
 
-  if (error instanceof EmailAdapterError) {
-    return error;
+  if (cause instanceof EmailAdapterError) {
+    return cause;
   }
 
-  if (error instanceof EmailSdkError) {
-    return new EmailAdapterError(error.message, {
+  if (cause instanceof EmailSdkError) {
+    return new EmailAdapterError(cause.message, {
       adapter: provider,
-      retryable: error.retryable,
+      retryable: cause.retryable,
       delivery: "unknown",
-      cause: error,
+      cause,
     });
   }
 
-  if (error instanceof Error) {
-    return new EmailAdapterError(error.message, {
+  if (cause instanceof Error) {
+    return new EmailAdapterError(cause.message, {
       adapter: provider,
-      retryable: isRetryableRuntimeError(error),
+      retryable: isRetryableRuntimeError(cause),
       delivery: "unknown",
-      cause: error,
+      cause,
     });
   }
 
@@ -289,7 +312,7 @@ export function toProviderError(provider: string, error: unknown) {
     adapter: provider,
     retryable: false,
     delivery: "unknown",
-    cause: error,
+    cause,
   });
 }
 
@@ -298,10 +321,10 @@ function isRetryableRuntimeError(error: Error) {
     return false;
   }
 
-  const code = (error as unknown as Record<string, unknown>).code;
+  const code = causeString(error, "code");
 
   if (
-    typeof code === "string" &&
+    code !== undefined &&
     /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE)$/i.test(code)
   ) {
     return true;
@@ -320,12 +343,13 @@ export async function attachmentContentToString(
     return content;
   }
 
-  if (typeof content === "string") {
+  if (isStringMember(content)) {
     return encoding === "base64" ? content : Buffer.from(content).toString("base64");
   }
 
   if (content instanceof Blob) {
     const arrayBuffer = await content.arrayBuffer();
+
     return Buffer.from(arrayBuffer).toString("base64");
   }
 
@@ -355,7 +379,7 @@ export async function attachmentToBytes(attachment: EmailAttachment) {
     return Buffer.alloc(0);
   }
 
-  if (typeof content === "string") {
+  if (isStringMember(content)) {
     return Buffer.from(content, attachment.contentEncoding === "base64" ? "base64" : "utf8");
   }
 
@@ -497,9 +521,13 @@ export const SUPPORTED_MESSAGE_FIELDS = {
 } satisfies Record<string, MessageFieldSupport>;
 
 const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive"]);
+
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
+
 const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
 
+// SAFETY: the entries map every key of SUPPORTED_MESSAGE_FIELDS to its capabilities, so the
+// rebuilt object has exactly those keys.
 export const BUILT_IN_ADAPTER_CAPABILITIES = Object.fromEntries(
   Object.entries(SUPPORTED_MESSAGE_FIELDS).map(([name, fields]) => [
     name,
@@ -539,11 +567,13 @@ export function validateBuiltInAdapter(
 
 	for (const header of headersToArray(message.headers) ?? []) {
     const normalized = header.name.toLowerCase();
+
     if (!capabilities.repeatedHeaders && headerNames.has(normalized)) {
       throw new EmailValidationError(
         `${adapter} does not support repeated email header names: ${header.name}.`,
       );
     }
+
     headerNames.add(normalized);
   }
 
@@ -553,6 +583,7 @@ export function validateBuiltInAdapter(
   if (adapter === "loops" || adapter === "iterable" || adapter === "primitive") {
     assertMaxItems(adapter, "recipient", to, 1);
   }
+
   if (adapter === "jetemail") {
     if (!formatAddress(message.from).includes("<")) {
       const from = emailAddressOf(message.from);
@@ -560,11 +591,13 @@ export function validateBuiltInAdapter(
         `jetemail requires a from address with a display name, for example "Acme <${from}>".`,
       );
     }
+
     assertMaxItems(adapter, "recipient", to, 50);
     assertMaxItems(adapter, "cc", arrayify(message.cc), 50);
     assertMaxItems(adapter, "bcc", arrayify(message.bcc), 50);
     assertMaxItems(adapter, "replyTo", replyTo, 50);
   }
+
 	if (adapter === "cloudflare") {
     assertMaxItems(
       adapter,
@@ -573,14 +606,16 @@ export function validateBuiltInAdapter(
       50,
     );
     assertMaxItems(adapter, "replyTo", replyTo, 1);
+
 		for (const recipient of [...to, ...arrayify(message.cc), ...arrayify(message.bcc)]) {
-			if (typeof recipient === "string" ? recipient.includes("<") : Boolean(recipient.name)) {
+			if (isStringMember(recipient) ? recipient.includes("<") : Boolean(recipient.name)) {
 				throw new EmailValidationError(
 					"cloudflare recipient fields only support plain email addresses.",
 				);
 			}
 		}
 	}
+
 	if (
 		adapter === "brevo" ||
 		adapter === "mailersend" ||
@@ -592,22 +627,27 @@ export function validateBuiltInAdapter(
 	) {
 		assertMaxItems(adapter, "replyTo", replyTo, 1);
 	}
+
   if (adapter === "sequenzy") {
     assertMaxItems(adapter, "recipient", to, 50);
   }
+
   if (adapter === "postmark" || adapter === "lettermint" || adapter === "mailtrap" || adapter === "lettr") {
     assertMaxItems(adapter, "tag", [...(message.tags ?? [])], 1);
   }
+
   if (adapter === "scaleway" && replyTo.length > 0) {
 		const hasReplyHeader = (headersToArray(message.headers) ?? []).some(
 			(header) => header.name.toLowerCase() === "reply-to",
 		);
+
     if (hasReplyHeader) {
       throw new EmailValidationError(
         "scaleway cannot set replyTo when headers already include Reply-To.",
       );
     }
   }
+
   if (adapter === "graph") {
     const invalidHeaders = (headersToArray(message.headers) ?? [])
       .filter((header) => !/^x-/i.test(header.name))
@@ -628,6 +668,7 @@ export function validateBuiltInAdapter(
       1000,
     );
   }
+
   if (adapter === "smtp") {
     for (const address of [
       message.from,
@@ -636,20 +677,25 @@ export function validateBuiltInAdapter(
       ...arrayify(message.bcc),
     ]) {
       const envelope = emailAddressOf(address);
+
       const hasInvalidCharacter = [...envelope].some((character) => {
         const codePoint = character.codePointAt(0) ?? 0;
+
         return codePoint <= 0x20 || codePoint >= 0x7f || character === "<" || character === ">";
       });
+
       if (!envelope || hasInvalidCharacter) {
         throw new EmailValidationError(
           `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
         );
       }
     }
+
 		for (const header of headersToArray(message.headers) ?? []) {
 			if (header.name.toLowerCase() === "bcc") {
 				throw new EmailValidationError("SMTP does not allow Bcc in message headers.");
 			}
+
 			if (!/^[!-9;-~]+$/.test(header.name)) {
 				throw new EmailValidationError(
 					`SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
@@ -667,12 +713,19 @@ export function assertSupportedMessageFields(
   const unsupported: string[] = [];
 
   if (hasOptionalRecipients(message.cc) && !supported.cc) unsupported.push("cc");
+
   if (hasOptionalRecipients(message.bcc) && !supported.bcc) unsupported.push("bcc");
+
   if (hasOptionalRecipients(message.replyTo) && !supported.replyTo) unsupported.push("replyTo");
+
   if (hasValues(message.headers) && !supported.headers) unsupported.push("headers");
+
   if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
+
   if (message.tags?.length && !supported.tags) unsupported.push("tags");
+
   if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
+
   if (message.sendAt !== undefined && !supported.sendAt) unsupported.push("sendAt");
 
   if (unsupported.length > 0) {
@@ -683,10 +736,10 @@ export function assertSupportedMessageFields(
   }
 }
 
-export function assertMaxItems(
+export function assertMaxItems<T>(
   adapter: string,
   field: string,
-  values: readonly unknown[],
+  values: readonly T[],
   max: number,
 ) {
   if (values.length <= max) {

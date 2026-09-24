@@ -15,6 +15,7 @@ import { Moon, Sun } from "@/components/icon";
 import {
   emailExampleCategories as categories,
   type EmailExampleId,
+  emailExampleIds,
   emailExamples as examples,
 } from "@/lib/email-example-data";
 
@@ -38,9 +39,12 @@ export function EmailExampleGallery() {
             <p className="text-sm text-fd-muted-foreground">{category.description}</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            {(Object.entries(examples) as [ExampleId, (typeof examples)[ExampleId]][])
-              .filter(([, example]) => example.category === category.key)
-              .map(([id, example]) => (
+            {emailExampleIds.flatMap((id) => {
+              const example = examples[id];
+
+              if (example.category !== category.key) return [];
+
+              return [
                 <a
                   className="group overflow-hidden rounded-xl border border-fd-border bg-fd-card transition hover:border-fd-muted-foreground/60 hover:bg-fd-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
                   href={example.path}
@@ -60,8 +64,9 @@ export function EmailExampleGallery() {
                       {example.description}
                     </p>
                   </div>
-                </a>
-              ))}
+                </a>,
+              ];
+            })}
           </div>
         </section>
       ))}
@@ -377,6 +382,7 @@ function Details({
       <tbody>
         {rows.map(([label, value], index) => {
           const strong = strongLast && index === rows.length - 1;
+
           return (
             <tr key={label}>
               <td

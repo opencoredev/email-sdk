@@ -18,6 +18,7 @@ import { appName, siteUrl } from "@/lib/shared";
 export const Route = createFileRoute("/compare/$pair")({
   head: ({ params }) => {
     const pair = getComparePair(params.pair);
+
     if (!pair) return {};
 
     const title = getComparePairTitle(pair);
@@ -78,6 +79,7 @@ export const Route = createFileRoute("/compare/$pair")({
 function ComparePage() {
   const { pair: slug } = Route.useParams();
   const pair = getComparePair(slug);
+
   if (!pair) return null;
 
   const a = getProvider(pair.a);

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+// SAFETY: this package's own package.json always declares a string name and version.
 const packageInfo = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as {
   name: string;
   version: string;
@@ -86,14 +87,17 @@ describe("email-sdk CLI", () => {
 
   test("doctor JSON defaults to configuration-only without provider traffic", async () => {
     let calls = 0;
+
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch() {
         calls++;
+
         return Response.json({});
       },
     });
+
     try {
       const result = await runCli([
         "doctor",
@@ -105,6 +109,7 @@ describe("email-sdk CLI", () => {
         server.url.origin,
         "--json",
       ]);
+
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
       expect(calls).toBe(0);
@@ -131,14 +136,17 @@ describe("email-sdk CLI", () => {
     "doctor rejects a valueless base URL override without falling back",
     async ({ override }) => {
       let calls = 0;
+
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
         fetch() {
           calls++;
+
           return Response.json({ data: [], has_more: false });
         },
       });
+
       try {
         const result = await runCli(
           [
@@ -153,6 +161,7 @@ describe("email-sdk CLI", () => {
           ],
           { RESEND_BASE_URL: server.url.origin },
         );
+
         expect(result.exitCode).toBe(1);
         expect(result.stderr).toBe("");
         expect(JSON.parse(result.stdout).checks.configuration.status).toBe("failed");
@@ -165,6 +174,7 @@ describe("email-sdk CLI", () => {
 
   test("doctor live JSON uses flag credentials over environment and verifies Resend sender", async () => {
     let calls = 0;
+
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -173,6 +183,7 @@ describe("email-sdk CLI", () => {
         expect(request.method).toBe("GET");
         expect(await request.text()).toBe("");
         expect(request.headers.get("Authorization")).toBe("Bearer flag-private-key");
+
         return Response.json({
           has_more: false,
           data: [
@@ -186,6 +197,7 @@ describe("email-sdk CLI", () => {
         });
       },
     });
+
     try {
       const result = await runCli(
         [
@@ -203,12 +215,14 @@ describe("email-sdk CLI", () => {
         ],
         { RESEND_API_KEY: "env-private-key", RESEND_BASE_URL: "https://must-not-request.example" },
       );
+
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
       expect(calls).toBe(1);
       const body = JSON.parse(result.stdout);
       expect(body.ok).toBe(true);
       expect(body.checks.sender.status).toBe("passed");
+
       for (const privateValue of [
         "flag-private-key",
         "env-private-key",
@@ -228,6 +242,7 @@ describe("email-sdk CLI", () => {
       MS_GRAPH_CLIENT_SECRET: "",
       MS_GRAPH_USER: "",
     });
+
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe("");
     const body = JSON.parse(result.stdout);
@@ -238,14 +253,17 @@ describe("email-sdk CLI", () => {
 
   test("Graph doctor uses secret flags and national-cloud OAuth options without leaking them", async () => {
     const requests: string[] = [];
+
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         requests.push(await request.text());
+
         return Response.json({ access_token: "private-access-token" });
       },
     });
+
     try {
       const result = await runCli([
         "doctor", "--adapter", "graph", "--live", "--json",
@@ -253,6 +271,7 @@ describe("email-sdk CLI", () => {
         "--client-secret", "flag-private-secret", "--token-url", server.url.href,
         "--scope", "https://graph.microsoft.us/.default",
       ], { MS_GRAPH_CLIENT_SECRET: "env-private-secret" });
+
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
       expect(requests).toHaveLength(1);
@@ -260,6 +279,7 @@ describe("email-sdk CLI", () => {
       expect(form.get("client_secret")).toBe("flag-private-secret");
       expect(form.get("scope")).toBe("https://graph.microsoft.us/.default");
       expect(JSON.parse(result.stdout).checks.authentication.status).toBe("passed");
+
       for (const secret of ["flag-private-secret", "env-private-secret", "private-access-token"]) {
         expect(result.stdout).not.toContain(secret);
       }
@@ -285,6 +305,7 @@ describe("email-sdk CLI", () => {
         );
       },
     });
+
     try {
       const result = await runCli([
         "doctor",
@@ -297,6 +318,7 @@ describe("email-sdk CLI", () => {
         "--live",
         "--json",
       ]);
+
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toBe("");
       expect(JSON.parse(result.stdout).checks.authentication.status).toBe(expected);
@@ -326,6 +348,7 @@ describe("email-sdk CLI", () => {
         });
       },
     });
+
     try {
       const result = await runCli([
         "doctor",
@@ -339,11 +362,13 @@ describe("email-sdk CLI", () => {
         "--from",
         "sender@example.com",
       ]);
+
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toBe("");
       expect(result.stdout).toContain("configuration: passed");
       expect(result.stdout).toContain("authentication: passed");
       expect(result.stdout).toContain("sender: not_ready");
+
       for (const privateValue of [
         "re_private_key_000",
         "private_key",
@@ -361,14 +386,17 @@ describe("email-sdk CLI", () => {
 
   test("doctor never follows a redirect to another local server", async () => {
     let leaked = 0;
+
     const destination = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch() {
         leaked++;
+
         return Response.json({});
       },
     });
+
     const redirect = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -376,6 +404,7 @@ describe("email-sdk CLI", () => {
         return Response.redirect(destination.url);
       },
     });
+
     try {
       const result = await runCli([
         "doctor",
@@ -388,6 +417,7 @@ describe("email-sdk CLI", () => {
         "--live",
         "--json",
       ]);
+
       expect(result.exitCode).toBe(1);
       expect(JSON.parse(result.stdout).checks.authentication.status).toBe("network_failure");
       expect(leaked).toBe(0);
@@ -409,6 +439,7 @@ describe("email-sdk CLI", () => {
       "hello@example.com",
       "--json",
     ]);
+
     expect(result.exitCode).toBe(1);
     expect(JSON.parse(result.stdout).checks.configuration.message).toContain(
       "--from requires --live",
@@ -420,6 +451,7 @@ describe("email-sdk CLI", () => {
       ["doctor", "--adapter", "resend", "--api-key", "", "--live", "--json"],
       { RESEND_API_KEY: "env-private-key" },
     );
+
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe("");
     expect(JSON.parse(result.stdout).checks.configuration.status).toBe("failed");
@@ -434,6 +466,7 @@ describe("email-sdk CLI", () => {
       "--live",
       "--json",
     ]);
+
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe("");
     expect(JSON.parse(result.stdout).adapter).toBe("unknown");
@@ -451,6 +484,7 @@ describe("email-sdk CLI", () => {
       "--live",
       "--json",
     ]);
+
     expect(result.exitCode).toBe(1);
     expect(JSON.parse(result.stdout).checks.authentication.status).toBe("unsupported");
   });
@@ -657,6 +691,7 @@ describe("email-sdk CLI", () => {
 
 async function runCli(args: string[], env: Record<string, string | undefined> = {}) {
   const packageRoot = new URL("..", import.meta.url).pathname;
+
   const proc = Bun.spawn({
     cmd: ["bun", "src/cli.ts", ...args],
     cwd: packageRoot,

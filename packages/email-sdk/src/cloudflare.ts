@@ -1,5 +1,7 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
+import { causeString, isJsonString, jsonArray, jsonField, jsonString } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersObject, emailParts, stringAddresses } from "./payloads.js";
 import type { EmailAddress, EmailAdapter, EmailMessage, OneOrMany } from "./types.js";
 import {
@@ -78,17 +80,6 @@ export type CloudflareAdapterRaw =
   | { baseUrl: string; accountId: string }
   | { binding: CloudflareSendEmailBinding };
 
-type CloudflareSendResponse = {
-  success?: boolean;
-  errors?: Array<{ code?: number; message?: string }>;
-  messages?: Array<{ code?: number; message?: string }>;
-  result?: {
-    delivered?: string[];
-    permanent_bounces?: string[];
-    queued?: string[];
-  } | null;
-};
-
 export function cloudflare(
   options: CloudflareAdapterOptions,
 ): EmailAdapter<"cloudflare", CloudflareAdapterRaw> {
@@ -158,6 +149,7 @@ function fromBinding(
         if (error instanceof EmailAdapterError || error instanceof EmailValidationError) {
           throw error;
         }
+
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new EmailAdapterError(`cloudflare failed: ${errorMessage}`, {
           adapter: "cloudflare",
@@ -175,7 +167,7 @@ function fromHttp(
   const baseUrl = options.baseUrl ?? "https://api.cloudflare.com/client/v4";
 
   return {
-    ...jsonProvider<"cloudflare", CloudflareSendResponse>({
+    ...jsonProvider({
       name: "cloudflare",
       baseUrl,
       endpoint: `/accounts/${encodeURIComponent(options.accountId)}/email/sending/send`,
@@ -208,16 +200,16 @@ function fromHttp(
         };
       },
       parseResponse(body) {
-        if (body.success !== true) {
+        if (jsonField(body, "success") !== true) {
           throw new EmailAdapterError(cloudflareErrorMessage(body), {
             adapter: "cloudflare",
             retryable: false,
           });
         }
 
-        const result = body.result ?? {};
-        const accepted = [...(result.delivered ?? []), ...(result.queued ?? [])];
-        const rejected = result.permanent_bounces ?? [];
+        const result = jsonField(body, "result");
+        const accepted = [...stringList(result, "delivered"), ...stringList(result, "queued")];
+        const rejected = stringList(result, "permanent_bounces");
 
         return {
           adapter: "cloudflare",
@@ -272,6 +264,7 @@ function cloudflareRecipients(addresses: OneOrMany<EmailAddress>) {
 
 function cloudflareOptionalRecipients(addresses: OneOrMany<EmailAddress> | undefined) {
   const values = arrayify(addresses).map(cloudflareRecipient);
+
   return values.length > 0 ? values : undefined;
 }
 
@@ -296,6 +289,7 @@ function cloudflareOptionalReplyTo(addresses: OneOrMany<EmailAddress> | undefine
   }
 
   assertMaxItems("cloudflare", "replyTo", values, 1);
+
   return cloudflareAddress(values[0]!);
 }
 
@@ -309,6 +303,7 @@ function cloudflareOptionalBindingReplyTo(
   }
 
   assertMaxItems("cloudflare", "replyTo", values, 1);
+
   return cloudflareBindingAddress(values[0]!);
 }
 
@@ -318,18 +313,20 @@ function assertCloudflareLimits(message: EmailMessage) {
   assertMaxItems("cloudflare", "recipient", recipients, 50);
 }
 
-function isRetryableCloudflareBindingError(error: unknown) {
-  if (!error || typeof error !== "object" || !("code" in error)) {
-    return false;
-  }
+function isRetryableCloudflareBindingError(cause: unknown) {
+  const code = causeString(cause, "code");
 
-  return ["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR"].includes(String(error.code));
+  return code !== undefined && ["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR"].includes(code);
 }
 
-function cloudflareErrorMessage(body: CloudflareSendResponse) {
-  const message = body.errors
-    ?.map((error) => error.message)
-    .find((value): value is string => Boolean(value));
+function stringList(value: JsonValue | undefined, key: string) {
+  return jsonArray(value, key).filter(isJsonString);
+}
+
+function cloudflareErrorMessage(body: JsonValue) {
+  const message = jsonArray(body, "errors")
+    .map((error) => jsonString(error, "message"))
+    .find((value) => Boolean(value));
 
   return message ? `cloudflare failed: ${message}` : "cloudflare failed.";
 }

@@ -22,6 +22,7 @@ const SINGLETONS = ["fumadocs-core", "react", "react-dom", "@tanstack/react-rout
 
 function resolveFrom(baseDir: string, pkg: string): string {
   const req = createRequire(resolve(baseDir, "noop.js"));
+
   return realpathSync(dirname(req.resolve(`${pkg}/package.json`)));
 }
 
@@ -32,6 +33,7 @@ let failed = false;
 for (const pkg of SINGLETONS) {
   const fromApp = resolveFrom(appDir, pkg);
   let fromUi: string;
+
   try {
     fromUi = resolveFrom(fumadocsUiDir, pkg);
   } catch {
@@ -52,6 +54,7 @@ for (const pkg of SINGLETONS) {
 try {
   const lucideApp = resolveFrom(appDir, "lucide-react");
   const lucideUi = resolveFrom(fumadocsUiDir, "lucide-react");
+
   if (lucideApp !== lucideUi) {
     failed = true;
     console.error(

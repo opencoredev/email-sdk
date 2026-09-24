@@ -5,12 +5,14 @@ import { notraPosts } from "./notra-posts.generated";
 export type { BlogPost };
 
 const blogMetaTitleSuffix = " - Email SDK";
+
 const maxBlogMetaTitleLength = 68;
 
 // Launch and editorial posts can live in source control, while recurring posts
 // continue to come from the Notra snapshot. Local posts win on slug collisions so
 // a Notra draft cannot accidentally replace a versioned launch article.
 const localSlugs = new Set(localBlogPosts.map((post) => post.slug));
+
 export const blogPosts: readonly BlogPost[] = [
   ...localBlogPosts,
   ...notraPosts.filter((post) => !localSlugs.has(post.slug)),
@@ -20,6 +22,7 @@ export function getBlogPost(slug: string, options: { includeFuture?: boolean } =
   const post = blogPosts.find((item) => item.slug === slug);
 
   if (!post) return undefined;
+
   if (options.includeFuture || isBlogPostPublished(post)) return post;
 
   return undefined;
@@ -57,10 +60,12 @@ function truncateTitle(title: string, maxLength: number) {
   if (title.length <= maxLength) return title;
 
   const stemLimit = Math.max(1, maxLength - 3);
+
   const wordBoundaryStem = title
     .slice(0, stemLimit)
     .replace(/\s+\S*$/, "")
     .replace(/[.,;:\s]+$/, "");
+
   const stem = wordBoundaryStem || title.slice(0, stemLimit).trimEnd();
 
   return `${stem}...`;

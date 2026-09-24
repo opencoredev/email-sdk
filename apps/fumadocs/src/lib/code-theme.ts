@@ -115,4 +115,5 @@ function buildTheme(name: string, type: "dark" | "light", c: typeof dark): Theme
 }
 
 export const emailSdkDark = buildTheme("email-sdk-dark", "dark", dark);
+
 export const emailSdkLight = buildTheme("email-sdk-light", "light", light);

@@ -1,4 +1,6 @@
 import { EmailAbortError, EmailAdapterError } from "./errors.js";
+import { isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersArray, emailParts } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
@@ -41,8 +43,11 @@ export type GraphAccessTokenOptions = GraphSharedOptions & {
 export type GraphAdapterOptions = GraphClientSecretOptions | GraphAccessTokenOptions;
 
 const DEFAULT_BASE_URL = "https://graph.microsoft.com/v1.0";
+
 const TOKEN_REFRESH_SKEW_MS = 60_000;
+
 const DEFAULT_TOKEN_TIMEOUT_MS = 30_000;
+
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 type TokenProvider = {
@@ -64,6 +69,7 @@ export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { bas
 
       let token = await resolveAccessToken(accessToken, context.signal);
       const payload = JSON.stringify(await toGraphPayload(message, options.saveToSentItems));
+
       let response = await sendGraphMessage(
         fetcher,
         baseUrl,
@@ -84,6 +90,7 @@ export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { bas
           payload,
           context.signal,
         );
+
         if (response.status === 401) accessToken.invalidate(token);
       }
 
@@ -129,6 +136,7 @@ async function resolveAccessToken(provider: TokenProvider, signal?: AbortSignal)
   try {
     if (signal?.aborted) throw new EmailAbortError(signal.reason);
     const token = provider.get();
+
     if (!signal) return await token;
 
     // Cancel this sender's wait, not the refresh shared with other senders.
@@ -137,6 +145,7 @@ async function resolveAccessToken(provider: TokenProvider, signal?: AbortSignal)
         signal.removeEventListener("abort", abort);
         reject(new EmailAbortError(signal.reason));
       };
+
       signal.addEventListener("abort", abort, { once: true });
       Promise.resolve(token).then(
         (value) => {
@@ -148,6 +157,7 @@ async function resolveAccessToken(provider: TokenProvider, signal?: AbortSignal)
           reject(error);
         },
       );
+
       if (signal.aborted) abort();
     });
   } catch (error) {
@@ -175,6 +185,7 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
 
   const tokenUrl =
     options.tokenUrl ?? `https://login.microsoftonline.com/${options.tenantId}/oauth2/v2.0/token`;
+
   const body = new URLSearchParams({
     client_id: options.clientId,
     client_secret: options.clientSecret,
@@ -207,10 +218,12 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
         .finally(() => {
           refreshing = undefined;
         });
+
       return (await refreshing).accessToken;
     },
     invalidate(token: string) {
       if (cached?.accessToken === token) cached = undefined;
+
       return true;
     },
   };
@@ -223,13 +236,16 @@ async function requestAccessToken(
   timeoutMs: number,
 ) {
   const controller = new AbortController();
+
   const request = fetcher(tokenUrl, {
     method: "POST",
     signal: controller.signal,
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   }).then(async (response) => ({ response, body: await readErrorBody(response) }));
+
   let timer: ReturnType<typeof setTimeout> | undefined;
+
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(
@@ -242,6 +258,7 @@ async function requestAccessToken(
       controller.abort();
     }, timeoutMs);
   });
+
   const { response, body: responseBody } = await Promise.race([request, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
   });
@@ -255,9 +272,9 @@ async function requestAccessToken(
     });
   }
 
-  const token = responseBody as { access_token?: string; expires_in?: number } | undefined;
+  const accessToken = jsonString(responseBody, "access_token");
 
-  if (typeof token?.access_token !== "string") {
+  if (accessToken === undefined) {
     throw new EmailAdapterError("graph returned a token response without an access_token.", {
       adapter: "graph",
       retryable: false,
@@ -266,8 +283,12 @@ async function requestAccessToken(
   }
 
   return {
-    accessToken: token.access_token,
-    refreshAt: Date.now() + (token.expires_in ?? 3_600) * 1_000 - TOKEN_REFRESH_SKEW_MS,
+    accessToken,
+    // Some Microsoft identity endpoints send expires_in as a numeric string.
+    refreshAt:
+      Date.now() +
+      Number(jsonField(responseBody, "expires_in") ?? 3_600) * 1_000 -
+      TOKEN_REFRESH_SKEW_MS,
   };
 }
 
@@ -305,23 +326,27 @@ async function toGraphPayload(message: EmailMessage, saveToSentItems?: boolean) 
 function graphRecipients(addresses: EmailMessage["cc"]) {
   return arrayify(addresses).map((address) => {
     const { email, name } = emailParts(address);
+
     return { emailAddress: { address: email, name } };
   });
 }
 
-function graphErrorMessage(status: number, body: unknown) {
-  const record = body as Record<string, unknown> | undefined;
+function graphErrorMessage(status: number, body: JsonValue | undefined) {
+  const error = jsonField(body, "error");
 
-  if (typeof record?.error === "string") {
-    const detail = [record.error, record.error_description].filter(Boolean).join(" - ");
+  if (isJsonString(error)) {
+    const detail = [error, jsonField(body, "error_description")].filter(Boolean).join(" - ");
+
     return detail
       ? `graph failed with ${status}: ${detail}`
       : httpErrorMessage("graph", status, body);
   }
 
-  if (record?.error && typeof record.error === "object") {
-    const error = record.error as Record<string, unknown>;
-    const detail = [error.code, error.message].filter(Boolean).join(" - ");
+  if (isJsonObject(error)) {
+    const detail = [jsonField(error, "code"), jsonField(error, "message")]
+      .filter(Boolean)
+      .join(" - ");
+
     return detail
       ? `graph failed with ${status}: ${detail}`
       : httpErrorMessage("graph", status, body);

@@ -46,7 +46,6 @@
     "dist",
     "src",
     "!src/**/*.test.ts",
-    "!src/email-sdk-shim.d.ts",
     "README.md"
   ],
   "type": "module",
@@ -90,6 +89,9 @@
     "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
     "prepack": "if [ \"${EMAIL_SDK_RELEASE_PREBUILT:-0}\" = \"1\" ]; then test -f dist/client/index.js; else bun run build; fi"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@opencoredev/email-sdk": "workspace:*",

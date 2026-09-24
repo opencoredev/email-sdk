@@ -6,15 +6,20 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const requireMode = process.argv.includes("--require");
+
 const run = promisify(execFile);
+
 const root = resolve(new URL("..", import.meta.url).pathname);
+
 const packageDir = resolve(root, "packages/email-sdk");
+
 const packageJson = JSON.parse(await readFile(resolve(packageDir, "package.json"), "utf8"));
 
 // Exercise the package through its published exports map, rather than loading
 // repository-relative dist files. This catches packaging and conditional-export
 // regressions in the same way a consumer encounters them.
 const scratch = await mkdtemp(join(tmpdir(), "email-sdk-node-compatibility-"));
+
 try {
   const tarballDir = join(scratch, "tarball");
   await mkdir(tarballDir);
@@ -34,8 +39,10 @@ try {
   if (requireMode) {
     const subpaths = Object.entries(packageJson.exports).map(([subpath, entry]) => {
       assert.ok(entry.require, `${subpath} is missing a CommonJS export`);
+
       return subpath === "." ? packageJson.name : `${packageJson.name}${subpath.slice(1)}`;
     });
+
     await writeFile(
       join(scratch, "probe.cjs"),
       `for (const specifier of ${JSON.stringify(subpaths)}) { const loaded = require(specifier); if (!loaded || typeof loaded !== "object") throw new Error(specifier + " did not load as CommonJS"); }\n`,

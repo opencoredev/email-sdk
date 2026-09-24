@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { GenericValidator, Validator } from "convex/values";
+import type { GenericValidator, PropertyValidators, Validator } from "convex/values";
 
 import {
   CONVEX_EMAIL_ADAPTERS,
@@ -64,28 +64,46 @@ export const vEmailMessage = {
  * contributes an optional `<field>Env` key when it can be read from the component environment and
  * an optional literal key when it is safe to store inline.
  */
-export const vAdapterConfig = v.union(
-  ...(Object.entries(CONVEX_EMAIL_ADAPTERS as Record<string, ConvexAdapterFields>).map(
-    ([kind, fields]) => v.object(adapterConfigShape(kind, fields)),
-  ) as [GenericValidator, GenericValidator, ...GenericValidator[]]),
-) as unknown as Validator<ConvexEmailAdapterConfig, "required", never>;
+export const vAdapterConfig = adapterConfigValidator();
 
-function adapterConfigShape(kind: string, fields: ConvexAdapterFields) {
-  const shape: Record<string, GenericValidator> = {
+function adapterConfigValidator(): Validator<ConvexEmailAdapterConfig, "required", string> {
+  const [first, second, ...rest] = Object.entries(CONVEX_EMAIL_ADAPTERS).map(([kind, fields]) =>
+    adapterObjectValidator(kind, fields),
+  );
+
+  if (!first || !second) {
+    throw new Error("CONVEX_EMAIL_ADAPTERS must describe at least two adapters.");
+  }
+
+  // SAFETY: each object validator is generated from the same CONVEX_EMAIL_ADAPTERS entry that
+  // ConvexEmailAdapterConfig derives its member type from (kind literal, optional name, `<field>Env`
+  // for env-backed fields, and inline fields typed by ConvexAdapterFieldValue). adapters.test.ts
+  // checks the generated validator against the registry, so the runtime union and the static type
+  // describe the same values.
+  return v.union(first, second, ...rest) as Validator<ConvexEmailAdapterConfig, "required", string>;
+}
+
+function adapterObjectValidator(kind: string, fields: ConvexAdapterFields): GenericValidator {
+  return v.object(adapterConfigFields(kind, fields));
+}
+
+function adapterConfigFields(kind: string, fields: ConvexAdapterFields) {
+  const validators: PropertyValidators = {
     kind: v.literal(kind),
     name: v.optional(v.string()),
   };
 
   for (const [key, field] of Object.entries(fields)) {
     if (field.env) {
-      shape[`${key}Env`] = v.optional(v.string());
+      validators[`${key}Env`] = v.optional(v.string());
     }
+
     if (field.inline) {
-      shape[key] = v.optional(vAdapterFieldValue(field));
+      validators[key] = v.optional(vAdapterFieldValue(field));
     }
   }
 
-  return shape;
+  return validators;
 }
 
 function vAdapterFieldValue(field: ConvexAdapterField): GenericValidator {
@@ -176,8 +194,26 @@ export const vEmailProviderFailure = v.object({
   rejectedCount: v.optional(v.number()),
 });
 
-export const vStoredEmail = v.object({
-  _id: v.id("emails"),
+export const vEmailWebhookResult = v.object({
+  ok: v.boolean(),
+  duplicate: v.optional(v.boolean()),
+});
+
+export const vEmailWebhookArgs = {
+  provider: v.string(),
+  headers: v.record(v.string(), v.string()),
+  body: v.string(),
+};
+
+/** The provider acknowledgement the worker records when a send succeeds. */
+export const vEmailSendResult = v.object({
+  adapter: v.string(),
+  id: v.optional(v.string()),
+  accepted: v.optional(v.array(v.string())),
+  rejected: v.optional(v.array(v.string())),
+});
+
+const emailRecordFields = {
   _creationTime: v.number(),
   status: vEmailStatusValue,
   message: v.object(vEmailMessage),
@@ -202,12 +238,19 @@ export const vStoredEmail = v.object({
   updatedAt: v.number(),
   sentAt: v.optional(v.number()),
   terminalAt: v.optional(v.number()),
-});
+};
 
-export const vStoredEmailEvent = v.object({
-  _id: v.id("emailEvents"),
+/** An email document as the component reads it, keyed by its own table id. */
+export const vStoredEmail = v.object({ _id: v.id("emails"), ...emailRecordFields });
+
+/**
+ * The same email as an app sees it. Component table ids cross the component boundary as plain
+ * strings, so app-side functions must not validate them against the app's own tables.
+ */
+export const vEmailRecord = v.object({ _id: v.string(), ...emailRecordFields });
+
+const emailEventRecordFields = {
   _creationTime: v.number(),
-  emailId: v.id("emails"),
   type: vEmailEventType,
   adapter: v.optional(v.string()),
   attempt: v.optional(v.number()),
@@ -215,4 +258,17 @@ export const vStoredEmailEvent = v.object({
   payload: v.optional(v.any()),
   error: v.optional(v.string()),
   createdAt: v.number(),
+};
+
+export const vStoredEmailEvent = v.object({
+  _id: v.id("emailEvents"),
+  emailId: v.id("emails"),
+  ...emailEventRecordFields,
+});
+
+/** An email event as an app sees it; see `vEmailRecord` for why ids are strings here. */
+export const vEmailEventRecord = v.object({
+  _id: v.string(),
+  emailId: v.string(),
+  ...emailEventRecordFields,
 });

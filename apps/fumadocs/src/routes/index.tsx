@@ -78,7 +78,9 @@ export const Route = createFileRoute("/")({
 
 function sponsorByName(name: string) {
   const sponsor = sponsors.find((entry) => entry.name === name);
+
   if (!sponsor) throw new Error(`Unknown sponsor "${name}" referenced by the landing page`);
+
   return sponsor;
 }
 
@@ -267,6 +269,7 @@ function Adapters() {
       <div className="landing-adapter-list">
         {adapterNames.map((name) => {
           const adapter = sponsorByName(name);
+
           return (
             <DocsVersionLink docsPath={`/docs/adapters/${name.toLowerCase()}`} key={name}>
               <img alt="" aria-hidden="true" src={adapter.logo} />
@@ -302,6 +305,7 @@ function Sponsors() {
       <div className="landing-sponsor-grid">
         {sponsorNames.map((name) => {
           const sponsor = sponsorByName(name);
+
           return (
             <a
               className="landing-sponsor"

@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
   builtInAdapterDefinition,
@@ -19,12 +20,6 @@ export type JetemailAdapterOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
-};
-
-type JetemailResponse = {
-  id?: string;
-  response?: string;
-  scheduled_at?: number;
 };
 
 export function jetemail(
@@ -64,11 +59,11 @@ export function jetemail(
         });
       }
 
-      const body = (await response.json().catch(() => ({}))) as JetemailResponse;
+      const body = await readJsonBody(response);
 
       return {
         adapter: "jetemail",
-        id: body.id,
+        id: jsonString(body, "id"),
         raw: body,
       };
     },

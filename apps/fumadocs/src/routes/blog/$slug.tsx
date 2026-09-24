@@ -2,19 +2,21 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 
 import { ArrowRight } from "@/components/icon";
-import { formatBlogDate, getBlogPostMetaTitle, getBlogPostUrl, type BlogPost } from "@/lib/blog";
+import { formatBlogDate, getBlogPostMetaTitle, getBlogPostUrl } from "@/lib/blog";
 import { baseOptions } from "@/lib/layout.shared";
 import { getBlogPostServerFn } from "@/lib/notra-runtime";
 import { siteUrl } from "@/lib/shared";
 
-type BlogPostLoaderData = {
-  html: string;
-  post: BlogPost;
-};
-
 export const Route = createFileRoute("/blog/$slug")({
+  loader: async ({ params }) => {
+    const detail = await getBlogPostServerFn({ data: params.slug });
+
+    if (!detail) throw notFound();
+
+    return detail;
+  },
   head: ({ params, loaderData }) => {
-    const post = (loaderData as BlogPostLoaderData | undefined)?.post;
+    const post = loaderData?.post;
     const title = post ? getBlogPostMetaTitle(post.title) : "Email SDK Blog";
     const description = post?.description ?? "Email SDK blog post.";
     const canonicalUrl = `${siteUrl}${getBlogPostUrl(params.slug)}`;
@@ -104,12 +106,6 @@ export const Route = createFileRoute("/blog/$slug")({
     };
   },
   component: BlogPostPage,
-  loader: async ({ params }) => {
-    const detail = await getBlogPostServerFn({ data: params.slug });
-    if (!detail) throw notFound();
-
-    return detail;
-  },
   headers: () => ({
     // Edge-cache the SSR'd post; updates and new posts appear within s-maxage, no rebuild.
     "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=600",
@@ -117,7 +113,7 @@ export const Route = createFileRoute("/blog/$slug")({
 });
 
 function BlogPostPage() {
-  const { html, post } = Route.useLoaderData() as BlogPostLoaderData;
+  const { html, post } = Route.useLoaderData();
 
   // `html` is the post body, rendered from the post's Markdown and sanitized
   // server-side in scripts/notra-content.ts, so it is safe to inject here.

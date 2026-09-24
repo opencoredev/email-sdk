@@ -1,15 +1,21 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { z } from "zod";
 
-type PackReport = {
-  filename: string;
-  files: Array<{ path: string; mode: number }>;
-};
+const packReportSchema = z.object({
+  filename: z.string(),
+  files: z.array(z.object({ path: z.string(), mode: z.number() })),
+});
+
+type PackReport = z.infer<typeof packReportSchema>;
 
 const root = resolve(import.meta.dir, "..");
+
 const scratchBase = process.env.JCODE_SCRATCH_DIR ?? tmpdir();
+
 await mkdir(scratchBase, { recursive: true });
+
 const scratch = await mkdtemp(join(scratchBase, "email-sdk-pack-check-"));
 
 try {
@@ -58,7 +64,11 @@ try {
 
   const commonJsTypes = join(install, "consumer.cts");
   await writeFile(commonJsTypes, commonJsTypeProgram());
-  console.log("Compiling installed-package typed CommonJS consumers...");
+  // Module augmentation is global to a compilation, so the metadata consumer compiles alone.
+  const metadataTypes = join(install, "metadata-register.mts");
+  await writeFile(metadataTypes, metadataRegisterTypeProgram());
+  console.log("Compiling installed-package typed consumers...");
+
   for (const [compiler, module] of [
     ["typescript-min", "nodenext"],
     ["typescript", "nodenext"],
@@ -76,6 +86,21 @@ try {
         "--module",
         module,
         commonJsTypes,
+      ],
+      install,
+    );
+    await run(
+      [
+        "node",
+        join(install, "node_modules", compiler, "bin/tsc"),
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--target",
+        "es2022",
+        "--module",
+        module,
+        metadataTypes,
       ],
       install,
     );
@@ -97,12 +122,14 @@ async function pack(packageDir: string, destination: string): Promise<PackReport
     ["npm", "pack", "--json", "--silent", "--pack-destination", destination],
     packageDir,
   );
-  const jsonStart = output.lastIndexOf("\n[");
-  const report = JSON.parse(output.slice(jsonStart >= 0 ? jsonStart + 1 : output.indexOf("["))) as
-    | PackReport[]
-    | undefined;
 
-  if (!report || report.length !== 1) {
+  const jsonStart = output.lastIndexOf("\n[");
+
+  const report = z
+    .array(packReportSchema)
+    .parse(JSON.parse(output.slice(jsonStart >= 0 ? jsonStart + 1 : output.indexOf("["))));
+
+  if (report.length !== 1) {
     throw new Error(`npm pack did not return one package for ${basename(packageDir)}.`);
   }
 
@@ -145,6 +172,7 @@ async function run(command: string[], cwd: string): Promise<string> {
     stdout: "pipe",
     stderr: "pipe",
   });
+
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
@@ -251,6 +279,44 @@ void email.send({
 resend({ apiKey: 123 });
 // @ts-expect-error Client options must remain typed.
 sdk.createEmailClient({ adapters: "invalid" });
+`;
+}
+
+function metadataRegisterTypeProgram(): string {
+  return String.raw`
+import { createEmailClient, type EmailSendMetadata } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+declare module "@opencoredev/email-sdk" {
+  interface EmailMetadataRegister {
+    metadata: { tenantId: string };
+  }
+}
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: "compile-only" })],
+  telemetry: false,
+  hooks: {
+    beforeSend(event) {
+      const tenantId: string | undefined = event.metadata?.tenantId;
+      void tenantId;
+    },
+  },
+});
+
+const message = {
+  from: "sender@example.com",
+  to: "recipient@example.com",
+  subject: "Compile only",
+  text: "This fixture is never executed.",
+};
+
+void email.send(message, { metadata: { tenantId: "t_1" } });
+// @ts-expect-error Registered metadata must keep its declared shape.
+void email.send(message, { metadata: { tenantId: 1 } });
+
+const registered: EmailSendMetadata = { tenantId: "t_2" };
+void registered;
 `;
 }
 

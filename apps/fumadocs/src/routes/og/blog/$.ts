@@ -15,6 +15,7 @@ export const Route = createFileRoute("/og/blog/$")({
         }
 
         const detail = await getBlogPostServerFn({ data: slug });
+
         if (!detail) {
           return new Response("Not found", { status: 404 });
         }
@@ -86,9 +87,11 @@ function renderBlogOgImage(post: OgPost) {
 
 function hashSlug(value: string) {
   let hash = 0;
+
   for (let index = 0; index < value.length; index++) {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
+
   return hash;
 }
 
@@ -103,20 +106,24 @@ function wrapText(value: string, maxLength: number) {
         lines.push(current);
         current = "";
       }
+
       lines.push(...splitLongWord(word, maxLength));
       continue;
     }
 
     const candidate = current ? `${current} ${word}` : word;
+
     if (candidate.length > maxLength && current) {
       lines.push(current);
       current = word;
       continue;
     }
+
     current = candidate;
   }
 
   if (current) lines.push(current);
+
   return lines;
 }
 
@@ -137,6 +144,7 @@ function limitLines(lines: string[], maxLines: number) {
 
   const visible = lines.slice(0, maxLines);
   const last = visible.at(-1);
+
   if (last) {
     visible[visible.length - 1] = `${last.replace(/[.,;:\s]+$/, "")}...`;
   }

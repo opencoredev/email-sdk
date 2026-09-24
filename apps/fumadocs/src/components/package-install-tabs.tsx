@@ -19,6 +19,7 @@ type InstallCommand = {
 type CopyState = "idle" | "copied" | "failed";
 
 const packageManagerStorageKey = "email-sdk-package-manager";
+
 const packageManagerChangeEvent = "email-sdk-package-manager-change";
 
 const packageManagers: Array<{
@@ -89,6 +90,7 @@ export function PackageInstallTabs({
 
   const selectedManager =
     packageManagers.find((manager) => manager.value === selected) ?? packageManagers[0];
+
   const selectedCommand = selectedManager.command(packageName);
   const commandText = `${selectedCommand.executable} ${selectedCommand.verb} ${selectedCommand.packageName}`;
   const panelId = `${installTabsId}-panel`;

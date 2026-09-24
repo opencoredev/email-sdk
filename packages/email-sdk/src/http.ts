@@ -1,4 +1,6 @@
 import { EmailProviderError } from "./errors.js";
+import { jsonString, readJsonBody } from "./internal/decode.js";
+import type { JsonValue } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
@@ -16,20 +18,25 @@ type LegacyAdapterResult = Omit<EmailSendResult, "adapter"> & {
   messageId?: string;
 };
 
-export type JsonProviderOptions<Name extends string, TRaw = unknown> = {
+export type JsonProviderOptions<Name extends string, TPayload> = {
   name: Name;
   baseUrl: string;
   endpoint: string;
   headers: Record<string, string>;
   fetch?: typeof fetch;
-  buildPayload: (message: EmailMessage) => unknown | Promise<unknown>;
-  parseResponse?: (body: TRaw, message: EmailMessage, response: Response) => LegacyAdapterResult;
+  buildPayload: (message: EmailMessage) => TPayload | Promise<TPayload>;
+  /** Receives the parsed JSON response body, or `{}` when the body is empty or malformed. */
+  parseResponse?: (
+    body: JsonValue,
+    message: EmailMessage,
+    response: Response,
+  ) => LegacyAdapterResult;
 };
 
 export function jsonProvider<
   const Name extends keyof typeof SUPPORTED_MESSAGE_FIELDS,
-  TRaw = Record<string, unknown>,
->(options: JsonProviderOptions<Name, TRaw>): EmailAdapter<Name, { baseUrl: string }> {
+  TPayload,
+>(options: JsonProviderOptions<Name, TPayload>): EmailAdapter<Name, { baseUrl: string }> {
   return {
     name: options.name,
     ...builtInAdapterDefinition(options.name),
@@ -37,6 +44,7 @@ export function jsonProvider<
     async send(message, context) {
       validateBuiltInAdapter(options.name, message);
       const fetcher = options.fetch ?? fetch;
+
       const response = await fetcher(`${options.baseUrl}${options.endpoint}`, {
         method: "POST",
         signal: context.signal,
@@ -57,7 +65,8 @@ export function jsonProvider<
         });
       }
 
-      const body = (await response.json().catch(() => ({}))) as TRaw;
+      const body = await readJsonBody(response);
+
       const result = options.parseResponse?.(body, message, response) ?? {
         adapter: options.name,
         raw: body,
@@ -68,11 +77,12 @@ export function jsonProvider<
   };
 }
 
-export function firstString(record: Record<string, unknown>, keys: string[]) {
+/** Return the first of `keys` whose value on a JSON object is a string. */
+export function firstString(record: JsonValue | undefined, keys: readonly string[]) {
   for (const key of keys) {
-    const value = record[key];
+    const value = jsonString(record, key);
 
-    if (typeof value === "string") {
+    if (value !== undefined) {
       return value;
     }
   }

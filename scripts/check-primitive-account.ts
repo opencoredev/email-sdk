@@ -5,9 +5,11 @@ import { createEmailClient } from "../packages/email-sdk/src/core.js";
 import { primitive } from "../packages/email-sdk/src/primitive.js";
 
 config({ path: ".env.local" });
+
 config();
 
 const baseUrl = process.env.PRIMITIVE_BASE_URL ?? "https://api.primitive.dev/v1";
+
 const apiKey = process.env.PRIMITIVE_API_KEY;
 
 if (!apiKey) {
@@ -15,7 +17,9 @@ if (!apiKey) {
 }
 
 const result = await runDoctor({ adapter: "primitive", credential: apiKey, live: true, baseUrl });
+
 console.log(JSON.stringify(result, null, 2));
+
 if (!result.ok) process.exit(1);
 
 if (process.env.PRIMITIVE_LIVE_SEND !== "true") {
@@ -23,7 +27,9 @@ if (process.env.PRIMITIVE_LIVE_SEND !== "true") {
 }
 
 const from = requiredEnv("PRIMITIVE_TEST_FROM");
+
 const to = requiredEnv("PRIMITIVE_TEST_TO");
+
 const email = createEmailClient({
   adapters: [
     primitive({

@@ -67,11 +67,26 @@ type EmailSendOptions<Name extends string> = {
   };
   signal?: AbortSignal;
   idempotencyKey?: string;
-  metadata?: Readonly<Record<string, unknown>>;
+  metadata?: EmailSendMetadata;
 };
 ```
 
-Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`.
+Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes it unchanged to hooks, plugins, and adapter contexts.
+
+By default `EmailSendMetadata` is `EmailMetadataRecord`: strings, numbers, booleans, `null`, `undefined`, `Date`, and arrays or plain objects of those. To give it your own shape, augment `EmailMetadataRegister` once in your app:
+
+```ts title="email-metadata.d.ts"
+// The import makes this file a module, so the block below augments the SDK types instead of replacing them.
+import "@opencoredev/email-sdk";
+
+declare module "@opencoredev/email-sdk" {
+  interface EmailMetadataRegister {
+    metadata: { tenantId: string; traceId?: string };
+  }
+}
+```
+
+After that, `send()` requires that shape and hooks read `event.metadata?.tenantId` as a `string`.
 
 ```ts title="types.ts"
 type EmailSendResult<Name extends string = string, Raw = unknown> = {
