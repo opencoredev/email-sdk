@@ -8,6 +8,8 @@ function request(url: string, destination?: string, method = "GET") {
   const req = new IncomingMessage(new Socket());
   req.url = url;
   req.method = method;
+  // Bun 1.3 leaves `headers` unset on a socket-constructed IncomingMessage.
+  req.headers = {};
 
   if (destination !== undefined) req.headers["sec-fetch-dest"] = destination;
 
