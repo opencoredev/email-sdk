@@ -12,6 +12,8 @@ Tighten types at the SDK's input boundaries.
 - To give metadata your own shape, augment `EmailMetadataRegister`:
 
   ```ts
+  import "@opencoredev/email-sdk";
+
   declare module "@opencoredev/email-sdk" {
     interface EmailMetadataRegister {
       metadata: { tenantId: string };

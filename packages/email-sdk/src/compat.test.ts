@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmailClient, type EmailPlugin } from "./compat.js";
+import { toLegacyProvider } from "./compat/adapters.js";
 import { EmailAdapterError } from "./errors.js";
 
 const message = {
@@ -172,5 +173,31 @@ describe("compat client", () => {
 
     expect(results[0]).toMatchObject({ ok: true, response: { provider: "legacy" } });
     expect(batches).toEqual([{ "user@example.com": { name: "Ada" } }]);
+  });
+
+  test("legacy sendBulk calls a native sendPersonalized with the adapter as receiver", async () => {
+    const adapter = {
+      name: "stateful",
+      capabilities: {
+        repeatedHeaders: true,
+        idempotency: "none" as const,
+        scheduling: false,
+        personalized: "native" as const,
+      },
+      bulkId: "bulk_stateful",
+      send() {
+        return { adapter: "stateful" };
+      },
+      sendPersonalized() {
+        return { adapter: "stateful", id: this.bulkId, accepted: [], rejected: [] };
+      },
+    };
+
+    const result = await toLegacyProvider(adapter).sendBulk?.(
+      { ...message, recipientVariables: { "user@example.com": { name: "Ada" } } },
+      { adapter: "stateful", operation: "personalized", attempt: 1 },
+    );
+
+    expect(result).toMatchObject({ provider: "stateful", messageId: "bulk_stateful" });
   });
 });

@@ -204,7 +204,7 @@ export function toLegacyProvider(adapter: V1EmailAdapter): EmailProvider {
 
   if (sendPersonalized) {
     provider.sendBulk = async (message: EmailMessage, context: EmailProviderContext) => {
-      const result = await sendPersonalized(toPersonalizedInput(message), {
+      const result = await sendPersonalized.call(adapter, toPersonalizedInput(message), {
         adapter: adapter.name,
         operation: "personalized",
         ...context,

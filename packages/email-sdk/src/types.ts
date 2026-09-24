@@ -19,6 +19,8 @@ export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue }
  * unchanged to hooks, plugins, and adapter contexts.
  *
  * ```ts
+ * import "@opencoredev/email-sdk";
+ *
  * declare module "@opencoredev/email-sdk" {
  *   interface EmailMetadataRegister {
  *     metadata: { tenantId: string; traceId?: string };

@@ -76,6 +76,9 @@ Per-send retry and fallback objects replace the client objects. `adapter` select
 By default `EmailSendMetadata` is `EmailMetadataRecord`: strings, numbers, booleans, `null`, `undefined`, `Date`, and arrays or plain objects of those. To give it your own shape, augment `EmailMetadataRegister` once in your app:
 
 ```ts title="email-metadata.d.ts"
+// The import makes this file a module, so the block below augments the SDK types instead of replacing them.
+import "@opencoredev/email-sdk";
+
 declare module "@opencoredev/email-sdk" {
   interface EmailMetadataRegister {
     metadata: { tenantId: string; traceId?: string };
