@@ -7,7 +7,7 @@ import { sponsorHref, sponsors } from "@/lib/sponsors";
 
 const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
-// The Paper design shows these eleven sponsor slots in this order.
+// The Paper design shows these ten sponsor slots in this order.
 const sponsorNames = [
   "Resend",
   "Sequenzy",
@@ -17,7 +17,6 @@ const sponsorNames = [
   "Instatus",
   "Neon",
   "Notra",
-  "Zernio",
   "Customer.io",
   "Context.dev",
 ] as const;
