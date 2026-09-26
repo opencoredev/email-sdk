@@ -12,7 +12,7 @@ icon: sendheron
 
 These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
 
-The SendHeron adapter calls `POST /emails/send` on the SendHeron API with plain `fetch`. Every send passes through SendHeron's compliance gate, which can refuse a message on policy. The adapter turns that refusal into an error so it is never mistaken for a sent email.
+The SendHeron adapter calls `POST /emails/send` on the [SendHeron](https://sendheron.com/?utm_source=email-sdk&utm_medium=sponsor&utm_campaign=adapter) API with plain `fetch`. Every send passes through SendHeron's compliance gate, which can refuse a message on policy. The adapter turns that refusal into an error so it is never mistaken for a sent email.
 
 <ProviderBadge adapter="sendheron" />
 

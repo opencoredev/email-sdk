@@ -238,7 +238,7 @@ export const providers = [
     key: "sendheron",
     importPath: "@opencoredev/email-sdk/sendheron",
     docs: "/docs/adapters/sendheron",
-    website: "https://sendheron.com",
+    website: "https://sendheron.com/?utm_source=email-sdk&utm_medium=sponsor&utm_campaign=adapter",
     summary: "EU-hosted transactional and marketing email with a compliance gate on every send.",
     logo: "https://www.google.com/s2/favicons?domain=sendheron.com&sz=64",
     currentOnly: true,
