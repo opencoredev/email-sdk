@@ -67,10 +67,15 @@ export const sponsors: readonly Sponsor[] = [
     href: "https://lettr.com/?utm_source=email-sdk.dev&utm_medium=referral&utm_campaign=sponsor",
     logo: "/landing/sponsors/lettr.svg",
   },
+  {
+    name: "SendHeron",
+    href: "https://sendheron.com/?utm_source=email-sdk&utm_medium=sponsor&utm_campaign=adapter",
+    logo: "/landing/sponsors/sendheron.png",
+  },
 ];
 
 // Keep the sponsor count plus the open slots a multiple of the five-column
 // landing grid, so the last row stays full instead of leaving one orphan tile.
-export const openSponsorSlots = [1, 2, 3, 4] as const;
+export const openSponsorSlots = [1, 2, 3] as const;
 
 export const sponsorHref = "https://github.com/sponsors/opencoredev";
