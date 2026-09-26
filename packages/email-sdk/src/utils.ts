@@ -242,11 +242,14 @@ export function assertRecipientVariables(message: EmailMessage) {
   }
 }
 
-/** Read an error response body: parsed JSON for JSON responses, otherwise the raw text. */
+/**
+ * Read an error response body: parsed JSON for JSON responses (including `+json` types such as
+ * RFC 9457 `application/problem+json`), otherwise the raw text.
+ */
 export async function readErrorBody(response: Response): Promise<JsonValue | undefined> {
   const contentType = response.headers.get("content-type") ?? "";
 
-  if (contentType.includes("application/json")) {
+  if (/application\/(?:[\w.-]+\+)?json/i.test(contentType)) {
     return readJson(response).catch(() => undefined);
   }
 

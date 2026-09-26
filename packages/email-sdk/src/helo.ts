@@ -166,10 +166,11 @@ async function heloIdempotencyKey(key: string) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-// Helo validates and authorizes before queueing, so other 4xx responses were not sent. A 409
-// can mean the idempotency key belongs to an in-flight request whose outcome is unknown here.
+// Helo validates and authorizes before queueing, so other 4xx responses were not sent. A 408
+// timeout leaves the outcome unknown, and a 409 can mean the idempotency key belongs to an
+// in-flight request whose outcome is unknown here.
 function heloDelivery(status: number): "not_sent" | "unknown" {
-  return status === 409 || status >= 500 ? "unknown" : "not_sent";
+  return status === 408 || status === 409 || status >= 500 ? "unknown" : "not_sent";
 }
 
 function heloErrorMessage(status: number, body: JsonValue | undefined) {

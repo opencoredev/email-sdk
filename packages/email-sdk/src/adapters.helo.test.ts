@@ -184,10 +184,33 @@ describe("provider payloads", () => {
     await expect(send({ detail: "Busy", code: "idempotency_conflict" }, 409)).rejects.toMatchObject(
       { status: 409, delivery: "unknown" },
     );
+    await expect(send({ title: "Request Timeout" }, 408)).rejects.toMatchObject({
+      status: 408,
+      delivery: "unknown",
+    });
     await expect(send({ title: "Unavailable" }, 503)).rejects.toMatchObject({
       status: 503,
       delivery: "unknown",
       retryable: true,
+    });
+  });
+
+  test("Helo reads application/problem+json error bodies", async () => {
+    const fetcher: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          detail: "Invalid recipient",
+          code: "validation_failed",
+          errors: { "/to/0/email": [{ message: "Invalid address" }] },
+        }),
+        { status: 422, headers: { "content-type": "application/problem+json" } },
+      );
+
+    await expect(
+      helo({ apiKey: "helo_key", fetch: fetcher }).send(base, context),
+    ).rejects.toMatchObject({
+      message:
+        "Helo failed with 422: Invalid recipient /to/0/email: Invalid address (validation_failed)",
     });
   });
 
