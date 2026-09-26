@@ -22,6 +22,8 @@ const env = {
   CLOUDFLARE_API_TOKEN: v.optional(v.string()),
   ITERABLE_API_KEY: v.optional(v.string()),
   ITERABLE_CAMPAIGN_ID: v.optional(v.string()),
+  HELO_API_KEY: v.optional(v.string()),
+  HELO_CHANNEL_ID: v.optional(v.string()),
   JETEMAIL_API_KEY: v.optional(v.string()),
   LETTERMINT_API_TOKEN: v.optional(v.string()),
   LETTERMINT_ROUTE: v.optional(v.string()),

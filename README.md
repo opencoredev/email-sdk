@@ -10,7 +10,7 @@
 
 Email for TypeScript apps. One client for transactional email with your existing provider account. Pick the providers you actually send through, add retries and fallback routes, catch unsupported fields before they are silently dropped, and keep every send observable.
 
-- Adapters for 25 provider APIs plus SMTP, 26 adapters total, behind one normalized message
+- Adapters for 26 provider APIs plus SMTP, 27 adapters total, behind one normalized message
 - Retries within an adapter, plus fallback routes across adapters
 - Fail-fast field-support checks before a provider drops data
 - Batch personalization with per-recipient variables, plus provider-side scheduled sends
@@ -46,7 +46,7 @@ await email.send({
 
 ## Adapters
 
-Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SendHeron, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
+Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, MailerSend, SparkPost, Mailchimp, Iterable, Loops, Plunk, Mailtrap, Cloudflare, Unosend, Scaleway, ZeptoMail, MailPace, Sequenzy, JetEmail, Lettermint, Lettr, Primitive, SendHeron, Helo, SMTP, and a testing adapter, each imported from its own entry point. New here? Start with `resend` for the fastest first send.
 
 ## CLI
 

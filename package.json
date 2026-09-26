@@ -24,6 +24,7 @@
     "live:lettermint": "bun scripts/check-lettermint-account.ts",
     "live:lettr": "bun scripts/check-lettr-account.ts",
     "live:sendheron": "bun scripts/check-sendheron-account.ts",
+    "live:helo": "bun scripts/check-helo-account.ts",
     "live:graph": "bun scripts/check-graph-account.ts",
     "live:plan": "bun scripts/changed-live-adapters.ts",
     "live:run": "bun scripts/run-live-adapters.ts",

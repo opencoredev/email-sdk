@@ -533,6 +533,20 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("sendheron looks configured.");
   });
 
+  test("doctor accepts Helo credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "helo",
+      "--api-key",
+      "helo_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("helo looks configured.");
+  });
+
   test("doctor accepts Iterable credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",

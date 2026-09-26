@@ -526,9 +526,18 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     attachments: true,
     sendAt: true,
   },
+  helo: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    metadata: true,
+  },
 } satisfies Record<string, MessageFieldSupport>;
 
-const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron"]);
+const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo"]);
 
 // SendHeron refuses any attachment type outside this allowlist.
 const SENDHERON_ATTACHMENT_TYPES = new Set([
@@ -725,6 +734,39 @@ export function validateBuiltInAdapter(
           ].join(", ")}.`,
         );
       }
+    }
+  }
+
+  if (adapter === "helo") {
+    assertMaxItems(
+      adapter,
+      "recipient",
+      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
+      50,
+    );
+
+    const tags = message.tags ?? [];
+    assertMaxItems(adapter, "tag", tags, 5);
+
+    for (const tag of tags) {
+      if (tag.value.length > 100) {
+        throw new EmailValidationError("helo tag values must be 100 characters or fewer.");
+      }
+    }
+
+    const metadata = Object.entries(message.metadata ?? {});
+    assertMaxItems(adapter, "metadata field", metadata, 10);
+
+    for (const [key, value] of metadata) {
+      if (key.length > 50 || String(value ?? "").length > 100) {
+        throw new EmailValidationError(
+          "helo metadata keys must be 50 characters or fewer and values 100 characters or fewer.",
+        );
+      }
+    }
+
+    if (message.subject.length > 256) {
+      throw new EmailValidationError("helo subjects must be 256 characters or fewer.");
     }
   }
 

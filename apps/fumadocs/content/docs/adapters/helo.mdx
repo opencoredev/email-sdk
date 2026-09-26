@@ -1,0 +1,129 @@
+---
+title: Helo
+description: Send through the Helo transactional email API with native idempotency, Channel routing, tags, and metadata.
+icon: helo
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | No | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Helo adapter calls `POST /send/transactional` on the Helo API with plain `fetch` and Bearer authentication. Helo groups sending into Channels, and the adapter can pin every send to one Channel.
+
+<ProviderBadge adapter="helo" />
+
+## Configure
+
+Create an API credential in Helo and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { helo } from "@opencoredev/email-sdk/helo";
+
+export const email = createEmailClient({
+  adapters: [
+    helo({
+      apiKey: process.env.HELO_API_KEY!,
+      channelId: process.env.HELO_CHANNEL_ID,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Helo API credential.",
+      type: "string",
+      required: true,
+    },
+    channelId: {
+      description:
+        "Channel to send through, sent as the X-Helo-Channel-Id header. Required when the credential is valid for every Channel; omit it for a credential scoped to one Channel.",
+      type: "string",
+    },
+    baseUrl: {
+      description: "Override the API base URL, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.helohq.com"',
+    },
+    headers: {
+      description: "Extra request headers sent with every call.",
+      type: "Record<string, string>",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+<Callout type="info" title="Test Mode">
+  New Helo accounts start in Test Mode. You can send up to 1,000 emails, and only to recipients on
+  domains you have verified in the account.
+</Callout>
+
+## Send
+
+The adapter maps `cc`, `bcc`, `replyTo`, custom `headers`, `attachments`, `tags`, and `metadata`. An attachment goes out inline when it has a `contentId` or `disposition: "inline"`.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Your invoice is ready",
+  html: "<p>Your March invoice is attached.</p>",
+  attachments: [
+    { filename: "invoice.pdf", content: pdfBytes, contentType: "application/pdf" },
+  ],
+  tags: [{ name: "type", value: "invoice" }],
+  metadata: { invoiceId: "inv_123" },
+});
+
+console.log(result.id); // Helo message id
+```
+
+Helo tags are plain strings, so the adapter sends each tag's `value` and drops its `name`. Metadata values are sent as strings: numbers and booleans are converted, and `null` becomes an empty string.
+
+Helo has no scheduled sending. A message with `sendAt` throws an `EmailValidationError`.
+
+The client's idempotency key goes out as the `X-Helo-Idempotency-Key` header. Helo accepts keys up to 36 characters. Longer keys, such as the per-recipient keys `sendPersonalized` derives, are hashed into a UUID-shaped SHA-256 digest, so the same client key always maps to the same Helo key.
+
+<Callout type="warn" title="Limits checked before sending">
+  A message can have at most 50 recipients across `to`, `cc`, and `bcc`, at most 5 tags with
+  values of 100 characters or fewer, and at most 10 metadata fields with keys of 50 characters or
+  fewer and values of 100 characters or fewer. Subjects must be 256 characters or fewer. Each of
+  these throws an `EmailValidationError` before any request is made.
+</Callout>
+
+### Failed sends
+
+Helo can answer HTTP 200 with `status: "failed"` and an `errorCode`. That message was never queued, so the adapter throws an `EmailAdapterError` with `retryable: false` and `delivery: "not_sent"`, and includes Helo's reason in the error message.
+
+Other 4xx responses are reported with `delivery: "not_sent"`. A 409 or 5xx response reports `delivery: "unknown"`, because a 409 can mean another request with the same idempotency key is still in flight.
+
+## Verify from the CLI
+
+```bash
+HELO_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter helo --live
+```
+
+The live check posts an empty body to `/send/transactional`. Once the credential authenticates, Helo rejects the request with a 422 `validation_failed` or `invalid_channel` error, which the check reports as authenticated. Nothing is sent.
+
+```bash
+HELO_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
+  --adapter helo \
+  --channel-id "$HELO_CHANNEL_ID" \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Helo smoke test" \
+  --html "<p>It works</p>" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. The CLI also reads `HELO_CHANNEL_ID` and `HELO_BASE_URL` from the environment. Failed requests surface Helo's error detail, any field errors, and its error code.

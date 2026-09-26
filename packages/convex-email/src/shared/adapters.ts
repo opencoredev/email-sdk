@@ -49,6 +49,11 @@ export const CONVEX_EMAIL_ADAPTERS = {
     accountId: { type: "string", env: "CLOUDFLARE_ACCOUNT_ID", inline: true, required: true },
     baseUrl: BASE_URL,
   },
+  helo: {
+    apiKey: { type: "string", env: "HELO_API_KEY", required: true },
+    channelId: { type: "string", env: "HELO_CHANNEL_ID", inline: true },
+    baseUrl: BASE_URL,
+  },
   iterable: {
     apiKey: { type: "string", env: "ITERABLE_API_KEY", required: true },
     campaignId: { type: "number", env: "ITERABLE_CAMPAIGN_ID", inline: true, required: true },

@@ -264,6 +264,12 @@ const pricingByProvider = {
     note: "One allowance covers marketing and transactional mail. Starter is 50K for €19, Growth 150K for €49, Scale 250K for €99, and Max 500K for €179. No published plan covers 1M. There is no free plan, only a 7-day trial.",
     prices: [eur(19), eur(19), eur(49), eur(99), eur(179), custom],
   },
+  helo: {
+    model: "Platform fee + usage",
+    sources: [{ label: "Helo pricing", href: "https://www.helohq.com/pricing" }],
+    note: "One plan: a $5 monthly platform fee plus $0.00035 per email, with no included volume, tiers, or commitments. There is no free plan; new accounts get 1,000 free test sends to their own verified domains.",
+    prices: [usd(5.35), usd(22.5), usd(40), usd(92.5), usd(180), usd(355)],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

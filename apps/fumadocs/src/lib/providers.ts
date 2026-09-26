@@ -243,6 +243,16 @@ export const providers = [
     logo: "https://www.google.com/s2/favicons?domain=sendheron.com&sz=64",
     currentOnly: true,
   },
+  {
+    name: "Helo",
+    key: "helo",
+    importPath: "@opencoredev/email-sdk/helo",
+    docs: "/docs/adapters/helo",
+    website: "https://www.helohq.com",
+    summary: "Usage-priced transactional email with Channels for separating senders and tenants.",
+    logo: "https://www.google.com/s2/favicons?domain=helohq.com&sz=64",
+    currentOnly: true,
+  },
 ] as const;
 
 export type Provider = (typeof providers)[number];

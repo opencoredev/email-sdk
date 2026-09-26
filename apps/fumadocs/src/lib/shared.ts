@@ -14,7 +14,7 @@ export const siteUrl = (import.meta.env.VITE_SITE_URL ?? "https://email-sdk.dev"
 // machine indexes lead with what the project is and the rules for using it safely.
 export const llmsOverview = `> ${appDescription}
 
-Email SDK is an open-source, server-side TypeScript library (npm: \`@opencoredev/email-sdk\`) for transactional email. Send with your existing provider account, validate message fields, test with no-network adapters, and inspect common error types. It ships 25 provider API adapters plus SMTP, 26 adapters total, so changing providers later is optional. It is a library installed in your app, not a hosted API or a service you sign up for. Your provider still handles credentials, billing, and delivery.
+Email SDK is an open-source, server-side TypeScript library (npm: \`@opencoredev/email-sdk\`) for transactional email. Send with your existing provider account, validate message fields, test with no-network adapters, and inspect common error types. It ships 26 provider API adapters plus SMTP, 27 adapters total, so changing providers later is optional. It is a library installed in your app, not a hosted API or a service you sign up for. Your provider still handles credentials, billing, and delivery.
 
 ## When to use Email SDK
 

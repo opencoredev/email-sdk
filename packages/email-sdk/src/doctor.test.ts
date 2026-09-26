@@ -287,6 +287,50 @@ describe("doctor safe probes", () => {
     expect(JSON.stringify(result)).not.toContain("private-account-id");
   });
 
+  test.each(["validation_failed", "invalid_channel"])(
+    "Helo treats a %s 422 on an empty send as authenticated",
+    async (code) => {
+      let calls = 0;
+
+      const result = await runDoctor({
+        ...options,
+        adapter: "helo",
+        fetch: async (url, init) => {
+          calls++;
+          expect(url).toBe("https://api.helohq.com/send/transactional");
+          expect(init.method).toBe("POST");
+          expect(init.body).toBe("{}");
+          expect(init.redirect).toBe("error");
+          expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${credential}`);
+
+          return json({ title: "Unprocessable", detail: "Invalid request", code }, 422);
+        },
+      });
+
+      expect(calls).toBe(1);
+      expect(result.ok).toBe(true);
+      expect(result.checks.authentication.status).toBe("passed");
+      expect(JSON.stringify(result)).not.toContain(credential);
+    },
+  );
+
+  test.each([
+    [422, { code: "recipients_suppressed" }, "inconclusive"],
+    [200, { status: "accepted", messageId: "private-account-id" }, "inconclusive"],
+    [401, {}, "invalid_credentials"],
+    [403, { code: "forbidden" }, "insufficient_permissions"],
+  ] as const)("Helo HTTP %s maps to a safe diagnostic", async (status, body, expected) => {
+    const result = await runDoctor({
+      ...options,
+      adapter: "helo",
+      fetch: async () => json(body, status),
+    });
+
+    expect(result.checks.authentication.status).toBe(expected);
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private-account-id");
+  });
+
   test.each([200, 201, 400, 422])(
     "JetEmail HTTP %s cannot alone prove authentication",
     async (status) => {
