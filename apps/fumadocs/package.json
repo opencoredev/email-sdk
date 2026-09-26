@@ -37,7 +37,7 @@
     "fumadocs-mdx": "15.0.9",
     "fumadocs-ui": "16.9.1",
     "lucide-react": "^1.16.0",
-    "marked": "^18.0.13",
+    "marked": "^18.0.14",
     "motion": "^12.43.0",
     "posthog-js": "^1.386.6",
     "react": "^19.2.8",
