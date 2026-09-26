@@ -6,6 +6,7 @@
     "bun",
     "email",
     "email-sdk",
+    "helo",
     "iterable",
     "mailgun",
     "microsoft-graph",
@@ -138,6 +139,12 @@
       "import": "./dist/sequenzy.js",
       "require": "./dist/sequenzy.cjs",
       "default": "./dist/sequenzy.js"
+    },
+    "./helo": {
+      "types": "./dist/helo.d.ts",
+      "import": "./dist/helo.js",
+      "require": "./dist/helo.cjs",
+      "default": "./dist/helo.js"
     },
     "./jetemail": {
       "types": "./dist/jetemail.d.ts",

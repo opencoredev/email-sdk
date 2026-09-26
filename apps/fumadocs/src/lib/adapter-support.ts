@@ -245,11 +245,26 @@ export const ADAPTER_SUPPORT_ENTRIES = [
       "Up to 10 attachments from an allowlist of content types; no inline attachments and no attachments with sendAt.",
     ],
   },
+  {
+    id: "helo",
+    label: "Helo",
+    setupHref: "/docs/adapters/helo",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true, metadata: true },
+    capabilities: { repeatedHeaders: false, idempotency: "native", scheduling: false, personalized: "expanded" },
+    limits: [
+      "Accepts at most 50 combined to, cc, and bcc recipients.",
+      "Accepts at most 5 tags with values of 100 characters or fewer.",
+      "Tag names are discarded; tag values are sent as plain strings.",
+      "Accepts at most 10 metadata fields with keys of 50 characters or fewer and values of 100 characters or fewer; values are sent as strings.",
+      "Subjects must be 256 characters or fewer.",
+      "Idempotency keys longer than 36 characters are hashed to a UUID-shaped SHA-256 digest.",
+    ],
+  },
 ] as const satisfies readonly AdapterSupportEntry[];
 
 export type AdapterSupportId = (typeof ADAPTER_SUPPORT_ENTRIES)[number]["id"];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "25 provider APIs plus SMTP, 26 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "26 provider APIs plus SMTP, 27 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

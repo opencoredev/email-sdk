@@ -58,6 +58,9 @@ const probes = {
     base: "https://api.sendheron.com/api/v1",
     path: "/emails/00000000-0000-4000-8000-000000000000",
   },
+  // Helo has no account endpoint a send-only key can read. An empty send fails validation
+  // with 422 once the key authenticates, and nothing is queued without from and to.
+  helo: { base: "https://api.helohq.com", path: "/send/transactional" },
 } as const;
 
 class TransportFailure extends Error {}
@@ -274,7 +277,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
     if (adapter === "lettermint") headers.set("x-lettermint-token", options.credential!);
     else headers.set("Authorization", `Bearer ${options.credential}`);
-    const validation = adapter === "jetemail";
+    const validation = adapter === "jetemail" || adapter === "helo";
 
     if (validation) headers.set("Content-Type", "application/json");
     let response: Response;
@@ -295,11 +298,15 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
     controller.signal.throwIfAborted();
 
+    // Helo's 422 body carries the error code that proves the key authenticated.
+    const heloValidation = adapter === "helo" && response.status === 422;
+
     if (
       (response.status !== 200 &&
         !(adapter === "resend" && response.status === 401) &&
-        !(adapter === "sendheron" && response.status === 404)) ||
-      validation
+        !(adapter === "sendheron" && response.status === 404) &&
+        !heloValidation) ||
+      (validation && !heloValidation)
     ) {
       void response.body?.cancel().catch(() => {});
 
@@ -315,7 +322,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
   const work = async () => {
     const first = await request(probe.path);
 
-    if (adapter === "sendheron" && first.status === 404) {
+    if (
+      (adapter === "sendheron" && first.status === 404) ||
+      (adapter === "helo" && first.status === 422)
+    ) {
       checks.authentication = validAuthentication(adapter, first.body)
         ? authenticated()
         : uncertain();
@@ -325,7 +335,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
     checks.authentication = httpFailure(first.status, adapter, first.body) ?? uncertain();
 
-    if (first.status !== 200 || adapter === "jetemail") return;
+    if (first.status !== 200 || adapter === "jetemail" || adapter === "helo") return;
 
     if (!validAuthentication(adapter, first.body)) return;
     checks.authentication = authenticated();
@@ -469,6 +479,9 @@ function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): b
   if (!isJsonObject(body)) return false;
 
   if (adapter === "sendheron") return body.message === "emailSending.notFound";
+
+  if (adapter === "helo")
+    return body.code === "validation_failed" || body.code === "invalid_channel";
 
   if (adapter === "resend") return Array.isArray(body.data) && isJsonBoolean(body.has_more);
 

@@ -533,6 +533,20 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("sendheron looks configured.");
   });
 
+  test("doctor accepts Helo credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "helo",
+      "--api-key",
+      "helo_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("helo looks configured.");
+  });
+
   test("doctor accepts Iterable credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",
@@ -547,6 +561,54 @@ describe("email-sdk CLI", () => {
     expect(stderr).toBe("");
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("iterable looks configured.");
+  });
+
+  test.each([
+    { name: "--channel-id", flags: ["--channel-id", "chan_flag"], env: {}, channel: "chan_flag" },
+    { name: "HELO_CHANNEL_ID", flags: [], env: { HELO_CHANNEL_ID: "chan_env" }, channel: "chan_env" },
+    { name: "no channel", flags: [], env: { HELO_CHANNEL_ID: undefined }, channel: null },
+  ])("send passes the Helo channel from $name", async ({ flags, env, channel }) => {
+    const channels: Array<string | null> = [];
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        channels.push(request.headers.get("x-helo-channel-id"));
+
+        return Response.json({ status: "accepted", messageId: "helo_1" });
+      },
+    });
+
+    try {
+      const { stderr, exitCode } = await runCli(
+        [
+          "send",
+          "--adapter",
+          "helo",
+          "--api-key",
+          "helo_key",
+          "--base-url",
+          server.url.origin,
+          ...flags,
+          "--from",
+          "hello@example.com",
+          "--to",
+          "ada@example.com",
+          "--subject",
+          "Hello",
+          "--text",
+          "It works",
+        ],
+        env,
+      );
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(channels).toEqual([channel]);
+    } finally {
+      server.stop(true);
+    }
   });
 
   test("dry run rejects Iterable messages over the recipient limit", async () => {

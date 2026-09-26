@@ -28,6 +28,7 @@ import { sequenzy } from "./sequenzy.js";
 import { ses } from "./ses.js";
 import { sendgrid } from "./sendgrid.js";
 import { sendheron } from "./sendheron.js";
+import { helo } from "./helo.js";
 import { smtp } from "./smtp.js";
 import { sparkpost } from "./sparkpost.js";
 import type {
@@ -103,6 +104,7 @@ const providerDocs = [
   { name: "zeptomail", env: ["ZEPTOMAIL_TOKEN"], note: "Zoho ZeptoMail API" },
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
   { name: "sendheron", env: ["SENDHERON_API_KEY"], note: "SendHeron transactional email API" },
+  { name: "helo", env: ["HELO_API_KEY"], note: "Helo transactional send API" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
 ] as const satisfies ReadonlyArray<{
   name: SupportedAdapterName;
@@ -218,6 +220,12 @@ const factories = {
       apiKey: flagOrEnv(flags, "api-key", "SENDHERON_API_KEY"),
       baseUrl: stringFlag(flags, "base-url") ?? process.env.SENDHERON_BASE_URL,
     }),
+  helo: (flags) =>
+    helo({
+      apiKey: flagOrEnv(flags, "api-key", "HELO_API_KEY"),
+      channelId: stringFlag(flags, "channel-id") ?? process.env.HELO_CHANNEL_ID,
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.HELO_BASE_URL,
+    }),
   smtp: (flags) =>
     smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
@@ -274,6 +282,7 @@ const envFlagNames = new Map<string, string>([
   ["ZEPTOMAIL_TOKEN", "token"],
   ["MAILPACE_API_KEY", "api-key"],
   ["SENDHERON_API_KEY", "api-key"],
+  ["HELO_API_KEY", "api-key"],
   ["SMTP_HOST", "host"],
 ]);
 

@@ -47,8 +47,8 @@ const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 26) {
-  fail(`Expected 26 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 27) {
+  fail(`Expected 27 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -148,6 +148,14 @@ requireIncludes(entry("sendheron"), "without display names");
 
 requireIncludes(entry("sendheron"), "no attachments with sendAt");
 
+requireIncludes(entry("helo"), "50 combined to, cc, and bcc");
+
+requireIncludes(entry("helo"), "5 tags");
+
+requireIncludes(entry("helo"), "10 metadata fields");
+
+requireIncludes(entry("helo"), "256 characters");
+
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 
 requireIncludes(entry("mailgun"), "1,000 recipients");
@@ -157,6 +165,8 @@ requireIncludes(entry("sendgrid"), "Tag names are discarded");
 requireIncludes(entry("mailgun"), "Tag names are discarded");
 
 requireIncludes(entry("mailersend"), "Tag names are discarded");
+
+requireIncludes(entry("helo"), "Tag names are discarded");
 
 requireIncludes(entry("postmark"), "flattens one name:value tag");
 

@@ -17,6 +17,7 @@ import {
   observabilityPlugin,
   type EmailObservabilityEvent,
 } from "@opencoredev/email-sdk/plugins/observability";
+import { helo } from "@opencoredev/email-sdk/helo";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
 import { lettr } from "@opencoredev/email-sdk/lettr";
@@ -395,6 +396,15 @@ describe("documented adapter entry points", () => {
         replyTo: "support@example.com",
       },
       { id: "heron_1", status: "sent" },
+    ],
+    [
+      "helo",
+      helo({
+        apiKey: "test",
+        fetch: fetchOk({ messageId: "helo_1", status: "accepted" }).fetcher,
+      }),
+      simpleMessage,
+      { messageId: "helo_1", status: "accepted" },
     ],
   ];
 
