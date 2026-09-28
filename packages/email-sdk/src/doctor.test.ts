@@ -333,6 +333,7 @@ describe("doctor safe probes", () => {
 
   test.each([
     ["a full-access key", 200, [{ id: "d_1", name: "private-account-domain.example" }]],
+    ["a full-access key with no domains yet", 200, []],
     ["a sending-access key", 403, { error: "Sending access only", code: "FORBIDDEN" }],
   ] as const)("eusend authenticates %s without sending", async (_label, status, body) => {
     let calls = 0;
@@ -363,6 +364,8 @@ describe("doctor safe probes", () => {
     [401, { error: "Invalid API key", code: "UNAUTHORIZED" }, "invalid_credentials"],
     [403, { error: "Access denied", code: "SOMETHING_ELSE" }, "inconclusive"],
     [200, { data: "not a domain list" }, "inconclusive"],
+    [200, [null], "inconclusive"],
+    [200, [{ id: "d_1" }], "inconclusive"],
   ] as const)("eusend HTTP %s maps to a safe diagnostic", async (status, body, expected) => {
     const result = await runDoctor({
       ...options,

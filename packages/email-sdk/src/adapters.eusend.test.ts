@@ -225,6 +225,12 @@ describe("provider payloads", () => {
         context,
       ),
     ).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(
+      adapter.send(
+        { ...base, attachments: [{ filename: "logo.png", content: "png", disposition: "inline" }] },
+        context,
+      ),
+    ).rejects.toBeInstanceOf(EmailValidationError);
     await expect(adapter.send({ ...base, metadata: { userId: "u_1" } }, context)).rejects.toBeInstanceOf(
       EmailValidationError,
     );

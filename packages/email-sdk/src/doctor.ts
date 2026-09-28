@@ -484,7 +484,10 @@ function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): b
   // A full-access key lists domains as a bare array; a sending-access key is refused the
   // read with FORBIDDEN only after it authenticated.
   if (adapter === "eusend")
-    return Array.isArray(body) || (isJsonObject(body) && body.code === "FORBIDDEN");
+    return (
+      (Array.isArray(body) && body.every(validDomain)) ||
+      (isJsonObject(body) && body.code === "FORBIDDEN")
+    );
 
   if (!isJsonObject(body)) return false;
 

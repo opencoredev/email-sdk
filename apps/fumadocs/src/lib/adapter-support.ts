@@ -270,7 +270,7 @@ export const ADAPTER_SUPPORT_ENTRIES = [
       "Accepts at most 50 addresses in each of to, cc, bcc, and replyTo.",
       "Recipient and replyTo fields only support plain email addresses; the from address may carry a display name.",
       "Accepts at most 10 tags; names (64 characters) and values (256) may contain only ASCII letters, digits, underscores, and dashes.",
-      "Accepts at most 20 attachments, 10 MB combined.",
+      "Accepts at most 20 attachments, 10 MB combined; an attachment is inline only through its contentId.",
       "sendAt can be at most 30 days ahead.",
       "Idempotency keys longer than 255 characters are hashed to a SHA-256 hex digest.",
     ],

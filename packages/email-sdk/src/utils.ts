@@ -814,7 +814,17 @@ export function validateBuiltInAdapter(
       }
     }
 
-    assertMaxItems(adapter, "attachment", message.attachments ?? [], 20);
+    const attachments = message.attachments ?? [];
+    assertMaxItems(adapter, "attachment", attachments, 20);
+
+    // eusend has no disposition field: an attachment is inline only through its content id.
+    for (const attachment of attachments) {
+      if (attachment.disposition === "inline" && !attachment.contentId) {
+        throw new EmailValidationError(
+          "eusend sends an attachment inline only through its contentId; set contentId or drop disposition: \"inline\".",
+        );
+      }
+    }
   }
 
   if (adapter === "smtp") {

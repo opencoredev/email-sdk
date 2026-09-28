@@ -59,7 +59,7 @@ export const email = createEmailClient({
 
 ## Send
 
-The adapter maps `cc`, `bcc`, `replyTo`, custom `headers`, `attachments`, `tags`, and `sendAt`. An attachment with a `contentId` can be referenced from the HTML as `cid:`.
+The adapter maps `cc`, `bcc`, `replyTo`, custom `headers`, `attachments`, `tags`, and `sendAt`. An attachment with a `contentId` can be referenced from the HTML as `cid:`. eusend has no separate disposition field, so `disposition: "inline"` without a `contentId` throws an `EmailValidationError` rather than arriving as a regular attachment.
 
 ```ts
 const result = await email.send({
