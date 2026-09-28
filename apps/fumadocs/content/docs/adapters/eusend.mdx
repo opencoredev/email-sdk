@@ -1,0 +1,115 @@
+---
+title: eusend
+description: Send through the eusend transactional email API, hosted in the EU, with native idempotency, scheduled sends, tags, and attachments.
+icon: eusend
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The eusend adapter calls `POST /emails` on the eusend API with plain `fetch` and Bearer authentication. eusend accepts, stores and delivers mail on infrastructure in the EU.
+
+<ProviderBadge adapter="eusend" />
+
+## Configure
+
+Create an API key in eusend and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { eusend } from "@opencoredev/email-sdk/eusend";
+
+export const email = createEmailClient({
+  adapters: [eusend({ apiKey: process.env.EUSEND_API_KEY! })],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "eusend API key. A full-access or sending-access key both work for sending.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API base URL, e.g. for a proxy.",
+      type: "string",
+      default: '"https://api.eusend.dev"',
+    },
+    headers: {
+      description: "Extra request headers sent with every call.",
+      type: "Record<string, string>",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+<Callout type="info" title="Test keys">
+  Keys starting with `eu_test_` run the real pipeline — validation, quota, suppression and rate
+  limits — and deliver nothing, so you can wire up an integration before sending real mail.
+</Callout>
+
+## Send
+
+The adapter maps `cc`, `bcc`, `replyTo`, custom `headers`, `attachments`, `tags`, and `sendAt`. An attachment with a `contentId` can be referenced from the HTML as `cid:`.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Your invoice is ready",
+  html: "<p>Your March invoice is attached.</p>",
+  attachments: [
+    { filename: "invoice.pdf", content: pdfBytes, contentType: "application/pdf" },
+  ],
+  tags: [{ name: "type", value: "invoice" }],
+  sendAt: "2026-10-01T08:00:00Z",
+});
+
+console.log(result.id); // eusend email id
+```
+
+`sendAt` is sent as `scheduled_at` and can be at most 30 days ahead. eusend has no metadata field, so a message with `metadata` throws an `EmailValidationError`; use tags for values you want back on webhook events.
+
+The client's idempotency key goes out as the `Idempotency-Key` header, and a replayed key returns the original email id instead of sending again. eusend stores keys up to 255 characters. Longer keys, such as the per-recipient keys `sendPersonalized` derives from a long base key, are hashed into a SHA-256 hex digest, so the same client key always maps to the same eusend key.
+
+<Callout type="warn" title="Limits checked before sending">
+  Each of `to`, `cc`, `bcc`, and `replyTo` holds at most 50 addresses, and they only take plain
+  addresses — a display name belongs on `from`. A message can carry at most 10 tags, whose names
+  (up to 64 characters) and values (up to 256) may contain only ASCII letters, digits,
+  underscores, and dashes, and at most 20 attachments. Each of these throws an
+  `EmailValidationError` before any request is made.
+</Callout>
+
+### Failed sends
+
+eusend validates the message, checks the sending domain, quota, and suppression list before it queues anything, so every 4xx response is reported with `delivery: "not_sent"`. The error message carries eusend's own text and error code, such as `DOMAIN_NOT_VERIFIED` or `ALL_SUPPRESSED`. A 408 or 5xx response reports `delivery: "unknown"`.
+
+## Verify from the CLI
+
+```bash
+EUSEND_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter eusend --live
+```
+
+The live check reads `GET /domains`. A full-access key lists its domains; a sending-access key is refused the read with `403 FORBIDDEN`, which eusend only answers after the key authenticated. Both are reported as authenticated. Nothing is sent, and the domain list is not printed.
+
+```bash
+EUSEND_API_KEY="..." npx --package @opencoredev/email-sdk email-sdk send \
+  --adapter eusend \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "eusend smoke test" \
+  --html "<p>It works</p>" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. The CLI also reads `EUSEND_BASE_URL` from the environment.

@@ -179,7 +179,7 @@ function OneCall() {
           </DocsVersionLink>
         }
       >
-        Write the email once. Any of the 27 adapters sends it.
+        Write the email once. Any of the 28 adapters sends it.
       </SectionLabel>
       <CodePanel />
     </section>
@@ -278,7 +278,7 @@ function Adapters() {
           );
         })}
         <DocsVersionLink className="landing-adapter-more" docsPath="/docs/adapters">
-          + 22 more in the registry →
+          + 23 more in the registry →
         </DocsVersionLink>
       </div>
       <div aria-hidden="true" className="landing-art landing-art-globe">

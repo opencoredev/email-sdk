@@ -538,9 +538,23 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  eusend: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
 } satisfies Record<string, MessageFieldSupport>;
 
-const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo"]);
+const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo", "eusend"]);
+
+// eusend tag names and values share one charset: ASCII letters, digits, `_` and `-`.
+const EUSEND_TAG_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
+const EUSEND_TAG_VALUE = /^[A-Za-z0-9_-]{1,256}$/;
 
 // SendHeron refuses any attachment type outside this allowlist.
 const SENDHERON_ATTACHMENT_TYPES = new Set([
@@ -771,6 +785,36 @@ export function validateBuiltInAdapter(
     if (message.subject.length > 256) {
       throw new EmailValidationError("helo subjects must be 256 characters or fewer.");
     }
+  }
+
+  if (adapter === "eusend") {
+    const cc = arrayify(message.cc);
+    const bcc = arrayify(message.bcc);
+    assertMaxItems(adapter, "recipient", to, 50);
+    assertMaxItems(adapter, "cc", cc, 50);
+    assertMaxItems(adapter, "bcc", bcc, 50);
+    assertMaxItems(adapter, "replyTo", replyTo, 50);
+
+    for (const address of [...to, ...cc, ...bcc, ...replyTo]) {
+      if (isStringMember(address) ? address.includes("<") : Boolean(address.name)) {
+        throw new EmailValidationError(
+          "eusend recipient and replyTo fields only support plain email addresses.",
+        );
+      }
+    }
+
+    const tags = message.tags ?? [];
+    assertMaxItems(adapter, "tag", tags, 10);
+
+    for (const tag of tags) {
+      if (!EUSEND_TAG_NAME.test(tag.name) || !EUSEND_TAG_VALUE.test(tag.value)) {
+        throw new EmailValidationError(
+          "eusend tag names (up to 64 characters) and values (up to 256) may contain only ASCII letters, numbers, underscores and dashes.",
+        );
+      }
+    }
+
+    assertMaxItems(adapter, "attachment", message.attachments ?? [], 20);
   }
 
   if (adapter === "smtp") {

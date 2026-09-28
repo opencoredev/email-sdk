@@ -31,6 +31,7 @@ export type Env = {
   CLOUDFLARE_API_TOKEN?: string;
   ITERABLE_API_KEY?: string;
   ITERABLE_CAMPAIGN_ID?: string;
+  EUSEND_API_KEY?: string;
   HELO_API_KEY?: string;
   HELO_CHANNEL_ID?: string;
   JETEMAIL_API_KEY?: string;

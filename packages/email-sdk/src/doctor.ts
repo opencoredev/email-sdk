@@ -61,6 +61,9 @@ const probes = {
   // Helo has no account endpoint a send-only key can read. An empty send fails validation
   // with 422 once the key authenticates, and nothing is queued without from and to.
   helo: { base: "https://api.helohq.com", path: "/send/transactional" },
+  // Listing domains is a read. A sending-access key is refused it with 403 FORBIDDEN, which
+  // eusend only answers after the key authenticated, so both key types prove themselves.
+  eusend: { base: "https://api.eusend.dev", path: "/domains" },
 } as const;
 
 class TransportFailure extends Error {}
@@ -305,6 +308,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
       (response.status !== 200 &&
         !(adapter === "resend" && response.status === 401) &&
         !(adapter === "sendheron" && response.status === 404) &&
+        !(adapter === "eusend" && response.status === 403) &&
         !heloValidation) ||
       (validation && !heloValidation)
     ) {
@@ -324,7 +328,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
 
     if (
       (adapter === "sendheron" && first.status === 404) ||
-      (adapter === "helo" && first.status === 422)
+      (adapter === "helo" && first.status === 422) ||
+      (adapter === "eusend" && first.status === 403)
     ) {
       checks.authentication = validAuthentication(adapter, first.body)
         ? authenticated()
@@ -475,6 +480,11 @@ function httpFailure(
 
 function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): boolean {
   if (adapter === "lettermint") return body === 200;
+
+  // A full-access key lists domains as a bare array; a sending-access key is refused the
+  // read with FORBIDDEN only after it authenticated.
+  if (adapter === "eusend")
+    return Array.isArray(body) || (isJsonObject(body) && body.code === "FORBIDDEN");
 
   if (!isJsonObject(body)) return false;
 

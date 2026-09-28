@@ -30,6 +30,7 @@
     "mailpace",
     "sendheron",
     "helo",
+    "eusend",
     "smtp",
     "field-support",
     "capability-groups",

@@ -113,6 +113,7 @@ Every built-in Email SDK adapter is configurable, plus the in-memory adapter for
 memory
 brevo
 cloudflare
+eusend
 helo
 iterable
 jetemail
@@ -151,6 +152,7 @@ AWS_SESSION_TOKEN
 BREVO_API_KEY
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN
+EUSEND_API_KEY
 HELO_API_KEY
 HELO_CHANNEL_ID
 ITERABLE_API_KEY

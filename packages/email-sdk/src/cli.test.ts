@@ -547,6 +547,63 @@ describe("email-sdk CLI", () => {
     expect(stdout.trim()).toBe("helo looks configured.");
   });
 
+  test("doctor accepts eusend credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "eusend",
+      "--api-key",
+      "eu_test_key",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("eusend looks configured.");
+  });
+
+  test("send routes through the eusend adapter", async () => {
+    const received: Array<{ path: string; authorization: string | null }> = [];
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        received.push({
+          path: new URL(request.url).pathname,
+          authorization: request.headers.get("authorization"),
+        });
+
+        return Response.json({ id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c" }, { status: 201 });
+      },
+    });
+
+    try {
+      const { stderr, exitCode } = await runCli([
+        "send",
+        "--adapter",
+        "eusend",
+        "--api-key",
+        "eu_test_key",
+        "--base-url",
+        server.url.origin,
+        "--from",
+        "hello@example.com",
+        "--to",
+        "ada@example.com",
+        "--subject",
+        "Hello",
+        "--text",
+        "It works",
+      ]);
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(received).toEqual([{ path: "/emails", authorization: "Bearer eu_test_key" }]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("doctor accepts Iterable credentials from flags", async () => {
     const { stdout, stderr, exitCode } = await runCli([
       "doctor",
