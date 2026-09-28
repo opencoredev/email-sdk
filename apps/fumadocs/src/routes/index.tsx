@@ -19,6 +19,7 @@ const sponsorNames = [
   "Notra",
   "Customer.io",
   "Context.dev",
+  "Helo",
 ] as const;
 
 const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint"] as const;

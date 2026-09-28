@@ -18,9 +18,9 @@ export const sponsorRowGeometry = {
   labelOffset: 32,
   fontSize: 13,
   /** Blank space kept between a label and the next logo. */
-  minClearance: 10,
+  minClearance: 8,
   /** Below this the labels get too small to read, so the build must fail. */
-  minScale: 0.7,
+  minScale: 0.65,
 } as const;
 
 // The row labels are drawn in Liberation Sans Bold. generate-og-image.ts hands
