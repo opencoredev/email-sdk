@@ -294,7 +294,7 @@
     "@types/node": "^25.9.8",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
-    "ai": "^7.0.107",
+    "ai": "^7.0.118",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -323,6 +323,6 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "nodemailer": "^10.0.10"
+    "nodemailer": "^10.0.11"
   }
 }
