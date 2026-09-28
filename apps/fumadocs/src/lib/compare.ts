@@ -3,6 +3,9 @@
 import fieldSupport from "./field-support.generated.json";
 import { type Provider, providers } from "./providers";
 
+// Bump when compare content changes; shared by the sitemap and the docs.jsonl schema feed.
+export const compareLastmod = "2026-09-28";
+
 export const messageFields = [
   "cc",
   "bcc",
@@ -168,7 +171,7 @@ export const comparePairs: ComparePair[] = [
     a: "mailersend",
     b: "ses",
     intro:
-      "MailerSend and Amazon SES are the managed-service-versus-infrastructure trade in its purest form. SES is the cheapest per-message option in the SDK's lineup and sits inside the AWS ecosystem — IAM credentials, CloudWatch metrics, regional endpoints — in exchange for you owning deliverability: dedicated IPs, configuration sets, and bounce processing are all your job, and the console is unmistakably AWS. MailerSend, the transactional arm of the MailerLite family, wraps sending in a product instead: a template gallery with a drag-and-drop editor, a generous free tier, and a clean REST API, at a higher per-message price. In the unified message shape MailerSend covers the full common surface except per-message metadata, including native scheduled sending; SES supports neither scheduling nor metadata, so a MailerSend-to-SES fallback drops sendAt and Email SDK's field checks flag it before the send.",
+      "MailerSend and Amazon SES are the managed-service-versus-infrastructure trade in its purest form. SES keeps costs near the floor at scale — à-la-carte outbound at $0.10 per 1K sends — and sits inside the AWS ecosystem — IAM credentials, CloudWatch metrics, regional endpoints — in exchange for you owning deliverability: dedicated IPs, configuration sets, and bounce processing are all your job, and the console is unmistakably AWS. MailerSend, the transactional arm of the MailerLite family, wraps sending in a product instead: a template gallery with a drag-and-drop editor, a 500-send free tier, and a clean REST API, at a higher per-message price. In the unified message shape MailerSend covers the full common surface except per-message metadata, including native scheduled sending; SES supports neither scheduling nor metadata, so a MailerSend-to-SES fallback drops sendAt and Email SDK's field checks flag it before the send.",
   },
 ];
 

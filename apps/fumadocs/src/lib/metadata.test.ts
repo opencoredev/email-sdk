@@ -139,6 +139,7 @@ describe("documentation structured data", () => {
 
 describe("machine-facing agent files", () => {
   const providerNames = providers.map((provider) => provider.name);
+  const apiProviderCount = providers.filter((provider) => provider.key !== "smtp").length;
 
   const machineFiles = {
     "public/agents.md": readFileSync(new URL("../../public/agents.md", import.meta.url), "utf8"),
@@ -150,20 +151,25 @@ describe("machine-facing agent files", () => {
       new URL("../../public/.well-known/agent-skills", import.meta.url),
       "utf8",
     ),
+    // llmsOverview is the same claim in the llms.txt source.
+    "src/lib/shared.ts": readFileSync(new URL("./shared.ts", import.meta.url), "utf8"),
   };
 
   test("report the current adapter count", () => {
-    const stale = Object.entries(machineFiles).filter(
-      ([, text]) => !text.includes("26 provider API") || /\d+ provider APIs/.test(text),
-    );
+    const stale = Object.entries(machineFiles).filter(([, text]) => {
+      const counts = [...text.matchAll(/(\d+) provider API/g)].map((match) => Number(match[1]));
+
+      return counts.length === 0 || counts.some((count) => count !== apiProviderCount);
+    });
 
     expect(stale.map(([file]) => file)).toEqual([]);
   });
 
-  test("agents.md names every registered adapter", () => {
-    // The guide wraps prose at ~70 columns, so multi-word names split across lines.
+  test("agents.md names every registered adapter in its supported list", () => {
+    // The guide wraps prose at ~70 columns, so the list can span lines.
     const agentsMd = machineFiles["public/agents.md"].replace(/\s+/g, " ");
-    const missing = providerNames.filter((name) => !agentsMd.includes(name));
+    const list = agentsMd.match(/Supported providers: ([^.]+)\./)?.[1] ?? "";
+    const missing = providerNames.filter((name) => !list.includes(name));
 
     expect(missing).toEqual([]);
   });

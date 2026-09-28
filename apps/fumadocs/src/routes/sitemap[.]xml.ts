@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getBlogPostUrl, getPublishedBlogPosts } from "@/lib/blog";
-import { comparePairs } from "@/lib/compare";
+import { compareLastmod, comparePairs } from "@/lib/compare";
 import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { siteUrl } from "@/lib/shared";
 import { getDocsSource } from "@/lib/source";
@@ -82,13 +82,13 @@ function getSitemapEntries() {
     },
     {
       loc: `${siteUrl}/compare`,
-      lastmod: "2026-09-14",
+      lastmod: compareLastmod,
       changefreq: "monthly",
       priority: "0.7",
     },
     ...comparePairs.map((pair) => ({
       loc: `${siteUrl}/compare/${pair.slug}`,
-      lastmod: "2026-09-14",
+      lastmod: compareLastmod,
       changefreq: "monthly" as const,
       priority: "0.7",
     })),
