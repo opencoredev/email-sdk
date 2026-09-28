@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { compareLastmod, comparePairs, getComparePairTitle } from "@/lib/compare";
+import { comparePairs, getComparePairTitle } from "@/lib/compare";
 import { buildCompareDescription } from "@/lib/compare-page";
 import docsLastmod from "@/lib/docs-lastmod.generated.json";
 import { siteUrl } from "@/lib/shared";
@@ -54,7 +54,7 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
             headline: getComparePairTitle(pair),
             name: getComparePairTitle(pair),
             description: buildCompareDescription(pair),
-            dateModified: compareLastmod,
+            dateModified: pair.lastmod,
             inLanguage: "en",
             isPartOf: { "@id": `${siteUrl}/#website` },
             author: { "@id": `${siteUrl}/#organization` },
