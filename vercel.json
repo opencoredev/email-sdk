@@ -98,6 +98,11 @@
       "source": "/compare/mailersend-vs-brevo",
       "destination": "/compare/brevo-vs-mailersend",
       "permanent": true
+    },
+    {
+      "source": "/compare/ses-vs-mailersend",
+      "destination": "/compare/mailersend-vs-ses",
+      "permanent": true
     }
   ],
   "headers": [

@@ -163,6 +163,13 @@ export const comparePairs: ComparePair[] = [
     intro:
       "Brevo and MailerSend are both European-rooted platforms that pair transactional APIs with approachable marketing tooling, which makes them a common shortlist for teams that want one vendor for both jobs. Brevo is the broader suite: campaigns, automation, SMS, WhatsApp, and a CRM alongside its SMTP and API sending, priced by send volume with a usable free tier. MailerSend is narrower and more developer-focused within the MailerLite family, with a clean REST API, template editor, and inbound routing. In the unified message shape they differ on exactly one field: Brevo supports per-message metadata while MailerSend does not — both handle CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — so failing over from Brevo to MailerSend only needs care when messages carry metadata.",
   },
+  {
+    slug: "mailersend-vs-ses",
+    a: "mailersend",
+    b: "ses",
+    intro:
+      "MailerSend and Amazon SES are the managed-service-versus-infrastructure trade in its purest form. SES is the cheapest per-message option in the SDK's lineup and sits inside the AWS ecosystem — IAM credentials, CloudWatch metrics, regional endpoints — in exchange for you owning deliverability: dedicated IPs, configuration sets, and bounce processing are all your job, and the console is unmistakably AWS. MailerSend, the transactional arm of the MailerLite family, wraps sending in a product instead: a template gallery with a drag-and-drop editor, a generous free tier, and a clean REST API, at a higher per-message price. In the unified message shape MailerSend covers the full common surface except per-message metadata, including native scheduled sending; SES supports neither scheduling nor metadata, so a MailerSend-to-SES fallback drops sendAt and Email SDK's field checks flag it before the send.",
+  },
 ];
 
 /**

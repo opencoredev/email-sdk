@@ -137,6 +137,38 @@ describe("documentation structured data", () => {
   });
 });
 
+describe("machine-facing agent files", () => {
+  const providerNames = providers.map((provider) => provider.name);
+
+  const machineFiles = {
+    "public/agents.md": readFileSync(new URL("../../public/agents.md", import.meta.url), "utf8"),
+    "public/.well-known/agent.json": readFileSync(
+      new URL("../../public/.well-known/agent.json", import.meta.url),
+      "utf8",
+    ),
+    "public/.well-known/agent-skills": readFileSync(
+      new URL("../../public/.well-known/agent-skills", import.meta.url),
+      "utf8",
+    ),
+  };
+
+  test("report the current adapter count", () => {
+    const stale = Object.entries(machineFiles).filter(
+      ([, text]) => !text.includes("26 provider API") || /\d+ provider APIs/.test(text),
+    );
+
+    expect(stale.map(([file]) => file)).toEqual([]);
+  });
+
+  test("agents.md names every registered adapter", () => {
+    // The guide wraps prose at ~70 columns, so multi-word names split across lines.
+    const agentsMd = machineFiles["public/agents.md"].replace(/\s+/g, " ");
+    const missing = providerNames.filter((name) => !agentsMd.includes(name));
+
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("supported provider structured data", () => {
   const providerNames = providers.map((provider) => provider.name);
 
