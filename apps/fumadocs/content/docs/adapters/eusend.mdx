@@ -80,7 +80,7 @@ console.log(result.id); // eusend email id
 
 `sendAt` is sent as `scheduled_at` and can be at most 30 days ahead. eusend has no metadata field, so a message with `metadata` throws an `EmailValidationError`; use tags for values you want back on webhook events.
 
-The client's idempotency key goes out as the `Idempotency-Key` header, and a replayed key returns the original email id instead of sending again. eusend stores keys up to 255 characters. Longer keys, such as the per-recipient keys `sendPersonalized` derives from a long base key, are hashed into a SHA-256 hex digest, so the same client key always maps to the same eusend key.
+The client's idempotency key goes out as the `Idempotency-Key` header, and a replayed key returns the original email id instead of sending again. eusend stores keys up to 255 characters. Longer keys, such as the per-recipient keys `sendPersonalized` derives from a long base key, are hashed into a SHA-256 hex digest, so the same client key always maps to the same eusend key. A static `Idempotency-Key` passed through `headers` is normalized the same way.
 
 <Callout type="warn" title="Limits checked before sending">
   Each of `to`, `cc`, `bcc`, and `replyTo` holds at most 50 addresses, and they only take plain

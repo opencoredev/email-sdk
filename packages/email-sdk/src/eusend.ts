@@ -44,9 +44,12 @@ export function eusend(options: EusendAdapterOptions): EmailAdapter<"eusend", { 
         ...options.headers,
       });
 
-      // Set after construction so a per-send key replaces a static one in any casing.
-      if (context.idempotencyKey) {
-        headers.set("Idempotency-Key", await eusendIdempotencyKey(context.idempotencyKey));
+      // A per-send key replaces a static one in any casing, and whichever key goes out is
+      // normalized, so a long static key cannot collide on the stored prefix either.
+      const idempotencyKey = context.idempotencyKey ?? headers.get("Idempotency-Key");
+
+      if (idempotencyKey) {
+        headers.set("Idempotency-Key", await eusendIdempotencyKey(idempotencyKey));
       }
 
       const response = await fetcher(`${baseUrl}/emails`, {

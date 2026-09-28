@@ -102,6 +102,27 @@ describe("provider payloads", () => {
     expect(await send(`${"k".repeat(255)}:bob@example.com`)).not.toBe(first);
   });
 
+  test("eusend hashes a long static idempotency header the same way", async () => {
+    const send = async (key: string) => {
+      const capture = jsonCapture(created, { status: 201 });
+
+      await eusend({
+        apiKey: "eu_live_key",
+        headers: { "idempotency-key": key },
+        fetch: capture.fetch,
+      }).send(base, { ...context, idempotencyKey: undefined });
+
+      return capture.calls[0]?.headers.get("idempotency-key");
+    };
+
+    expect(await send("static")).toBe("static");
+
+    const first = await send(`${"k".repeat(255)}:ada@example.com`);
+
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    expect(await send(`${"k".repeat(255)}:bob@example.com`)).not.toBe(first);
+  });
+
   test("eusend gives a per-send idempotency key precedence over static headers", async () => {
     const capture = jsonCapture(created, { status: 201 });
 
