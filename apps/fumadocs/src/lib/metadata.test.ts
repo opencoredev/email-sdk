@@ -169,7 +169,8 @@ describe("machine-facing agent files", () => {
     // The guide wraps prose at ~70 columns, so the list can span lines.
     const agentsMd = machineFiles["public/agents.md"].replace(/\s+/g, " ");
     const list = agentsMd.match(/Supported providers: ([^.]+)\./)?.[1] ?? "";
-    const missing = providerNames.filter((name) => !list.includes(name));
+    const entries = list.split(/,|\band\b/).map((entry) => entry.trim());
+    const missing = providerNames.filter((name) => !entries.includes(name));
 
     expect(missing).toEqual([]);
   });
