@@ -1,6 +1,6 @@
 ---
 title: Helo
-description: Send through the Helo transactional email API with native idempotency, Channel routing, tags, and metadata.
+description: Send individual emails through Helo's transactional endpoint with native idempotency, Channel routing, tags, and metadata.
 icon: helo
 ---
 
@@ -13,6 +13,8 @@ icon: helo
 These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
 
 The Helo adapter calls `POST /send/transactional` on the Helo API with plain `fetch` and Bearer authentication. Helo groups sending into Channels, and the adapter can pin every send to one Channel.
+
+Helo supports both transactional and broadcast email. Email SDK sends one message at a time to explicit recipients, so this adapter uses the transactional endpoint. Send broadcasts from Helo directly through `POST /send/broadcast`.
 
 <ProviderBadge adapter="helo" />
 
