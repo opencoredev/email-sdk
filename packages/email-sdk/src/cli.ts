@@ -839,6 +839,12 @@ function telemetryCommand(action = "status") {
     const path = setTelemetryPreference(action === "enable");
     console.log(`Telemetry ${action}d for this machine (${path}).`);
 
+    const status = getTelemetryStatus();
+
+    if (action === "enable" && !status.enabled) {
+      console.log(`Telemetry is still disabled by ${status.reason}.`);
+    }
+
     return;
   }
 
@@ -849,7 +855,15 @@ function telemetryCommand(action = "status") {
   const status = getTelemetryStatus();
 
   if (status.enabled) {
-    console.log("Telemetry is enabled. Run `email-sdk telemetry disable` to opt out.");
+    console.log("Telemetry is enabled (default). Run `email-sdk telemetry disable` to opt out.");
+
+    return;
+  }
+
+  if (status.reason === "config-unreadable") {
+    console.log(
+      `Telemetry is disabled because ${status.configPath} is unreadable. Run \`email-sdk telemetry disable\` or \`enable\` to rewrite it.`,
+    );
 
     return;
   }

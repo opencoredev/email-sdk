@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -151,6 +151,46 @@ describe("telemetry preference", () => {
     expect(getTelemetryStatus({ env: { EMAIL_SDK_TELEMETRY: "off" }, configDir }).reason).toBe(
       "EMAIL_SDK_TELEMETRY",
     );
+  });
+
+  test("disableTelemetry() also silences instances that already exist", async () => {
+    const { calls, fetchFn } = fetchCapture();
+
+    const telemetry = createTelemetry({
+      env: {},
+      fetch: fetchFn,
+      configDir: tempConfigDir(),
+      notify: () => {},
+    });
+
+    try {
+      disableTelemetry();
+      await telemetry.capture("email sent", { adapter: "resend" });
+      expect(telemetry.enabled).toBe(false);
+      expect(calls).toHaveLength(0);
+    } finally {
+      resetDisableTelemetry();
+    }
+  });
+
+  test("an unreadable state file keeps telemetry off and is not overwritten", async () => {
+    const { calls, fetchFn } = fetchCapture();
+    const configDir = tempConfigDir();
+    const path = join(configDir, "telemetry.json");
+
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path, '{"installationId": "abc", "disab');
+
+    const telemetry = createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} });
+    await telemetry.capture("cli command run", { command: "help" });
+
+    expect(telemetry.enabled).toBe(false);
+    expect(calls).toHaveLength(0);
+    expect(readFileSync(path, "utf8")).toBe('{"installationId": "abc", "disab');
+    expect(getTelemetryStatus({ env: {}, configDir }).reason).toBe("config-unreadable");
+
+    setTelemetryPreference(true, { env: {}, configDir });
+    expect(getTelemetryStatus({ env: {}, configDir }).enabled).toBe(true);
   });
 
   test("disableTelemetry() turns off the shared instance for the process", () => {

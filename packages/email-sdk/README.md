@@ -320,7 +320,7 @@ export EMAIL_SDK_TELEMETRY=0
 export DO_NOT_TRACK=1
 ```
 
-Opt out for the whole process in code, including clients created by dependencies:
+Opt out for the whole process in code, including existing clients and clients created by dependencies:
 
 ```ts
 import { disableTelemetry } from "@opencoredev/email-sdk";

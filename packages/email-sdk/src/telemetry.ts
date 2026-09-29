@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,7 +133,14 @@ const disabledTelemetry: Telemetry = {
 export type TelemetryStatus = {
   enabled: boolean;
   /** What decided the current state. `default` means nothing opted out. */
-  reason: "EMAIL_SDK_TELEMETRY" | "DO_NOT_TRACK" | "NODE_ENV" | "config" | "code" | "default";
+  reason:
+    | "EMAIL_SDK_TELEMETRY"
+    | "DO_NOT_TRACK"
+    | "NODE_ENV"
+    | "config"
+    | "config-unreadable"
+    | "code"
+    | "default";
   /** File that `email-sdk telemetry disable` writes to. */
   configPath: string;
 };
@@ -146,9 +153,11 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   if (envOptOut(env)) return disabledTelemetry;
 
   const configDir = resolveConfigDir(env, options.configDir);
-  const state = loadTelemetryState(configDir);
+  const loaded = loadTelemetryState(configDir);
 
-  if (state.disabled) return disabledTelemetry;
+  if (!loaded || loaded.disabled) return disabledTelemetry;
+
+  const state = loaded;
 
   if (!state.noticeShown) {
     notify(TELEMETRY_NOTICE);
@@ -178,6 +187,10 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   let exceptionBudget = MAX_EXCEPTIONS_PER_PROCESS;
 
   async function deliver(event: string, properties?: TelemetryProperties | ExceptionProperties) {
+    // Clients keep the instance they were created with, so disableTelemetry()
+    // has to be honoured here as well as in getTelemetry().
+    if (disabledInCode) return;
+
     try {
       const response = await fetcher(`${POSTHOG_HOST}/capture/`, {
         method: "POST",
@@ -210,7 +223,9 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   }
 
   return {
-    enabled: true,
+    get enabled() {
+      return !disabledInCode;
+    },
     realProviderVolume: !options.fetch && env.NODE_ENV !== "test" && ciVendor === undefined,
     capture(event, properties) {
       return enqueue(deliver(event, properties));
@@ -290,7 +305,7 @@ export function getTelemetry(): Telemetry {
 
 /**
  * Turns telemetry off for every client in this process, including clients a
- * dependency creates. Call once at startup, before creating clients.
+ * dependency creates and clients that already exist.
  */
 export function disableTelemetry() {
   disabledInCode = true;
@@ -309,7 +324,11 @@ export function getTelemetryStatus(
 
   if (disabledInCode) return { enabled: false, reason: "code", configPath };
 
-  if (readStoredState(configDir)?.disabled) return { enabled: false, reason: "config", configPath };
+  const stored = readStoredState(configDir);
+
+  if (stored === "unreadable") return { enabled: false, reason: "config-unreadable", configPath };
+
+  if (stored !== "missing" && stored.disabled) return { enabled: false, reason: "config", configPath };
 
   return { enabled: true, reason: "default", configPath };
 }
@@ -326,15 +345,15 @@ export function setTelemetryPreference(
   const env = options.env ?? process.env;
   const configDir = resolveConfigDir(env, options.configDir);
   const stored = readStoredState(configDir);
+  const previous = stored === "missing" || stored === "unreadable" ? undefined : stored;
 
   const state: TelemetryState = {
-    installationId: stored?.installationId ?? randomUUID(),
-    noticeShown: stored?.noticeShown ?? false,
+    installationId: previous?.installationId ?? randomUUID(),
+    noticeShown: previous?.noticeShown ?? false,
     disabled: !enabled,
   };
 
-  mkdirSync(configDir, { recursive: true });
-  writeFileSync(join(configDir, "telemetry.json"), `${JSON.stringify(state, null, 2)}\n`);
+  writeStateFile(configDir, state);
   resetTelemetry();
 
   return join(configDir, "telemetry.json");
@@ -623,9 +642,17 @@ type TelemetryState = {
   disabled?: boolean;
 };
 
-function readStoredState(configDir: string): TelemetryState | undefined {
+/**
+ * "unreadable" means the file exists but cannot be parsed. It may hold a saved
+ * opt-out, so callers treat it as disabled and never overwrite it implicitly.
+ */
+function readStoredState(configDir: string): TelemetryState | "missing" | "unreadable" {
+  const path = join(configDir, "telemetry.json");
+
+  if (!existsSync(path)) return "missing";
+
   try {
-    const parsed = parseJsonStrict(readFileSync(join(configDir, "telemetry.json"), "utf8"));
+    const parsed = parseJsonStrict(readFileSync(path, "utf8"));
 
     const installationId =
       jsonString(parsed, "installationId") || jsonString(parsed, "anonymousId") || undefined;
@@ -638,16 +665,18 @@ function readStoredState(configDir: string): TelemetryState | undefined {
       };
     }
   } catch {
-    // Missing or unreadable state reads as "no stored preference".
+    // Falls through to "unreadable".
   }
 
-  return undefined;
+  return "unreadable";
 }
 
-function loadTelemetryState(configDir: string): TelemetryState {
+function loadTelemetryState(configDir: string): TelemetryState | undefined {
   const stored = readStoredState(configDir);
 
-  if (stored) return stored;
+  if (stored === "unreadable") return undefined;
+
+  if (stored !== "missing") return stored;
 
   const state = { installationId: randomUUID(), noticeShown: false };
   persistTelemetryState(configDir, state);
@@ -657,11 +686,21 @@ function loadTelemetryState(configDir: string): TelemetryState {
 
 function persistTelemetryState(configDir: string, state: TelemetryState) {
   try {
-    mkdirSync(configDir, { recursive: true });
-    writeFileSync(join(configDir, "telemetry.json"), `${JSON.stringify(state, null, 2)}\n`);
+    writeStateFile(configDir, state);
   } catch {
     // Read-only environments still get telemetry with a per-process identity.
   }
+}
+
+// Write-then-rename so a failed write (disk full, crash) never truncates a
+// saved opt-out into an unreadable file.
+function writeStateFile(configDir: string, state: TelemetryState) {
+  const path = join(configDir, "telemetry.json");
+  const temporary = `${path}.${process.pid}.tmp`;
+
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
+  renameSync(temporary, path);
 }
 
 function captureTimeoutSignal() {

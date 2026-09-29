@@ -14,7 +14,7 @@ npx @opencoredev/email-sdk telemetry disable
 npx @opencoredev/email-sdk telemetry status
 ```
 
-`status` reports whether telemetry is on and which setting decided it. `email-sdk telemetry enable` reverses the choice.
+`status` reports whether telemetry is on and which setting decided it. `email-sdk telemetry enable` reverses the choice. The saved choice applies to processes started afterwards; restart long-running servers to pick it up. If the file exists but cannot be read, telemetry stays off and the file is left untouched until you run `disable` or `enable` again.
 
 Environment variables take precedence over the saved choice. They fit CI, containers, and Workers, where there is no persistent home directory:
 
@@ -24,7 +24,7 @@ export EMAIL_SDK_TELEMETRY=0
 export DO_NOT_TRACK=1
 ```
 
-In code, `disableTelemetry()` switches it off for the whole process, including clients that a dependency creates. Call it once at startup:
+In code, `disableTelemetry()` switches it off for the whole process, including clients that already exist and clients that a dependency creates:
 
 ```ts title="src/email.ts"
 import { disableTelemetry } from "@opencoredev/email-sdk";

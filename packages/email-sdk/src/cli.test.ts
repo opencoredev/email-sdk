@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // SAFETY: this package's own package.json always declares a string name and version.
 const packageInfo = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as {
@@ -762,6 +765,40 @@ describe("email-sdk CLI", () => {
 
     expect(messageSchedule.exitCode).toBe(1);
     expect(messageSchedule.stderr).toContain("does not support scheduled email");
+  });
+});
+
+describe("telemetry command", () => {
+  test("managing telemetry never reports events, while other commands do", async () => {
+    const configHome = mkdtempSync(join(tmpdir(), "email-sdk-cli-telemetry-"));
+
+    const run = async (args: string[]) => {
+      const proc = Bun.spawn({
+        cmd: ["bun", "--preload", "./test-support/fetch-trap.ts", "src/cli.ts", ...args],
+        cwd: new URL("..", import.meta.url).pathname,
+        // Telemetry has to be live here for the trap to observe it.
+        env: { PATH: process.env.PATH, HOME: configHome, XDG_CONFIG_HOME: configHome },
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      return { stdout, sent: stderr.includes("FETCH_TRAP") };
+    };
+
+    expect(await run(["telemetry", "status"])).toMatchObject({ sent: false });
+    expect(await run(["telemetry", "bogus"])).toMatchObject({ sent: false });
+    expect(await run(["adapters"])).toMatchObject({ sent: true });
+
+    const disabled = await run(["telemetry", "disable"]);
+    expect(disabled.sent).toBe(false);
+    expect(await run(["adapters"])).toMatchObject({ sent: false });
+    expect((await run(["telemetry", "status"])).stdout).toContain("Telemetry is disabled");
   });
 });
 
