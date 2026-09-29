@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -191,6 +191,23 @@ describe("telemetry preference", () => {
 
     setTelemetryPreference(true, { env: {}, configDir });
     expect(getTelemetryStatus({ env: {}, configDir }).enabled).toBe(true);
+  });
+
+  test("saving through a symlinked state file updates its target", () => {
+    const configDir = tempConfigDir();
+    const targetDir = tempConfigDir();
+    const target = join(targetDir, "shared-telemetry.json");
+
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(target, '{"installationId": "shared", "noticeShown": true}');
+    symlinkSync(target, join(configDir, "telemetry.json"));
+
+    setTelemetryPreference(false, { env: {}, configDir });
+
+    expect(readFileSync(target, "utf8")).toContain('"disabled": true');
+    expect(getTelemetryStatus({ env: {}, configDir }).reason).toBe("config");
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
   });
 
   test("disableTelemetry() turns off the shared instance for the process", () => {

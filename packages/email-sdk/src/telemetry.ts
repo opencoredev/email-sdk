@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -693,14 +701,22 @@ function persistTelemetryState(configDir: string, state: TelemetryState) {
 }
 
 // Write-then-rename so a failed write (disk full, crash) never truncates a
-// saved opt-out into an unreadable file.
+// saved opt-out into an unreadable file. The random suffix keeps worker
+// threads, which share a PID, off each other's temporary file, and writing
+// through realpath keeps a symlinked state file linked.
 function writeStateFile(configDir: string, state: TelemetryState) {
-  const path = join(configDir, "telemetry.json");
-  const temporary = `${path}.${process.pid}.tmp`;
-
   mkdirSync(configDir, { recursive: true });
-  writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
-  renameSync(temporary, path);
+
+  const link = join(configDir, "telemetry.json");
+  const path = existsSync(link) ? realpathSync(link) : link;
+  const temporary = `${path}.${randomUUID()}.tmp`;
+
+  try {
+    writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 function captureTimeoutSignal() {
