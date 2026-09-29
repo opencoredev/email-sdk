@@ -270,6 +270,12 @@ const pricingByProvider = {
     note: "One plan: a $5 monthly platform fee plus $0.00035 per email, with no included volume, tiers, or commitments. There is no free plan; new accounts get 1,000 free test sends to their own verified domains.",
     prices: [usd(5.35), usd(22.5), usd(40), usd(92.5), usd(180), usd(355)],
   },
+  eusend: {
+    model: "Fixed volume tiers · EUR",
+    sources: [{ label: "eusend pricing", href: "https://eusend.dev/pricing" }],
+    note: "Free covers 3,000 emails a month. Paid plans are flat monthly tiers: 50K for €21, 100K for €36, 250K for €75, 500K for €140, and 1M for €250.",
+    prices: [eur(0), eur(21), eur(36), eur(75), eur(140), eur(250)],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

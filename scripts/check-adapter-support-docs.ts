@@ -47,8 +47,8 @@ const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 27) {
-  fail(`Expected 27 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 28) {
+  fail(`Expected 28 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -155,6 +155,14 @@ requireIncludes(entry("helo"), "5 tags");
 requireIncludes(entry("helo"), "10 metadata fields");
 
 requireIncludes(entry("helo"), "256 characters");
+
+requireIncludes(entry("eusend"), "50 addresses in each of to, cc, bcc, and replyTo");
+
+requireIncludes(entry("eusend"), "only support plain email addresses");
+
+requireIncludes(entry("eusend"), "10 tags");
+
+requireIncludes(entry("eusend"), "20 attachments");
 
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 

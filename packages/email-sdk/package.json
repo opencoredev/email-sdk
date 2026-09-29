@@ -6,6 +6,7 @@
     "bun",
     "email",
     "email-sdk",
+    "eusend",
     "helo",
     "iterable",
     "mailgun",
@@ -139,6 +140,12 @@
       "import": "./dist/sequenzy.js",
       "require": "./dist/sequenzy.cjs",
       "default": "./dist/sequenzy.js"
+    },
+    "./eusend": {
+      "types": "./dist/eusend.d.ts",
+      "import": "./dist/eusend.js",
+      "require": "./dist/eusend.cjs",
+      "default": "./dist/eusend.js"
     },
     "./helo": {
       "types": "./dist/helo.d.ts",

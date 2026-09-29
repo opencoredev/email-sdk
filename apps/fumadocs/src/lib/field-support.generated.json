@@ -200,5 +200,14 @@
     "attachments": true,
     "tags": true,
     "metadata": true
+  },
+  "eusend": {
+    "cc": true,
+    "bcc": true,
+    "replyTo": true,
+    "headers": true,
+    "attachments": true,
+    "tags": true,
+    "sendAt": true
   }
 }

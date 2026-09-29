@@ -331,6 +331,52 @@ describe("doctor safe probes", () => {
     expect(JSON.stringify(result)).not.toContain("private-account-id");
   });
 
+  test.each([
+    ["a full-access key", 200, [{ id: "d_1", name: "private-account-domain.example" }]],
+    ["a full-access key with no domains yet", 200, []],
+    ["a sending-access key", 403, { error: "Sending access only", code: "FORBIDDEN" }],
+  ] as const)("eusend authenticates %s without sending", async (_label, status, body) => {
+    let calls = 0;
+
+    const result = await runDoctor({
+      ...options,
+      adapter: "eusend",
+      fetch: async (url, init) => {
+        calls++;
+        expect(url).toBe("https://api.eusend.dev/domains");
+        expect(init.method).toBe("GET");
+        expect(init.body).toBeUndefined();
+        expect(init.redirect).toBe("error");
+        expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${credential}`);
+
+        return json(body, status);
+      },
+    });
+
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(true);
+    expect(result.checks.authentication.status).toBe("passed");
+    expect(JSON.stringify(result)).not.toContain(credential);
+    expect(JSON.stringify(result)).not.toContain("private-account-domain");
+  });
+
+  test.each([
+    [401, { error: "Invalid API key", code: "UNAUTHORIZED" }, "invalid_credentials"],
+    [403, { error: "Access denied", code: "SOMETHING_ELSE" }, "inconclusive"],
+    [200, { data: "not a domain list" }, "inconclusive"],
+    [200, [null], "inconclusive"],
+    [200, [{ id: "d_1" }], "inconclusive"],
+  ] as const)("eusend HTTP %s maps to a safe diagnostic", async (status, body, expected) => {
+    const result = await runDoctor({
+      ...options,
+      adapter: "eusend",
+      fetch: async () => json(body, status),
+    });
+
+    expect(result.checks.authentication.status).toBe(expected);
+    expect(result.ok).toBe(false);
+  });
+
   test.each([200, 201, 400, 422])(
     "JetEmail HTTP %s cannot alone prove authentication",
     async (status) => {

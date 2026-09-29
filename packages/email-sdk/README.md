@@ -42,7 +42,7 @@ console.log(result.adapter, result.id);
 
 ## Why use this
 
-- One `EmailMessage` shape across 26 provider API adapters plus SMTP, 27 adapters total.
+- One `EmailMessage` shape across 27 provider API adapters plus SMTP, 28 adapters total.
 - Adapter subpath imports, so apps load only the integrations they use.
 - Type-inferred route names across `send`, `validate`, `adapter`, and `withAdapter`.
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
@@ -99,6 +99,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/lettr` | Lettr |
 | `@opencoredev/email-sdk/sendheron` | SendHeron |
 | `@opencoredev/email-sdk/helo` | Helo |
+| `@opencoredev/email-sdk/eusend` | eusend |
 | `@opencoredev/email-sdk/primitive` | Primitive |
 | `@opencoredev/email-sdk/plunk` | Plunk |
 | `@opencoredev/email-sdk/mailtrap` | Mailtrap |

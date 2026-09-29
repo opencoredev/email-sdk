@@ -253,6 +253,16 @@ export const providers = [
     logo: "https://www.google.com/s2/favicons?domain=helohq.com&sz=64",
     currentOnly: true,
   },
+  {
+    name: "eusend",
+    key: "eusend",
+    importPath: "@opencoredev/email-sdk/eusend",
+    docs: "/docs/adapters/eusend",
+    website: "https://eusend.dev",
+    summary: "EU-hosted transactional email: sent, stored and delivered from infrastructure in the EU.",
+    logo: "https://www.google.com/s2/favicons?domain=eusend.dev&sz=64",
+    currentOnly: true,
+  },
 ] as const;
 
 export type Provider = (typeof providers)[number];

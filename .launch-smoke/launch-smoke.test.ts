@@ -17,6 +17,7 @@ import {
   observabilityPlugin,
   type EmailObservabilityEvent,
 } from "@opencoredev/email-sdk/plugins/observability";
+import { eusend } from "@opencoredev/email-sdk/eusend";
 import { helo } from "@opencoredev/email-sdk/helo";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
@@ -405,6 +406,15 @@ describe("documented adapter entry points", () => {
       }),
       simpleMessage,
       { messageId: "helo_1", status: "accepted" },
+    ],
+    [
+      "eusend",
+      eusend({
+        apiKey: "test",
+        fetch: fetchOk({ id: "eusend_1" }).fetcher,
+      }),
+      { ...simpleMessage, to: "user@example.com" },
+      { id: "eusend_1" },
     ],
   ];
 

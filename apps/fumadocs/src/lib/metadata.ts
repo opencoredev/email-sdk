@@ -295,7 +295,7 @@ export const homeStructuredData = {
       },
       featureList: [
         "Transactional email through your existing provider account",
-        "26 provider API adapters plus SMTP, 27 adapters total, including Resend, Postmark, SendGrid, Mailgun, and AWS SES",
+        "27 provider API adapters plus SMTP, 28 adapters total, including Resend, Postmark, SendGrid, Mailgun, and AWS SES",
         "Message validation, no-network test adapters, and common error types",
         "Configurable fallback routes and retries",
         "Plugins for defaults, observability, capture, and community adapters",

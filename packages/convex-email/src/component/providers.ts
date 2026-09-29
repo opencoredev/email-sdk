@@ -10,6 +10,7 @@ import { brevo } from "@opencoredev/email-sdk/brevo";
 import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
 import { graph } from "@opencoredev/email-sdk/graph";
 import { iterable } from "@opencoredev/email-sdk/iterable";
+import { eusend } from "@opencoredev/email-sdk/eusend";
 import { helo } from "@opencoredev/email-sdk/helo";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
@@ -136,6 +137,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   memory: (_options, config) => memoryAdapter(config.name ?? "memory"),
   brevo: fromOptions(brevo),
   cloudflare: fromOptions(cloudflare),
+  eusend: fromOptions(eusend),
   helo: fromOptions(helo),
   iterable: fromOptions(iterable),
   jetemail: fromOptions(jetemail),
