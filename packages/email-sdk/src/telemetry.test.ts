@@ -13,8 +13,13 @@ import {
   TELEMETRY_NOTICE,
   createTelemetry,
   detectCiVendor,
+  disableTelemetry,
+  getTelemetry,
+  getTelemetryStatus,
   isReportableSendError,
   normalizeAdapterName,
+  resetDisableTelemetry,
+  setTelemetryPreference,
 } from "./telemetry.js";
 import { stubFetch } from "../test-support/fetch.js";
 
@@ -96,6 +101,66 @@ describe("telemetry opt-out", () => {
     });
 
     expect(telemetry.enabled).toBe(false);
+  });
+});
+
+describe("telemetry preference", () => {
+  test("email-sdk telemetry disable persists across processes and keeps the identity", async () => {
+    const { calls, fetchFn } = fetchCapture();
+    const configDir = tempConfigDir();
+
+    createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} });
+
+    // SAFETY: createTelemetry wrote this state file above with an installationId.
+    const before = JSON.parse(readFileSync(join(configDir, "telemetry.json"), "utf8")) as {
+      installationId: string;
+    };
+
+    setTelemetryPreference(false, { env: {}, configDir });
+
+    const telemetry = createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} });
+    await telemetry.capture("cli command run", { command: "help" });
+
+    // SAFETY: setTelemetryPreference wrote this state file above.
+    const after = JSON.parse(readFileSync(join(configDir, "telemetry.json"), "utf8")) as {
+      installationId: string;
+      disabled: boolean;
+    };
+
+    expect(telemetry.enabled).toBe(false);
+    expect(calls).toHaveLength(0);
+    expect(after).toMatchObject({ installationId: before.installationId, disabled: true });
+    expect(getTelemetryStatus({ env: {}, configDir })).toMatchObject({
+      enabled: false,
+      reason: "config",
+    });
+
+    setTelemetryPreference(true, { env: {}, configDir });
+    expect(getTelemetryStatus({ env: {}, configDir })).toMatchObject({
+      enabled: true,
+      reason: "default",
+    });
+  });
+
+  test("status names the environment variable that opted out", () => {
+    const configDir = tempConfigDir();
+
+    expect(getTelemetryStatus({ env: { DO_NOT_TRACK: "1" }, configDir }).reason).toBe(
+      "DO_NOT_TRACK",
+    );
+    expect(getTelemetryStatus({ env: { EMAIL_SDK_TELEMETRY: "off" }, configDir }).reason).toBe(
+      "EMAIL_SDK_TELEMETRY",
+    );
+  });
+
+  test("disableTelemetry() turns off the shared instance for the process", () => {
+    try {
+      disableTelemetry();
+      expect(getTelemetry().enabled).toBe(false);
+      expect(getTelemetryStatus({ env: {}, configDir: tempConfigDir() }).reason).toBe("code");
+    } finally {
+      resetDisableTelemetry();
+    }
   });
 });
 

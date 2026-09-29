@@ -305,12 +305,27 @@ If the migration cannot happen in one change, import from `@opencoredev/email-sd
 
 Opt-out telemetry is enabled by default for SDK and CLI usage and uses a random, stable installation identifier. It records adapter names, command names, success/failure, error codes, duration, recipient counts, whether scheduling was requested, SDK version, runtime, OS, CI metadata, and redacted error shape. It never records a person's identity, email content, subjects, addresses, headers, attachments, API keys, or provider raw responses.
 
-Opt out globally:
+Opt out on this machine (persists in `~/.config/email-sdk/telemetry.json`):
+
+```bash
+npx @opencoredev/email-sdk telemetry disable
+npx @opencoredev/email-sdk telemetry status   # shows what decided the current state
+```
+
+Opt out through the environment, which suits CI, containers, and Workers:
 
 ```bash
 export EMAIL_SDK_TELEMETRY=0
 # or
 export DO_NOT_TRACK=1
+```
+
+Opt out for the whole process in code, including clients created by dependencies:
+
+```ts
+import { disableTelemetry } from "@opencoredev/email-sdk";
+
+disableTelemetry();
 ```
 
 Opt out per client:

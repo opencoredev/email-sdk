@@ -2,6 +2,10 @@ export { createEmailClient } from "./core.js";
 
 export { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 
+export { disableTelemetry, getTelemetryStatus } from "./telemetry.js";
+
+export type { TelemetryStatus } from "./telemetry.js";
+
 export type { MessageFieldSupport } from "./utils.js";
 
 export {

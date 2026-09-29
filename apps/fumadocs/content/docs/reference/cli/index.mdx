@@ -26,7 +26,7 @@ Usage and SDK errors print one message to stderr and exit with status 1. Unexpec
 
 ## Telemetry
 
-CLI runs use the same default telemetry and environment opt-outs as the SDK. Set `EMAIL_SDK_TELEMETRY=0` for repeatable smoke tests.
+CLI runs use the same default telemetry and opt-outs as the SDK. `email-sdk telemetry disable` turns it off for the machine, `email-sdk telemetry status` shows the current state, and `email-sdk telemetry enable` turns it back on. Set `EMAIL_SDK_TELEMETRY=0` for repeatable smoke tests.
 
 <Card title="List adapters" href="/docs/reference/cli/adapters" description="Inspect the bundled registry and credential names." />
 <Card title="Check setup" href="/docs/reference/cli/doctor" description="Verify required values are present." />

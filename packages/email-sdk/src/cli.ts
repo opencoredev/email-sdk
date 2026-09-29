@@ -38,7 +38,13 @@ import type {
   EmailAdapter,
   EmailTag,
 } from "./types.js";
-import { getTelemetry, normalizeAdapterName, setTelemetrySource } from "./telemetry.js";
+import {
+  getTelemetry,
+  getTelemetryStatus,
+  normalizeAdapterName,
+  setTelemetryPreference,
+  setTelemetrySource,
+} from "./telemetry.js";
 import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 import { unosend } from "./unosend.js";
 import { zeptomail } from "./zeptomail.js";
@@ -286,7 +292,7 @@ const envFlagNames = new Map<string, string>([
   ["SMTP_HOST", "host"],
 ]);
 
-async function main(command: string | undefined, flags: CliFlags) {
+async function main(command: string | undefined, flags: CliFlags, args: string[]) {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp();
 
@@ -307,6 +313,12 @@ async function main(command: string | undefined, flags: CliFlags) {
 
   if (command === "doctor") {
     await doctor(flags);
+
+    return;
+  }
+
+  if (command === "telemetry") {
+    telemetryCommand(args[0]);
 
     return;
   }
@@ -766,6 +778,7 @@ Usage:
   email-sdk adapters
   RESEND_API_KEY="re_..." email-sdk doctor --adapter resend
   email-sdk send --adapter resend --from you@example.com --to them@example.com --subject "Hello" --text "It works"
+  email-sdk telemetry [status|disable|enable]
 
 Doctor options:
   --live                       Explicitly check authentication without sending email.
@@ -819,6 +832,30 @@ SMTP options:
   --user <user>                Overrides SMTP_USER.
   --pass <pass>                Overrides SMTP_PASS.
 `);
+}
+
+function telemetryCommand(action = "status") {
+  if (action === "disable" || action === "enable") {
+    const path = setTelemetryPreference(action === "enable");
+    console.log(`Telemetry ${action}d for this machine (${path}).`);
+
+    return;
+  }
+
+  if (action !== "status") {
+    fail(`Unknown telemetry action "${action}". Use status, disable, or enable.`);
+  }
+
+  const status = getTelemetryStatus();
+
+  if (status.enabled) {
+    console.log("Telemetry is enabled. Run `email-sdk telemetry disable` to opt out.");
+
+    return;
+  }
+
+  const reason = status.reason === "config" ? status.configPath : status.reason;
+  console.log(`Telemetry is disabled (${reason}).`);
 }
 
 class CliFailure extends Error {}
@@ -883,15 +920,21 @@ const [cliCommand, ...cliArgs] = process.argv.slice(2);
 
 const cliFlags = parseFlags(cliArgs);
 
+// Managing the opt-out never reports anything, even when the command fails.
+const reportsTelemetry = cliCommand !== "telemetry";
+
 // Tag every telemetry event from this process (client created, email sent,
 // exceptions) as CLI traffic before any client is constructed.
 setTelemetrySource("cli");
 
 try {
-  await main(cliCommand, cliFlags);
-  await captureCliRun({ command: cliCommand, flags: cliFlags, success: true, startedAt });
+  await main(cliCommand, cliFlags, cliArgs);
+
+  if (reportsTelemetry) {
+    await captureCliRun({ command: cliCommand, flags: cliFlags, success: true, startedAt });
+  }
 } catch (error) {
-  if (!(error instanceof CliFailure) && !(error instanceof EmailSdkError)) {
+  if (reportsTelemetry && !(error instanceof CliFailure) && !(error instanceof EmailSdkError)) {
     // Unexpected crash, not a usage or provider failure. Reported before the run
     // summary so captureCliRun's flush() settles it too. Errors rethrown out of
     // client.send were already reported there; the per-object dedupe drops this one.
@@ -902,7 +945,9 @@ try {
     });
   }
 
-  await captureCliRun({ command: cliCommand, flags: cliFlags, success: false, startedAt, error });
+  if (reportsTelemetry) {
+    await captureCliRun({ command: cliCommand, flags: cliFlags, success: false, startedAt, error });
+  }
 
   if (error instanceof CliFailure || error instanceof EmailSdkError) {
     console.error(error.message);

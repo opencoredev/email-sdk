@@ -35,7 +35,7 @@ const MAX_STACK_FRAMES = 20;
 
 const MAX_MESSAGE_LENGTH = 300;
 
-export const TELEMETRY_NOTICE = `@opencoredev/email-sdk collects opt-out usage telemetry using a stable installation identifier: adapter names, command names, success/failure counts, and redacted error reports. Email content, addresses, and credentials are never collected. Opt out with EMAIL_SDK_TELEMETRY=0 or DO_NOT_TRACK=1. Details: https://github.com/opencoredev/email-sdk#telemetry`;
+export const TELEMETRY_NOTICE = `@opencoredev/email-sdk collects opt-out usage telemetry using a stable installation identifier: adapter names, command names, success/failure counts, and redacted error reports. Email content, addresses, and credentials are never collected. Opt out with "email-sdk telemetry disable", EMAIL_SDK_TELEMETRY=0, or DO_NOT_TRACK=1. Details: https://github.com/opencoredev/email-sdk#telemetry`;
 
 export type TelemetryEventName =
   | "client created"
@@ -123,24 +123,32 @@ export function detectCiVendor(env: Record<string, string | undefined>) {
   return undefined;
 }
 
+const disabledTelemetry: Telemetry = {
+  enabled: false,
+  capture: () => Promise.resolve(),
+  captureException: () => Promise.resolve(),
+  flush: () => Promise.resolve(),
+};
+
+export type TelemetryStatus = {
+  enabled: boolean;
+  /** What decided the current state. `default` means nothing opted out. */
+  reason: "EMAIL_SDK_TELEMETRY" | "DO_NOT_TRACK" | "NODE_ENV" | "config" | "code" | "default";
+  /** File that `email-sdk telemetry disable` writes to. */
+  configPath: string;
+};
+
 export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const env = options.env ?? process.env;
   const fetcher = options.fetch ?? fetch;
   const notify = options.notify ?? ((message: string) => process.stderr.write(`${message}\n`));
 
-  if (isTelemetryDisabled(env)) {
-    return {
-      enabled: false,
-      capture: () => Promise.resolve(),
-      captureException: () => Promise.resolve(),
-      flush: () => Promise.resolve(),
-    };
-  }
+  if (envOptOut(env)) return disabledTelemetry;
 
-  const configDir =
-    options.configDir ?? join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "email-sdk");
-
+  const configDir = resolveConfigDir(env, options.configDir);
   const state = loadTelemetryState(configDir);
+
+  if (state.disabled) return disabledTelemetry;
 
   if (!state.noticeShown) {
     notify(TELEMETRY_NOTICE);
@@ -270,10 +278,66 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
 let sharedTelemetry: Telemetry | undefined;
 
+let disabledInCode = false;
+
 export function getTelemetry(): Telemetry {
+  if (disabledInCode) return disabledTelemetry;
+
   sharedTelemetry ??= createTelemetry();
 
   return sharedTelemetry;
+}
+
+/**
+ * Turns telemetry off for every client in this process, including clients a
+ * dependency creates. Call once at startup, before creating clients.
+ */
+export function disableTelemetry() {
+  disabledInCode = true;
+}
+
+/** Reports whether telemetry is on for this process and which setting decided it. */
+export function getTelemetryStatus(
+  options: Pick<TelemetryOptions, "env" | "configDir"> = {},
+): TelemetryStatus {
+  const env = options.env ?? process.env;
+  const configDir = resolveConfigDir(env, options.configDir);
+  const configPath = join(configDir, "telemetry.json");
+  const envReason = envOptOut(env);
+
+  if (envReason) return { enabled: false, reason: envReason, configPath };
+
+  if (disabledInCode) return { enabled: false, reason: "code", configPath };
+
+  if (readStoredState(configDir)?.disabled) return { enabled: false, reason: "config", configPath };
+
+  return { enabled: true, reason: "default", configPath };
+}
+
+/**
+ * Persists the machine-wide preference that `email-sdk telemetry enable|disable`
+ * manages. Returns the path written. Throws when the config dir is not writable,
+ * so the CLI can report a failed opt-out instead of pretending it worked.
+ */
+export function setTelemetryPreference(
+  enabled: boolean,
+  options: Pick<TelemetryOptions, "env" | "configDir"> = {},
+) {
+  const env = options.env ?? process.env;
+  const configDir = resolveConfigDir(env, options.configDir);
+  const stored = readStoredState(configDir);
+
+  const state: TelemetryState = {
+    installationId: stored?.installationId ?? randomUUID(),
+    noticeShown: stored?.noticeShown ?? false,
+    disabled: !enabled,
+  };
+
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "telemetry.json"), `${JSON.stringify(state, null, 2)}\n`);
+  resetTelemetry();
+
+  return join(configDir, "telemetry.json");
 }
 
 /**
@@ -288,6 +352,11 @@ export function resetTelemetry() {
 /** @internal Test seam: swaps the shared singleton. Pair with resetTelemetry() to restore. */
 export function setSharedTelemetry(telemetry: Telemetry | undefined) {
   sharedTelemetry = telemetry;
+}
+
+/** @internal Test seam: undoes disableTelemetry(). */
+export function resetDisableTelemetry() {
+  disabledInCode = false;
 }
 
 // 2026-07-06: the source tag lives here as module state instead of on the public
@@ -311,11 +380,11 @@ export function resetTelemetrySource() {
   telemetrySource = "sdk";
 }
 
-function isTelemetryDisabled(env: Record<string, string | undefined>) {
+function envOptOut(env: Record<string, string | undefined>): TelemetryStatus["reason"] | undefined {
   const optOut = env.EMAIL_SDK_TELEMETRY?.toLowerCase();
 
   if (optOut === "0" || optOut === "false" || optOut === "off") {
-    return true;
+    return "EMAIL_SDK_TELEMETRY";
   }
 
   // Honour the standard DNT value "1" as well as the common "true" alias.
@@ -323,10 +392,14 @@ function isTelemetryDisabled(env: Record<string, string | undefined>) {
   const doNotTrack = env.DO_NOT_TRACK?.toLowerCase();
 
   if (doNotTrack === "1" || doNotTrack === "true") {
-    return true;
+    return "DO_NOT_TRACK";
   }
 
-  return env.NODE_ENV === "test";
+  return env.NODE_ENV === "test" ? "NODE_ENV" : undefined;
+}
+
+function resolveConfigDir(env: Record<string, string | undefined>, configDir?: string) {
+  return configDir ?? join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "email-sdk");
 }
 
 type ExceptionFrame = {
@@ -546,9 +619,11 @@ function redactErrorMessage(message: string): string {
 type TelemetryState = {
   installationId: string;
   noticeShown: boolean;
+  /** Set by `email-sdk telemetry disable`. */
+  disabled?: boolean;
 };
 
-function loadTelemetryState(configDir: string): TelemetryState {
+function readStoredState(configDir: string): TelemetryState | undefined {
   try {
     const parsed = parseJsonStrict(readFileSync(join(configDir, "telemetry.json"), "utf8"));
 
@@ -559,11 +634,20 @@ function loadTelemetryState(configDir: string): TelemetryState {
       return {
         installationId,
         noticeShown: jsonField(parsed, "noticeShown") === true,
+        disabled: jsonField(parsed, "disabled") === true,
       };
     }
   } catch {
-    // Missing or unreadable state falls through to a fresh identity.
+    // Missing or unreadable state reads as "no stored preference".
   }
+
+  return undefined;
+}
+
+function loadTelemetryState(configDir: string): TelemetryState {
+  const stored = readStoredState(configDir);
+
+  if (stored) return stored;
 
   const state = { installationId: randomUUID(), noticeShown: false };
   persistTelemetryState(configDir, state);

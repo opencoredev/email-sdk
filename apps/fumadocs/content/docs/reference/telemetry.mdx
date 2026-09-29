@@ -7,11 +7,32 @@ Core SDK and CLI telemetry are enabled by default. The first enabled run prints 
 
 ## Opt out
 
+Turn it off for every project on a machine. The choice is saved in the local state file:
+
+```bash
+npx @opencoredev/email-sdk telemetry disable
+npx @opencoredev/email-sdk telemetry status
+```
+
+`status` reports whether telemetry is on and which setting decided it. `email-sdk telemetry enable` reverses the choice.
+
+Environment variables take precedence over the saved choice. They fit CI, containers, and Workers, where there is no persistent home directory:
+
 ```bash
 export EMAIL_SDK_TELEMETRY=0
 # or
 export DO_NOT_TRACK=1
 ```
+
+In code, `disableTelemetry()` switches it off for the whole process, including clients that a dependency creates. Call it once at startup:
+
+```ts title="src/email.ts"
+import { disableTelemetry } from "@opencoredev/email-sdk";
+
+disableTelemetry();
+```
+
+Or opt out a single client:
 
 ```ts title="src/email.ts"
 const email = createEmailClient({
@@ -22,7 +43,7 @@ const email = createEmailClient({
 
 `NODE_ENV=test` also disables capture. Repository tests use a Bun preload that sets `EMAIL_SDK_TELEMETRY=0` for every in-process run.
 
-When disabled, telemetry does not write config, print the notice, or make network requests.
+When disabled, telemetry does not print the notice or make network requests. Only `email-sdk telemetry disable` writes config while opting out.
 
 ## Events
 
