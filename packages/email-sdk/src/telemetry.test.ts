@@ -193,6 +193,21 @@ describe("telemetry preference", () => {
     expect(getTelemetryStatus({ env: {}, configDir }).enabled).toBe(true);
   });
 
+  test("an inaccessible config directory cannot enable telemetry", async () => {
+    const { calls, fetchFn } = fetchCapture();
+    const configDir = join(tempConfigDir(), "not-a-directory");
+
+    mkdirSync(join(configDir, ".."), { recursive: true });
+    writeFileSync(configDir, "not a directory");
+
+    const telemetry = createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} });
+    await telemetry.capture("client created");
+
+    expect(telemetry.enabled).toBe(false);
+    expect(calls).toHaveLength(0);
+    expect(getTelemetryStatus({ env: {}, configDir }).reason).toBe("config-unreadable");
+  });
+
   test("saving through a symlinked state file updates its target", () => {
     const configDir = tempConfigDir();
     const targetDir = tempConfigDir();

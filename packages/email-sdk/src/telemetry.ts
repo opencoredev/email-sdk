@@ -656,11 +656,22 @@ type TelemetryState = {
  */
 function readStoredState(configDir: string): TelemetryState | "missing" | "unreadable" {
   const path = join(configDir, "telemetry.json");
-
-  if (!existsSync(path)) return "missing";
+  let contents: string;
 
   try {
-    const parsed = parseJsonStrict(readFileSync(path, "utf8"));
+    contents = readFileSync(path, "utf8");
+  } catch (error) {
+    // Only a genuinely absent state file permits telemetry to start. Permission
+    // failures may conceal a saved opt-out and must fail closed.
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return "missing";
+    }
+
+    return "unreadable";
+  }
+
+  try {
+    const parsed = parseJsonStrict(contents);
 
     const installationId =
       jsonString(parsed, "installationId") || jsonString(parsed, "anonymousId") || undefined;
