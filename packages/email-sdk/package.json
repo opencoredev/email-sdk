@@ -323,6 +323,6 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "nodemailer": "^10.0.10"
+    "nodemailer": "^10.0.13"
   }
 }
