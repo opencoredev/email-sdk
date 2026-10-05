@@ -3,7 +3,7 @@
 // parsed messages back from Mailpit's API. Never touches a real mail server.
 // Set KEEP_MAILPIT=1 to leave the container running for manual inspection.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { z } from "zod";
@@ -14,6 +14,10 @@ import { smtp } from "../packages/email-sdk/src/smtp.js";
 const MAILPIT_IMAGE = "axllent/mailpit:v1.27.8";
 
 const CLI_PATH = "packages/email-sdk/dist/cli.js";
+
+const SDK_SOURCE_DIR = "packages/email-sdk/src";
+
+const REQUEST_TIMEOUT_MS = 5_000;
 
 const containerName = `email-sdk-smtp-check-${process.pid}`;
 
@@ -33,8 +37,8 @@ const messageSchema = z.object({
   ReplyTo: z.array(address),
   Text: z.string(),
   HTML: z.string(),
-  Attachments: z.array(z.object({ FileName: z.string(), ContentType: z.string() })),
-  Inline: z.array(z.object({ FileName: z.string(), ContentID: z.string() })),
+  Attachments: z.array(z.object({ PartID: z.string(), FileName: z.string() })),
+  Inline: z.array(z.object({ PartID: z.string(), FileName: z.string(), ContentID: z.string() })),
 });
 
 const headersSchema = z.record(z.string(), z.array(z.string()));
@@ -83,7 +87,9 @@ async function waitForReady(apiBase: string): Promise<void> {
   const deadline = Date.now() + 20_000;
 
   while (Date.now() < deadline) {
-    const ready = await fetch(`${apiBase}/readyz`).then(
+    const ready = await fetch(`${apiBase}/readyz`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).then(
       (response) => response.ok,
       () => false,
     );
@@ -96,14 +102,24 @@ async function waitForReady(apiBase: string): Promise<void> {
   throw new Error(`Mailpit at ${apiBase} did not become ready within 20s.`);
 }
 
-async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<T> {
-  const response = await fetch(url);
+async function get(url: string): Promise<Response> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 
   if (!response.ok) {
     throw new Error(`GET ${url} returned ${response.status}.`);
   }
 
-  return schema.parse(await response.json());
+  return response;
+}
+
+async function getJson<T>(url: string, schema: z.ZodType<T>): Promise<T> {
+  return schema.parse(await (await get(url)).json());
+}
+
+async function getPartBase64(apiBase: string, messageId: string, partId: string): Promise<string> {
+  const bytes = await (await get(`${apiBase}/api/v1/message/${messageId}/part/${partId}`)).bytes();
+
+  return Buffer.from(bytes).toString("base64");
 }
 
 async function findMessage(apiBase: string, subject: string) {
@@ -119,8 +135,12 @@ async function findMessage(apiBase: string, subject: string) {
 
   const headers = await getJson(`${apiBase}/api/v1/message/${match.ID}/headers`, headersSchema);
 
-  return { message, headers };
+  return { id: match.ID, message, headers };
 }
+
+const ATTACHMENT_TEXT = "attachment body\n";
+
+const INLINE_PNG_BASE64 = "iVBORw0KGgo=";
 
 async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
   const subject = "Grüße from Email SDK ✉️";
@@ -142,10 +162,10 @@ async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
       html: '<p>HTML body</p><img src="cid:logo@example.test">',
       headers: [{ name: "X-Email-SDK-Check", value: "sdk" }],
       attachments: [
-        { filename: "report.txt", content: "attachment body\n", contentType: "text/plain" },
+        { filename: "report.txt", content: ATTACHMENT_TEXT, contentType: "text/plain" },
         {
           filename: "logo.png",
-          content: "iVBORw0KGgo=",
+          content: INLINE_PNG_BASE64,
           contentEncoding: "base64",
           contentType: "image/png",
           contentId: "logo@example.test",
@@ -156,7 +176,7 @@ async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
     { idempotencyKey: "smtp-local-check" },
   );
 
-  const { message, headers } = await findMessage(apiBase, subject);
+  const { id, message, headers } = await findMessage(apiBase, subject);
 
   expectEqual("sdk: non-ASCII subject round-trips", message.Subject, subject);
   expectEqual("sdk: from name and address", message.From, {
@@ -191,6 +211,11 @@ async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
     true,
   );
   expectEqual("sdk: html body present", message.HTML.includes("<p>HTML body</p>"), true);
+  expectEqual(
+    "sdk: html references inline image",
+    message.HTML.includes('src="cid:logo@example.test"'),
+    true,
+  );
   expectEqual("sdk: custom header", headers["X-Email-Sdk-Check"] ?? headers["X-Email-SDK-Check"], [
     "sdk",
   ]);
@@ -205,9 +230,31 @@ async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
     message.Inline.map((entry) => entry.ContentID),
     ["logo@example.test"],
   );
+
+  const [file] = message.Attachments;
+
+  const [inline] = message.Inline;
+
+  if (file) {
+    expectEqual(
+      "sdk: file attachment bytes",
+      await getPartBase64(apiBase, id, file.PartID),
+      Buffer.from(ATTACHMENT_TEXT).toString("base64"),
+    );
+  }
+
+  if (inline) {
+    expectEqual(
+      "sdk: inline attachment bytes",
+      await getPartBase64(apiBase, id, inline.PartID),
+      INLINE_PNG_BASE64,
+    );
+  }
 }
 
-// Drop inherited SMTP_* settings (TLS, auth) so the CLI talks plain SMTP to Mailpit.
+// Drop inherited SMTP_* settings (TLS, auth) so the CLI talks plain SMTP to
+// Mailpit. The child also runs with --no-env-file, because Bun would otherwise
+// reload them from the repo-root .env and .env.local.
 function cliEnv(): NodeJS.ProcessEnv {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("SMTP_")),
@@ -222,6 +269,7 @@ async function checkCliSend(smtpPort: number, apiBase: string): Promise<void> {
   const result = spawnSync(
     process.execPath,
     [
+      "--no-env-file",
       CLI_PATH,
       "send",
       "--adapter",
@@ -258,10 +306,34 @@ async function checkCliSend(smtpPort: number, apiBase: string): Promise<void> {
   expectEqual("cli: text body", message.Text.trim(), "Sent by the built CLI.");
 }
 
-async function main(): Promise<void> {
+function newestSourceMtime(dir: string): number {
+  return readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .reduce((newest, file) => Math.max(newest, statSync(`${dir}/${file}`).mtimeMs), 0);
+}
+
+function assertFreshCli(): void {
   if (!existsSync(CLI_PATH)) {
     throw new Error(`${CLI_PATH} is missing. Run "bun run build" first.`);
   }
+
+  if (newestSourceMtime(SDK_SOURCE_DIR) > statSync(CLI_PATH).mtimeMs) {
+    throw new Error(`${CLI_PATH} is older than ${SDK_SOURCE_DIR}. Run "bun run build" first.`);
+  }
+}
+
+let containerRemoved = false;
+
+function removeContainer(): void {
+  if (containerRemoved || process.env.KEEP_MAILPIT === "1") return;
+
+  containerRemoved = true;
+
+  spawnSync("docker", ["rm", "-f", containerName], { stdio: "ignore" });
+}
+
+async function main(): Promise<void> {
+  assertFreshCli();
 
   docker([
     "run",
@@ -276,6 +348,17 @@ async function main(): Promise<void> {
     MAILPIT_IMAGE,
   ]);
 
+  // finally blocks don't run when the process is killed, so remove the
+  // container from the signal handlers too.
+  process.once("SIGINT", () => {
+    removeContainer();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    removeContainer();
+    process.exit(143);
+  });
+
   let smtpPort = 0;
 
   let apiBase = "";
@@ -289,9 +372,9 @@ async function main(): Promise<void> {
   } finally {
     if (process.env.KEEP_MAILPIT === "1") {
       console.error(`Kept ${containerName}: Mailpit UI ${apiBase}, SMTP 127.0.0.1:${smtpPort}`);
-    } else {
-      docker(["rm", "-f", containerName]);
     }
+
+    removeContainer();
   }
 }
 

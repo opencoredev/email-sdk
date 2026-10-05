@@ -48,7 +48,7 @@ Required for any change to `src/smtp.ts`, `src/smtp-errors.ts`, MIME or attachme
 bun scripts/check-smtp-local.ts
 ```
 
-It needs Docker. It starts its own `axllent/mailpit` container named `email-sdk-smtp-check-<pid>`, bound to random `127.0.0.1` ports. Then it sends one rich message through the SDK (non-ASCII subject, cc/bcc/reply-to, a custom header, a file attachment, an inline `cid:` image, and an idempotency `Message-ID`) and one through `packages/email-sdk/dist/cli.js send`. It reads both back from the Mailpit API, prints a JSON check list, exits non-zero on any failure, and removes only its own container.
+It needs Docker. It starts its own `axllent/mailpit` container named `email-sdk-smtp-check-<pid>`, bound to random `127.0.0.1` ports. Then it sends one rich message through the SDK (non-ASCII subject, cc/bcc/reply-to, a custom header, a file attachment, an inline `cid:` image, and an idempotency `Message-ID`) and one through `packages/email-sdk/dist/cli.js send`. It reads both back from the Mailpit API, checks headers, bodies, and decoded attachment bytes, prints a JSON check list, and exits non-zero on any failure. It removes only its own container, including on Ctrl+C. It refuses to run if `dist/cli.js` is older than `packages/email-sdk/src`, and the CLI child ignores both inherited `SMTP_*` settings and `.env` files.
 
 - When you change behavior, add a matching assertion to the script. Don't just eyeball the output.
 - `KEEP_MAILPIT=1 bun scripts/check-smtp-local.ts` leaves the container up and prints its UI and SMTP ports, so you can inspect `/api/v1/message/<id>/raw`. Remove it afterward with `docker rm -f <printed name>`. Never remove other Mailpit or Postgres containers on this host; other worktrees own them.
