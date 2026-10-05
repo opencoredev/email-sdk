@@ -9,6 +9,16 @@ These instructions are local to this repository. Keep repo-specific release guid
 - Package directory: `packages/email-sdk`
 - Convex component: `@opencoredev/convex-email` in `packages/convex-email` (see [Convex Component](#convex-component))
 - Prefer `bun` and `bunx`.
+- SMTP delivery runs on Nodemailer (the package's only runtime dependency). Every other adapter calls its provider's HTTP API through the SDK's own `fetch` code.
+
+## Testing
+
+Read the matching skill before you test or report a change as done:
+
+- [`.agents/skills/test-email-sdk`](.agents/skills/test-email-sdk/SKILL.md): SDK, CLI, adapters, SMTP, and the Convex component. It defines the proof levels (unit, local wire, live auth, live send) and the credential-free SMTP check `bun scripts/check-smtp-local.ts`.
+- [`.agents/skills/test-email-sdk-docs`](.agents/skills/test-email-sdk-docs/SKILL.md): the `apps/fumadocs` docs site, including previews.
+
+State the proof level each claim reached. A unit test with stubbed `fetch` doesn't prove delivery, and a missing credential is NOT CHECKED, not a pass. Several worktrees share this host's Docker and ports, so stop only the containers and processes you started.
 
 ## SDK and CLI Changes
 
@@ -42,12 +52,7 @@ build, and npm package dry-run.
 Lint guidance lives in [Local Checks](#local-checks) and
 [Anti-slop Lint](#anti-slop-lint-never-disable) below.
 
-For a quick local CLI smoke test:
-
-```bash
-bun run build
-packages/email-sdk/dist/cli.js adapters
-```
+`release:ci` does not run the SMTP wire check or live gates. Run those separately when your change touches them (see the `test-email-sdk` skill).
 
 ## Local Checks
 
