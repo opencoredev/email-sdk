@@ -5,7 +5,6 @@ import { FullCompareTable } from "@/components/compare-table";
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { comparePairs, getComparePairTitle } from "@/lib/compare";
 import { baseOptions } from "@/lib/layout.shared";
-import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
 import { providers } from "@/lib/providers";
 
@@ -16,11 +15,59 @@ const pageDescription =
 
 export const Route = createFileRoute("/compare/")({
   head: () => ({
-    meta: buildPageMeta({
-      title: pageTitle,
-      description: pageDescription,
-      url: `${siteUrl}/compare`,
-    }),
+    meta: [
+      { title: pageTitle },
+      { name: "description", content: pageDescription },
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: pageTitle },
+      { property: "og:description", content: pageDescription },
+      { property: "og:url", content: `${siteUrl}/compare` },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: pageTitle },
+      { name: "twitter:description", content: pageDescription },
+      {
+        "script:ld+json": {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "CollectionPage",
+              "@id": `${siteUrl}/compare#page`,
+              url: `${siteUrl}/compare`,
+              name: "Compare transactional email providers",
+              description: pageDescription,
+              inLanguage: "en",
+              isPartOf: { "@id": `${siteUrl}/#website` },
+              mainEntity: { "@id": `${siteUrl}/compare#comparisons` },
+            },
+            {
+              "@type": "ItemList",
+              "@id": `${siteUrl}/compare#comparisons`,
+              name: "Head-to-head provider comparisons",
+              numberOfItems: comparePairs.length,
+              itemListElement: comparePairs.map((pair, index) => ({
+                "@type": "ListItem",
+                position: index + 1,
+                name: getComparePairTitle(pair),
+                url: `${siteUrl}/compare/${pair.slug}`,
+              })),
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${siteUrl}/compare#breadcrumb`,
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: appName, item: siteUrl },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: "Compare",
+                  item: `${siteUrl}/compare`,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
     links: [{ rel: "canonical", href: `${siteUrl}/compare` }],
   }),
   component: CompareIndex,

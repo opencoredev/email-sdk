@@ -37,10 +37,37 @@ function getSitemapEntries() {
       "2026-06-01",
     ) || "2026-06-01";
 
+  const latestDocsUpdate = Object.values(docsLastmod).reduce(
+    (latest, date) => (date > latest ? date : latest),
+    "2026-06-01",
+  );
+
+  // Seed is the index page's own lastmod; pair edits push it later.
+  const compareLastmod = comparePairs.reduce((latest, pair) => {
+    const date = comparePairLastmod(pair);
+
+    return date > latest ? date : latest;
+  }, "2026-10-05");
+
+  // /llms.txt indexes docs, comparisons, and blog posts; /llms-full.txt inlines
+  // docs and comparisons. Each lastmod follows the newest dependency, floored
+  // at the routes' own last content edit.
+  const llmsIndexLastmod = [
+    latestDocsUpdate,
+    latestBlogUpdate,
+    compareLastmod,
+    "2026-10-05",
+  ].reduce((latest, date) => (date > latest ? date : latest), "");
+
+  const llmsFullLastmod = [latestDocsUpdate, compareLastmod, "2026-10-05"].reduce(
+    (latest, date) => (date > latest ? date : latest),
+    "",
+  );
+
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
-      lastmod: "2026-09-06",
+      lastmod: "2026-09-28",
       changefreq: "weekly",
       priority: "1.0",
     },
@@ -52,7 +79,7 @@ function getSitemapEntries() {
     },
     {
       loc: `${siteUrl}/about`,
-      lastmod: "2026-09-07",
+      lastmod: "2026-09-26",
       changefreq: "monthly",
       priority: "0.5",
     },
@@ -82,11 +109,7 @@ function getSitemapEntries() {
     },
     {
       loc: `${siteUrl}/compare`,
-      lastmod: comparePairs.reduce((latest, pair) => {
-        const date = comparePairLastmod(pair);
-
-        return date > latest ? date : latest;
-      }, ""),
+      lastmod: compareLastmod,
       changefreq: "monthly",
       priority: "0.7",
     },
@@ -116,13 +139,13 @@ function getSitemapEntries() {
     })),
     {
       loc: `${siteUrl}/llms.txt`,
-      lastmod: "2026-09-14",
+      lastmod: llmsIndexLastmod,
       changefreq: "weekly",
       priority: "0.5",
     },
     {
       loc: `${siteUrl}/llms-full.txt`,
-      lastmod: "2026-09-14",
+      lastmod: llmsFullLastmod,
       changefreq: "weekly",
       priority: "0.5",
     },
