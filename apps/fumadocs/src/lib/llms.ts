@@ -65,7 +65,7 @@ function machineReadableSection() {
 - [Agent guide](${siteUrl}/agents.md): install, send, and agent tool usage in one page.
 - [Authentication model](${siteUrl}/auth.md): why there is no platform credential, and where provider credentials live.
 - [Agent discovery](${siteUrl}/.well-known/agent.json) and [skill descriptor](${siteUrl}/.well-known/agent-skills).
-- [Every documentation page inlined](${siteUrl}/llms-full.txt) and [documentation-only index](${siteUrl}/docs/llms.txt).
+- [Every documentation and comparison page inlined](${siteUrl}/llms-full.txt) and [documentation-only index](${siteUrl}/docs/llms.txt).
 - [Schema map](${siteUrl}/schemamap.xml) with the [documentation schema feed](${siteUrl}/feeds/docs.jsonl): schema.org TechArticle entities for natural-language retrieval.
 - [Blog](${siteUrl}/blog) with [RSS](${siteUrl}/rss.xml) and [JSON Feed](${siteUrl}/feed.json).`;
 }

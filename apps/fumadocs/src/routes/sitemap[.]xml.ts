@@ -40,7 +40,7 @@ function getSitemapEntries() {
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
-      lastmod: "2026-09-06",
+      lastmod: "2026-09-28",
       changefreq: "weekly",
       priority: "1.0",
     },
@@ -52,7 +52,7 @@ function getSitemapEntries() {
     },
     {
       loc: `${siteUrl}/about`,
-      lastmod: "2026-09-07",
+      lastmod: "2026-09-26",
       changefreq: "monthly",
       priority: "0.5",
     },
