@@ -4,7 +4,7 @@ export const sdkPackageName = emailSdkPackage.name;
 
 export const latestPublishedVersion = emailSdkPackage.version;
 
-export const currentDocsMajorVersion = 2;
+export const currentDocsMajorVersion = 3;
 
 export const docsVersion = `v${currentDocsMajorVersion}`;
 
@@ -20,11 +20,11 @@ export function getCurrentDocsPublishedVersion(packageVersion: string) {
 
 export const docsVersions = [
   {
-    label: currentDocsPublishedVersion ? "latest" : "v1 preview",
+    label: currentDocsPublishedVersion ? "latest" : `${docsVersion} preview`,
     version: docsVersion,
     description: currentDocsPublishedVersion
-      ? "Current v1 SDK, CLI, and docs"
-      : "Unreleased v1 SDK, CLI, and docs",
+      ? `Current ${docsVersion} SDK, CLI, and docs`
+      : `Unreleased ${docsVersion} SDK, CLI, and docs`,
     href: "/docs",
     collection: "docs",
     contentPath: "content/docs",
