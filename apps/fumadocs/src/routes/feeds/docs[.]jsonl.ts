@@ -69,8 +69,9 @@ export const Route = createFileRoute("/feeds/docs.jsonl")({
           });
         });
 
-        // Blog posts render on demand from the build-time snapshot, so the feed
-        // lists the same posts as the sitemap and RSS built from that source.
+        // Blog pages fetch Notra at request time, but this feed is prerendered from
+        // the build-time snapshot, the same source as the sitemap and RSS. Posts
+        // published after a build appear here on the next rebuild.
         const blogLines = getPublishedBlogPosts().map((post) => {
           const url = `${siteUrl}${getBlogPostUrl(post.slug)}`;
 

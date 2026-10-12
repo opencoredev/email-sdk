@@ -106,9 +106,9 @@ export const getBlogPostMarkdownServerFn = createServerFn({ method: "GET" })
     if (localPost) {
       const localMarkdown = getLocalBlogPostMarkdown(slug);
 
-      return localMarkdown
-        ? { post: localPost, markdown: stripLeadingH1(localMarkdown) }
-        : null;
+      return localMarkdown === null
+        ? null
+        : { post: localPost, markdown: stripLeadingH1(localMarkdown) };
     }
 
     const { posts, markdowns } = await fetchBlogData();
@@ -118,5 +118,7 @@ export const getBlogPostMarkdownServerFn = createServerFn({ method: "GET" })
 
     const markdown = markdowns[post.slug];
 
-    return markdown ? { post, markdown: stripLeadingH1(markdown) } : null;
+    // An empty body is still a published post; its HTML page renders, so the
+    // mirror should too.
+    return markdown === undefined ? null : { post, markdown: stripLeadingH1(markdown) };
   });

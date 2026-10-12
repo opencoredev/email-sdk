@@ -19,6 +19,8 @@ export const Route = createFileRoute("/blog/{$slug}.md")({
         return new Response(renderBlogPostMarkdown(detail.post, detail.markdown), {
           headers: {
             "Content-Type": "text/markdown; charset=utf-8",
+            // Same edge cache as the HTML post, so crawler hits don't refetch Notra.
+            "Cache-Control": "public, max-age=0, s-maxage=60, stale-while-revalidate=600",
           },
         });
       },

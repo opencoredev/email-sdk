@@ -3,9 +3,15 @@ import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
 
-const localBlogBodies = new Map([
-  ["email-sdk-v1-safer-typescript-transactional-email", renderMarkdownToSafeHtml(articleMarkdown)],
+// One Markdown source per local post. The HTML page and the /blog/<slug>.md
+// mirror both read from here, so adding a post means adding one entry.
+const localBlogMarkdown = new Map([
+  ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
 ]);
+
+const localBlogBodies = new Map(
+  [...localBlogMarkdown].map(([slug, markdown]) => [slug, renderMarkdownToSafeHtml(markdown)]),
+);
 
 export function getLocalBlogPostDetail(slug: string) {
   const post = localBlogPosts.find((item) => item.slug === slug);
@@ -14,10 +20,6 @@ export function getLocalBlogPostDetail(slug: string) {
 
   return { post, html: localBlogBodies.get(post.slug) ?? "" };
 }
-
-const localBlogMarkdown = new Map([
-  ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
-]);
 
 export function getLocalBlogPostMarkdown(slug: string) {
   return localBlogMarkdown.get(slug) ?? null;
