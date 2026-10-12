@@ -95,6 +95,7 @@ export const email = createEmailClient({
 - Add tests with `memoryAdapter()`, `failingAdapter()`, and `capturePlugin()` when fallback or retry behavior matters.
 - Use the CLI `doctor` and `send --dry-run` before live provider authentication checks.
 - Use the separate `email-sdk-migrate` skill for v0-to-v1 application migrations instead of applying static find-and-replace rules.
+- For 2.x to v3 upgrades, follow `/docs/guides/migrate/v2-to-v3`: run the type checker and fix send-option `metadata` that is not plain data.
 
 Inside this repo, the main public docs for this pattern are:
 

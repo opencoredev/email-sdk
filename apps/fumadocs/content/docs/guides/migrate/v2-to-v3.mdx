@@ -46,7 +46,7 @@ await email.send(message, {
 });
 ```
 
-Provider-facing `message.metadata` is a separate field and keeps its existing type.
+The same rules apply to `metadata` on the `@opencoredev/email-sdk/compat` client's send options, hook events, and provider contexts. Provider-facing `message.metadata` is a separate field and keeps its existing type.
 
 ## Register your own metadata shape
 
@@ -64,7 +64,8 @@ declare module "@opencoredev/email-sdk" {
 
 ## Other type changes
 
-- `NormalizedWebhookEvent.payload` is a parsed `JsonObject` instead of `Record<string, unknown>`. Reads return `JsonValue`, so narrow a field before treating it as a string or number. `JsonObject` and `JsonValue` are exported from `@opencoredev/email-sdk/webhooks`.
+- The Iterable adapter's `dataFields` option, or the function that returns it, is typed as `EmailMetadataRecord` instead of `Record<string, unknown>`. Apply the same fixes as for send-option metadata.
+- `NormalizedWebhookEvent.payload` is a parsed `JsonObject` instead of `Record<string, unknown>`. Code that builds a `NormalizedWebhookEvent`, such as a custom normalizer or a test fixture, must pass a `JsonObject` payload. `JsonObject` and `JsonValue` are exported from `@opencoredev/email-sdk/webhooks`.
 - The SMTP adapter's `tls` option uses Nodemailer's own TLS options type. Options Nodemailer doesn't accept no longer type-check.
 - `createEmailAgentTools` returns `EmailAgentTools`, and `sendEmail.execute` resolves to `EmailSendResult` instead of `unknown`. Existing code keeps working and can drop its casts.
 
