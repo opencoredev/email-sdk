@@ -651,8 +651,9 @@ type TelemetryState = {
 };
 
 /**
- * "unreadable" means the file exists but cannot be parsed. It may hold a saved
- * opt-out, so callers treat it as disabled and never overwrite it implicitly.
+ * "unreadable" means the file cannot be parsed, or it or its directory cannot
+ * be accessed. It may hold a saved opt-out, so callers treat it as disabled and
+ * never overwrite it implicitly.
  */
 function readStoredState(configDir: string): TelemetryState | "missing" | "unreadable" {
   const path = join(configDir, "telemetry.json");
