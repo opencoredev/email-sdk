@@ -32,7 +32,7 @@
   "adapters/verification.mdx": "2026-09-26",
   "adapters/zeptomail.mdx": "2026-09-06",
   "agents/index.mdx": "2026-09-06",
-  "agents/machine-readable-docs.mdx": "2026-09-06",
+  "agents/machine-readable-docs.mdx": "2026-10-05",
   "concepts/adapter-model.mdx": "2026-09-28",
   "concepts/fallbacks-and-retries.mdx": "2026-07-22",
   "concepts/hooks.mdx": "2026-07-22",
