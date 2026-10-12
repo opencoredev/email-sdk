@@ -26,6 +26,7 @@ import { Route as ApiBuildInfoRouteImport } from './routes/api/build-info'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as BlogIndexRouteImport } from './routes/blog/index'
 import { Route as BlogSlugRouteImport } from './routes/blog/$slug'
+import { Route as BlogChar123slugChar125DotmdRouteImport } from './routes/blog/{$slug}[.]md'
 import { Route as CompareIndexRouteImport } from './routes/compare/index'
 import { Route as ComparePairRouteImport } from './routes/compare/$pair'
 import { Route as CompareChar123pairChar125DotmdRouteImport } from './routes/compare/{$pair}[.]md'
@@ -122,6 +123,12 @@ const BlogSlugRoute = BlogSlugRouteImport.update({
   path: '/blog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogChar123slugChar125DotmdRoute =
+  BlogChar123slugChar125DotmdRouteImport.update({
+    id: '/blog/{$slug}.md',
+    path: '/blog/{$slug}.md',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const CompareIndexRoute = CompareIndexRouteImport.update({
   id: '/compare/',
   path: '/compare/',
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/blog/{$slug}.md': typeof BlogChar123slugChar125DotmdRoute
   '/compare/$pair': typeof ComparePairRoute
   '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
@@ -220,6 +228,7 @@ export interface FileRoutesByTo {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/blog/{$slug}.md': typeof BlogChar123slugChar125DotmdRoute
   '/compare/$pair': typeof ComparePairRoute
   '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
@@ -250,6 +259,7 @@ export interface FileRoutesById {
   '/api/build-info': typeof ApiBuildInfoRoute
   '/api/search': typeof ApiSearchRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/blog/{$slug}.md': typeof BlogChar123slugChar125DotmdRoute
   '/compare/$pair': typeof ComparePairRoute
   '/compare/{$pair}.md': typeof CompareChar123pairChar125DotmdRoute
   '/docs/$': typeof DocsSplatRoute
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/blog/{$slug}.md'
     | '/compare/$pair'
     | '/compare/{$pair}.md'
     | '/docs/$'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/blog/{$slug}.md'
     | '/compare/$pair'
     | '/compare/{$pair}.md'
     | '/docs/$'
@@ -339,6 +351,7 @@ export interface FileRouteTypes {
     | '/api/build-info'
     | '/api/search'
     | '/blog/$slug'
+    | '/blog/{$slug}.md'
     | '/compare/$pair'
     | '/compare/{$pair}.md'
     | '/docs/$'
@@ -369,6 +382,7 @@ export interface RootRouteChildren {
   ApiBuildInfoRoute: typeof ApiBuildInfoRoute
   ApiSearchRoute: typeof ApiSearchRoute
   BlogSlugRoute: typeof BlogSlugRoute
+  BlogChar123slugChar125DotmdRoute: typeof BlogChar123slugChar125DotmdRoute
   ComparePairRoute: typeof ComparePairRoute
   CompareChar123pairChar125DotmdRoute: typeof CompareChar123pairChar125DotmdRoute
   DocsSplatRoute: typeof DocsSplatRoute
@@ -503,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BlogSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blog/{$slug}.md': {
+      id: '/blog/{$slug}.md'
+      path: '/blog/{$slug}.md'
+      fullPath: '/blog/{$slug}.md'
+      preLoaderRoute: typeof BlogChar123slugChar125DotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/compare/': {
       id: '/compare/'
       path: '/compare'
@@ -593,6 +614,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBuildInfoRoute: ApiBuildInfoRoute,
   ApiSearchRoute: ApiSearchRoute,
   BlogSlugRoute: BlogSlugRoute,
+  BlogChar123slugChar125DotmdRoute: BlogChar123slugChar125DotmdRoute,
   ComparePairRoute: ComparePairRoute,
   CompareChar123pairChar125DotmdRoute: CompareChar123pairChar125DotmdRoute,
   DocsSplatRoute: DocsSplatRoute,

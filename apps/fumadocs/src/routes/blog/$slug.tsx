@@ -102,7 +102,12 @@ export const Route = createFileRoute("/blog/$slug")({
 
     return {
       meta,
-      links: [{ rel: "canonical", href: canonicalUrl }],
+      links: [
+        { rel: "canonical", href: canonicalUrl },
+        // Advertise the raw markdown mirror every post serves at <url>.md so
+        // agents can discover it without knowing the convention.
+        { rel: "alternate", type: "text/markdown", href: `${canonicalUrl}.md` },
+      ],
     };
   },
   component: BlogPostPage,

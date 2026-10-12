@@ -49,6 +49,8 @@ function blogSection() {
 
   return `## Blog posts
 
+Append \`.md\` to any post URL (for example ${siteUrl}/blog/email-sdk-v1-safer-typescript-transactional-email.md) to fetch the same post as raw markdown.
+
 ${items}`;
 }
 
@@ -66,7 +68,7 @@ function machineReadableSection() {
 - [Authentication model](${siteUrl}/auth.md): why there is no platform credential, and where provider credentials live.
 - [Agent discovery](${siteUrl}/.well-known/agent.json) and [skill descriptor](${siteUrl}/.well-known/agent-skills).
 - [Every documentation page inlined](${siteUrl}/llms-full.txt) and [documentation-only index](${siteUrl}/docs/llms.txt).
-- [Schema map](${siteUrl}/schemamap.xml) with the [documentation schema feed](${siteUrl}/feeds/docs.jsonl): schema.org TechArticle entities for natural-language retrieval.
+- [Schema map](${siteUrl}/schemamap.xml) with the [content schema feed](${siteUrl}/feeds/docs.jsonl): schema.org entities for documentation, comparisons, and blog posts, for natural-language retrieval.
 - [Blog](${siteUrl}/blog) with [RSS](${siteUrl}/rss.xml) and [JSON Feed](${siteUrl}/feed.json).`;
 }
 

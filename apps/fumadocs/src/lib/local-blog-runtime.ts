@@ -14,3 +14,11 @@ export function getLocalBlogPostDetail(slug: string) {
 
   return { post, html: localBlogBodies.get(post.slug) ?? "" };
 }
+
+const localBlogMarkdown = new Map([
+  ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
+]);
+
+export function getLocalBlogPostMarkdown(slug: string) {
+  return localBlogMarkdown.get(slug) ?? null;
+}

@@ -9,7 +9,7 @@
     <loc>https://email-sdk.dev/feeds/docs.jsonl</loc>
     <format>application/x-ndjson</format>
     <vocabulary>https://schema.org</vocabulary>
-    <description>Email SDK documentation as schema.org TechArticle entities, one JSON object per line.</description>
+    <description>Email SDK documentation, comparison pages, and blog posts as schema.org entities, one JSON object per line.</description>
   </feed>
   <feed>
     <loc>https://email-sdk.dev/rss.xml</loc>

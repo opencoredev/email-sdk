@@ -92,9 +92,10 @@ Predictable URLs for programmatic discovery:
 - Schema feed (NLWeb): https://email-sdk.dev/schemamap.xml → https://email-sdk.dev/feeds/docs.jsonl
 - Skill descriptor: https://email-sdk.dev/.well-known/agent-skills
 
-Append `.md` to any documentation URL (for example
-`/docs/getting-started/quickstart.md`) to fetch its raw markdown, or pass
-`?mode=agent` to the homepage for this guide.
+Append `.md` to any documentation, comparison, or blog post URL (for example
+`/docs/getting-started/quickstart.md`, `/compare/resend-vs-postmark.md`, or
+`/blog/email-sdk-v1-safer-typescript-transactional-email.md`) to fetch its raw
+markdown, or pass `?mode=agent` to the homepage for this guide.
 
 ## Constraints for agents
 

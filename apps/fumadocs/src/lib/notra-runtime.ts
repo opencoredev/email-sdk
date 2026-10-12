@@ -14,10 +14,14 @@ export type BlogPostDetail = {
 // these run inside the Vercel SSR function and pick up new posts without a
 // rebuild. Dynamic imports keep @usenotra/sdk and the Markdown renderer out of
 // the client bundle; the API key stays server-side.
-async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<string, string> }> {
+async function fetchBlogData(): Promise<{
+  posts: BlogPost[];
+  bodies: Record<string, string>;
+  markdowns: Record<string, string>;
+}> {
   const apiKey = process.env.NOTRA_API_KEY?.trim();
 
-  if (!apiKey) return { posts: [], bodies: {} };
+  if (!apiKey) return { posts: [], bodies: {}, markdowns: {} };
 
   const [{ Notra }, { mapNotraPost }] = await Promise.all([
     import("@usenotra/sdk"),
@@ -47,6 +51,7 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
   const seenSlugs = new Set(localBlogPosts.map((post) => post.slug));
   const posts: BlogPost[] = [];
   const bodies: Record<string, string> = {};
+  const markdowns: Record<string, string> = {};
 
   for (const item of raw) {
     const mapped = mapNotraPost(item, seenSlugs);
@@ -55,11 +60,12 @@ async function fetchBlogData(): Promise<{ posts: BlogPost[]; bodies: Record<stri
 
     posts.push(mapped.post);
     bodies[mapped.post.slug] = mapped.html;
+    markdowns[mapped.post.slug] = mapped.markdown;
   }
 
   posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 
-  return { posts, bodies };
+  return { posts, bodies, markdowns };
 }
 
 export const getBlogPostsServerFn = createServerFn({ method: "GET" }).handler(async () => {
@@ -82,4 +88,35 @@ export const getBlogPostServerFn = createServerFn({ method: "GET" })
     if (!post) return null;
 
     return { post, html: bodies[post.slug] ?? "" };
+  });
+
+// Raw Markdown source of a published post, for the /blog/<slug>.md mirror.
+// Every post that reaches the published lists has a Markdown body: mapNotraPost
+// drops Notra entries without one, and local posts are Markdown files on disk.
+export const getBlogPostMarkdownServerFn = createServerFn({ method: "GET" })
+  .inputValidator((slug: string) => slug)
+  .handler(async ({ data: slug }): Promise<{ post: BlogPost; markdown: string } | null> => {
+    const [{ getLocalBlogPostMarkdown }, { stripLeadingH1 }] = await Promise.all([
+      import("./local-blog-runtime"),
+      import("../../scripts/notra-content"),
+    ]);
+
+    const localPost = localBlogPosts.find((item) => item.slug === slug);
+
+    if (localPost) {
+      const localMarkdown = getLocalBlogPostMarkdown(slug);
+
+      return localMarkdown
+        ? { post: localPost, markdown: stripLeadingH1(localMarkdown) }
+        : null;
+    }
+
+    const { posts, markdowns } = await fetchBlogData();
+    const post = posts.find((item) => item.slug === slug);
+
+    if (!post) return null;
+
+    const markdown = markdowns[post.slug];
+
+    return markdown ? { post, markdown: stripLeadingH1(markdown) } : null;
   });

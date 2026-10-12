@@ -25,6 +25,7 @@ export type NotraPostInput = {
 export type MappedPost = {
   post: BlogPost;
   html: string;
+  markdown: string;
 };
 
 const readWordsPerMinute = 200;
@@ -225,5 +226,5 @@ export function mapNotraPost(input: NotraPostInput, seenSlugs: Set<string>): Map
     tags: [],
   };
 
-  return { post, html: renderMarkdownToSafeHtml(markdown) };
+  return { post, html: renderMarkdownToSafeHtml(markdown), markdown };
 }
