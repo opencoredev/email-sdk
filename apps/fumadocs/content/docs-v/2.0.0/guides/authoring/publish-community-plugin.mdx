@@ -1,0 +1,50 @@
+---
+title: Publish a community plugin
+description: Package a v1-compatible plugin with explicit peer versions, tests, and support documentation.
+---
+
+Community plugins are independent npm packages. They should depend on the public contract rather than repository internals.
+
+## Package the plugin
+
+```json title="package.json"
+{
+  "name": "@example/email-sdk-receipts",
+  "type": "module",
+  "peerDependencies": {
+    "@opencoredev/email-sdk": "^1.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  }
+}
+```
+
+Keep Email SDK as a peer and development dependency so consumers use one client type identity.
+
+## Test the public behavior
+
+Cover every middleware phase, hook, registered adapter, client extension, reserved-key collision, and duplicate plugin id your package uses. Use `memoryAdapter`, `failingAdapter`, and injected dependencies instead of real credentials.
+
+## Document the contract
+
+The package README should state:
+
+- exact import and setup
+- required environment variables
+- message or send-option changes
+- client extension types
+- failure behavior
+- data retained or logged
+- supported Email SDK versions
+
+Never include live provider credentials or message data in examples.
+
+## Request registry listing
+
+Add the package to the repository's community registry through a pull request. The listing is discovery, not a security or delivery endorsement.
+
+<Card title="Community extensions" href="/docs/plugins/community" description="See the review and support boundary for third-party packages." />
