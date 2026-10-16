@@ -260,11 +260,24 @@ export const ADAPTER_SUPPORT_ENTRIES = [
       "Idempotency keys longer than 36 characters are hashed to a UUID-shaped SHA-256 digest.",
     ],
   },
+  {
+    id: "reloop",
+    label: "Reloop",
+    setupHref: "/docs/adapters/reloop",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true, sendAt: true },
+    capabilities: { repeatedHeaders: false, idempotency: "native", scheduling: true, personalized: "expanded" },
+    limits: [
+      "Accepts at most 50 to, 50 cc, and 50 bcc recipients.",
+      "Tag names and values may only contain ASCII letters, numbers, underscores, and dashes, up to 256 characters.",
+      "Subjects must be 255 characters or fewer.",
+      "Idempotency keys longer than 500 characters are hashed to a SHA-256 hex digest.",
+    ],
+  },
 ] as const satisfies readonly AdapterSupportEntry[];
 
 export type AdapterSupportId = (typeof ADAPTER_SUPPORT_ENTRIES)[number]["id"];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "26 provider APIs plus SMTP, 27 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "27 provider APIs plus SMTP, 28 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

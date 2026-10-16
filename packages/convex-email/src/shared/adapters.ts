@@ -119,6 +119,10 @@ export const CONVEX_EMAIL_ADAPTERS = {
     apiKey: { type: "string", env: "PRIMITIVE_API_KEY", required: true },
     baseUrl: BASE_URL,
   },
+  reloop: {
+    apiKey: { type: "string", env: "RELOOP_API_KEY", required: true },
+    baseUrl: BASE_URL,
+  },
   resend: {
     apiKey: { type: "string", env: "RESEND_API_KEY", required: true },
     baseUrl: BASE_URL,

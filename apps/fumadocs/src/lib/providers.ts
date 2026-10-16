@@ -253,6 +253,16 @@ export const providers = [
     logo: "https://www.google.com/s2/favicons?domain=helohq.com&sz=64",
     currentOnly: true,
   },
+  {
+    name: "Reloop",
+    key: "reloop",
+    importPath: "@opencoredev/email-sdk/reloop",
+    docs: "/docs/adapters/reloop",
+    website: "https://reloop.sh",
+    summary: "Open-source email infrastructure with a hosted cloud or a self-hosted stack.",
+    logo: "https://www.google.com/s2/favicons?domain=reloop.sh&sz=64",
+    currentOnly: true,
+  },
 ] as const;
 
 export type Provider = (typeof providers)[number];

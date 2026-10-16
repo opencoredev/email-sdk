@@ -11,6 +11,7 @@
     "mailgun",
     "microsoft-graph",
     "postmark",
+    "reloop",
     "resend",
     "sendgrid",
     "sendheron",
@@ -145,6 +146,12 @@
       "import": "./dist/helo.js",
       "require": "./dist/helo.cjs",
       "default": "./dist/helo.js"
+    },
+    "./reloop": {
+      "types": "./dist/reloop.d.ts",
+      "import": "./dist/reloop.js",
+      "require": "./dist/reloop.cjs",
+      "default": "./dist/reloop.js"
     },
     "./jetemail": {
       "types": "./dist/jetemail.d.ts",

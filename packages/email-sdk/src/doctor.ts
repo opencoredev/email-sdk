@@ -61,6 +61,8 @@ const probes = {
   // Helo has no account endpoint a send-only key can read. An empty send fails validation
   // with 422 once the key authenticates, and nothing is queued without from and to.
   helo: { base: "https://api.helohq.com", path: "/send/transactional" },
+  // Listing domains is read-only and answers 401 when the key does not authenticate.
+  reloop: { base: "https://reloop.sh", path: "/api/domain/v1/list" },
 } as const;
 
 class TransportFailure extends Error {}
@@ -276,6 +278,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorResult> {
     const headers = new Headers({ Accept: "application/json" });
 
     if (adapter === "lettermint") headers.set("x-lettermint-token", options.credential!);
+    else if (adapter === "reloop") headers.set("x-api-key", options.credential!);
     else headers.set("Authorization", `Bearer ${options.credential}`);
     const validation = adapter === "jetemail" || adapter === "helo";
 
@@ -484,6 +487,8 @@ function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): b
     return body.code === "validation_failed" || body.code === "invalid_channel";
 
   if (adapter === "resend") return Array.isArray(body.data) && isJsonBoolean(body.has_more);
+
+  if (adapter === "reloop") return body.object === "domain" && Array.isArray(body.domains);
 
   if (adapter === "sequenzy") return body.success === true && Array.isArray(body.companies);
 

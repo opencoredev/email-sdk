@@ -47,6 +47,7 @@ const env = {
   PLUNK_API_KEY: v.optional(v.string()),
   POSTMARK_SERVER_TOKEN: v.optional(v.string()),
   PRIMITIVE_API_KEY: v.optional(v.string()),
+  RELOOP_API_KEY: v.optional(v.string()),
   RESEND_API_KEY: v.optional(v.string()),
   SCALEWAY_PROJECT_ID: v.optional(v.string()),
   SCALEWAY_REGION: v.optional(v.string()),
