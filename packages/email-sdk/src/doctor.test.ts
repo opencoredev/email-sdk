@@ -24,14 +24,14 @@ const run = (body: JsonValue, extra: Partial<DoctorOptions> = {}) =>
   runDoctor({ ...options, fetch: async () => json(body), ...extra });
 
 describe("shared live gate wiring", () => {
-  const all = ["graph", "jetemail", "lettermint", "lettr", "primitive", "resend", "sequenzy"];
+  const all = ["graph", "jetemail", "lettermint", "lettr", "primitive", "reloop", "resend", "sequenzy"];
   test.each([
     "packages/email-sdk/src/doctor.ts",
     "packages/email-sdk/src/doctor.test.ts",
     "packages/email-sdk/src/cli.ts",
     "scripts/changed-live-adapters.ts",
     "scripts/run-live-adapters.ts",
-  ])("shared change %s selects all seven checks", (file) => {
+  ])("shared change %s selects all eight checks", (file) => {
     expect(selectLiveAdapters([file])).toEqual(all);
   });
   test("individual adapters select only their checks", () => {
@@ -323,6 +323,48 @@ describe("doctor safe probes", () => {
     const result = await runDoctor({
       ...options,
       adapter: "helo",
+      fetch: async () => json(body, status),
+    });
+
+    expect(result.checks.authentication.status).toBe(expected);
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private-account-id");
+  });
+
+  test("Reloop authenticates with a read-only domain list", async () => {
+    let calls = 0;
+
+    const result = await runDoctor({
+      ...options,
+      adapter: "reloop",
+      fetch: async (url, init) => {
+        calls++;
+        expect(url).toBe("https://reloop.sh/api/domain/v1/list");
+        expect(init.method).toBe("GET");
+        expect(init.body).toBeUndefined();
+        expect(init.redirect).toBe("error");
+        expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+        expect(new Headers(init.headers).has("Authorization")).toBe(false);
+
+        return json({ object: "domain", domains: [], total: 0, page: 1, limit: 10, event: "domain.list" });
+      },
+    });
+
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(true);
+    expect(result.checks.authentication.status).toBe("passed");
+    expect(JSON.stringify(result)).not.toContain(credential);
+  });
+
+  test.each([
+    [200, { domains: "private-account-id" }, "inconclusive"],
+    [401, { message: "Authentication required" }, "invalid_credentials"],
+    [403, { message: "User is not a member of an organization" }, "insufficient_permissions"],
+    [429, { message: "Too many requests" }, "rate_limited"],
+  ] as const)("Reloop HTTP %s maps to a safe diagnostic", async (status, body, expected) => {
+    const result = await runDoctor({
+      ...options,
+      adapter: "reloop",
       fetch: async () => json(body, status),
     });
 

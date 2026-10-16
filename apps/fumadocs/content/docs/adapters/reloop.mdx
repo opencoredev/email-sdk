@@ -1,0 +1,115 @@
+---
+title: Reloop
+description: Send transactional email through Reloop Cloud or a self-hosted Reloop with native idempotency, scheduling, tags, and attachments.
+icon: reloop
+---
+
+## Capabilities
+
+| Repeated headers | Idempotency | Scheduling | Personalized |
+| --- | --- | --- | --- |
+| No | `native` | Yes | `expanded` |
+
+These values come from the adapter's exported `capabilities` declaration. The [field support matrix](/docs/adapters/field-support) covers normalized message fields.
+
+The Reloop adapter calls `POST /api/mail/v1/send` with plain `fetch` and the `x-api-key` header. It sends the same requests as Reloop's own `reloop-email` package without adding it as a dependency. Reloop is open source, so the same adapter works against Reloop Cloud or your own deployment.
+
+<ProviderBadge adapter="reloop" />
+
+## Configure
+
+Create an API key in the [Reloop dashboard](https://reloop.sh/dashboard/api-keys) and verify the domain you send from.
+
+```ts title="lib/email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { reloop } from "@opencoredev/email-sdk/reloop";
+
+export const email = createEmailClient({
+  adapters: [
+    reloop({
+      apiKey: process.env.RELOOP_API_KEY!,
+    }),
+  ],
+});
+```
+
+<TypeTable
+  type={{
+    apiKey: {
+      description: "Reloop API key, sent as the x-api-key header.",
+      type: "string",
+      required: true,
+    },
+    baseUrl: {
+      description: "Override the API base URL, e.g. your self-hosted Reloop domain or a proxy.",
+      type: "string",
+      default: '"https://reloop.sh"',
+    },
+    headers: {
+      description: "Extra request headers sent with every call.",
+      type: "Record<string, string>",
+    },
+    fetch: {
+      description: "Custom fetch implementation for tests or special runtimes.",
+      type: "typeof fetch",
+    },
+  }}
+/>
+
+## Send
+
+The adapter maps `cc`, `bcc`, `replyTo`, custom `headers`, `attachments`, `tags`, and `sendAt`. Attachments are sent as base64, and an attachment with a `contentId` keeps it for inline images.
+
+```ts
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  replyTo: "support@example.com",
+  subject: "Your invoice is ready",
+  html: "<p>Your March invoice is attached.</p>",
+  attachments: [
+    { filename: "invoice.pdf", content: pdfBytes, contentType: "application/pdf" },
+  ],
+  tags: [{ name: "type", value: "invoice" }],
+  sendAt: new Date(Date.now() + 60 * 60 * 1000),
+});
+
+console.log(result.id); // Reloop email id
+```
+
+`result.id` is Reloop's email id, which the Reloop logs API and dashboard use. The full response, including the RFC `messageId` and `status`, is on `result.raw`. A message with `sendAt` goes out as `scheduled_at` and comes back with `status: "scheduled"`.
+
+Reloop has no metadata field. A message with `metadata` throws an `EmailValidationError`.
+
+The client's idempotency key goes out as the `Idempotency-Key` header. A retry with the same key returns the original send. Reloop truncates keys to 500 characters, so the adapter hashes longer keys into a SHA-256 hex digest and the same client key always maps to the same Reloop key.
+
+<Callout type="warn" title="Limits checked before sending">
+  A message can have at most 50 `to`, 50 `cc`, and 50 `bcc` recipients. Tag names and values may
+  only contain ASCII letters, numbers, underscores, and dashes, up to 256 characters each. Subjects
+  must be 255 characters or fewer. Each of these throws an `EmailValidationError` before any request
+  is made.
+</Callout>
+
+### Failed sends
+
+Reloop validates the request, checks quota and rate limits, and removes suppressed recipients before it queues anything. A 4xx response, including a 402 quota error or a 429 rate limit, is reported with `delivery: "not_sent"`. A 408, 409, or 5xx response reports `delivery: "unknown"`, because a 5xx can follow a successful handoff to Reloop's mail server. Error messages include Reloop's `message`, `why`, and `fix` fields.
+
+## Verify from the CLI
+
+```bash
+RELOOP_API_KEY="rl_..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter reloop --live
+```
+
+The live check calls `GET /api/domain/v1/list`, which is read-only. A key that authenticates passes, and an invalid key is reported as `invalid_credentials`. Nothing is sent.
+
+```bash
+RELOOP_API_KEY="rl_..." npx --package @opencoredev/email-sdk email-sdk send \
+  --adapter reloop \
+  --from "Acme <hello@acme.com>" \
+  --to user@example.com \
+  --subject "Reloop smoke test" \
+  --html "<p>It works</p>" \
+  --dry-run
+```
+
+Drop `--dry-run` to send for real. The CLI also reads `RELOOP_BASE_URL` from the environment for self-hosted deployments. The live `doctor` check only targets Reloop Cloud.

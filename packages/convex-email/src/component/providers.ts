@@ -11,6 +11,7 @@ import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
 import { graph } from "@opencoredev/email-sdk/graph";
 import { iterable } from "@opencoredev/email-sdk/iterable";
 import { helo } from "@opencoredev/email-sdk/helo";
+import { reloop } from "@opencoredev/email-sdk/reloop";
 import { jetemail } from "@opencoredev/email-sdk/jetemail";
 import { lettermint } from "@opencoredev/email-sdk/lettermint";
 import { lettr } from "@opencoredev/email-sdk/lettr";
@@ -150,6 +151,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   plunk: fromOptions(plunk),
   postmark: fromOptions(postmark),
   primitive: fromOptions(primitive),
+  reloop: fromOptions(reloop),
   resend: fromOptions(resend),
   scaleway: fromOptions(scaleway),
   sendgrid: fromOptions(sendgrid),

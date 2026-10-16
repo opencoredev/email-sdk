@@ -31,6 +31,11 @@
       "secret": "LETTR_API_KEY",
       "probe": "Authenticated GET /auth/check in the shared doctor probe; no send or delivery check. Sending is separately opt-in."
     },
+    "reloop": {
+      "command": "bun run live:reloop",
+      "secret": "RELOOP_API_KEY",
+      "probe": "Authenticated GET /api/domain/v1/list in the shared doctor probe; no send or delivery check. Sending is separately opt-in."
+    },
     "graph": {
       "command": "bun run live:graph",
       "secret": "MS_GRAPH_CLIENT_SECRET",

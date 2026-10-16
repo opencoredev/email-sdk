@@ -538,9 +538,26 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  reloop: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    tags: true,
+    sendAt: true,
+  },
 } satisfies Record<string, MessageFieldSupport>;
 
-const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo"]);
+const NATIVE_IDEMPOTENCY = new Set([
+  "resend",
+  "jetemail",
+  "lettermint",
+  "primitive",
+  "sendheron",
+  "helo",
+  "reloop",
+]);
 
 // SendHeron refuses any attachment type outside this allowlist.
 const SENDHERON_ATTACHMENT_TYPES = new Set([
@@ -554,6 +571,9 @@ const SENDHERON_ATTACHMENT_TYPES = new Set([
   "text/plain",
   "application/zip",
 ]);
+
+// Reloop accepts tag names and values made of ASCII letters, numbers, underscores, and dashes.
+const RELOOP_TAG_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 
@@ -770,6 +790,24 @@ export function validateBuiltInAdapter(
 
     if (message.subject.length > 256) {
       throw new EmailValidationError("helo subjects must be 256 characters or fewer.");
+    }
+  }
+
+  if (adapter === "reloop") {
+    assertMaxItems(adapter, "recipient", to, 50);
+    assertMaxItems(adapter, "cc", arrayify(message.cc), 50);
+    assertMaxItems(adapter, "bcc", arrayify(message.bcc), 50);
+
+    for (const tag of message.tags ?? []) {
+      if (!RELOOP_TAG_PATTERN.test(tag.name) || !RELOOP_TAG_PATTERN.test(tag.value)) {
+        throw new EmailValidationError(
+          "reloop tag names and values must be 1-256 ASCII letters, numbers, underscores, or dashes.",
+        );
+      }
+    }
+
+    if (message.subject.length > 255) {
+      throw new EmailValidationError("reloop subjects must be 255 characters or fewer.");
     }
   }
 

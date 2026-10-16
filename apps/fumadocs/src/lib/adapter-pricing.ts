@@ -270,6 +270,12 @@ const pricingByProvider = {
     note: "One plan: a $5 monthly platform fee plus $0.00035 per email, with no included volume, tiers, or commitments. There is no free plan; new accounts get 1,000 free test sends to their own verified domains.",
     prices: [usd(5.35), usd(22.5), usd(40), usd(92.5), usd(180), usd(355)],
   },
+  reloop: {
+    model: "Free tier + monthly plans",
+    sources: [{ label: "Reloop pricing", href: "https://reloop.sh/pricing" }],
+    note: "Free covers 3,000 emails a month at up to 100 a day. Pro is $10 for 50K and Growth $20 for 100K, both with overage at $0.50 per 1,000; higher volumes are priced as Growth plus overage, and Reloop also offers custom Enterprise plans. Self-hosting has no Reloop fee.",
+    prices: [usd(0), usd(10), usd(20), usd(95), usd(220), usd(470)],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

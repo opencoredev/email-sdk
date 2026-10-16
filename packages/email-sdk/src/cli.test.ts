@@ -614,6 +614,82 @@ describe("email-sdk CLI", () => {
     }
   });
 
+  test("doctor accepts Reloop credentials from flags", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "doctor",
+      "--adapter",
+      "reloop",
+      "--api-key",
+      "rl_test",
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("reloop looks configured.");
+  });
+
+  test("send reaches Reloop at the configured base URL", async () => {
+    const requests: Array<{ path: string; apiKey: string | null; body: unknown }> = [];
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        requests.push({
+          path: new URL(request.url).pathname,
+          apiKey: request.headers.get("x-api-key"),
+          body: await request.json(),
+        });
+
+        return Response.json({
+          success: true,
+          messageId: "<msg_1@example.com>",
+          status: "sent",
+          timestamp: "2026-10-16T00:00:00.000Z",
+          id: "log_1",
+        });
+      },
+    });
+
+    try {
+      const { stderr, exitCode } = await runCli(
+        [
+          "send",
+          "--adapter",
+          "reloop",
+          "--base-url",
+          server.url.origin,
+          "--from",
+          "hello@example.com",
+          "--to",
+          "ada@example.com",
+          "--subject",
+          "Hello",
+          "--text",
+          "It works",
+        ],
+        { RELOOP_API_KEY: "rl_env" },
+      );
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(requests).toEqual([
+        {
+          path: "/api/mail/v1/send",
+          apiKey: "rl_env",
+          body: {
+            from: "hello@example.com",
+            to: ["ada@example.com"],
+            subject: "Hello",
+            text: "It works",
+          },
+        },
+      ]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("dry run rejects Iterable messages over the recipient limit", async () => {
     const { stderr, exitCode } = await runCli([
       "send",

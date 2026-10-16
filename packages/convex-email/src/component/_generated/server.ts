@@ -56,6 +56,7 @@ export type Env = {
   PLUNK_API_KEY?: string;
   POSTMARK_SERVER_TOKEN?: string;
   PRIMITIVE_API_KEY?: string;
+  RELOOP_API_KEY?: string;
   RESEND_API_KEY?: string;
   SCALEWAY_PROJECT_ID?: string;
   SCALEWAY_REGION?: string;

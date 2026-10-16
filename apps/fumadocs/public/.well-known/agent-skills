@@ -1,6 +1,6 @@
 {
   "name": "Email SDK",
-  "description": "TypeScript SDK that sends transactional email through 26 provider API adapters plus SMTP (Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks.",
+  "description": "TypeScript SDK that sends transactional email through 27 provider API adapters plus SMTP (Resend, SMTP, Postmark, SendGrid, Mailgun, AWS SES, and more) behind one typed send() call, with retries and compatible fallbacks.",
   "homepage": "https://email-sdk.dev",
   "guide": "https://email-sdk.dev/agents.md",
   "docs": "https://email-sdk.dev/docs",
