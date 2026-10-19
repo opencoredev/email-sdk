@@ -5,9 +5,9 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite dev --port=4000",
-    "build": "bun run registry:check && bun scripts/check-module-identity.ts && bun scripts/fetch-notra-posts.ts && bun scripts/og/generate-og-image.ts && vite build && bun scripts/check-client-bundle.ts && bun scripts/ensure-root-index.ts",
+    "build": "bun run registry:check && bun scripts/check-module-identity.ts && bun scripts/fetch-notra-posts.ts && bun scripts/og/generate-og-image.ts && bun scripts/og/generate-compare-og.ts && vite build && bun scripts/check-client-bundle.ts && bun scripts/ensure-root-index.ts",
     "posts:fetch": "bun scripts/fetch-notra-posts.ts",
-    "og:generate": "bun scripts/og/generate-og-image.ts",
+    "og:generate": "bun scripts/og/generate-og-image.ts && bun scripts/og/generate-compare-og.ts",
     "lastmod:generate": "bun scripts/generate-docs-lastmod.ts",
     "field-support:generate": "bun scripts/generate-field-support.ts",
     "registry:generate": "bun scripts/generate-email-registry.ts",

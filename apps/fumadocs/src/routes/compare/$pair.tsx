@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 
 import { CompareTable } from "@/components/compare-table";
 import { DocsVersionLink } from "@/components/docs-version-link";
-import { getComparePair, getComparePairTitle, getFallbackGaps, getProvider } from "@/lib/compare";
+import {
+  comparePairLastmod,
+  getComparePair,
+  getComparePairTitle,
+  getFallbackGaps,
+  getProvider,
+} from "@/lib/compare";
 import {
   buildCompareDescription,
   buildCompareFaq,
@@ -25,6 +31,8 @@ export const Route = createFileRoute("/compare/$pair")({
     const pageTitle = `${title}: transactional email API comparison - ${appName}`;
     const description = buildCompareDescription(pair);
     const canonicalUrl = `${siteUrl}/compare/${pair.slug}`;
+    const imageUrl = `${siteUrl}/og/compare/${pair.slug}.png`;
+    const imageAlt = `${title} provider comparison card`;
 
     return {
       meta: [
@@ -34,13 +42,32 @@ export const Route = createFileRoute("/compare/$pair")({
         { property: "og:title", content: pageTitle },
         { property: "og:description", content: description },
         { property: "og:url", content: canonicalUrl },
+        { property: "og:image", content: imageUrl },
+        { property: "og:image:alt", content: imageAlt },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:title", content: pageTitle },
         { name: "twitter:description", content: description },
+        { name: "twitter:image", content: imageUrl },
+        { name: "twitter:image:alt", content: imageAlt },
         {
           "script:ld+json": {
             "@context": "https://schema.org",
             "@graph": [
+              {
+                "@type": "TechArticle",
+                "@id": `${canonicalUrl}#article`,
+                headline: title,
+                description,
+                url: canonicalUrl,
+                image: imageUrl,
+                inLanguage: "en",
+                dateModified: comparePairLastmod(pair),
+                author: { "@id": `${siteUrl}/#organization` },
+                publisher: { "@id": `${siteUrl}/#organization` },
+                isPartOf: { "@id": `${siteUrl}/#website` },
+              },
               {
                 "@type": "FAQPage",
                 "@id": `${canonicalUrl}#faq`,

@@ -28,9 +28,21 @@ export const Route = createFileRoute("/docs/{$}.md")({
           throw resolveMissingMarkdownPage(resolved);
         }
 
-        return new Response(await getLLMText(page, resolved.version), {
+        const body = await getLLMText(page, resolved.version);
+
+        if (resolved.version.current) {
+          return new Response(body, {
+            headers: { "Content-Type": "text/markdown" },
+          });
+        }
+
+        // Old-version mirrors follow the HTML pages' noindex policy: the
+        // text/markdown twins cannot carry a meta tag, so the policy moves to
+        // a header. Keeps ~1k archived duplicates out of the index.
+        return new Response(body, {
           headers: {
             "Content-Type": "text/markdown",
+            "X-Robots-Tag": "noindex, follow",
           },
         });
       },
