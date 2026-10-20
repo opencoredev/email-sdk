@@ -2,8 +2,8 @@ import { Banner } from "fumadocs-ui/components/banner";
 import posthog from "posthog-js";
 import type { MouseEvent } from "react";
 
-// The X launch post for gradients.sh.
-const LAUNCH_POST_URL = "__X_POST_URL__";
+// gradients.sh, tagged so its analytics show which site sent the visitor.
+const LAUNCH_POST_URL = "https://gradients.sh/?utm_source=email-sdk.dev&utm_medium=banner&utm_campaign=gradients-launch";
 
 const promo = { project: "gradients-sh", placement: "banner" };
 
