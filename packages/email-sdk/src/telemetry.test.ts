@@ -495,9 +495,14 @@ describe("telemetry exceptions", () => {
     ["connect ECONNREFUSED 203.0.113.27:587", "connect ECONNREFUSED <ip>"],
     ["connect ECONNREFUSED 2001:db8::1", "connect ECONNREFUSED <ip>"],
     ["getaddrinfo ENOTFOUND smtp.example.co.uk", "getaddrinfo ENOTFOUND <host>"],
+    // Any TLD, not just common ones.
+    ["connect smtp.customer-example.app:587 failed", "connect <host> failed"],
+    ["relay mail.customer.photography refused", "relay <host> refused"],
     // Property access in programming errors stays readable.
     ["x.map is not a function", "x.map is not a function"],
     ["Cannot find module core.js", "Cannot find module core.js"],
+    ["undefined is not an object (evaluating e.useCache)", "undefined is not an object (evaluating e.useCache)"],
+    ["process.env is undefined", "process.env is undefined"],
   ])("redacts %j", async (input, expected) => {
     const { calls, telemetry } = exceptionTelemetry();
     const error = new Error(input);
@@ -691,19 +696,27 @@ describe("exception grouping", () => {
     // Error names come from `this.name = "..."` in errors.ts. Anything missing
     // from the safe list is redacted, and long names turn into "<token>".
     const source = readFileSync(new URL("./errors.ts", import.meta.url), "utf8");
-    const names = [...source.matchAll(/this\.name = "(\w+)"/g)].map((match) => match[1] ?? "");
+
+    const names = [
+      ...new Set([...source.matchAll(/this\.name = "(\w+)"/g)].map((match) => match[1] ?? "")),
+    ];
 
     expect(names.length).toBeGreaterThan(5);
 
-    for (const name of names) {
+    // One instance reports at most five errors per process, so names go in batches.
+    for (let start = 0; start < names.length; start += 5) {
+      const batch = names.slice(start, start + 5);
       const { calls, telemetry } = exceptionTelemetry();
-      const error = new Error("boom");
-      error.name = name;
-      error.stack = undefined;
 
-      await telemetry.captureException(error, { source: "sdk", handled: true });
+      for (const name of batch) {
+        const error = new Error("boom");
+        error.name = name;
+        error.stack = undefined;
 
-      expect(exceptionList(calls[0])[0]?.type).toBe(name);
+        await telemetry.captureException(error, { source: "sdk", handled: true });
+      }
+
+      expect(calls.map((call) => exceptionList(call)[0]?.type)).toEqual(batch);
     }
   });
 });

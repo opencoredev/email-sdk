@@ -633,11 +633,13 @@ const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
 // ("~/Documents/payroll.xlsx"), so they are consumed too — both separators.
 const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
 
-// Bare hostnames ("mg.customer.com is not allowed to send") name the caller's
-// sending domain. Matching only real-looking TLDs keeps code in messages
-// ("x.map is not a function", "core.js") readable.
+// Bare hostnames ("mg.customer.app is not allowed to send") name the caller's
+// sending domain, so any lowercase dotted name counts, whatever its TLD.
+// Source file names ("core.js") and camelCase property access ("e.useCache")
+// stay readable; plain property paths ("body.data") are redacted too, which
+// is the safe side to err on.
 const HOSTNAME_PATTERN =
-  /(?<![\w.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|dev|co|ai|email|cloud|sh|uk|eu|de|fr|nl|ca|au|jp|br|ch|se|dk|fi|pl|ie|nz|sg|xyz|biz|gg)(?::\d+)?(?![\w-])/gi;
+  /(?<![\w.@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?!(?:c?js|mjs|[cm]?ts|[jt]sx|json|map|node|wasm|md|txt|log|html|css|ya?ml|toml|lock|env)(?![a-z]))[a-z]{2,63}(?::\d+)?(?![\w-])/g;
 
 // IPv4 with an optional port, and colon-separated hex runs for IPv6.
 const IPV4_PATTERN = /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?!\.?\d)/g;
