@@ -10,14 +10,8 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import {
-  EmailAdapterNotFoundError,
-  EmailProviderNotFoundError,
-  EmailSdkError,
-  EmailValidationError,
-} from "./errors.js";
+import { EmailSdkError } from "./errors.js";
 import {
   isFunctionMember,
   isObjectLike,
@@ -27,6 +21,7 @@ import {
   parseJsonStrict,
 } from "./internal/decode.js";
 import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
+import { SDK_VERSION } from "./version.js";
 
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
@@ -89,25 +84,18 @@ export type Telemetry = {
 
 const KNOWN_ADAPTER_NAMES = new Set(Object.keys(SUPPORTED_MESSAGE_FIELDS));
 
+/** True for adapter names the SDK ships, as opposed to caller-registered adapters. */
+export function isBuiltInAdapterName(name: string) {
+  return KNOWN_ADAPTER_NAMES.has(name);
+}
+
 /** Maps custom adapter names to "custom" so telemetry never carries user-defined strings. */
 export function normalizeAdapterName(name: string | undefined) {
   if (!name) {
     return "unknown";
   }
 
-  return KNOWN_ADAPTER_NAMES.has(name) ? name : "custom";
-}
-
-/**
- * Usage mistakes (invalid message input, unregistered adapter names) are expected
- * caller errors, not SDK defects, so they stay out of error reports.
- */
-export function isReportableSendError(cause: unknown) {
-  return (
-    !(cause instanceof EmailValidationError) &&
-    !(cause instanceof EmailAdapterNotFoundError) &&
-    !(cause instanceof EmailProviderNotFoundError)
-  );
+  return isBuiltInAdapterName(name) ? name : "custom";
 }
 
 export function detectCiVendor(env: Record<string, string | undefined>) {
@@ -175,7 +163,7 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const ciVendor = detectCiVendor(env);
 
   const commonProperties = {
-    sdk_version: options.sdkVersion ?? readSdkVersion(),
+    sdk_version: options.sdkVersion ?? SDK_VERSION,
     node_version: process.versions.node,
     platform: process.platform,
     arch: process.arch,
@@ -256,9 +244,9 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
         }
 
         const errorCode = cause instanceof EmailSdkError ? cause.code : "unknown";
-        const classKey = `${head.type}:${cause instanceof EmailSdkError ? cause.code : head.value.slice(0, 60)}`;
+        const fingerprint = exceptionFingerprint(exceptionList, errorCode, context);
 
-        if (seenErrorClasses.has(classKey) || exceptionBudget <= 0) {
+        if (seenErrorClasses.has(fingerprint) || exceptionBudget <= 0) {
           return Promise.resolve();
         }
 
@@ -268,12 +256,13 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
           seenErrorObjects.add(errorObject);
         }
 
-        seenErrorClasses.add(classKey);
+        seenErrorClasses.add(fingerprint);
         exceptionBudget -= 1;
 
         const properties: ExceptionProperties = {
           $exception_list: exceptionList,
           $exception_level: "error",
+          $exception_fingerprint: fingerprint,
           error_name: head.type,
           error_code: errorCode,
           source: context.source,
@@ -281,11 +270,6 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
           adapter: context.adapter,
           command: context.command,
         };
-
-        if (cause instanceof EmailSdkError) {
-          // Redacted messages vary; the stable name:code pair keeps issue grouping useful.
-          properties.$exception_fingerprint = `${head.type}:${cause.code}`;
-        }
 
         return enqueue(deliver("$exception", properties));
       } catch {
@@ -441,7 +425,7 @@ type ExceptionFrame = {
 type ExceptionProperties = {
   $exception_list: ExceptionListItem[];
   $exception_level: "error";
-  $exception_fingerprint?: string;
+  $exception_fingerprint: string;
   error_name: string;
   error_code: string;
   source: TelemetrySource;
@@ -489,6 +473,45 @@ function buildExceptionList(cause: unknown, handled: boolean): ExceptionListItem
   }
 
   return items;
+}
+
+/**
+ * Groups reports by defect rather than by call site: the reported SDK error and
+ * code, the adapter or command, the root cause's type, and the innermost SDK
+ * stack frame. Line numbers and caller frames are left out, so one bug hit from
+ * many apps and releases lands in one PostHog issue. The same key dedupes
+ * reports within a process.
+ */
+function exceptionFingerprint(
+  exceptionList: readonly ExceptionListItem[],
+  errorCode: string,
+  context: CaptureExceptionContext,
+) {
+  const head = exceptionList[0];
+  const root = exceptionList.at(-1);
+
+  const sdkFrame = exceptionList
+    .toReversed()
+    .flatMap((item) => (item.stacktrace?.frames ?? []).filter((frame) => frame.in_app).toReversed())
+    .at(0);
+
+  return [
+    head?.type ?? "Error",
+    errorCode,
+    context.adapter ?? context.command ?? "none",
+    root?.type ?? "Error",
+    // Without an SDK frame, the redacted root message is the best remaining
+    // signal for telling unrelated errors apart.
+    sdkFrame
+      ? `${sdkFrame.filename.split("/").at(-1)}#${stableFunctionName(sdkFrame.function)}`
+      : (root?.value.slice(0, 60) ?? ""),
+  ].join(":");
+}
+
+// Node names a method "Object.send" or "async Object.send" where Bun says
+// "send", so the prefixes are dropped to keep one bug in one issue.
+function stableFunctionName(name: string) {
+  return name.replace(/^(?:async |new )?(?:Object\.)?/, "");
 }
 
 const STACK_LINE_PATTERN = /^\s*at (?:(.*?) \()?((?:file:\/\/)?[^()]+?):(\d+):(\d+)\)?\s*$/;
@@ -559,6 +582,12 @@ function sanitizeFrameFilename(raw: string): string {
 // or $exception_fingerprint (all of which derive from the exception list's type).
 const SAFE_ERROR_NAMES = new Set([
   "EmailSdkError",
+  "EmailAdapterError",
+  "EmailAdapterNotFoundError",
+  "EmailAllRecipientsFailedError",
+  "EmailRouteError",
+  "EmailMiddlewareError",
+  "EmailAbortError",
   "EmailProviderError",
   "EmailValidationError",
   "EmailProviderNotFoundError",
@@ -604,6 +633,18 @@ const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
 // ("~/Documents/payroll.xlsx"), so they are consumed too — both separators.
 const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
 
+// Bare hostnames ("mg.customer.com is not allowed to send") name the caller's
+// sending domain. Matching only real-looking TLDs keeps code in messages
+// ("x.map is not a function", "core.js") readable.
+const HOSTNAME_PATTERN =
+  /(?<![\w.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|dev|co|ai|email|cloud|sh|uk|eu|de|fr|nl|ca|au|jp|br|ch|se|dk|fi|pl|ie|nz|sg|xyz|biz|gg)(?::\d+)?(?![\w-])/gi;
+
+// IPv4 with an optional port, and colon-separated hex runs for IPv6.
+const IPV4_PATTERN = /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?!\.?\d)/g;
+
+const IPV6_PATTERN =
+  /(?<![\w:])(?=[0-9a-f:]*[0-9a-f])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])/gi;
+
 // Key=value credentials ("password=hunter2", "api_key=sk_live_…"), value up to
 // whitespace or a quote. Quoted values are already covered by the quote passes.
 const KEY_VALUE_SECRET_PATTERN =
@@ -611,7 +652,8 @@ const KEY_VALUE_SECRET_PATTERN =
 
 /**
  * Strips the values most likely to carry personal or secret data from error
- * messages: addresses, URLs, quoted user input, long tokens, and home paths.
+ * messages: addresses, URLs, hostnames, IPs, quoted user input, long tokens,
+ * and home paths.
  */
 function redactErrorMessage(message: string): string {
   // Home paths go first: a long alphanumeric username must collapse into "~"
@@ -630,6 +672,9 @@ function redactErrorMessage(message: string): string {
     // than the email pass catching only the "pass@host" portion.
     .replace(URL_PATTERN, "<url>")
     .replace(EMAIL_PATTERN, "<email>")
+    .replace(HOSTNAME_PATTERN, "<host>")
+    .replace(IPV4_PATTERN, "<ip>")
+    .replace(IPV6_PATTERN, "<ip>")
     .replace(/"[^"]*"/g, '"<redacted>"')
     .replace(/'[^']*'/g, "'<redacted>'")
     .replace(/`[^`]*`/g, "`<redacted>`")
@@ -735,16 +780,4 @@ function captureTimeoutSignal() {
   return isFunctionMember(AbortSignal.timeout)
     ? AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
     : undefined;
-}
-
-function readSdkVersion() {
-  try {
-    const packageJson = parseJsonStrict(
-      readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
-    );
-
-    return jsonString(packageJson, "version") ?? "unknown";
-  } catch {
-    return "unknown";
-  }
 }

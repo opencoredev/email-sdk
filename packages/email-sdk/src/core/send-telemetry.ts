@@ -1,6 +1,13 @@
-import { getTelemetry, normalizeAdapterName } from "../telemetry.js";
+import type { EmailSdkError } from "../errors.js";
+import {
+  getTelemetry,
+  isBuiltInAdapterName,
+  normalizeAdapterName,
+  type TelemetrySource,
+} from "../telemetry.js";
 import type { EmailMessage, EmailPersonalizedInput } from "../types.js";
 import { arrayify } from "../utils.js";
+import { classifySendFailure, findSdkDefect, type FailureKind } from "./failure-kind.js";
 
 export function messageFacts(message: EmailMessage) {
   return {
@@ -38,6 +45,7 @@ export type SendTelemetryInput = {
    */
   messageCount: number;
   errorCode?: string;
+  failureKind?: FailureKind;
   deliveryPath?: string;
 };
 
@@ -50,6 +58,7 @@ export function captureSendTelemetry({
   success,
   messageCount,
   errorCode,
+  failureKind,
   deliveryPath = "single",
 }: SendTelemetryInput) {
   void telemetry?.capture("email sent", {
@@ -59,6 +68,7 @@ export function captureSendTelemetry({
     success,
     duration_ms: Date.now() - startedAt,
     error_code: errorCode,
+    failure_kind: failureKind,
     message_count: messageCount,
     measurement_schema_version: 2,
     measurement_scope: "logical_operation",
@@ -67,4 +77,36 @@ export function captureSendTelemetry({
     operation_failure_count: Number(!success),
     source,
   });
+}
+
+export type SendFailureTelemetryInput = Omit<
+  SendTelemetryInput,
+  "success" | "errorCode" | "failureKind" | "source"
+> & {
+  source: TelemetrySource;
+  error: EmailSdkError;
+};
+
+/**
+ * Records a failed send, and reports it to error tracking only when one of its
+ * adapter failures looks like an SDK defect. Provider, network, and caller
+ * failures are counted on the `email sent` event and nowhere else.
+ */
+export function captureSendFailure({ error, ...input }: SendFailureTelemetryInput) {
+  captureSendTelemetry({
+    ...input,
+    success: false,
+    errorCode: error.code,
+    failureKind: classifySendFailure(error),
+  });
+
+  const defect = input.telemetry ? findSdkDefect(error, isBuiltInAdapterName) : undefined;
+
+  if (defect) {
+    void input.telemetry?.captureException(defect, {
+      source: input.source,
+      handled: true,
+      adapter: normalizeAdapterName(defect.adapter),
+    });
+  }
 }

@@ -75,7 +75,8 @@ What gets collected:
 - Total recipient counts (`to` + `cc` + `bcc`) and whether a message includes attachments (a boolean only, never the files themselves)
 - Whether scheduling was requested
 - SDK version, OS, Node.js version, whether the run happens in CI (and which CI provider), and whether usage comes from the library or the bundled CLI
-- Redacted error reports: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, quoted text, long tokens, and home directories before upload.
+- Why a send failed (`auth`, `rate_limited`, `rejected`, `provider_error`, `network`, `caller`, or `unexpected`) and the provider's HTTP status code
+- Redacted error reports, only for `unexpected` failures inside the SDK: the error type, the Email SDK error code, and stack traces with file paths reduced to package-relative names. Error messages are scrubbed of email addresses, URLs, hostnames, IP addresses, quoted text, long tokens, and home directories before upload.
 
 Provider acceptance is not proof of delivery, and telemetry is best-effort, so these counts describe observed SDK usage, not every email sent. See [telemetry](https://email-sdk.dev/docs/reference/telemetry) for counting rules.
 

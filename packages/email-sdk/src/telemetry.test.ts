@@ -3,12 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFi
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  EmailAdapterNotFoundError,
-  EmailProviderError,
-  EmailProviderNotFoundError,
-  EmailValidationError,
-} from "./errors.js";
+import { EmailProviderError } from "./errors.js";
 import {
   TELEMETRY_NOTICE,
   createTelemetry,
@@ -16,7 +11,7 @@ import {
   disableTelemetry,
   getTelemetry,
   getTelemetryStatus,
-  isReportableSendError,
+  isBuiltInAdapterName,
   normalizeAdapterName,
   resetDisableTelemetry,
   setTelemetryPreference,
@@ -416,7 +411,7 @@ describe("telemetry exceptions", () => {
     expect(calls[0]?.body.event).toBe("$exception");
     expect(calls[0]?.body.properties).toMatchObject({
       $exception_level: "error",
-      $exception_fingerprint: "EmailAdapterError:adapter_error",
+      $exception_fingerprint: "EmailAdapterError:adapter_error:resend:EmailAdapterError:core.js#sendWithRetry",
       error_name: "EmailAdapterError",
       error_code: "adapter_error",
       source: "sdk",
@@ -492,6 +487,17 @@ describe("telemetry exceptions", () => {
     ["pass=x secret=y token=z", "pass=<redacted> secret=<redacted> token=<redacted>"],
     // Quoted secret values fall through to the quote passes instead.
     ['password="hunter two" rejected', 'password="<redacted>" rejected'],
+    // Bare sending domains and server addresses identify the caller.
+    [
+      "Domain mg.customer-example.com is not allowed to send",
+      "Domain <host> is not allowed to send",
+    ],
+    ["connect ECONNREFUSED 203.0.113.27:587", "connect ECONNREFUSED <ip>"],
+    ["connect ECONNREFUSED 2001:db8::1", "connect ECONNREFUSED <ip>"],
+    ["getaddrinfo ENOTFOUND smtp.example.co.uk", "getaddrinfo ENOTFOUND <host>"],
+    // Property access in programming errors stays readable.
+    ["x.map is not a function", "x.map is not a function"],
+    ["Cannot find module core.js", "Cannot find module core.js"],
   ])("redacts %j", async (input, expected) => {
     const { calls, telemetry } = exceptionTelemetry();
     const error = new Error(input);
@@ -561,7 +567,7 @@ describe("telemetry exceptions", () => {
 
     const chained = exceptionList(calls[0]);
     expect(chained.map((item) => item.value)).toEqual(["top", "middle", "root"]);
-    expect(calls[0]?.body.properties.$exception_fingerprint).toBeUndefined();
+    expect(calls[0]?.body.properties.$exception_fingerprint).toBe("Error:unknown:none:Error:root");
 
     const synthetic = exceptionList(calls[1]);
     expect(synthetic[0]?.mechanism.synthetic).toBe(true);
@@ -587,7 +593,9 @@ describe("telemetry exceptions", () => {
     const expectedName = "Error for <email> in ~<path-redacted>";
     expect(exceptionList(calls[0])[0]?.type).toBe(expectedName);
     expect(calls[0]?.body.properties.error_name).toBe(expectedName);
-    expect(calls[0]?.body.properties.$exception_fingerprint).toBe(`${expectedName}:adapter_error`);
+    expect(calls[0]?.body.properties.$exception_fingerprint).toBe(
+      `${expectedName}:adapter_error:none:${expectedName}:request failed`,
+    );
   });
 
   test("keeps allowlisted error names verbatim and normalizes non-string names", async () => {
@@ -646,16 +654,65 @@ describe("telemetry exceptions", () => {
   });
 });
 
-describe("isReportableSendError", () => {
-  test("excludes caller usage errors", () => {
-    expect(isReportableSendError(new EmailValidationError("bad message"))).toBe(false);
-    expect(isReportableSendError(new EmailAdapterNotFoundError("acme"))).toBe(false);
-    expect(isReportableSendError(new EmailProviderNotFoundError("acme"))).toBe(false);
+describe("exception grouping", () => {
+  function defectFrom(callSite: string, runtime: "node" | "bun") {
+    const error = new TypeError("Cannot read properties of undefined");
+    error.stack = [
+      "TypeError: Cannot read properties of undefined",
+      `    at ${runtime === "node" ? "async Object.mapResponse" : "mapResponse"} (/srv/app/node_modules/@opencoredev/email-sdk/dist/resend.js:88:21)`,
+      "    at send (/srv/app/node_modules/@opencoredev/email-sdk/dist/core.js:192:7)",
+      `    at ${callSite}`,
+    ].join("\n");
+
+    return error;
+  }
+
+  test("groups one SDK defect hit from different apps and runtimes into one fingerprint", async () => {
+    const first = exceptionTelemetry();
+    const second = exceptionTelemetry();
+
+    await first.telemetry.captureException(defectFrom("welcome (/srv/a/src/welcome.ts:3:1)", "node"), {
+      source: "sdk",
+      handled: true,
+      adapter: "resend",
+    });
+    await second.telemetry.captureException(defectFrom("job (/opt/b/worker.js:90:12)", "bun"), {
+      source: "sdk",
+      handled: true,
+      adapter: "resend",
+    });
+
+    const fingerprint = first.calls[0]?.body.properties.$exception_fingerprint;
+    expect(fingerprint).toBe("TypeError:unknown:resend:TypeError:resend.js#mapResponse");
+    expect(second.calls[0]?.body.properties.$exception_fingerprint).toBe(fingerprint);
   });
 
-  test("includes provider failures and unknown throws", () => {
-    expect(isReportableSendError(new EmailProviderError("boom", {}))).toBe(true);
-    expect(isReportableSendError(new Error("boom"))).toBe(true);
+  test("reports every SDK error class name verbatim", async () => {
+    // Error names come from `this.name = "..."` in errors.ts. Anything missing
+    // from the safe list is redacted, and long names turn into "<token>".
+    const source = readFileSync(new URL("./errors.ts", import.meta.url), "utf8");
+    const names = [...source.matchAll(/this\.name = "(\w+)"/g)].map((match) => match[1] ?? "");
+
+    expect(names.length).toBeGreaterThan(5);
+
+    for (const name of names) {
+      const { calls, telemetry } = exceptionTelemetry();
+      const error = new Error("boom");
+      error.name = name;
+      error.stack = undefined;
+
+      await telemetry.captureException(error, { source: "sdk", handled: true });
+
+      expect(exceptionList(calls[0])[0]?.type).toBe(name);
+    }
+  });
+});
+
+describe("isBuiltInAdapterName", () => {
+  test("separates shipped adapters from caller-registered ones", () => {
+    expect(isBuiltInAdapterName("resend")).toBe(true);
+    expect(isBuiltInAdapterName("smtp")).toBe(true);
+    expect(isBuiltInAdapterName("acme-internal")).toBe(false);
   });
 });
 

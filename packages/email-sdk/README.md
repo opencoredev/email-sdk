@@ -303,7 +303,7 @@ If the migration cannot happen in one change, import from `@opencoredev/email-sd
 
 ## Telemetry
 
-Opt-out telemetry is enabled by default for SDK and CLI usage and uses a random, stable installation identifier. It records adapter names, command names, success/failure, error codes, duration, recipient counts, whether scheduling was requested, SDK version, runtime, OS, CI metadata, and redacted error shape. It never records a person's identity, email content, subjects, addresses, headers, attachments, API keys, or provider raw responses.
+Opt-out telemetry is enabled by default for SDK and CLI usage and uses a random, stable installation identifier. It records adapter names, command names, success/failure, error codes, why a send failed (provider, network, caller, or SDK), the provider's HTTP status, duration, recipient counts, whether scheduling was requested, SDK version, runtime, OS, CI metadata, and redacted error reports for bugs inside the SDK itself. It never records a person's identity, email content, subjects, addresses, headers, attachments, API keys, or provider raw responses.
 
 Opt out on this machine (persists in `~/.config/email-sdk/telemetry.json`):
 

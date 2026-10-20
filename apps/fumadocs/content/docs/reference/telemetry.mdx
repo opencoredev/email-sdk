@@ -110,9 +110,21 @@ Long-running servers do not need this — the process stays alive long enough fo
 
 ## Error reports
 
-Handled provider and unknown failures may produce a PostHog `$exception` event. Caller validation mistakes and unknown adapter names are excluded.
+Error reports exist to find bugs in Email SDK itself, so most failed sends never produce one. Each failed adapter attempt is classified, and the class is recorded as `failure_kind` on `email sent` and `email adapter attempted`:
 
-Error reporting limits cause depth, frames, message length, duplicate classes, and reports per process. It scrubs email addresses, URLs, quoted text, long tokens, home directories, and filesystem paths from messages and stacks.
+| `failure_kind` | Meaning | Error report |
+| --- | --- | --- |
+| `auth` | The provider refused the credentials (HTTP 401 or 403, SMTP authentication failure). | No |
+| `rate_limited` | The provider asked the caller to slow down (HTTP 429). | No |
+| `rejected` | The provider or mail server answered and refused the request. | No |
+| `provider_error` | The provider failed (HTTP 5xx). | No |
+| `network` | The request never got an answer: refused connection, DNS, TLS, or timeout. | No |
+| `caller` | Caller code failed: validation, middleware, or an abort. | No |
+| `unexpected` | A built-in adapter or the SDK core threw a programming error, such as a `TypeError`. | Yes |
+
+`email adapter attempted` also records `http_status` when the provider answered over HTTP. Failures inside custom adapters are never reported, and the CLI reports its own crashes.
+
+A report is a PostHog `$exception` event. Its fingerprint combines the error class, the error code, the adapter, the root cause type, and the innermost SDK stack frame, so one bug shows up as one issue no matter which app hit it. Error reporting limits cause depth, frames, message length, duplicate reports, and reports per process. It scrubs email addresses, URLs, hostnames, IP addresses, quoted text, long tokens, home directories, and filesystem paths from messages and stacks.
 
 ## Data that is not collected
 

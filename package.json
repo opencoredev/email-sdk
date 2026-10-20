@@ -14,7 +14,7 @@
     "lint": "oxlint --disable-nested-config --deny-warnings --report-unused-disable-directives && bun scripts/check-lint-policy.ts",
     "check": "bun run lint && oxfmt --write",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && bun scripts/sync-sdk-version.ts",
     "verification:check": "bun scripts/check-adapter-verification.ts && bun test scripts/check-adapter-verification.test.ts apps/fumadocs/src/lib/adapter-verification.test.ts",
     "release:ci": "bun run lint && bun run check-types && bun run test && bun run verification:check && bun run community:check && bun run docs:versions:check && bun run docs:check && bun run build && bun run pack:check",
     "release": "changeset publish",

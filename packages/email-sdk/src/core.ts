@@ -31,7 +31,13 @@ import {
   validateFallback,
   validateRetry,
 } from "./core/routing.js";
-import { captureSendTelemetry, messageFacts, personalizedFacts } from "./core/send-telemetry.js";
+import { classifyAdapterFailure } from "./core/failure-kind.js";
+import {
+  captureSendFailure,
+  captureSendTelemetry,
+  messageFacts,
+  personalizedFacts,
+} from "./core/send-telemetry.js";
 import {
   EmailAbortError,
   EmailAdapterError,
@@ -40,12 +46,7 @@ import {
   EmailRouteError,
   EmailValidationError,
 } from "./errors.js";
-import {
-  getTelemetry,
-  getTelemetrySource,
-  isReportableSendError,
-  normalizeAdapterName,
-} from "./telemetry.js";
+import { getTelemetry, getTelemetrySource, normalizeAdapterName } from "./telemetry.js";
 import { isTestAdapter } from "./testing.js";
 import type {
   EmailAdapter,
@@ -170,6 +171,10 @@ export function createEmailClient<
       const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
       const unknownRecipients = notSent ? 0 : Math.max(0, recipients - accepted - rejected);
       void telemetry?.capture("email adapter attempted", {
+        failure_kind: resolved
+          ? undefined
+          : classifyAdapterFailure(normalizeAdapterFailure(adapter.name, failure)),
+        http_status: adapterError?.status,
         measurement_schema_version: 2,
         measurement_scope: "adapter_attempt",
         adapter: adapterName,
@@ -306,25 +311,15 @@ export function createEmailClient<
       throw new EmailRouteError(failures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      const attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
-      captureSendTelemetry({
+      captureSendFailure({
         telemetry,
         source: telemetrySource,
         startedAt,
         facts,
-        adapter: attemptedAdapter,
-        success: false,
+        adapter: sendOptions?.adapter ?? defaultAdapter,
         messageCount: 1,
-        errorCode: normalized.code,
+        error: normalized,
       });
-
-      if (telemetry && isReportableSendError(normalized)) {
-        void telemetry.captureException(normalized, {
-          source: telemetrySource,
-          handled: true,
-          adapter: normalizeAdapterName(attemptedAdapter),
-        });
-      }
 
       throw normalized;
     }
@@ -474,25 +469,16 @@ export function createEmailClient<
       throw new EmailAllRecipientsFailedError(routeFailures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      captureSendTelemetry({
+      captureSendFailure({
         telemetry,
         source: telemetrySource,
         startedAt,
         facts,
         adapter: attemptedAdapter,
-        success: false,
         messageCount: facts.recipients,
-        errorCode: normalized.code,
+        error: normalized,
         deliveryPath,
       });
-
-      if (telemetry && isReportableSendError(normalized)) {
-        void telemetry.captureException(normalized, {
-          source: telemetrySource,
-          handled: true,
-          adapter: normalizeAdapterName(attemptedAdapter),
-        });
-      }
 
       throw normalized;
     }
