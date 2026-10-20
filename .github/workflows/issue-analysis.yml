@@ -4,13 +4,20 @@ name: Analyze new issues
 # code and reports to the maintainer. The agent only reads: it never comments,
 # labels, or closes anything here. Bots (including Linear's issue sync) and the
 # maintainer's own issues are skipped, and each author gets at most three
-# analyses a day so a spammer can't start unlimited agent runs.
+# analyses a day so a spammer can't start unlimited agent runs. Search results
+# lag behind new issues, so a fast burst could slip past that count; the
+# per-author concurrency group covers it, because GitHub keeps only one queued
+# run per group and cancels the rest of the burst.
 on:
   issues:
     types: [opened]
 
 permissions:
   issues: read
+
+concurrency:
+  group: issue-analysis-${{ github.event.issue.user.login }}
+  cancel-in-progress: false
 
 jobs:
   analyze:
@@ -25,12 +32,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AUTHOR: ${{ github.event.issue.user.login }}
         run: |
+          set -euo pipefail
           since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
           opened="$(gh api -X GET search/issues \
             -f q="repo:${GITHUB_REPOSITORY} is:issue author:${AUTHOR} created:>=${since}" \
             --jq .total_count)"
           echo "Issues opened by this author in the last 24 hours: ${opened}"
-          if [ "${opened}" -gt 3 ]; then
+          # Anything but a plain count (an API shape change) fails closed.
+          if ! [[ "${opened}" =~ ^[0-9]+$ ]] || [ "${opened}" -gt 3 ]; then
             echo "::notice::Daily analysis budget used up for this author; skipping."
             echo "send=false" >> "$GITHUB_OUTPUT"
           else
@@ -45,6 +54,7 @@ jobs:
           # is never interpolated into the shell script.
           ISSUE_JSON: ${{ toJSON(github.event.issue) }}
         run: |
+          set -euo pipefail
           if [ -z "${WEBHOOK_URL}" ]; then
             echo "::notice::T3_ISSUE_ANALYSIS_WEBHOOK_URL is not set; skipping."
             exit 0
