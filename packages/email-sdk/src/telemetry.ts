@@ -634,12 +634,26 @@ const HOME_DIR_PATTERN = /[/\\](?:Users|home)[/\\][^\s/\\]+/g;
 const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
 
 // Bare hostnames ("mg.customer.app is not allowed to send") name the caller's
-// sending domain, so any lowercase dotted name counts, whatever its TLD.
-// Source file names ("core.js") and camelCase property access ("e.useCache")
-// stay readable; plain property paths ("body.data") are redacted too, which
-// is the safe side to err on.
+// sending domain, so any dotted name counts, whatever its TLD or case.
+// redactHostname keeps source file names ("core.js") and camelCase property
+// access ("e.useCache") readable; plain property paths ("body.data") are
+// redacted too, which is the safe side to err on.
 const HOSTNAME_PATTERN =
-  /(?<![\w.@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?!(?:c?js|mjs|[cm]?ts|[jt]sx|json|map|node|wasm|md|txt|log|html|css|ya?ml|toml|lock|env)(?![a-z]))[a-z]{2,63}(?::\d+)?(?![\w-])/g;
+  /(?<![\w.@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?![\w-])/gi;
+
+const SOURCE_FILE_EXTENSION =
+  /^(?:c?js|mjs|[cm]?ts|[jt]sx|json|map|node|wasm|md|txt|log|html|css|ya?ml|toml|lock|env)$/i;
+
+function redactHostname(match: string) {
+  const labels = match.replace(/:\d+$/, "").split(".");
+  const last = labels.at(-1) ?? "";
+
+  if (SOURCE_FILE_EXTENSION.test(last) || labels.some((label) => /[a-z][A-Z]/.test(label))) {
+    return match;
+  }
+
+  return "<host>";
+}
 
 // IPv4 with an optional port, and colon-separated hex runs for IPv6.
 const IPV4_PATTERN = /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?!\.?\d)/g;
@@ -674,7 +688,7 @@ function redactErrorMessage(message: string): string {
     // than the email pass catching only the "pass@host" portion.
     .replace(URL_PATTERN, "<url>")
     .replace(EMAIL_PATTERN, "<email>")
-    .replace(HOSTNAME_PATTERN, "<host>")
+    .replace(HOSTNAME_PATTERN, redactHostname)
     .replace(IPV4_PATTERN, "<ip>")
     .replace(IPV6_PATTERN, "<ip>")
     .replace(/"[^"]*"/g, '"<redacted>"')

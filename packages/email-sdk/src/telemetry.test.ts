@@ -498,11 +498,15 @@ describe("telemetry exceptions", () => {
     // Any TLD, not just common ones.
     ["connect smtp.customer-example.app:587 failed", "connect <host> failed"],
     ["relay mail.customer.photography refused", "relay <host> refused"],
+    // Hostnames are case-insensitive, so case must not let them through.
+    ["connect SMTP.Customer-Example.APP failed", "connect <host> failed"],
+    ["connect smtp.example.COM:587 failed", "connect <host> failed"],
     // Property access in programming errors stays readable.
     ["x.map is not a function", "x.map is not a function"],
     ["Cannot find module core.js", "Cannot find module core.js"],
     ["undefined is not an object (evaluating e.useCache)", "undefined is not an object (evaluating e.useCache)"],
     ["process.env is undefined", "process.env is undefined"],
+    ["Cannot find module LOADER.JS", "Cannot find module LOADER.JS"],
   ])("redacts %j", async (input, expected) => {
     const { calls, telemetry } = exceptionTelemetry();
     const error = new Error(input);
