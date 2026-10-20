@@ -2,10 +2,10 @@ import { Banner } from "fumadocs-ui/components/banner";
 import posthog from "posthog-js";
 import type { MouseEvent } from "react";
 
-const SOCIAL_SDK_URL =
-  "https://social-sdk.dev/?utm_source=email-sdk.dev&utm_medium=banner&utm_campaign=social-sdk-launch";
+// The X launch post for gradients.sh.
+const LAUNCH_POST_URL = "__X_POST_URL__";
 
-const promo = { project: "social-sdk", placement: "banner" };
+const promo = { project: "gradients-sh", placement: "banner" };
 
 // Fumadocs owns the close button, so catch its click as it bubbles.
 function onBannerClick(event: MouseEvent<HTMLDivElement>) {
@@ -16,13 +16,13 @@ function onBannerClick(event: MouseEvent<HTMLDivElement>) {
 export function LaunchBanner() {
   return (
     <Banner
-      id="social-sdk-launch"
+      id="gradients-sh-launch"
       height="2.5rem"
       onClick={onBannerClick}
       className="ps-3 pe-10 text-xs sm:text-sm"
     >
       <a
-        href={SOCIAL_SDK_URL}
+        href={LAUNCH_POST_URL}
         target="_blank"
         rel="noopener"
         className="truncate text-fd-muted-foreground transition-colors hover:text-fd-foreground"
@@ -30,9 +30,10 @@ export function LaunchBanner() {
       >
         <span className="hidden sm:inline">Hey, Leo here 👋 </span>I just launched{" "}
         <span className="font-semibold text-fd-foreground underline underline-offset-4">
-          Social SDK
+          gradients.sh
         </span>
-        <span className="hidden sm:inline">, my new open source project</span>. Come check it out →
+        <span className="hidden sm:inline">, animated gradient backgrounds for React</span>. Come
+        check it out →
       </a>
     </Banner>
   );
