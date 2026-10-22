@@ -4,7 +4,7 @@ import { createEmailClient } from "./core.js";
 import { EmailAdapterError, EmailMiddlewareError } from "./errors.js";
 import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 import type { EmailAdapter } from "./types.js";
-import { BUILT_IN_ADAPTER_CAPABILITIES } from "./utils.js";
+import { BUILT_IN_ADAPTER_CAPABILITIES, isBuiltInAdapter } from "./utils.js";
 import { adapter, message, telemetryCapture } from "../test-support/core-fixtures.js";
 
 function captured() {
@@ -235,5 +235,26 @@ describe("send telemetry error reporting", () => {
     expect(events.find((item) => item.event === "email sent")?.properties).toMatchObject({
       failure_kind: "caller",
     });
+  });
+});
+
+describe("isBuiltInAdapter", () => {
+  test("trusts the mark on SDK capabilities, not their shape or the adapter's name", () => {
+    const copied = { ...BUILT_IN_ADAPTER_CAPABILITIES.resend };
+
+    // Real factories, including CommonJS subpath imports, are checked against
+    // the packed tarball in scripts/check-package-tarballs.ts.
+    expect(isBuiltInAdapter(builtIn("resend"))).toBe(true);
+    expect(isBuiltInAdapter(adapter("relay", undefined, { capabilities: BUILT_IN_ADAPTER_CAPABILITIES.smtp }))).toBe(true);
+    expect(isBuiltInAdapter(adapter("resend", undefined, { capabilities: copied }))).toBe(false);
+    expect(isBuiltInAdapter(undefined)).toBe(false);
+  });
+
+  test("tolerates a plain JavaScript adapter without capabilities", () => {
+    const legacy = adapter("legacy");
+    // A JavaScript caller can skip the field the types require.
+    Reflect.deleteProperty(legacy, "capabilities");
+
+    expect(isBuiltInAdapter(legacy)).toBe(false);
   });
 });

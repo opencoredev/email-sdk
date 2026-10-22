@@ -331,5 +331,20 @@ const manifest = JSON.parse(readFileSync(join(coreDir, "package.json"), "utf8"))
 for (const subpath of Object.keys(manifest.exports ?? {})) {
   require(subpath === "." ? manifest.name : manifest.name + subpath.slice(1));
 }
+
+// Each CommonJS entry point is its own bundle. Telemetry tells built-in
+// adapters from caller adapters by a registered symbol on their capabilities,
+// so adapters required from a subpath must carry it too.
+const builtInMark = Symbol.for("@opencoredev/email-sdk/built-in-adapter");
+const adapters = [
+  require(manifest.name + "/resend").resend({ apiKey: "re_test" }),
+  require(manifest.name + "/smtp").smtp({ host: "localhost", port: 25, name: "relay" }),
+];
+
+for (const adapter of adapters) {
+  if (!Object.hasOwn(adapter.capabilities, builtInMark)) {
+    throw new Error("CommonJS adapter " + adapter.name + " is missing the built-in mark.");
+  }
+}
 `;
 }

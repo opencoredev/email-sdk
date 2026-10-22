@@ -6,7 +6,14 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "./errors.js";
-import { causeString, isJsonObject, isJsonString, isStringMember, readJson } from "./internal/decode.js";
+import {
+  causeString,
+  isJsonObject,
+  isJsonString,
+  isObjectLike,
+  isStringMember,
+  readJson,
+} from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type {
   EmailAddress,
@@ -588,17 +595,26 @@ export function builtInAdapterDefinition<Name extends keyof typeof SUPPORTED_MES
   };
 }
 
-const BUILT_IN_CAPABILITY_OBJECTS = new Set<EmailAdapterCapabilities>(
-  Object.values(BUILT_IN_ADAPTER_CAPABILITIES),
-);
+// The CommonJS build bundles each entry point on its own, so a client from
+// "@opencoredev/email-sdk" and an adapter from "@opencoredev/email-sdk/resend"
+// hold different copies of these objects. A registered symbol is the same in
+// every copy, so it marks them instead of object identity.
+const BUILT_IN_ADAPTER_MARK = Symbol.for("@opencoredev/email-sdk/built-in-adapter");
+
+for (const capabilities of Object.values(BUILT_IN_ADAPTER_CAPABILITIES)) {
+  Object.defineProperty(capabilities, BUILT_IN_ADAPTER_MARK, { value: true });
+}
 
 /**
- * True for adapters an SDK factory built. Every factory shares its
- * capabilities object from BUILT_IN_ADAPTER_CAPABILITIES, so identity proves
- * where the adapter came from; a caller can name their own adapter "resend".
+ * True for adapters an SDK factory built. Every factory takes its capabilities
+ * object from BUILT_IN_ADAPTER_CAPABILITIES, so the mark proves where the
+ * adapter came from; a caller can name their own adapter "resend".
  */
 export function isBuiltInAdapter(adapter: EmailAdapter | undefined) {
-  return adapter !== undefined && BUILT_IN_CAPABILITY_OBJECTS.has(adapter.capabilities);
+  // Plain JavaScript callers can register an adapter without capabilities.
+  const capabilities: unknown = adapter?.capabilities;
+
+  return isObjectLike(capabilities) && Object.hasOwn(capabilities, BUILT_IN_ADAPTER_MARK);
 }
 
 export function validateBuiltInAdapter(
