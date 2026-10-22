@@ -161,17 +161,16 @@ describe("send telemetry error reporting", () => {
       retry: onClient ? retry : undefined,
     });
 
-    const settled = await client
-      .sendPersonalized(
-        {
-          message: { from: message.from, subject: message.subject, text: message.text },
-          recipients: [{ to: "a@example.com", variables: {} }],
-        },
-        onClient ? undefined : { retry },
-      )
-      .catch((error: unknown) => error);
+    const sending = client.sendPersonalized(
+      {
+        message: { from: message.from, subject: message.subject, text: message.text },
+        recipients: [{ to: "a@example.com", variables: {} }],
+      },
+      onClient ? undefined : { retry },
+    );
 
-    expect(settled).toBeInstanceOf(Error);
+    await expect(sending).rejects.toThrow();
+
     expect(exceptions).toHaveLength(0);
   });
 
