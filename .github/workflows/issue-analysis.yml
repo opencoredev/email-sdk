@@ -4,10 +4,9 @@ name: Analyze new issues
 # code and reports to the maintainer. The agent only reads: it never comments,
 # labels, or closes anything here. Bots (including Linear's issue sync) and the
 # maintainer's own issues are skipped, and each author gets at most three
-# analyses a day so a spammer can't start unlimited agent runs. Search results
-# lag behind new issues, so a fast burst could slip past that count; the
-# per-author concurrency group covers it, because GitHub keeps only one queued
-# run per group and cancels the rest of the burst.
+# analyses a day so a spammer can't start unlimited agent runs. The count
+# includes the issue that triggered this run. The per-author concurrency group keeps only one queued run per
+# author and cancels the rest of a burst.
 on:
   issues:
     types: [opened]
@@ -31,12 +30,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           AUTHOR: ${{ github.event.issue.user.login }}
+          QUERY: |
+            query($owner: String!, $name: String!, $author: String!, $since: DateTime!) {
+              repository(owner: $owner, name: $name) {
+                issues(first: 100, filterBy: { createdBy: $author, since: $since }) {
+                  nodes { createdAt }
+                }
+              }
+            }
         run: |
           set -euo pipefail
           since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
-          opened="$(gh api -X GET search/issues \
-            -f q="repo:${GITHUB_REPOSITORY} is:issue author:${AUTHOR} created:>=${since}" \
-            --jq .total_count)"
+          # GraphQL reads the issue list directly; search and the REST list can
+          # lag or miss issues. `since` filters on updated time, so keep only
+          # issues created since then. Only "more than 3" matters, so 100 is
+          # plenty.
+          opened="$(gh api graphql \
+            -f owner="${GITHUB_REPOSITORY_OWNER}" -f name="${GITHUB_REPOSITORY#*/}" \
+            -f author="${AUTHOR}" -f since="${since}" -f query="${QUERY}" \
+            --jq "[.data.repository.issues.nodes[] | select(.createdAt >= \"${since}\")] | length")"
           echo "Issues opened by this author in the last 24 hours: ${opened}"
           # Anything but a plain count (an API shape change) fails closed.
           if ! [[ "${opened}" =~ ^[0-9]+$ ]] || [ "${opened}" -gt 3 ]; then
@@ -50,15 +62,15 @@ jobs:
         if: steps.budget.outputs.send == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.T3_ISSUE_ANALYSIS_WEBHOOK_URL }}
-          # The issue text is untrusted, so it travels as data in an env var and
-          # is never interpolated into the shell script.
-          ISSUE_JSON: ${{ toJSON(github.event.issue) }}
         run: |
           set -euo pipefail
           if [ -z "${WEBHOOK_URL}" ]; then
             echo "::notice::T3_ISSUE_ANALYSIS_WEBHOOK_URL is not set; skipping."
             exit 0
           fi
-          printf '%s' "${ISSUE_JSON}" | curl -fsS --max-time 30 -X POST "${WEBHOOK_URL}" \
+          # The issue text is untrusted, so it is read from the event file as
+          # data and never interpolated into the script. Reading the file also
+          # avoids the per-variable size limit a long issue body would hit.
+          jq -c .issue "${GITHUB_EVENT_PATH}" | curl -fsS --max-time 30 -X POST "${WEBHOOK_URL}" \
             -H 'Content-Type: application/json' --data-binary @- -o /dev/null
-          echo "Sent issue #${{ github.event.issue.number }} for analysis."
+          echo "Sent issue #$(jq .issue.number "${GITHUB_EVENT_PATH}") for analysis."
