@@ -504,6 +504,7 @@ describe("telemetry exceptions", () => {
     // A camelCase label or a file-like TLD inside a host must not save it.
     ["connect smtp.customerExample.com failed", "connect <host> failed"],
     ["relay mail.customer.md refused", "relay <host> refused"],
+    ["connect smtp.customer.cOm failed", "connect <host> failed"],
     ["Domain send.acme.dev is not verified", "Domain <host> is not verified"],
     // Property access in programming errors stays readable.
     ["x.map is not a function", "x.map is not a function"],

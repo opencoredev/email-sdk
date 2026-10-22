@@ -62,6 +62,7 @@ import type {
   EmailSendMiddleware,
   EmailSendOptions,
   EmailSendResult,
+  EmailRetryConfig,
   EmailSendSettledResult,
   EmailValidationResult,
 } from "./types.js";
@@ -206,15 +207,40 @@ export function createEmailClient<
     }
   };
 
-  // Core labels errors thrown by caller-written validate hooks adapter
-  // "unknown", like its own failures, so they are remembered here to keep them
-  // out of error tracking.
+  // Caller callbacks (adapter validate hooks, retry shouldRetry and delay) run
+  // inside SDK code, so their throws get filed under a built-in adapter or
+  // "unknown". They are remembered here to keep them out of error tracking.
   const callerErrors = new WeakSet<object>();
 
-  const isSdkOwned = (failure: EmailAdapterError) =>
-    failure.adapter === "unknown"
-      ? !(isObjectLike(failure.cause) && callerErrors.has(failure.cause))
-      : isBuiltInAdapter(adapters.get(failure.adapter));
+  const callerOwned = <Result>(run: () => Result): Result => {
+    try {
+      return run();
+    } catch (error) {
+      if (isObjectLike(error)) callerErrors.add(error);
+
+      throw error;
+    }
+  };
+
+  const callerRetry = (retry: EmailRetryConfig | undefined): EmailRetryConfig | undefined => {
+    if (!retry) return retry;
+    const { shouldRetry, delay } = retry;
+
+    return {
+      ...retry,
+      shouldRetry: shouldRetry && ((error, attempt) => callerOwned(() => shouldRetry(error, attempt))),
+      delay: delay && ((attempt, error) => callerOwned(() => delay(attempt, error))),
+    };
+  };
+
+  const isSdkOwned = (failure: EmailAdapterError) => {
+    if (isObjectLike(failure.cause) && callerErrors.has(failure.cause)) return false;
+
+    // "unknown" is core's own label, unless a caller registered an adapter by that name.
+    if (failure.adapter === "unknown" && !adapters.has("unknown")) return true;
+
+    return isBuiltInAdapter(adapters.get(failure.adapter));
+  };
 
   void telemetry?.capture("client created", {
     adapters: [...adapters.keys()].map(normalizeAdapterName),
@@ -277,7 +303,7 @@ export function createEmailClient<
             adapter,
             message: prepared.message,
             options: prepared.options,
-            retry: prepared.options?.retry ?? options.retry,
+            retry: callerRetry(prepared.options?.retry ?? options.retry),
             hooks,
             middleware,
             measureAttempt,
@@ -444,7 +470,7 @@ export function createEmailClient<
               preparedInput,
               expanded[0]!.message,
               prepared.options,
-              options.retry,
+              callerRetry(options.retry),
               hooks,
               middleware,
               measureAttempt,
@@ -453,7 +479,7 @@ export function createEmailClient<
               adapter,
               expanded,
               prepared.options,
-              options.retry,
+              callerRetry(options.retry),
               hooks,
               middleware,
               measureAttempt,

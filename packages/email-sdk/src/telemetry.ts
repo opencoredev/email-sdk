@@ -655,7 +655,8 @@ function redactHostname(match: string) {
   const labels = match.replace(/:\d+$/, "").split(".");
   const last = labels.at(-1) ?? "";
 
-  if (SOURCE_FILE_EXTENSION.test(last) || /[a-z][A-Z]/.test(last)) {
+  // "e.useCache" is property access; "smtp.customer.cOm" is a host in odd case.
+  if (SOURCE_FILE_EXTENSION.test(last) || (labels.length === 2 && /[a-z][A-Z]/.test(last))) {
     return match;
   }
 

@@ -137,6 +137,27 @@ describe("send telemetry error reporting", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test.each([
+    ["shouldRetry", { maxAttempts: 2, shouldRetry: () => crash() }],
+    ["delay", { maxAttempts: 2, shouldRetry: () => true, delay: () => crash() }],
+  ])("a crash in the caller's retry %s callback is not the SDK's defect", async (_label, retry) => {
+    const { exceptions } = captured();
+    const client = createEmailClient({ adapters: [builtIn("resend", rejectWith(500))], retry });
+
+    await expect(client.send(message)).rejects.toThrow();
+
+    expect(exceptions).toHaveLength(0);
+  });
+
+  test("a caller adapter registered as unknown is still the caller's", async () => {
+    const { exceptions } = captured();
+    const client = createEmailClient({ adapters: [adapter("unknown", crash)] });
+
+    await expect(client.send(message)).rejects.toThrow();
+
+    expect(exceptions).toHaveLength(0);
+  });
+
   test("a malformed provider reply is the provider's fault", async () => {
     const { events, exceptions } = captured();
 
