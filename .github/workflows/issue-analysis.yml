@@ -33,7 +33,11 @@ jobs:
           QUERY: |
             query($owner: String!, $name: String!, $author: String!, $since: DateTime!) {
               repository(owner: $owner, name: $name) {
-                issues(first: 100, filterBy: { createdBy: $author, since: $since }) {
+                issues(
+                  first: 100
+                  filterBy: { createdBy: $author, since: $since }
+                  orderBy: { field: CREATED_AT, direction: DESC }
+                ) {
                   nodes { createdAt }
                 }
               }
@@ -43,8 +47,8 @@ jobs:
           since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
           # GraphQL reads the issue list directly; search and the REST list can
           # lag or miss issues. `since` filters on updated time, so keep only
-          # issues created since then. Only "more than 3" matters, so 100 is
-          # plenty.
+          # issues created since then. Newest first, so the first 100 always
+          # hold the new ones; only "more than 3" matters.
           opened="$(gh api graphql \
             -f owner="${GITHUB_REPOSITORY_OWNER}" -f name="${GITHUB_REPOSITORY#*/}" \
             -f author="${AUTHOR}" -f since="${since}" -f query="${QUERY}" \
