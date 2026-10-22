@@ -588,6 +588,19 @@ export function builtInAdapterDefinition<Name extends keyof typeof SUPPORTED_MES
   };
 }
 
+const BUILT_IN_CAPABILITY_OBJECTS = new Set<EmailAdapterCapabilities>(
+  Object.values(BUILT_IN_ADAPTER_CAPABILITIES),
+);
+
+/**
+ * True for adapters an SDK factory built. Every factory shares its
+ * capabilities object from BUILT_IN_ADAPTER_CAPABILITIES, so identity proves
+ * where the adapter came from; a caller can name their own adapter "resend".
+ */
+export function isBuiltInAdapter(adapter: EmailAdapter | undefined) {
+  return adapter !== undefined && BUILT_IN_CAPABILITY_OBJECTS.has(adapter.capabilities);
+}
+
 export function validateBuiltInAdapter(
   adapter: keyof typeof SUPPORTED_MESSAGE_FIELDS,
   message: EmailMessage,

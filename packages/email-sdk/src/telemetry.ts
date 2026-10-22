@@ -503,9 +503,15 @@ function exceptionFingerprint(
     // Without an SDK frame, the redacted root message is the best remaining
     // signal for telling unrelated errors apart.
     sdkFrame
-      ? `${sdkFrame.filename.split("/").at(-1)}#${stableFunctionName(sdkFrame.function)}`
+      ? `${stableModuleName(sdkFrame.filename)}#${stableFunctionName(sdkFrame.function)}`
       : (root?.value.slice(0, 60) ?? ""),
   ].join(":");
+}
+
+// ESM installs run dist/resend.js and CommonJS installs run dist/resend.cjs,
+// so the extension is dropped to keep one bug in one issue.
+function stableModuleName(filename: string) {
+  return (filename.split("/").at(-1) ?? filename).replace(/\.[cm]?[jt]s$/, "");
 }
 
 // Node names a method "Object.send" or "async Object.send" where Bun says
@@ -637,18 +643,19 @@ const HOME_TAIL_PATTERN = /~[/\\][^\s"'`<>]+/g;
 // sending domain, so any dotted name counts, whatever its TLD or case.
 // redactHostname keeps source file names ("core.js") and camelCase property
 // access ("e.useCache") readable; plain property paths ("body.data") are
-// redacted too, which is the safe side to err on.
+// redacted too, which is the safe side to err on. Only the last label decides,
+// because that is where a TLD sits: "smtp.customerExample.com" is a host.
 const HOSTNAME_PATTERN =
   /(?<![\w.@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?![\w-])/gi;
 
 const SOURCE_FILE_EXTENSION =
-  /^(?:c?js|mjs|[cm]?ts|[jt]sx|json|map|node|wasm|md|txt|log|html|css|ya?ml|toml|lock|env)$/i;
+  /^(?:c?js|mjs|[cm]?ts|[jt]sx|json|map|node|wasm|txt|log|html|css|ya?ml|toml|lock|env)$/i;
 
 function redactHostname(match: string) {
   const labels = match.replace(/:\d+$/, "").split(".");
   const last = labels.at(-1) ?? "";
 
-  if (SOURCE_FILE_EXTENSION.test(last) || labels.some((label) => /[a-z][A-Z]/.test(label))) {
+  if (SOURCE_FILE_EXTENSION.test(last) || /[a-z][A-Z]/.test(last)) {
     return match;
   }
 

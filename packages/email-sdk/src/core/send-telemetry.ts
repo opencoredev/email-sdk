@@ -1,7 +1,6 @@
-import type { EmailSdkError } from "../errors.js";
+import type { EmailAdapterError, EmailSdkError } from "../errors.js";
 import {
   getTelemetry,
-  isBuiltInAdapterName,
   normalizeAdapterName,
   type TelemetrySource,
 } from "../telemetry.js";
@@ -85,6 +84,8 @@ export type SendFailureTelemetryInput = Omit<
 > & {
   source: TelemetrySource;
   error: EmailSdkError;
+  /** True when a failure came from SDK code rather than caller code. */
+  isSdkOwned: (failure: EmailAdapterError) => boolean;
 };
 
 /**
@@ -92,7 +93,7 @@ export type SendFailureTelemetryInput = Omit<
  * adapter failures looks like an SDK defect. Provider, network, and caller
  * failures are counted on the `email sent` event and nowhere else.
  */
-export function captureSendFailure({ error, ...input }: SendFailureTelemetryInput) {
+export function captureSendFailure({ error, isSdkOwned, ...input }: SendFailureTelemetryInput) {
   captureSendTelemetry({
     ...input,
     success: false,
@@ -100,7 +101,7 @@ export function captureSendFailure({ error, ...input }: SendFailureTelemetryInpu
     failureKind: classifySendFailure(error),
   });
 
-  const defect = input.telemetry ? findSdkDefect(error, isBuiltInAdapterName) : undefined;
+  const defect = input.telemetry ? findSdkDefect(error, isSdkOwned) : undefined;
 
   if (defect) {
     void input.telemetry?.captureException(defect, {

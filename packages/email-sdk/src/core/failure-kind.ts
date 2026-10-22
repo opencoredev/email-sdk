@@ -8,6 +8,7 @@ import {
   EmailValidationError,
 } from "../errors.js";
 import { causeNumber, causeString, isObjectLike } from "../internal/decode.js";
+import { normalizeAdapterFailure } from "./failures.js";
 
 /**
  * Why an adapter attempt failed, as far as telemetry is concerned.
@@ -28,14 +29,22 @@ export type FailureKind =
 const MAX_CAUSE_DEPTH = 6;
 
 // Errors JavaScript raises when code is wrong, rather than when the world is.
+// SyntaxError is missing on purpose: at runtime it only comes from parsing,
+// and the SDK only parses provider replies, so it means a malformed answer.
 const PROGRAMMING_ERROR_NAMES = new Set([
   "TypeError",
   "RangeError",
   "ReferenceError",
-  "SyntaxError",
   "EvalError",
   "URIError",
 ]);
+
+// `new Headers()` and `fetch()` reject header names and values the caller
+// configured (an API key with a newline, a custom header with a space). Node
+// says 'is an invalid header name' or 'Cannot convert argument to a
+// ByteString'; Bun says 'Invalid header name' or 'Header ... has invalid value'.
+const INVALID_HEADER_PATTERN =
+  /invalid header (?:name|value)|^Header .* has invalid value|Cannot convert argument to a ByteString/i;
 
 // Node errno codes, undici codes, Bun fetch codes, Nodemailer connection codes,
 // and TLS certificate failures all mean the request never reached a provider
@@ -78,8 +87,29 @@ function causeChain(error: EmailAdapterError): unknown[] {
   return chain;
 }
 
-/** Classifies one failed adapter attempt. */
+/**
+ * Classifies one failed adapter attempt. Never throws: the error came from code
+ * the SDK may not own, and a throwing getter on it must not turn telemetry
+ * into a different send failure.
+ */
 export function classifyAdapterFailure(error: EmailAdapterError): FailureKind {
+  try {
+    return classify(error);
+  } catch {
+    return "rejected";
+  }
+}
+
+/** classifyAdapterFailure for whatever an adapter attempt threw. Never throws. */
+export function classifyAttemptFailure(adapter: string, cause: unknown): FailureKind {
+  try {
+    return classify(normalizeAdapterFailure(adapter, cause));
+  } catch {
+    return "rejected";
+  }
+}
+
+function classify(error: EmailAdapterError): FailureKind {
   const chain = causeChain(error);
 
   if (
@@ -131,6 +161,10 @@ export function classifyAdapterFailure(error: EmailAdapterError): FailureKind {
 
   if (root instanceof EmailSdkError || !(root instanceof Error)) return "rejected";
 
+  if (root.name === "SyntaxError") return "provider_error";
+
+  if (root.name === "TypeError" && INVALID_HEADER_PATTERN.test(root.message)) return "caller";
+
   return PROGRAMMING_ERROR_NAMES.has(root.name) ? "unexpected" : "rejected";
 }
 
@@ -152,17 +186,14 @@ export function classifySendFailure(error: EmailSdkError): FailureKind {
 
 /**
  * The first adapter failure that points at an SDK defect, if any. Failures from
- * caller-registered adapters are never defects of the SDK, so `isBuiltInAdapter`
- * decides which adapter names count.
+ * caller code are never defects of the SDK, so `isSdkOwned` decides which
+ * failures came from SDK code.
  */
 export function findSdkDefect(
   error: EmailSdkError,
-  isBuiltInAdapter: (name: string) => boolean,
+  isSdkOwned: (failure: EmailAdapterError) => boolean,
 ): EmailAdapterError | undefined {
   return sendFailures(error).find(
-    (failure) =>
-      // Core wraps its own unexpected throws under the adapter name "unknown".
-      (failure.adapter === "unknown" || isBuiltInAdapter(failure.adapter)) &&
-      classifyAdapterFailure(failure) === "unexpected",
+    (failure) => isSdkOwned(failure) && classifyAdapterFailure(failure) === "unexpected",
   );
 }

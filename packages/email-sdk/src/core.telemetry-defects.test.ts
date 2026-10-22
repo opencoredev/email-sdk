@@ -3,6 +3,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createEmailClient } from "./core.js";
 import { EmailAdapterError, EmailMiddlewareError } from "./errors.js";
 import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
+import type { EmailAdapter } from "./types.js";
+import { BUILT_IN_ADAPTER_CAPABILITIES } from "./utils.js";
 import { adapter, message, telemetryCapture } from "../test-support/core-fixtures.js";
 
 function captured() {
@@ -12,9 +14,17 @@ function captured() {
   return capture;
 }
 
-function rejectWith(status: number) {
+/** An adapter the SDK ships, as far as ownership checks can tell. */
+function builtIn<const Name extends "resend" | "postmark">(
+  name: Name,
+  send?: EmailAdapter<Name>["send"],
+) {
+  return adapter(name, send, { capabilities: BUILT_IN_ADAPTER_CAPABILITIES[name] });
+}
+
+function rejectWith(status: number, name = "resend") {
   return () => {
-    throw new EmailAdapterError(`resend failed with ${status}`, { adapter: "resend", status });
+    throw new EmailAdapterError(`${name} failed with ${status}`, { adapter: name, status });
   };
 }
 
@@ -30,7 +40,7 @@ afterEach(() => {
 describe("send telemetry error reporting", () => {
   test("a provider rejection is counted but never reported as an exception", async () => {
     const { events, exceptions } = captured();
-    const client = createEmailClient({ adapters: [adapter("resend", rejectWith(401))] });
+    const client = createEmailClient({ adapters: [builtIn("resend", rejectWith(401))] });
 
     await expect(client.send(message)).rejects.toThrow("All configured email adapters failed.");
 
@@ -50,7 +60,7 @@ describe("send telemetry error reporting", () => {
 
   test("a crash inside a built-in adapter is reported as the adapter failure", async () => {
     const { events, exceptions } = captured();
-    const client = createEmailClient({ adapters: [adapter("resend", crash)] });
+    const client = createEmailClient({ adapters: [builtIn("resend", crash)] });
 
     await expect(client.send(message)).rejects.toThrow();
 
@@ -64,17 +74,31 @@ describe("send telemetry error reporting", () => {
   });
 
   test("the defect is reported even when a fallback adapter fails last", async () => {
-    const { exceptions } = captured();
+    const { events, exceptions } = captured();
+    const attempted: string[] = [];
 
     const client = createEmailClient({
-      adapters: [adapter("resend", crash), adapter("postmark", rejectWith(500))],
-      fallback: ["resend", "postmark"],
+      adapters: [
+        builtIn("resend", () => {
+          attempted.push("resend");
+          crash();
+        }),
+        builtIn("postmark", () => {
+          attempted.push("postmark");
+          rejectWith(500, "postmark")();
+        }),
+      ],
+      fallback: { adapters: ["postmark"], onUnknownDelivery: "continue" },
     });
 
     await expect(client.send(message)).rejects.toThrow();
 
+    expect(attempted).toEqual(["resend", "postmark"]);
     expect(exceptions).toHaveLength(1);
     expect(exceptions[0] instanceof EmailAdapterError ? exceptions[0].adapter : "").toBe("resend");
+    expect(events.find((item) => item.event === "email sent")?.properties).toMatchObject({
+      failure_kind: "provider_error",
+    });
   });
 
   test("a crash inside a caller-registered adapter is not the SDK's defect", async () => {
@@ -84,6 +108,106 @@ describe("send telemetry error reporting", () => {
     await expect(client.send(message)).rejects.toThrow();
 
     expect(exceptions).toHaveLength(0);
+  });
+
+  test("a caller adapter that borrows a built-in name is still the caller's", async () => {
+    const { exceptions } = captured();
+    const client = createEmailClient({ adapters: [adapter("resend", crash)] });
+
+    await expect(client.send(message)).rejects.toThrow();
+
+    expect(exceptions).toHaveLength(0);
+  });
+
+  test("a crash in a caller adapter's validate is not the SDK's defect", async () => {
+    const { exceptions } = captured();
+
+    const client = createEmailClient({
+      adapters: [
+        adapter("acme-internal", undefined, {
+          validate() {
+            crash();
+          },
+        }),
+      ],
+    });
+
+    await expect(client.send(message)).rejects.toBeInstanceOf(EmailAdapterError);
+
+    expect(exceptions).toHaveLength(0);
+  });
+
+  test("a malformed provider reply is the provider's fault", async () => {
+    const { events, exceptions } = captured();
+
+    const client = createEmailClient({
+      adapters: [
+        builtIn("resend", () => {
+          JSON.parse("<html>Bad gateway</html>");
+
+          return { adapter: "resend", id: "never" };
+        }),
+      ],
+    });
+
+    await expect(client.send(message)).rejects.toThrow();
+
+    expect(exceptions).toHaveLength(0);
+    expect(events.find((item) => item.event === "email sent")?.properties).toMatchObject({
+      failure_kind: "provider_error",
+    });
+  });
+
+  test("a header the caller configured badly is the caller's error", async () => {
+    const { events, exceptions } = captured();
+
+    const client = createEmailClient({
+      adapters: [
+        builtIn("resend", () => {
+          // What `new Headers({ ...options.headers })` throws for a bad name.
+          new Headers({ "x bad": "1" });
+
+          return { adapter: "resend", id: "never" };
+        }),
+      ],
+    });
+
+    await expect(client.send(message)).rejects.toThrow();
+
+    expect(exceptions).toHaveLength(0);
+    expect(events.find((item) => item.event === "email sent")?.properties).toMatchObject({
+      failure_kind: "caller",
+    });
+  });
+
+  test("an error with a throwing getter cannot change the send failure or stop fallback", async () => {
+    captured();
+    const attempted: string[] = [];
+
+    const hostile = new Error("adapter failed");
+    Object.defineProperty(hostile, "cause", {
+      get() {
+        throw new Error("getter exploded");
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [
+        builtIn("resend", () => {
+          attempted.push("resend");
+          throw hostile;
+        }),
+        builtIn("postmark", () => {
+          attempted.push("postmark");
+
+          return { adapter: "postmark", id: "pm_1" };
+        }),
+      ],
+      fallback: { adapters: ["postmark"], onUnknownDelivery: "continue" },
+    });
+
+    await expect(client.send(message)).resolves.toMatchObject({ adapter: "postmark" });
+    expect(attempted).toEqual(["resend", "postmark"]);
   });
 
   test("a throwing middleware is the caller's error", async () => {

@@ -8,7 +8,6 @@ import {
   EmailRouteError,
   EmailValidationError,
 } from "../errors.js";
-import { isBuiltInAdapterName } from "../telemetry.js";
 import { toProviderError } from "../utils.js";
 import {
   classifyAdapterFailure,
@@ -92,11 +91,36 @@ describe("classifyAdapterFailure", () => {
       "unexpected",
     ],
     ["bad recursion", new RangeError("Maximum call stack size exceeded"), "unexpected"],
-    ["unparseable body", new SyntaxError("Unexpected token < in JSON"), "unexpected"],
+    ["unparseable body", new SyntaxError("Unexpected token < in JSON"), "provider_error"],
+    ["bad header on Node", new TypeError('Headers.append: "a b" is an invalid header name.'), "caller"],
+    ["bad header on Bun", new TypeError("Header 'a' has invalid value"), "caller"],
+    [
+      "non-Latin-1 header on Node",
+      new TypeError("Cannot convert argument to a ByteString because the character at index 0"),
+      "caller",
+    ],
+    [
+      "SDK bug that mentions headers",
+      new TypeError("Cannot read properties of undefined (reading 'headers')"),
+      "unexpected",
+    ],
     ["plain provider SDK error", new Error("destination address not verified"), "rejected"],
     ["non-Error throw", "nope", "rejected"],
   ])("%s", (_label, cause, kind) => {
     expect(classifyAdapterFailure(thrownBy("resend", cause))).toBe(kind);
+  });
+
+  test("a throwing getter on the error cannot make classification throw", () => {
+    const hostile = new Error("adapter failed");
+    Object.defineProperty(hostile, "cause", {
+      get() {
+        throw new Error("getter exploded");
+      },
+    });
+
+    expect(classifyAdapterFailure(new EmailAdapterError("failed", { adapter: "resend", cause: hostile }))).toBe(
+      "rejected",
+    );
   });
 
   test("a status wins over the cause", () => {
@@ -121,33 +145,34 @@ describe("classifyAdapterFailure", () => {
 });
 
 describe("findSdkDefect", () => {
+  const isSdkOwned = (failure: EmailAdapterError) => failure.adapter !== "acme-internal";
   const defect = thrownBy("resend", new TypeError("Cannot read properties of undefined"));
   const auth = withStatus(401);
 
   test("finds the defect anywhere in a fallback route", () => {
-    expect(findSdkDefect(new EmailRouteError([defect, auth]), isBuiltInAdapterName)).toBe(defect);
+    expect(findSdkDefect(new EmailRouteError([defect, auth]), isSdkOwned)).toBe(defect);
     expect(
-      findSdkDefect(new EmailAllRecipientsFailedError([auth, defect]), isBuiltInAdapterName),
+      findSdkDefect(new EmailAllRecipientsFailedError([auth, defect]), isSdkOwned),
     ).toBe(defect);
   });
 
   test("ignores provider, network, and caller failures", () => {
-    expect(findSdkDefect(new EmailRouteError([auth, withStatus(500)]), isBuiltInAdapterName)).toBe(
+    expect(findSdkDefect(new EmailRouteError([auth, withStatus(500)]), isSdkOwned)).toBe(
       undefined,
     );
-    expect(findSdkDefect(new EmailValidationError("bad"), isBuiltInAdapterName)).toBe(undefined);
+    expect(findSdkDefect(new EmailValidationError("bad"), isSdkOwned)).toBe(undefined);
   });
 
-  test("ignores bugs in caller-registered adapters", () => {
+  test("ignores bugs in caller-owned code", () => {
     const custom = thrownBy("acme-internal", new TypeError("caller adapter bug"));
 
-    expect(findSdkDefect(custom, isBuiltInAdapterName)).toBe(undefined);
+    expect(findSdkDefect(custom, isSdkOwned)).toBe(undefined);
   });
 
   test("keeps core's own unexpected throws", () => {
     const core = thrownBy("unknown", new TypeError("core bug"));
 
-    expect(findSdkDefect(core, isBuiltInAdapterName)).toBe(core);
+    expect(findSdkDefect(core, isSdkOwned)).toBe(core);
   });
 });
 

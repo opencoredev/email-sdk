@@ -31,7 +31,7 @@ import {
   validateFallback,
   validateRetry,
 } from "./core/routing.js";
-import { classifyAdapterFailure } from "./core/failure-kind.js";
+import { classifyAttemptFailure } from "./core/failure-kind.js";
 import {
   captureSendFailure,
   captureSendTelemetry,
@@ -65,7 +65,8 @@ import type {
   EmailSendSettledResult,
   EmailValidationResult,
 } from "./types.js";
-import { arrayify, assertMessage } from "./utils.js";
+import { isObjectLike } from "./internal/decode.js";
+import { arrayify, assertMessage, isBuiltInAdapter } from "./utils.js";
 
 export function createEmailClient<
   const TAdapters extends readonly EmailAdapter[],
@@ -173,7 +174,7 @@ export function createEmailClient<
       void telemetry?.capture("email adapter attempted", {
         failure_kind: resolved
           ? undefined
-          : classifyAdapterFailure(normalizeAdapterFailure(adapter.name, failure)),
+          : classifyAttemptFailure(adapter.name, failure),
         http_status: adapterError?.status,
         measurement_schema_version: 2,
         measurement_scope: "adapter_attempt",
@@ -205,6 +206,16 @@ export function createEmailClient<
     }
   };
 
+  // Core labels errors thrown by caller-written validate hooks adapter
+  // "unknown", like its own failures, so they are remembered here to keep them
+  // out of error tracking.
+  const callerErrors = new WeakSet<object>();
+
+  const isSdkOwned = (failure: EmailAdapterError) =>
+    failure.adapter === "unknown"
+      ? !(isObjectLike(failure.cause) && callerErrors.has(failure.cause))
+      : isBuiltInAdapter(adapters.get(failure.adapter));
+
   void telemetry?.capture("client created", {
     adapters: [...adapters.keys()].map(normalizeAdapterName),
     adapter_count: adapters.size,
@@ -226,7 +237,14 @@ export function createEmailClient<
     for (const name of route.names) {
       const adapter = requireAdapter(adapters, name);
       validateCapabilities(adapter, message, operation);
-      await adapter.validate?.(message, { adapter: name, operation });
+
+      try {
+        await adapter.validate?.(message, { adapter: name, operation });
+      } catch (error) {
+        if (!isBuiltInAdapter(adapter) && isObjectLike(error)) callerErrors.add(error);
+
+        throw error;
+      }
     }
 
     return { adapter: route.primary, warnings: [] };
@@ -319,6 +337,7 @@ export function createEmailClient<
         adapter: sendOptions?.adapter ?? defaultAdapter,
         messageCount: 1,
         error: normalized,
+        isSdkOwned,
       });
 
       throw normalized;
@@ -477,6 +496,7 @@ export function createEmailClient<
         adapter: attemptedAdapter,
         messageCount: facts.recipients,
         error: normalized,
+        isSdkOwned,
         deliveryPath,
       });
 

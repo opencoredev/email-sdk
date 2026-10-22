@@ -411,7 +411,7 @@ describe("telemetry exceptions", () => {
     expect(calls[0]?.body.event).toBe("$exception");
     expect(calls[0]?.body.properties).toMatchObject({
       $exception_level: "error",
-      $exception_fingerprint: "EmailAdapterError:adapter_error:resend:EmailAdapterError:core.js#sendWithRetry",
+      $exception_fingerprint: "EmailAdapterError:adapter_error:resend:EmailAdapterError:core#sendWithRetry",
       error_name: "EmailAdapterError",
       error_code: "adapter_error",
       source: "sdk",
@@ -501,6 +501,10 @@ describe("telemetry exceptions", () => {
     // Hostnames are case-insensitive, so case must not let them through.
     ["connect SMTP.Customer-Example.APP failed", "connect <host> failed"],
     ["connect smtp.example.COM:587 failed", "connect <host> failed"],
+    // A camelCase label or a file-like TLD inside a host must not save it.
+    ["connect smtp.customerExample.com failed", "connect <host> failed"],
+    ["relay mail.customer.md refused", "relay <host> refused"],
+    ["Domain send.acme.dev is not verified", "Domain <host> is not verified"],
     // Property access in programming errors stays readable.
     ["x.map is not a function", "x.map is not a function"],
     ["Cannot find module core.js", "Cannot find module core.js"],
@@ -664,21 +668,22 @@ describe("telemetry exceptions", () => {
 });
 
 describe("exception grouping", () => {
-  function defectFrom(callSite: string, runtime: "node" | "bun") {
+  function defectFrom(callSite: string, runtime: "node" | "bun", extension = "js") {
     const error = new TypeError("Cannot read properties of undefined");
     error.stack = [
       "TypeError: Cannot read properties of undefined",
-      `    at ${runtime === "node" ? "async Object.mapResponse" : "mapResponse"} (/srv/app/node_modules/@opencoredev/email-sdk/dist/resend.js:88:21)`,
-      "    at send (/srv/app/node_modules/@opencoredev/email-sdk/dist/core.js:192:7)",
+      `    at ${runtime === "node" ? "async Object.mapResponse" : "mapResponse"} (/srv/app/node_modules/@opencoredev/email-sdk/dist/resend.${extension}:88:21)`,
+      `    at send (/srv/app/node_modules/@opencoredev/email-sdk/dist/core.${extension}:192:7)`,
       `    at ${callSite}`,
     ].join("\n");
 
     return error;
   }
 
-  test("groups one SDK defect hit from different apps and runtimes into one fingerprint", async () => {
+  test("groups one SDK defect hit from different apps, runtimes, and module formats into one fingerprint", async () => {
     const first = exceptionTelemetry();
     const second = exceptionTelemetry();
+    const third = exceptionTelemetry();
 
     await first.telemetry.captureException(defectFrom("welcome (/srv/a/src/welcome.ts:3:1)", "node"), {
       source: "sdk",
@@ -691,9 +696,16 @@ describe("exception grouping", () => {
       adapter: "resend",
     });
 
+    await third.telemetry.captureException(defectFrom("job (/opt/c/worker.cjs:4:2)", "node", "cjs"), {
+      source: "sdk",
+      handled: true,
+      adapter: "resend",
+    });
+
     const fingerprint = first.calls[0]?.body.properties.$exception_fingerprint;
-    expect(fingerprint).toBe("TypeError:unknown:resend:TypeError:resend.js#mapResponse");
+    expect(fingerprint).toBe("TypeError:unknown:resend:TypeError:resend#mapResponse");
     expect(second.calls[0]?.body.properties.$exception_fingerprint).toBe(fingerprint);
+    expect(third.calls[0]?.body.properties.$exception_fingerprint).toBe(fingerprint);
   });
 
   test("reports every SDK error class name verbatim", async () => {
