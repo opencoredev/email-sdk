@@ -1,0 +1,84 @@
+---
+title: Create an adapter
+description: Implement a literal route name, capabilities, no-network validation, sending, and typed failures.
+---
+
+An adapter maps `EmailMessage` into one provider request and refuses every field it cannot preserve.
+
+## Implement the contract
+
+```ts title="src/acme-mail.ts"
+import {
+  EmailAdapterError,
+  EmailValidationError,
+  type EmailAdapter,
+} from "@opencoredev/email-sdk";
+
+export function acmeMail(options: {
+  apiKey: string;
+  fetch?: typeof fetch;
+}): EmailAdapter<"acme-mail"> {
+  const fetcher = options.fetch ?? fetch;
+
+  return {
+    name: "acme-mail",
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    validate(message) {
+      if (message.attachments?.length) {
+        throw new EmailValidationError("acme-mail does not support attachments.");
+      }
+    },
+    async send(message, context) {
+      const response = await fetcher("https://api.acme.example/send", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${options.apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          from: message.from,
+          to: message.to,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        }),
+        signal: context.signal,
+      });
+
+      if (!response.ok) {
+        throw new EmailAdapterError(`acme-mail failed with HTTP ${response.status}.`, {
+          adapter: "acme-mail",
+          status: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+          delivery: "not_sent",
+        });
+      }
+
+      const body = (await response.json()) as { id: string };
+      return { adapter: "acme-mail", id: body.id };
+    },
+  };
+}
+```
+
+## Classify delivery conservatively
+
+Use `not_sent` only when the adapter can prove the provider did not accept the message. Timeouts, connection loss after dispatch, and unparseable success responses are `unknown` unless the protocol proves otherwise.
+
+## Validate every unsupported field
+
+The client enforces declared repeated-header, scheduling, and personalized capabilities. Your adapter still owns address limits, provider-only format rules, and unsupported normalized fields.
+
+`validate` must not send network requests. The CLI relies on it as a shared dry boundary.
+
+## Add tests
+
+Test payload mapping, all unsupported fields, adapter-specific limits, abort forwarding, retryable status codes, `not_sent` versus `unknown`, idempotency forwarding when declared, and normalized result fields.
+
+<Card title="Adapter contract" href="/docs/reference/adapter-contract" description="Look up every adapter field and context value." />
+<Card title="Publish an adapter" href="/docs/guides/authoring/publish-community-adapter" description="Ship the adapter as a community package." />
