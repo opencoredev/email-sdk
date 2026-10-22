@@ -169,6 +169,14 @@ describe("findSdkDefect", () => {
     expect(findSdkDefect(custom, isSdkOwned)).toBe(undefined);
   });
 
+  test("a throwing ownership check cannot make it throw", () => {
+    const explode = () => {
+      throw new Error("getter exploded");
+    };
+
+    expect(findSdkDefect(new EmailRouteError([defect]), explode)).toBe(undefined);
+  });
+
   test("keeps core's own unexpected throws", () => {
     const core = thrownBy("unknown", new TypeError("core bug"));
 

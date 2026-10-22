@@ -187,13 +187,19 @@ export function classifySendFailure(error: EmailSdkError): FailureKind {
 /**
  * The first adapter failure that points at an SDK defect, if any. Failures from
  * caller code are never defects of the SDK, so `isSdkOwned` decides which
- * failures came from SDK code.
+ * failures came from SDK code. Never throws.
  */
 export function findSdkDefect(
   error: EmailSdkError,
   isSdkOwned: (failure: EmailAdapterError) => boolean,
 ): EmailAdapterError | undefined {
-  return sendFailures(error).find(
-    (failure) => isSdkOwned(failure) && classifyAdapterFailure(failure) === "unexpected",
-  );
+  return sendFailures(error).find((failure) => {
+    // Failures can come from caller code, so a throwing getter must not let
+    // telemetry replace the error the send is about to throw.
+    try {
+      return isSdkOwned(failure) && classifyAdapterFailure(failure) === "unexpected";
+    } catch {
+      return false;
+    }
+  });
 }

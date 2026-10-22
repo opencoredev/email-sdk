@@ -256,6 +256,26 @@ describe("send telemetry error reporting", () => {
     expect(attempted).toEqual(["resend", "postmark"]);
   });
 
+  test("a custom adapter error with a throwing cause getter still surfaces as the route error", async () => {
+    captured();
+    const hostile = new EmailAdapterError("acme failed", { adapter: "acme-internal" });
+    Object.defineProperty(hostile, "cause", {
+      get() {
+        throw new Error("getter exploded");
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [
+        adapter("acme-internal", () => {
+          throw hostile;
+        }),
+      ],
+    });
+
+    await expect(client.send(message)).rejects.toThrow("All configured email adapters failed.");
+  });
+
   test("a throwing middleware is the caller's error", async () => {
     const { events, exceptions } = captured();
 
