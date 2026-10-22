@@ -1,0 +1,76 @@
+---
+title: Hooks and middleware
+sidebarTitle: Hooks & middleware
+description: Observe sends with hooks or change them with middleware.
+---
+
+Hooks observe the send lifecycle. Middleware may change the message or options and can fail the operation.
+
+## Lifecycle order
+
+For a normal send, the client runs this sequence:
+
+1. `beforeSend` middleware prepares the message and send options.
+2. Public validation checks the complete route.
+3. `beforeSend` hooks run before each adapter attempt.
+4. The adapter sends or throws.
+5. Retry hooks run before an eligible backoff.
+6. `afterSend` middleware and hooks run after success.
+7. Error middleware and hooks run after a terminal adapter failure.
+
+## Add hooks
+
+Hook failures are swallowed because observability must not change delivery behavior.
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [adapter],
+  hooks: {
+    onRetry(event) {
+      console.info("email retry", {
+        adapter: event.adapter,
+        attempt: event.attempt,
+        nextAttempt: event.nextAttempt,
+        delayMs: event.delayMs,
+        code: event.error.code,
+      });
+    },
+  },
+});
+```
+
+Hook events include the normalized message. Do not log addresses, subjects, bodies, headers, attachments, credentials, or arbitrary metadata without your own redaction policy.
+
+## Add middleware
+
+Middleware exceptions become `EmailMiddlewareError` with phase `before_send`, `after_send`, or `on_error`.
+
+```ts title="src/plugins/tenant-metadata.ts"
+import type { EmailPlugin } from "@opencoredev/email-sdk";
+
+export const tenantMetadata = (tenantId: string): EmailPlugin => ({
+  id: "tenant-metadata",
+  middleware: [
+    {
+      beforeSend({ message, options }) {
+        return {
+          message,
+          options: {
+            ...options,
+            metadata: { ...options?.metadata, tenantId },
+          },
+        };
+      },
+    },
+  ],
+});
+```
+
+Message `metadata` is provider-facing when an adapter supports it. Send-option `metadata` is application context for hooks, middleware, telemetry feature facts, and adapters that inspect context.
+
+## Use the built-in observability plugin
+
+The default redactor keeps the subject, recipient counts, body-presence booleans, attachment count, tag names, and metadata keys. Replace it if the subject is sensitive in your application.
+
+<Card title="Observability plugin" href="/docs/plugins/built-in/observability" description="Emit redacted log, metric, and trace events." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="Look up hooks, middleware, adapter registration, and client extensions." />

@@ -1,0 +1,60 @@
+---
+title: Capture plugin
+description: Record lifecycle events in memory and expose the store through a typed client extension.
+---
+
+`capturePlugin` is useful in application tests and local debugging. It stores full normalized messages, so do not use it as an unbounded production log.
+
+```ts title="src/email.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { capturePlugin } from "@opencoredev/email-sdk/plugins/capture";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
+
+const email = createEmailClient({
+  adapters: [memoryAdapter()],
+  plugins: [capturePlugin()],
+});
+
+await email.send(message);
+expect(email.capture.events.map((event) => event.type)).toEqual([
+  "beforeSend",
+  "afterSend",
+]);
+```
+
+## Captured events
+
+The store records `beforeSend`, `afterSend`, `retry`, and `error`. Success, retry, and error records include the adapter and attempt. The store keeps the complete message and send metadata.
+
+## Supply a store
+
+Use `createEmailCaptureStore` when multiple clients or tests should share an explicitly managed store.
+
+```ts title="src/email.test.ts"
+import {
+  capturePlugin,
+  createEmailCaptureStore,
+} from "@opencoredev/email-sdk/plugins/capture";
+
+const store = createEmailCaptureStore();
+const plugin = capturePlugin(store);
+
+store.clear();
+```
+
+## Rename the client property
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [adapter],
+  plugins: [capturePlugin({ clientKey: "emailEvents" })],
+});
+
+email.emailEvents.clear();
+```
+
+The plugin rejects a client key that collides with a built-in client property or another extension.
+
+<Card title="Test email behavior" href="/docs/guides/test-email-behavior" description="Assert messages, retries, fallback, and failures without network calls." />
+<Card title="Plugin API" href="/docs/reference/plugin-api" description="See captured event and extension types." />

@@ -1,0 +1,82 @@
+---
+title: Test email behavior
+description: Assert normalized messages, retries, fallback routes, and lifecycle events without sending real email.
+---
+
+The testing entry point provides an in-memory adapter and a configurable failing adapter.
+
+## Capture a successful send
+
+```ts title="src/email.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
+
+const memory = memoryAdapter();
+const email = createEmailClient({ adapters: [memory] });
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+
+expect(memory.raw?.sent).toHaveLength(1);
+expect(memory.raw?.sent[0]?.message.subject).toBe("Welcome");
+```
+
+`memory.raw.clear()` resets the store.
+
+## Prove fallback behavior
+
+Fallback advances automatically only after a `not_sent` failure.
+
+```ts title="src/email.test.ts"
+import { EmailAdapterError } from "@opencoredev/email-sdk";
+import { failingAdapter, memoryAdapter } from "@opencoredev/email-sdk/testing";
+
+const primary = failingAdapter(
+  "primary",
+  new EmailAdapterError("Rejected before acceptance", {
+    adapter: "primary",
+    retryable: false,
+    delivery: "not_sent",
+  }),
+);
+const backup = memoryAdapter("backup");
+
+const email = createEmailClient({
+  adapters: [primary, backup],
+  fallback: { adapters: ["backup"] },
+});
+
+const result = await email.send(message);
+expect(result.adapter).toBe("backup");
+```
+
+Use `delivery: "unknown"` to prove the default route stops instead of risking a duplicate.
+
+## Prove retry counts
+
+`maxAttempts` is the total call count. Set `delay: () => 0` in tests.
+
+```ts title="src/email.test.ts"
+const email = createEmailClient({
+  adapters: [primary],
+  retry: {
+    maxAttempts: 3,
+    delay: () => 0,
+  },
+});
+```
+
+## Capture lifecycle events
+
+Use `capturePlugin()` when a test needs ordered `beforeSend`, `retry`, `afterSend`, and `error` records.
+
+## Keep telemetry off
+
+The repository test preload sets `EMAIL_SDK_TELEMETRY=0`. Application tests can also construct clients with `telemetry: false`.
+
+<Card title="Capture plugin" href="/docs/plugins/built-in/capture" description="Inspect complete lifecycle events through a typed client property." />

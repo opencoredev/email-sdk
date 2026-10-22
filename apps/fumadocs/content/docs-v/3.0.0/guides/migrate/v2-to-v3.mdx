@@ -1,0 +1,76 @@
+---
+title: Upgrade from Email SDK 2.x to v3
+description: Update send-option metadata, webhook payload reads, and SMTP TLS options for the stricter v3 types.
+---
+
+v3 tightens the TypeScript types at the SDK's input boundaries. Most apps upgrade without code changes. The ones that need edits pass send-option `metadata` that isn't plain data, and TypeScript reports each spot as a compile error, so the type checker gives you the full list.
+
+Upgrade the package, then run your type check:
+
+```bash
+npm install @opencoredev/email-sdk@3
+npx tsc --noEmit
+```
+
+## Send-option metadata
+
+`metadata` on `send()` options, hook events, adapter contexts, and the capture and observability plugins is now typed as `EmailSendMetadata`. Unless you register your own shape, that is `EmailMetadataRecord`: strings, numbers, booleans, `null`, `undefined`, `Date`, and arrays or plain objects of those.
+
+Three patterns that compiled in 2.x now fail:
+
+| Value | Why it fails | Fix |
+| --- | --- | --- |
+| A value typed by an `interface` | Interfaces have no index signature | Spread it, `{ ...audit }`, or declare it with `type` |
+| A class instance such as `URL` | Not plain data | Convert it, for example `url.toString()` |
+| A `Record<string, unknown>` | `unknown` values aren't checked | Type it as `EmailMetadataRecord` or register a shape |
+
+Before:
+
+```ts title="src/send-receipt.ts"
+interface AuditInfo {
+  userId: string;
+}
+
+const audit: AuditInfo = { userId: "user_123" };
+
+await email.send(message, {
+  metadata: { audit, link: new URL(receiptUrl) },
+});
+```
+
+After:
+
+```ts title="src/send-receipt.ts"
+await email.send(message, {
+  metadata: { audit: { ...audit }, link: new URL(receiptUrl).toString() },
+});
+```
+
+The same rules apply to `metadata` on the `@opencoredev/email-sdk/compat` client's send options, hook events, and provider contexts. Provider-facing `message.metadata` is a separate field and keeps its existing type.
+
+## Register your own metadata shape
+
+When every send carries the same context, register it once. `send()` then requires that shape, and hooks and plugins read its fields with their real types.
+
+```ts title="email-metadata.d.ts"
+import "@opencoredev/email-sdk";
+
+declare module "@opencoredev/email-sdk" {
+  interface EmailMetadataRegister {
+    metadata: { tenantId: string; traceId?: string };
+  }
+}
+```
+
+## Other type changes
+
+- The Iterable adapter's `dataFields` option, or the function that returns it, is typed as `EmailMetadataRecord` instead of `Record<string, unknown>`. Apply the same fixes as for send-option metadata.
+- `NormalizedWebhookEvent.payload` is a parsed `JsonObject` instead of `Record<string, unknown>`. Code that builds a `NormalizedWebhookEvent`, such as a custom normalizer or a test fixture, must pass a `JsonObject` payload. `JsonObject` and `JsonValue` are exported from `@opencoredev/email-sdk/webhooks`.
+- The SMTP adapter's `tls` option uses Nodemailer's own TLS options type. Options Nodemailer doesn't accept no longer type-check.
+- `createEmailAgentTools` returns `EmailAgentTools`, and `sendEmail.execute` resolves to `EmailSendResult` instead of `unknown`. Existing code keeps working and can drop its casts.
+
+## Runtime changes
+
+Provider responses now go through shared JSON parsing. A malformed or `null` success body is treated like an empty body, and non-string entries in accepted or rejected recipient lists are ignored instead of passed through to your result.
+
+<Card title="Client reference" href="/docs/reference/client" description="Send options, metadata, and the EmailMetadataRegister interface." />
