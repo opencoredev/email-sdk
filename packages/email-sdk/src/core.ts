@@ -460,6 +460,15 @@ export function createEmailClient<
 
       const routeFailures: EmailAdapterError[] = [];
 
+      // The helpers pick per-send retry over the client's, so both are wrapped
+      // and the choice between them is left alone.
+      const attemptOptions = prepared.options && {
+        ...prepared.options,
+        retry: callerRetry(prepared.options.retry),
+      };
+
+      const clientRetry = callerRetry(options.retry);
+
       for (const [index, name] of route.names.entries()) {
         const adapter = requireAdapter(adapters, name);
         deliveryPath = adapter.sendPersonalized ? "personalized_native" : "personalized_expanded";
@@ -469,8 +478,8 @@ export function createEmailClient<
               adapter,
               preparedInput,
               expanded[0]!.message,
-              prepared.options,
-              callerRetry(options.retry),
+              attemptOptions,
+              clientRetry,
               hooks,
               middleware,
               measureAttempt,
@@ -478,8 +487,8 @@ export function createEmailClient<
           : await attemptExpandedPersonalized(
               adapter,
               expanded,
-              prepared.options,
-              callerRetry(options.retry),
+              attemptOptions,
+              clientRetry,
               hooks,
               middleware,
               measureAttempt,

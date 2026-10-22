@@ -149,6 +149,32 @@ describe("send telemetry error reporting", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test.each([
+    ["client", true],
+    ["per-send", false],
+  ])("a crash in a %s retry callback during a personalized send is not the SDK's defect", async (_label, onClient) => {
+    const { exceptions } = captured();
+    const retry = { maxAttempts: 2, shouldRetry: () => crash() };
+
+    const client = createEmailClient({
+      adapters: [builtIn("resend", rejectWith(500))],
+      retry: onClient ? retry : undefined,
+    });
+
+    const settled = await client
+      .sendPersonalized(
+        {
+          message: { from: message.from, subject: message.subject, text: message.text },
+          recipients: [{ to: "a@example.com", variables: {} }],
+        },
+        onClient ? undefined : { retry },
+      )
+      .catch((error: unknown) => error);
+
+    expect(settled).toBeInstanceOf(Error);
+    expect(exceptions).toHaveLength(0);
+  });
+
   test("a caller adapter registered as unknown is still the caller's", async () => {
     const { exceptions } = captured();
     const client = createEmailClient({ adapters: [adapter("unknown", crash)] });
