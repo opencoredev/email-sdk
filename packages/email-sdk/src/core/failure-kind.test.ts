@@ -123,6 +123,16 @@ describe("classifyAdapterFailure", () => {
     );
   });
 
+  test("a status on a nested cause counts, as from a CommonJS subpath adapter", () => {
+    // Another bundle's EmailAdapterError is a plain Error to this one.
+    const foreign = Object.assign(new Error("resend failed with 429"), {
+      name: "EmailAdapterError",
+      status: 429,
+    });
+
+    expect(classifyAdapterFailure(thrownBy("resend", foreign))).toBe("rate_limited");
+  });
+
   test("a status wins over the cause", () => {
     const error = new EmailAdapterError("resend failed with 401", {
       adapter: "resend",

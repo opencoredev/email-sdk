@@ -129,7 +129,13 @@ export async function readJson(response: Response): Promise<JsonValue | undefine
   return text ? parseJson(text) : undefined;
 }
 
-type ThrownFields = { code?: unknown; message?: unknown; name?: unknown; responseCode?: unknown };
+type ThrownFields = {
+  code?: unknown;
+  message?: unknown;
+  name?: unknown;
+  responseCode?: unknown;
+  status?: unknown;
+};
 
 /** Read a response body as JSON, rejecting on malformed input like `response.json()`. */
 export async function responseJson(response: Response): Promise<JsonValue> {
@@ -161,7 +167,7 @@ export function causeString(cause: unknown, key: "code" | "message" | "name"): s
 }
 
 /** Read a numeric property, such as an SMTP `responseCode`, from a thrown value. */
-export function causeNumber(cause: unknown, key: "responseCode"): number | undefined {
+export function causeNumber(cause: unknown, key: "responseCode" | "status"): number | undefined {
   if (!isObjectLike(cause)) {
     return undefined;
   }

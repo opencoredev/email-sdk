@@ -31,7 +31,7 @@ import {
   validateFallback,
   validateRetry,
 } from "./core/routing.js";
-import { classifyAttemptFailure } from "./core/failure-kind.js";
+import { attemptStatus, classifyAttemptFailure } from "./core/failure-kind.js";
 import {
   captureSendFailure,
   captureSendTelemetry,
@@ -176,7 +176,7 @@ export function createEmailClient<
         failure_kind: resolved
           ? undefined
           : classifyAttemptFailure(adapter.name, failure),
-        http_status: adapterError?.status,
+        http_status: resolved ? undefined : attemptStatus(adapter.name, failure),
         measurement_schema_version: 2,
         measurement_scope: "adapter_attempt",
         adapter: adapterName,

@@ -88,6 +88,30 @@ function causeChain(error: EmailAdapterError): unknown[] {
 }
 
 /**
+ * The first HTTP status in the chain. A CommonJS subpath adapter throws its own
+ * bundle's EmailAdapterError, which core wraps, so the status can sit a level
+ * down instead of on the outer error.
+ */
+function chainStatus(chain: readonly unknown[]): number | undefined {
+  for (const link of chain) {
+    const status = causeNumber(link, "status");
+
+    if (status !== undefined) return status;
+  }
+
+  return undefined;
+}
+
+/** The HTTP status behind whatever an adapter attempt threw. Never throws. */
+export function attemptStatus(adapter: string, cause: unknown): number | undefined {
+  try {
+    return chainStatus(causeChain(normalizeAdapterFailure(adapter, cause)));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Classifies one failed adapter attempt. Never throws: the error came from code
  * the SDK may not own, and a throwing getter on it must not turn telemetry
  * into a different send failure.
@@ -123,7 +147,9 @@ function classify(error: EmailAdapterError): FailureKind {
     return "caller";
   }
 
-  if (error.status !== undefined) return statusKind(error.status);
+  const status = chainStatus(chain);
+
+  if (status !== undefined) return statusKind(status);
 
   for (const link of chain) {
     const code = causeString(link, "code");
