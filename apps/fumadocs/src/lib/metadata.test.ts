@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   buildDocsStructuredData,
   homeStructuredData,
+  rootMetaFor,
   siteImageAlt,
   siteMeta,
   siteTitle,
@@ -54,6 +55,18 @@ describe("site social metadata", () => {
     // The root route adds the video separately so pages with their own card can skip it.
     expect(findByProperty("og:video")).toHaveLength(0);
     expect(findByName("twitter:player")).toHaveLength(0);
+  });
+
+  test("adds the video only on pages that use the site-wide card", () => {
+    const videoTagsFor = (routeId: string) =>
+      rootMetaFor({ routeIds: ["__root__", routeId] }).filter(
+        (meta) => "property" in meta && meta.property?.startsWith("og:video") === true,
+      );
+
+    expect(videoTagsFor("/")).toEqual(siteVideoMeta);
+    expect(videoTagsFor("/docs/$")).toEqual(siteVideoMeta);
+    expect(videoTagsFor("/blog/$slug")).toHaveLength(0);
+    expect(videoTagsFor("/compare/$pair")).toHaveLength(0);
   });
 
   test("keeps the Twitter preview on the large image card", () => {

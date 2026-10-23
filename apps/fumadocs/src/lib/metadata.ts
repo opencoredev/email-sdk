@@ -115,6 +115,13 @@ export const routesWithOwnShareCard: ReadonlySet<string> = new Set<keyof FileRou
   "/compare/$pair",
 ]);
 
+// The root route's tags for the matched routes: the site card everywhere, plus
+// the video unless a matched route sets its own card.
+export const rootMetaFor = ({ routeIds }: { routeIds: readonly string[] }) =>
+  routeIds.some((routeId) => routesWithOwnShareCard.has(routeId))
+    ? siteMeta
+    : [...siteMeta, ...siteVideoMeta];
+
 type PageMetaTag =
   | { title: string }
   | { name: string; content: string }
