@@ -2,10 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { homeStructuredData, siteTitle } from "@/lib/metadata";
+import { otherOpenCoreSites } from "@/lib/opencore-sites";
 import { appDescription, gitConfig, siteUrl } from "@/lib/shared";
 import { sponsorHref, sponsors } from "@/lib/sponsors";
 
 const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+
+// Plain followed links on purpose: they share authority between our sites.
+const openCoreSites = otherOpenCoreSites("https://email-sdk.dev");
 
 // The Paper design shows these ten sponsor slots in this order.
 const sponsorNames = [
@@ -361,6 +365,20 @@ function Footer() {
           </nav>
         ))}
       </div>
+      <nav aria-labelledby="landing-footer-family-label" className="landing-footer-family">
+        <span className="landing-footer-label" id="landing-footer-family-label">
+          More from OpenCore
+        </span>
+        <ul>
+          {openCoreSites.map((site) => (
+            <li key={site.url}>
+              <a href={site.url}>
+                <span>{site.name}</span> {site.description}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <div aria-hidden="true" className="landing-mountains">
         <div className="landing-engraving" />
       </div>
