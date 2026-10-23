@@ -1,7 +1,8 @@
 import type { MetaDescriptor } from "@tanstack/react-router";
 
 import { providers } from "@/lib/providers";
-import { appDescription, appName, siteOgImageUrl, siteUrl } from "@/lib/shared";
+import { appDescription, appName, siteOgImageUrl, siteOgVideoUrl, siteUrl } from "@/lib/shared";
+import type { FileRoutesById } from "@/routeTree.gen";
 
 // Both the FAQ answer and the ItemList below used to spell the adapters out by
 // hand, so each new adapter left the structured data one provider short of the
@@ -97,6 +98,22 @@ export const siteMeta = [
     content: "index, follow",
   },
 ] satisfies MetaDescriptor[];
+
+// Only for pages that share the site-wide card. Routes with their own card
+// (blog posts, compare pages) must not inherit the product video.
+export const siteVideoMeta = [
+  { property: "og:video", content: siteOgVideoUrl },
+  { property: "og:video:secure_url", content: siteOgVideoUrl },
+  { property: "og:video:type", content: "video/mp4" },
+  { property: "og:video:width", content: "2400" },
+  { property: "og:video:height", content: "1260" },
+] satisfies MetaDescriptor[];
+
+// Route IDs whose head() sets a page-specific og:image.
+export const routesWithOwnShareCard: ReadonlySet<string> = new Set<keyof FileRoutesById>([
+  "/blog/$slug",
+  "/compare/$pair",
+]);
 
 type PageMetaTag =
   | { title: string }

@@ -48,6 +48,12 @@ export const siteOgImageUrl = `${siteUrl}${siteOgImagePath}?v=${encodeURICompone
   siteOgImageVersion,
 )}`;
 
+// Silent loop that iMessage, Discord and Telegram play in link previews. Slack
+// and X ignore og:video and keep showing the still image above.
+export const siteOgVideoPath = "/og/og-video.mp4";
+
+export const siteOgVideoUrl = `${siteUrl}${siteOgVideoPath}`;
+
 // fill this with your actual GitHub info, for example:
 export const gitConfig = {
   user: "opencoredev",

@@ -16,7 +16,7 @@ import SearchDialog from "@/components/search";
 import { StaleBuildNotice } from "@/components/stale-build-notice";
 import { chunkLoadGuardScript } from "@/lib/chunk-load-guard";
 import { domMutationGuardScript } from "@/lib/dom-mutation-guard";
-import { siteMeta } from "@/lib/metadata";
+import { routesWithOwnShareCard, siteMeta, siteVideoMeta } from "@/lib/metadata";
 import { initPostHog } from "@/lib/posthog";
 
 import appCss from "@/styles/app.css?url";
@@ -24,8 +24,10 @@ import appCss from "@/styles/app.css?url";
 export const Route = createRootRoute({
   errorComponent: RootErrorComponent,
   notFoundComponent: RootNotFoundComponent,
-  head: () => ({
-    meta: siteMeta,
+  head: ({ matches }) => ({
+    meta: matches.some((match) => routesWithOwnShareCard.has(match.routeId))
+      ? siteMeta
+      : [...siteMeta, ...siteVideoMeta],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", sizes: "any" },
