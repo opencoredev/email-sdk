@@ -1,12 +1,11 @@
-import { type JsonValue, isJsonString, parseJson } from "../internal/decode.js";
-import { parseAddress, parseAddressList } from "./mime.js";
+import { type JsonValue, isJsonObject, isJsonString, parseJson } from "../internal/decode.js";
+import { parseAddress, parseAddressList, parseMultipartFormData } from "./mime.js";
 import { emailFromMime, headerFields, mergeSecurity } from "./normalize.js";
 import {
   type InboundFetchOptions,
   type InboundForm,
   decodeHexStrict,
   encodeBase64,
-  fetchJson,
   formField,
   hmac,
   inlineAttachment,
@@ -15,11 +14,15 @@ import {
   jsonObject,
   jsonText,
   parseFormBody,
+  parseJsonBody,
   payloadError,
+  providerFetch,
+  readHeader,
   rejected,
   signingSecrets,
   timestampFresh,
   timingSafeEqual,
+  toBytes,
   utf8Bytes,
   verdict,
   verified,
@@ -107,12 +110,84 @@ export async function verifyMailgunInbound(
   return rejected("signature_invalid");
 }
 
-async function emailFromForm(form: InboundForm, payload: InboundEmail["raw"]): Promise<InboundEmail> {
+function hexDigit(byte: number | undefined): number | undefined {
+  if (byte === undefined) return undefined;
+
+  const digit = Number.parseInt(String.fromCharCode(byte), 16);
+
+  return Number.isNaN(digit) ? undefined : digit;
+}
+
+/** Percent-decode urlencoded bytes to bytes, with `+` as a space. */
+function percentDecode(bytes: Uint8Array): Uint8Array {
+  const decoded = new Uint8Array(bytes.length);
+  let length = 0;
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = bytes[index]!;
+    const high = byte === 0x25 ? hexDigit(bytes[index + 1]) : undefined;
+    const low = high === undefined ? undefined : hexDigit(bytes[index + 2]);
+
+    if (high !== undefined && low !== undefined) {
+      decoded[length] = high * 16 + low;
+      index += 2;
+    } else {
+      decoded[length] = byte === 0x2b ? 0x20 : byte;
+    }
+
+    length += 1;
+  }
+
+  return decoded.slice(0, length);
+}
+
+function urlencodedField(body: Uint8Array, name: string): Uint8Array | undefined {
+  const decoder = new TextDecoder();
+
+  for (let start = 0; start <= body.length;) {
+    const found = body.indexOf(0x26, start);
+    const end = found === -1 ? body.length : found;
+    const pair = body.subarray(start, end);
+    const equals = pair.indexOf(0x3d);
+
+    if (decoder.decode(percentDecode(equals === -1 ? pair : pair.subarray(0, equals))) === name) {
+      return percentDecode(equals === -1 ? new Uint8Array() : pair.subarray(equals + 1));
+    }
+
+    start = end + 1;
+  }
+
+  return undefined;
+}
+
+/**
+ * Read `body-mime` as the bytes Mailgun sent. `FormData` decodes text fields as UTF-8, which
+ * would corrupt 8bit bodies and attachments in other charsets.
+ */
+function mimeFieldBytes(payload: InboundRequestPayload): Uint8Array | undefined {
+  const contentType = readHeader(payload.headers, "content-type") ?? "";
+
+  if (/^multipart\/form-data/i.test(contentType)) {
+    return parseMultipartFormData(payload.body, contentType).find(part => part.name === "body-mime" && part.filename === undefined)?.bytes;
+  }
+
+  if (/^application\/x-www-form-urlencoded/i.test(contentType)) return urlencodedField(toBytes(payload.body), "body-mime");
+
+  return undefined;
+}
+
+/** Every non-empty value of a field Mailgun may repeat, such as `body-html` for multiple HTML parts. */
+function joinedField(fields: InboundFormFields, name: string): string | undefined {
+  const values = (fields.get(name) ?? []).filter(Boolean);
+
+  return values.length ? values.join("\n") : undefined;
+}
+
+async function emailFromForm(form: InboundForm, payload: InboundEmail["raw"], mime?: Uint8Array): Promise<InboundEmail> {
   const { fields, files } = form;
   const recipient = formField(fields, "recipient");
   const sender = formField(fields, "sender");
   const envelope = { from: sender, to: parseAddressList(recipient).map(entry => entry.address) };
-  const mime = formField(fields, "body-mime");
 
   if (mime !== undefined) {
     const email = emailFromMime({ provider, raw: mime, envelope, payload });
@@ -154,8 +229,8 @@ async function emailFromForm(form: InboundForm, payload: InboundEmail["raw"]): P
     id: fromHeaders.messageId,
     from: parseAddress(formField(fields, "from")) ?? fromHeaders.from,
     subject: formField(fields, "subject") ?? fromHeaders.subject,
-    text: formField(fields, "body-plain"),
-    html: formField(fields, "body-html"),
+    text: joinedField(fields, "body-plain"),
+    html: joinedField(fields, "body-html"),
     headers,
     attachments,
     security: mailgunSecurity(headers),
@@ -176,7 +251,10 @@ export async function parseMailgunInbound(payload: InboundRequestPayload): Promi
     throw payloadError(provider, "Mailgun inbound post has no recipient, body-plain, or body-mime field.");
   }
 
-  return emailFromForm(form, { kind: "form", fields: form.fields });
+  const mime = formField(form.fields, "body-mime");
+  const mimeBytes = mime === undefined ? undefined : mimeFieldBytes(payload) ?? utf8Bytes(mime);
+
+  return emailFromForm(form, { kind: "form", fields: form.fields }, mimeBytes);
 }
 
 /**
@@ -193,11 +271,21 @@ export async function fetchMailgunStoredEmail(
     throw payloadError(provider, "Mailgun storage URL must be an https://storage-*.api.mailgun.net URL.");
   }
 
-  const data = await fetchJson(provider, url, {
+  const response = await providerFetch(provider, url, {
     headers: { Authorization: `Basic ${encodeBase64(utf8Bytes(`api:${options.apiKey}`))}`, Accept: "message/rfc2822" },
     fetch: options.fetch,
     signal: options.signal,
   });
+
+  // Mailgun documents a JSON object with `body-mime` for this Accept header; a raw RFC 2822
+  // response is read as the message itself.
+  if (!/\bjson\b/i.test(response.headers.get("content-type") ?? "")) {
+    return emailFromMime({ provider, raw: new Uint8Array(await response.arrayBuffer()) });
+  }
+
+  const data = parseJsonBody(provider, await response.text());
+
+  if (!isJsonObject(data)) throw payloadError(provider, "Mailgun API returned a non-object JSON body.");
 
   const mime = jsonText(data["body-mime"]);
 

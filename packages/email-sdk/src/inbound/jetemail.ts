@@ -75,7 +75,7 @@ export function parseJetEmailInbound(payload: InboundRequestPayload): InboundEma
   return {
     provider,
     id: jsonText(root.uid),
-    messageId: firstMessageId(`<${(jsonText(root.messageId) ?? "").replace(/^<|>$/g, "")}>`),
+    messageId: firstMessageId(jsonText(root.messageId)),
     from: parseAddress(jsonText(root.from)),
     to,
     cc: parseAddressList(jsonText(root.cc)),

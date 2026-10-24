@@ -15,6 +15,8 @@ import {
   messageIds,
   parseDate,
   parseJsonObjectBody,
+  payloadError,
+  remoteAttachment,
 } from "./shared.js";
 import {
   type InboundAddress,
@@ -73,18 +75,24 @@ function emailFromJson(data: JsonObject): InboundEmail {
     headers,
     attachments: jsonList(data.Attachments).flatMap(entry => {
       const item = jsonObject(entry);
-      const content = jsonContent(item?.Content);
 
-      if (!item || content === undefined) return [];
+      if (!item) return [];
 
+      const content = jsonContent(item.Content);
       const contentId = jsonText(item.ContentID)?.replace(/^<|>$/g, "");
 
-      return [inlineAttachment({
+      const details = {
         filename: jsonText(item.Name),
         contentType: jsonText(item.ContentType) ?? "application/octet-stream",
         contentId,
-        disposition: contentId ? "inline" : "attachment",
-        content: decodeBase64(content),
+        disposition: contentId ? "inline" as const : "attachment" as const,
+      };
+
+      if (content !== undefined) return [inlineAttachment({ ...details, content: decodeBase64(content) })];
+
+      // The Messages API details response lists attachments without their bytes.
+      return [remoteAttachment({ ...details, size: jsonNumber(item.ContentLength) }, async () => {
+        throw payloadError(provider, "Postmark's inbound details API does not return attachment content; read it from the inbound webhook.");
       })];
     }),
     inReplyTo: firstMessageId(headers.get("in-reply-to")),

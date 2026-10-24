@@ -1,5 +1,5 @@
 import type { JsonObject, JsonValue } from "../internal/decode.js";
-import { parseAddress } from "./mime.js";
+import { parseAddress, parseAddressList } from "./mime.js";
 import { emailFromMime, headerFields } from "./normalize.js";
 import {
   decodeBase64,
@@ -56,6 +56,8 @@ function emailFromRelay(provider: "sparkpost" | "lettr", relay: JsonObject, even
     provider,
     ...fields,
     from: parseAddress(jsonText(relay.friendly_from)) ?? fields.from,
+    // Relay content often carries recipients in `content.to` without a To header.
+    to: fields.to.length ? fields.to : jsonList(content?.to).flatMap(entry => parseAddressList(jsonText(entry))),
     subject: jsonText(content?.subject) ?? fields.subject,
     text: jsonText(content?.text),
     html: jsonText(content?.html),

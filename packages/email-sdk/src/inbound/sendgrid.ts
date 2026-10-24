@@ -92,23 +92,30 @@ export async function verifySendGridInbound(
   signed.set(utf8Bytes(timestamp));
   signed.set(body, timestamp.length);
 
+  // A malformed key is skipped, so one bad entry in a rotation list cannot block the valid one.
+  let usable = 0;
+
   for (const key of keys) {
+    let cryptoKey: CryptoKey;
+
     try {
-      const cryptoKey = await crypto.subtle.importKey(
+      cryptoKey = await crypto.subtle.importKey(
         "spki",
         decodeBase64Strict(key.replace(/-----[^-]+-----|\s/g, "")),
         { name: "ECDSA", namedCurve: "P-256" },
         false,
         ["verify"],
       );
-
-      if (await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, cryptoKey, raw, signed)) return verified;
     } catch {
-      return rejected("secret_missing");
+      continue;
     }
+
+    usable += 1;
+
+    if (await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, cryptoKey, raw, signed)) return verified;
   }
 
-  return rejected("signature_invalid");
+  return rejected(usable ? "signature_invalid" : "secret_missing");
 }
 
 function sendGridSecurity(fields: ReadonlyMap<string, string>): InboundSecurity {

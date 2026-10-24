@@ -192,6 +192,14 @@ export function parseResendInbound(payload: InboundRequestPayload): InboundEmail
   return emailFromJson(data, root);
 }
 
+function jsonObjects(value: JsonValue | undefined): JsonObject[] {
+  return jsonList(value).flatMap(entry => {
+    const item = jsonObject(entry);
+
+    return item ? [item] : [];
+  });
+}
+
 /** Fetch a received email, with bodies, headers, and downloadable attachments. */
 export async function fetchResendInboundEmail(id: string, options: ResendInboundApiOptions): Promise<InboundEmail> {
   const baseUrl = options.baseUrl ?? "https://api.resend.com";
@@ -200,23 +208,30 @@ export async function fetchResendInboundEmail(id: string, options: ResendInbound
   const encoded = encodeURIComponent(id);
   const email = await fetchJson(provider, `${baseUrl}/emails/receiving/${encoded}`, init);
   const list = await fetchJson(provider, `${baseUrl}/emails/receiving/${encoded}/attachments`, init);
-  const listed = jsonList(list.data);
+  const listed = jsonObjects(list.data);
 
-  const urls = new Map(listed.flatMap(entry => {
-    const item = jsonObject(entry);
-    const attachmentId = jsonText(item?.id);
-    const url = jsonText(item?.download_url);
+  const listedById = new Map(listed.flatMap(item => {
+    const attachmentId = jsonText(item.id);
 
-    return attachmentId && url ? [[attachmentId, url] as const] : [];
+    return attachmentId ? [[attachmentId, item] as const] : [];
   }));
 
   const download = async (attachmentId: string) => {
-    const url = urls.get(attachmentId);
+    const url = jsonText(listedById.get(attachmentId)?.download_url);
 
     if (!url) throw payloadError(provider, `Resend attachment ${attachmentId} has no download URL.`);
 
     return fetchBytes(provider, url, { fetch: options.fetch, signal: options.signal });
   };
 
-  return emailFromJson({ ...email, attachments: listed.length ? listed : email.attachments ?? [] }, email, download);
+  // The list adds download URLs; the detail response keeps inline metadata the list may omit.
+  const detailed = jsonObjects(email.attachments);
+  const detailIds = new Set(detailed.flatMap(item => jsonText(item.id) ?? []));
+
+  const merged = [
+    ...detailed.map(item => ({ ...listedById.get(jsonText(item.id) ?? ""), ...item })),
+    ...listed.filter(item => !detailIds.has(jsonText(item.id) ?? "")),
+  ];
+
+  return emailFromJson({ ...email, attachments: merged }, email, download);
 }

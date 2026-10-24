@@ -140,6 +140,26 @@ describe("Resend", () => {
     expect(requests.at(-1)).toBe("https://inbound-cdn.resend.com/a?sig=1 ");
   });
 
+  test("keeps detail metadata when the attachment list adds download URLs", async () => {
+    const fetch = stubFetch(async input => {
+      if (String(input).endsWith("/attachments")) {
+        return Response.json({ object: "list", data: [
+          { id: "2a0c9ce0-3112-4728-976e-47ddcd16a318", filename: "avatar.png", content_type: "image/png", download_url: "https://inbound-cdn.resend.com/a?sig=1" },
+          { id: "list-only", filename: "late.txt", content_type: "text/plain", download_url: "https://inbound-cdn.resend.com/b?sig=2" },
+        ] });
+      }
+
+      return new Response(text("resend-received-email.json"));
+    });
+
+    const email = await fetchResendInboundEmail("56761188-7520-42d8-8898-ff6fc54ce618", { apiKey: "re_test", fetch });
+
+    expect(email.attachments.map(item => [item.filename, item.disposition, item.contentId, item.size, item.url])).toEqual([
+      ["avatar.png", "inline", "img001", 4096, "https://inbound-cdn.resend.com/a?sig=1"],
+      ["late.txt", "attachment", undefined, undefined, "https://inbound-cdn.resend.com/b?sig=2"],
+    ]);
+  });
+
   test("maps API failures to fetch_failed with the HTTP status", async () => {
     const fetch = stubFetch(async () => new Response('{"message":"not found"}', { status: 404 }));
 
@@ -178,6 +198,26 @@ describe("Postmark", () => {
     expect(verifyBasicAuth({ authorization }, { username: "inbound", password: "wrong" })).toEqual({ ok: false, reason: "signature_invalid" });
     expect(verifyBasicAuth({}, { username: "inbound", password: "s3cret" })).toEqual({ ok: false, reason: "signature_missing" });
     expect(verifyBearerToken({ authorization: "Bearer tok" }, "tok")).toEqual({ ok: true });
+  });
+
+  test("keeps attachment metadata from the inbound details API, which omits Content", async () => {
+    const fetch = stubFetch(async () => Response.json({
+      MessageID: "cc5727a0-ea30-4e79-baea-aa43c9628ac4",
+      Subject: "Test",
+      Headers: [],
+      Attachments: [
+        { Name: "myimage.png", ContentID: "myimage.png@01CE7342.75E71F80", ContentType: "image/png", ContentLength: 4096 },
+        { Name: "mypaper.doc", ContentID: "", ContentType: "application/msword", ContentLength: 16384 },
+      ],
+    }));
+
+    const email = await fetchPostmarkInboundEmail("cc5727a0-ea30-4e79-baea-aa43c9628ac4", { serverToken: "pm_token", fetch });
+
+    expect(email.attachments.map(item => [item.filename, item.contentType, item.contentId, item.disposition, item.size, item.content])).toEqual([
+      ["myimage.png", "image/png", "myimage.png@01CE7342.75E71F80", "inline", 4096, undefined],
+      ["mypaper.doc", "application/msword", undefined, "attachment", 16384, undefined],
+    ]);
+    await expect(email.attachments[0]!.read()).rejects.toMatchObject({ reason: "payload_invalid", provider: "postmark" });
   });
 
   test("fetches inbound message details with the server token", async () => {
@@ -255,6 +295,35 @@ describe("Mailgun", () => {
     expect(email.attachments).toHaveLength(3);
   });
 
+  test("keeps 8bit body-mime bytes instead of decoding them as UTF-8", async () => {
+    const mime = new Uint8Array([...Buffer.from("From: a@x.test\r\nSubject: Hi\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Transfer-Encoding: 8bit\r\n\r\ncaf"), 0xe9]);
+    const fields = Object.entries({ ...signed(), recipient: "support@acme.test" }).map(([name, value]) => ({ name, value }));
+    const body = multipart("mg-boundary", [...fields, { name: "body-mime", value: mime }]);
+    const multipartEmail = await parseMailgunInbound({ body, headers: { "content-type": "multipart/form-data; boundary=mg-boundary" } });
+
+    expect(multipartEmail.text).toBe("café");
+    expect(multipartEmail.envelope).toEqual({ to: ["support@acme.test"] });
+
+    const encoded = [...mime].map(byte => `%${byte.toString(16).padStart(2, "0")}`).join("");
+    const urlencoded = `recipient=support%40acme.test&timestamp=${seconds}&body-mime=${encoded}`;
+    const formEmail = await parseMailgunInbound({ body: urlencoded, headers: { "content-type": "application/x-www-form-urlencoded" } });
+
+    expect(formEmail.text).toBe("café");
+  });
+
+  test("keeps every body-html and body-plain value Mailgun repeats", async () => {
+    const form = route({ ...signed(), recipient: "support@acme.test" });
+    form.append("body-plain", "first");
+    form.append("body-plain", "second");
+    form.append("body-html", "<p>first</p>");
+    form.append("body-html", "<p>second</p>");
+
+    const email = await parseMailgunInbound(await payload(form));
+
+    expect(email.text).toBe("first\nsecond");
+    expect(email.html).toBe("<p>first</p>\n<p>second</p>");
+  });
+
   test("rejects bad, replayed-old, and missing signatures", async () => {
     expect(await verifyMailgunInbound(await payload(route({ ...signed(), signature: "0".repeat(64) })), { secret: key, now })).toEqual({ ok: false, reason: "signature_invalid" });
     expect(await verifyMailgunInbound(await payload(route(signed(String(+seconds - 3600)))), { secret: key, now })).toEqual({ ok: false, reason: "timestamp_expired" });
@@ -273,6 +342,19 @@ describe("Mailgun", () => {
 
     expect(email.envelope).toEqual({ from: "bounce@example.net", to: ["support@acme.test"] });
     await expect(fetchMailgunStoredEmail("https://evil.test/v3/messages/abc", { apiKey: "key-1", fetch })).rejects.toThrow("storage URL");
+  });
+
+  test("reads stored messages returned as raw message/rfc2822", async () => {
+    const fetch = stubFetch(async (_input, init) => {
+      expect(new Headers(init?.headers).get("accept")).toBe("message/rfc2822");
+
+      return new Response(eml, { headers: { "content-type": "message/rfc2822" } });
+    });
+
+    const email = await fetchMailgunStoredEmail("https://storage-us-east4.api.mailgun.net/v3/domains/acme.test/messages/abc", { apiKey: "key-1", fetch });
+
+    expect(email.subject).toBe("Café order ✉ #42");
+    expect(email.attachments).toHaveLength(3);
   });
 });
 
@@ -320,6 +402,13 @@ describe("SendGrid Inbound Parse", () => {
 
     expect(await verifySendGridInbound({ body: tampered, headers: signedHeaders(parsedBody, contentType) }, { publicKey: spki, now })).toEqual({ ok: false, reason: "signature_invalid" });
     expect(await verifySendGridInbound({ body: parsedBody, headers: signedHeaders(parsedBody, contentType, String(+seconds - 600)) }, { publicKey: spki, now })).toEqual({ ok: false, reason: "timestamp_expired" });
+  });
+
+  test("tries every configured public key, skipping malformed ones", async () => {
+    const request = { body: parsedBody, headers: signedHeaders(parsedBody, contentType) };
+
+    expect(await verifySendGridInbound(request, { publicKey: ["invalid!", spki], now })).toEqual({ ok: true });
+    expect(await verifySendGridInbound(request, { publicKey: ["invalid!"], now })).toEqual({ ok: false, reason: "secret_missing" });
   });
 
   test("decodes fields in their declared charsets and keeps attachment bytes exact", async () => {
@@ -403,6 +492,7 @@ describe("SparkPost and Lettr relay webhooks", () => {
     expect(mime!.envelope).toEqual({ from: "bounce@example.net", to: ["support@acme.test"] });
     expect(fields!.from).toEqual({ address: "sender@example.com", name: "John Sender" });
     expect(fields!.inReplyTo).toBe("original@example.com");
+    expect(fields!.to).toEqual([{ address: "support@mail.example.com" }]);
     expect(parseLettrInbound({ body })[1]!.provider).toBe("lettr");
   });
 });
@@ -556,6 +646,13 @@ describe("JetEmail", () => {
     expect(email.messageId).toBe("CAOEWyCpfbcjqB-YFzTqZ7=h2g02qCq7WLWa4qZ35N7zvkxK2Mg@mail.gmail.com");
     expect(email.security).toEqual({ spf: "pass", dkim: "pass", dmarc: "pass" });
     expect(await email.attachments[0]!.read()).toEqual(pdf);
+  });
+});
+
+describe("JetEmail without a messageId", () => {
+  test("leaves messageId undefined instead of inventing <>", () => {
+    expect(parseJetEmailInbound({ body: JSON.stringify({ uid: "u1", subject: "Hi" }) }).messageId).toBeUndefined();
+    expect(parseJetEmailInbound({ body: JSON.stringify({ uid: "u1", messageId: "" }) }).messageId).toBeUndefined();
   });
 });
 
