@@ -132,10 +132,12 @@ export type WorkflowDuePage = { ids: string[]; cursor?: string };
 export type WorkflowTimer = { runId: string; at: number; revision: number };
 
 /**
- * Arranges for `engine.resume(runId)` to be called at or after `at`. Timers are hints: resume
- * ignores duplicate and stale deliveries, and an early one schedules a new timer for the run's
- * persisted `dueAt`, so `cancel` may be best-effort. A scheduler that keeps one timer per run must
- * not let a timer replace one with a higher `revision`: wakes can arrive out of order.
+ * Arranges for `engine.resume(runId)` to be called at or after `at`. The engine schedules a timer
+ * for each wait's deadline and for each claim's lease expiry, which resumes a run whose worker
+ * died. Timers are hints: resume ignores duplicate, early, and stale deliveries, and one that finds
+ * the lease renewed schedules a new timer for the renewed expiry, so `cancel` may be best-effort. A
+ * scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`:
+ * wakes can arrive out of order.
  */
 export type WorkflowScheduler = {
   schedule(timer: WorkflowTimer): MaybePromise<void>;

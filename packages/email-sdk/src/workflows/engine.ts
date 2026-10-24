@@ -410,12 +410,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   /**
    * Schedules the wake for a wait the caller just saved. The save has already released the run,
    * so a newer execution may schedule its own wake first; the revision lets the scheduler keep
-   * the newer one, and an early wake that still lands re-arms from `dueAt` in `resumeRun`.
+   * the newer one.
    */
   async function scheduleWake(run: WorkflowRun) {
     if (run.wait?.until !== undefined) {
       await scheduler?.schedule({ runId: run.id, at: run.wait.until, revision: run.revision });
     }
+  }
+
+  /**
+   * Schedules a wake for when the lease of the execution that just claimed the run expires, so a
+   * run whose worker dies mid-step resumes without a `resumeDue` poll. The claim is the run's newest
+   * revision, so this wake never displaces a newer one, and the wake of a wait the execution saves
+   * later displaces it. A wake that finds the lease renewed re-arms in `resumeRun`.
+   */
+  async function scheduleRecovery(run: WorkflowRun) {
+    if (run.lease) await scheduler?.schedule({ runId: run.id, at: run.lease.until, revision: run.revision });
   }
 
   /** Saves the cancellation. Returns undefined when the run had already ended or changed owner. */
@@ -941,10 +951,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const run = await store.get(runId);
 
     if (!run || !isRunnable(run, now())) {
-      // An early or stale wake may have taken the place of the run's real timer. Arm one for the
-      // persisted due time so the run never waits without a wake.
-      if (run && run.dueAt !== undefined && run.dueAt > now()) {
-        await scheduler?.schedule({ runId: run.id, at: run.dueAt, revision: run.revision });
+      // A wake that finds an execution still holding the run, because it renewed the lease after
+      // the wake was scheduled, re-arms for the renewed expiry. A waiting run already has the wake
+      // its parking save scheduled, so re-arming it would only leave a duplicate job behind.
+      if (run?.lease !== undefined && run.lease.until > now()) {
+        await scheduler?.schedule({ runId: run.id, at: run.lease.until, revision: run.revision });
       }
 
       return { run, executed: false };
@@ -956,6 +967,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const claimed = await claim(run);
 
     if (!claimed) return { run: await store.get(runId), executed: false };
+
+    await scheduleRecovery(claimed.run);
 
     return { run: await execute(claimed.run, claimed.owner), executed: true };
   }
@@ -1191,6 +1204,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
         return existing;
       }
+
+      await scheduleRecovery(run);
 
       return (await execute(run, owner)) ?? run;
     },

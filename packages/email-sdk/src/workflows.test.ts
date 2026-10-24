@@ -23,6 +23,7 @@ import type {
   WorkflowHooks,
   WorkflowJsonValue,
   WorkflowRun,
+  ManualClock,
   WorkflowStore,
 } from "./workflows.js";
 
@@ -1142,17 +1143,122 @@ describe("workflows: timers", () => {
     expect(sender.deliveries).toHaveLength(1);
   });
 
-  test("an early timer re-arms the wake from the run's persisted due time", async () => {
+  test("an early wake for a waiting run schedules nothing, and the wait's own timer still fires", async () => {
     const { engine, scheduler, sender } = setup([linear]);
-    const run = await engine.start(linear, ada, { id: "run-1" });
 
-    // A scheduler whose jobs cannot be replaced (Convex) may hold an early wake and nothing else.
-    scheduler.cancel("run-1");
-    await scheduler.schedule({ runId: "run-1", at: start + 1, revision: run.revision });
+    await engine.start(linear, ada, { id: "run-1" });
+
+    const schedule = spyOn(scheduler, "schedule");
+
+    expect(await engine.resume("run-1")).toMatchObject({ status: "waiting" });
+    expect(schedule).not.toHaveBeenCalled();
 
     await scheduler.advance("2d", engine);
     expect((await engine.get("run-1"))?.status).toBe("completed");
     expect(sender.deliveries).toHaveLength(2);
+  });
+
+  describe("lease-expiry wakes", () => {
+    const hour = 3_600_000;
+
+    /** Hangs the first call of step "charge" until `hung.open()`, as if its worker had died. */
+    function stalling(before?: (ctx: WorkflowContext) => Promise<void>) {
+      const hung = gate();
+      let calls = 0;
+
+      const workflow = defineWorkflow({
+        name: "stalling",
+        run: async (ctx, input: Input) => {
+          await before?.(ctx);
+
+          const attempt = await ctx.step("charge", async () => {
+            calls += 1;
+
+            if (calls === 1) await hung.pass();
+
+            return calls;
+          });
+
+          await ctx.send("receipt", mail(input.email, `attempt ${attempt}`));
+        },
+      });
+
+      return { hung, workflow, calls: () => calls };
+    }
+
+    function workers(workflow: AnyWorkflowDefinition, clock: ManualClock = createManualClock(start)) {
+      const scheduler = createMemoryWorkflowScheduler(clock);
+      const store = createMemoryWorkflowStore();
+      const sender = recordingSender();
+      // An hour-long lease keeps the dead worker's heartbeat (every third of it, in real time) quiet.
+      const options: WorkflowEngineOptions = { email: sender, store, scheduler, clock, workflows: [workflow], leaseDuration: "1h" };
+
+      return { clock, scheduler, store, sender, options };
+    }
+
+    test("a run whose worker died mid-step is recovered by the scheduler alone, with no resumeDue", async () => {
+      const { hung, workflow, calls } = stalling();
+      const { scheduler, store, sender, options } = workers(workflow);
+      const dead = createWorkflowEngine(options).start(workflow, ada, { id: "run-1" });
+
+      await hung.reached;
+      expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + hour, revision: 0 }]);
+
+      // The first engine is gone. Only the scheduler fires timers, into a second engine.
+      expect(await scheduler.advance("2h", createWorkflowEngine(options))).toBe(1);
+      expect((await store.get("run-1"))?.status).toBe("completed");
+      expect(calls()).toBe(2);
+      expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["attempt 2"]);
+      expect(scheduler.pending()).toEqual([]);
+
+      hung.open();
+      await dead;
+      expect((await store.get("run-1"))?.status).toBe("completed");
+      expect(sender.deliveries).toHaveLength(1);
+    });
+
+    test("a wake that finds the lease renewed re-arms for the new expiry instead of claiming", async () => {
+      const clock = createManualClock(start);
+
+      const { hung, workflow, calls } = stalling(async (ctx) => {
+        await ctx.step("first", () => {
+          clock.advance("40m");
+
+          return 1;
+        });
+      });
+
+      const { scheduler, store, options } = workers(workflow, clock);
+      const dead = createWorkflowEngine(options).start(workflow, ada, { id: "run-1" });
+      const second = createWorkflowEngine(options);
+
+      await hung.reached;
+
+      // Saving step "first" 40 minutes in renewed the lease to start + 1h40m.
+      const held = await store.get("run-1");
+
+      expect(held?.lease?.until).toBe(start + 100 * 60_000);
+      clock.set(start + hour);
+      expect(await scheduler.runDue(second)).toBe(1);
+      expect(calls()).toBe(1);
+      expect(await store.get("run-1")).toMatchObject({ status: "running", lease: held?.lease });
+      expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 100 * 60_000, revision: held?.revision }]);
+
+      clock.set(start + 100 * 60_000);
+      expect(await scheduler.runDue(second)).toBe(1);
+      expect((await store.get("run-1"))?.status).toBe("completed");
+      expect(calls()).toBe(2);
+
+      hung.open();
+      await dead;
+    });
+
+    test("a wait saved after the claim replaces the lease-expiry wake", async () => {
+      const { engine, scheduler } = setup([linear], { leaseDuration: "1h" });
+      const run = await engine.start(linear, ada, { id: "run-1" });
+
+      expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 2 * day, revision: run.revision }]);
+    });
   });
 });
 
