@@ -37,18 +37,26 @@ export function validateCapabilities(
   }
 }
 
+export type EmailRoute = {
+  primary: string;
+  fallback: EmailFallbackConfig | undefined;
+  names: readonly string[];
+};
+
 export function resolveRoute(
   defaultAdapter: string,
   clientFallback: EmailFallbackConfig | undefined,
   sendOptions: EmailSendOptions | undefined,
-) {
+): EmailRoute {
   const primary = sendOptions?.adapter ?? defaultAdapter;
   const fallback = sendOptions?.fallback ?? clientFallback;
+
+  if (!fallback?.adapters?.length) return { primary, fallback, names: [primary] };
 
   return {
     primary,
     fallback,
-    names: [primary, ...(fallback?.adapters ?? []).filter((name) => name !== primary)],
+    names: [primary, ...fallback.adapters.filter((name) => name !== primary)],
   };
 }
 
