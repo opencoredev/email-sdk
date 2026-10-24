@@ -280,6 +280,32 @@ function unquote(value: string): string {
   return trimmed;
 }
 
+const utf8 = new TextEncoder();
+
+/**
+ * Append the bytes of an RFC 2231 encoded value: `%XX` is one byte, and any other character is
+ * its UTF-8 encoding, so stray non-ASCII text is not truncated to its low byte.
+ */
+function appendPercentBytes(bytes: number[], value: string): void {
+  let literal = "";
+
+  for (let index = 0; index < value.length; index += 1) {
+    const hex = value[index] === "%" ? value.slice(index + 1, index + 3) : "";
+
+    if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+      for (const byte of utf8.encode(literal)) bytes.push(byte);
+
+      literal = "";
+      bytes.push(Number.parseInt(hex, 16));
+      index += 2;
+    } else {
+      literal += value[index];
+    }
+  }
+
+  for (const byte of utf8.encode(literal)) bytes.push(byte);
+}
+
 /** Parse `type/subtype; a=b; filename*=UTF-8''%C3%A9`, including RFC 2231 continuations. */
 export function parseStructuredHeader(value: string | undefined): ContentType {
   const [head = "", ...rest] = splitParams(value ?? "");
@@ -312,12 +338,27 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
   for (const [name, pieces] of extended) {
     pieces.sort((left, right) => left.index - right.index);
     let charset = "utf-8";
-    let bytes = "";
+    let decoded = "";
+    // Consecutive encoded pieces decode together, since a multi-byte character may span them.
+    let bytes: number[] = [];
+
+    const flush = () => {
+      if (bytes.length) decoded += decodeCharset(Uint8Array.from(bytes), charset);
+
+      bytes = [];
+    };
 
     for (const [position, piece] of pieces.entries()) {
       let text = piece.value;
 
-      if (piece.encoded && position === 0) {
+      if (!piece.encoded) {
+        // An unencoded piece is already text; it must not pass through a byte conversion.
+        flush();
+        decoded += text;
+        continue;
+      }
+
+      if (position === 0) {
         const parts = /^([^']*)'[^']*'(.*)$/.exec(text);
 
         if (parts) {
@@ -326,12 +367,11 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
         }
       }
 
-      bytes += piece.encoded
-        ? text.replace(/%([0-9A-Fa-f]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
-        : text;
+      appendPercentBytes(bytes, text);
     }
 
-    params.set(name, decodeCharset(binaryBytes(bytes), charset));
+    flush();
+    params.set(name, decoded);
   }
 
   return { type: head.toLowerCase(), params };

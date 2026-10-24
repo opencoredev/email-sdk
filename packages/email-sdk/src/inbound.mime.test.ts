@@ -382,3 +382,63 @@ describe("parseAddressList comments and quotes", () => {
     expect(parseAddressList(`Team: ${input}, z@example.com;`)).toEqual([...expected, next]);
   });
 });
+
+describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
+  const attachment = (disposition: string) => [
+    "Content-Type: multipart/mixed; boundary=b",
+    "",
+    "--b",
+    "Content-Type: application/octet-stream",
+    `Content-Disposition: attachment; ${disposition}`,
+    "",
+    "raw",
+    "--b--",
+  ].join("\r\n");
+
+  const filenameOf = (disposition: string) => parseMimeMessage(new TextEncoder().encode(attachment(disposition))).attachments[0]?.filename;
+
+  const filenames: [label: string, disposition: string, expected: string][] = [
+    ["unencoded Unicode continuation", "filename*0=\"Ā\"; filename*1=\".txt\"", "Ā.txt"],
+    ["unencoded Unicode after an encoded piece", "filename*0*=UTF-8''%C3%A9; filename*1=\"Ā.txt\"", "éĀ.txt"],
+    ["encoded piece after an unencoded one", "filename*0=\"Ā\"; filename*1*=%C3%A9.txt", "Āé.txt"],
+    ["UTF-8 sequence split across encoded pieces", "filename*0*=UTF-8''%C3; filename*1*=%A9.txt", "é.txt"],
+    ["out-of-order pieces", "filename*1=\".txt\"; filename*0=\"a\"", "a.txt"],
+    ["Latin-1 charset with a language", "filename*=iso-8859-1'fr'%E9t%E9.txt", "été.txt"],
+    ["extended value wins over the plain one", "filename=\"plain.txt\"; filename*=UTF-8''%C3%A9.txt", "é.txt"],
+    ["encoded word in a quoted filename", "filename=\"=?UTF-8?B?w6kudHh0?=\"", "é.txt"],
+  ];
+
+  test.each(filenames)("filename: %s", (_label, disposition, expected) => {
+    expect(filenameOf(disposition)).toBe(expected);
+  });
+
+  const words: [label: string, input: string, expected: string][] = [
+    ["adjacent words in different charsets", "=?ISO-8859-1?Q?=E9?= =?UTF-8?Q?=C3=A9?=", "éé"],
+    ["words separated by a folded tab", "=?UTF-8?Q?a?=\t=?UTF-8?Q?b?=", "ab"],
+    ["text between words is kept", "=?UTF-8?Q?a?= and =?UTF-8?Q?b?=", "a and b"],
+    ["language suffix on the charset", "=?UTF-8*en?Q?=C3=A9?=", "é"],
+  ];
+
+  test.each(words)("encoded word: %s", (_label, input, expected) => {
+    expect(decodeEncodedWords(input)).toBe(expected);
+  });
+
+  const bodies: [label: string, message: string, expected: string | undefined][] = [
+    ["boundary line with transport padding", "Content-Type: multipart/mixed; boundary=b\r\n\r\npreamble\r\n--b \t\r\n\r\nhi\r\n--b-- \r\nepilogue", "hi"],
+    ["nested boundary that extends the outer one", "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: multipart/mixed; boundary=b-1\r\n\r\n--b-1\r\n\r\ninner\r\n--b-1--\r\n--b--", "inner"],
+    ["outer boundary that extends the inner one", "Content-Type: multipart/mixed; boundary=b-1\r\n\r\n--b-1\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n\r\ninner\r\n--b--\r\n--b-1--", "inner"],
+    ["Content-Transfer-Encoding in mixed case with whitespace", "Content-Transfer-Encoding:  BASE64 \r\n\r\naGk=", "hi"],
+    ["Content-Transfer-Encoding folded onto a tab line", "Content-Transfer-Encoding:\r\n\tQuoted-Printable\r\n\r\nh=69", "hi"],
+    ["header folded with a tab", "Content-Type: text/plain;\r\n\tcharset=iso-8859-1\r\n\r\né", "é"],
+    ["empty body", "Content-Type: text/plain\r\n\r\n", undefined],
+    ["headers without a body separator", "Content-Type: text/plain", undefined],
+    ["empty part between boundaries", "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n--b\r\n\r\nhi\r\n--b--", "hi"],
+  ];
+
+  test.each(bodies)("body: %s", (_label, message, expected) => {
+    // One char per byte, as a raw message arrives.
+    const bytes = Uint8Array.from(message, char => char.charCodeAt(0));
+
+    expect(parseMimeMessage(bytes).text).toBe(expected);
+  });
+});
