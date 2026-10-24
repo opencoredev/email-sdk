@@ -161,12 +161,15 @@ type WorkflowStore = {
   create(run: WorkflowRun): Promise<boolean>;                      // false when the id exists
   save(run: WorkflowRun, expectedRevision: number): Promise<boolean>; // false on conflict
   listActiveBySubject(subject: string): Promise<WorkflowRun[]>;
-  listDue(now: number, limit: number): Promise<string[]>;
+  // One page of runs whose dueAt <= now, oldest first; cursor is undefined on the last page.
+  listDue(now: number, limit: number, cursor?: string): Promise<{ ids: string[]; cursor?: string }>;
 };
 ```
 
 `create` returning false makes `start` idempotent: use a deterministic id (`onboarding:${userId}`)
-and a repeated signup webhook returns the existing run instead of starting a second drip.
+and a repeated signup webhook returns the existing run instead of starting a second drip. With an
+`id`, `start` reads the run first and returns an existing one before parsing the new input, which
+it would never use; the create-if-absent check still settles two concurrent first starts.
 
 `save` with `expectedRevision` is the only atomic primitive the engine needs. Everything that must
 not happen twice is built on it:
@@ -184,6 +187,9 @@ not happen twice is built on it:
   stale worker cannot advance or commit the run. The lease is released when the run waits or ends.
 - **Other writers.** Event delivery and cancellation never take the lease. They are plain
   revision-checked writes, so they conflict with the owner's next save, which reloads and sees them.
+- **Conflicts.** Every conflict means another writer saved, so a save retries on the fresh run up to
+  25 times. Past that it throws `WorkflowError` with code `write_conflict`; `sendEvent` and `cancel`
+  never report a busy run as missing.
 
 A step can run twice only when its worker stops renewing for a whole lease (crash, hang, or a
 blocked event loop) and another worker takes over. For sends the idempotency key covers that case.
@@ -215,7 +221,10 @@ extra: the stale job fires early and re-arms.
 
 Without a push scheduler, call `engine.resumeDue()` from a cron. It asks the store for runs whose
 `dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired because
-their worker crashed.
+their worker crashed. `listDue` returns pages oldest first with a cursor, and `resumeDue(limit)`
+follows the cursor until it has checked `limit` runs (`0` checks none). Runs whose version this
+engine doesn't register don't count toward `limit`, so after a deploy drops a version they can't
+hide later due runs; they are reported in an `AggregateError` after the rest have run.
 
 The in-memory scheduler plus a manual clock (`createManualClock`) make tests deterministic: nothing
 sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due timers in order.
@@ -237,7 +246,14 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
      delivery makes that save conflict, an event can't land between "inbox is empty" and "wait
      saved" and be stranded.
 4. Suspension leaves the user's `run` promise pending forever instead of throwing, so a user
-   `try/catch` around `ctx.sleep` cannot swallow it.
+   `try/catch` around `ctx.sleep` cannot swallow it. The pending promise belongs to the execution,
+   so once the execution returns the abandoned call can be garbage collected.
+5. `ctx.step`, `ctx.send`, and `ctx.waitForEvent` return copies of journaled values, and `run`
+   gets a copy of the input, so editing them never changes the journal. `run` starts inside a
+   promise callback, so a synchronous throw fails the run like a rejection.
+6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
+   invalid `Date`, `maxAttempts` below 1, or a step result or output that isn't JSON, such as
+   `NaN` or `Infinity`) fails the run. Replaying it would throw again on every wake.
 5. When `run` resolves, the run completes and its return value is stored as `output`. When it throws,
    the run fails.
 
@@ -252,7 +268,7 @@ pair unambiguous (run `a:b` step `c` and run `a` step `b:c` used to collide as `
 hash keeps the key at 67 characters, inside provider limits such as Resend's 256. The journal makes
 replays skip completed sends; the key covers the remaining window, a crash after the provider
 accepted the message but before the journal save. On adapters with `idempotency: "native"` (Resend,
-Postmark, and others) the provider drops the duplicate; on `message_id` adapters (SMTP) the
+JetEmail, Lettermint, and others; not Postmark) the provider drops the duplicate; on `message_id` adapters (SMTP) the
 `Message-ID` lets the receiving side dedupe; on `"none"` adapters delivery is at least once in that
 window. The docs say so.
 
@@ -263,8 +279,10 @@ window. The docs say so.
 - If the event name is in the definition's `cancelOn`, the run is canceled (timers canceled,
   `onRunCanceled` fired, `cancelReason: "event:<name>"`).
 - Otherwise the event goes into the run's inbox (capped at 50), stamped with `receivedAt`. Delivery
-  never touches the run's wait or its deadline. A waiting run whose wait matches is resumed
-  immediately. A run that has not reached its `waitForEvent` yet consumes the inbox event when it
+  never touches the run's wait or its deadline. `sendEvent` saves the event, with one `receivedAt`,
+  to every target before resuming any, then resumes the runs whose wait matches concurrently, so one
+  run's slow step can't delay another's delivery or push it past its deadline. A failure on one
+  target doesn't stop the others; the failures are reported in an `AggregateError`. A run that has not reached its `waitForEvent` yet consumes the inbox event when it
   gets there, so "user activated before the reminder step" works.
 - Event versus timeout is decided by persisted timestamps, not by which worker gets there first: an
   event with `receivedAt <= wait.until` wins, a later one loses to the timeout and stays in the
@@ -280,13 +298,17 @@ window. The docs say so.
 
 Defaults: 3 attempts, exponential backoff from 1 minute (1m, 2m, 4m), configurable per engine and
 per step. An `EmailSdkError` with `retryable: false` (validation errors, permanent provider
-rejections) fails immediately. Retries are timers, not in-process sleeps, so a crash during backoff
+rejections) fails immediately. A route error (every adapter failed) is retryable when any adapter
+failure inside it is, so a 503 retries and a 400 fails. Errors are recognized by `code`,
+`retryable`, and `name` rather than `instanceof`, because a CommonJS build bundles each package
+entry with its own copy of the error classes. Retries are timers, not in-process sleeps, so a crash during backoff
 loses nothing. The email client's own `retry` option still applies inside each attempt.
 
 ### Versioning in-flight runs
 
-A run records its definition's `version` (default `1`). `start` uses the highest registered version
-for the name; `resume` uses the run's own version. If that version is no longer registered, `resume`
+A run records its definition's `version` (default `1`). `start` creates a run of exactly the
+definition passed to it, so registering version 2 does not move new starts: update the `start`
+calls to pass the new definition. `resume` uses the run's own version. If that version is no longer registered, `resume`
 throws `WorkflowError` with code `workflow_not_registered` and leaves the run untouched, so the fix
 is to redeploy with the old definition still registered.
 
@@ -315,8 +337,9 @@ The workflows code lives in `src/workflows/` and is reachable only through the
 
 `@opencoredev/convex-email` stores runs in a `workflowRuns` table and exposes
 `workflows:create/get/save/listActiveBySubject/listDue` mutations and queries.
-`listActiveRunsBySubject` returns one page; `convexWorkflowStore` follows its cursor across queries
-so every active run for a subject is returned without one query reading the whole set. The run is stored as
+`listActiveRunsBySubject` and `listDueRuns` each return one page; `convexWorkflowStore` follows the
+subject cursor across queries so every active run for a subject is returned without one query
+reading the whole set, and hands the due cursor to `resumeDue`. The run is stored as
 a JSON string plus indexed columns (`runId`, `status`, `subject`, `dueAt`, `revision`), so the
 component never depends on the engine's types, and the CAS check in `save` is transactional.
 
@@ -325,7 +348,10 @@ and parses each stored run with zod at the boundary. `convexWorkflowScheduler(ct
 implements timers with `ctx.scheduler.runAt`; `cancel` is a no-op because `resume` already ignores
 stale timers and re-arms early ones from `dueAt`. `convexWorkflowEmail(component, ctx)` sends through the component's durable
 queue (`enqueue` with the step's idempotency key), so a workflow send gets the component's retries,
-fallback, and webhook status tracking.
+fallback, and webhook status tracking. It forwards the `ctx.send` options the queue can store
+(`adapter`, `fallback.adapters`, `retry.maxAttempts`, flat `metadata`) and fails the step on the
+ones it can't (`signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknownDelivery:
+"continue"`, nested metadata) instead of dropping them.
 
 The engine runs in a Convex action (the user's `run` function is app code the component cannot
 call). A typical app defines one internal action, `resumeWorkflow({ runId })`, that builds the
