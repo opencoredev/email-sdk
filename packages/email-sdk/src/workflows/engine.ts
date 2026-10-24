@@ -262,8 +262,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return claimed ? { run: claimed, owner } : undefined;
   }
 
+  /**
+   * Schedules the wake for a wait the caller just saved. The save has already released the run,
+   * so a newer execution may schedule its own wake first; the revision lets the scheduler keep
+   * the newer one, and an early wake that still lands re-arms from `dueAt` in `resumeRun`.
+   */
   async function scheduleWake(run: WorkflowRun) {
-    if (run.wait?.until !== undefined) await scheduler?.schedule({ runId: run.id, at: run.wait.until });
+    if (run.wait?.until !== undefined) {
+      await scheduler?.schedule({ runId: run.id, at: run.wait.until, revision: run.revision });
+    }
   }
 
   async function cancelRun(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
@@ -655,7 +662,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   async function resumeRun(runId: string): Promise<{ run: WorkflowRun | undefined; executed: boolean }> {
     const run = await store.get(runId);
 
-    if (!run || !isRunnable(run, now())) return { run, executed: false };
+    if (!run || !isRunnable(run, now())) {
+      // An early or stale wake may have taken the place of the run's real timer. Arm one for the
+      // persisted due time so the run never waits without a wake.
+      if (run && run.dueAt !== undefined && run.dueAt > now()) {
+        await scheduler?.schedule({ runId: run.id, at: run.dueAt, revision: run.revision });
+      }
+
+      return { run, executed: false };
+    }
 
     // Resolve the definition before writing, so a missing version leaves the run untouched.
     definitionFor(run);

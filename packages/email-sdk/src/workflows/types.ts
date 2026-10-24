@@ -104,11 +104,14 @@ export type WorkflowStore = {
   listDue(now: number, limit: number): Promise<string[]>;
 };
 
-export type WorkflowTimer = { runId: string; at: number };
+/** A wake for one run. `revision` is the run revision whose wait asked for it. */
+export type WorkflowTimer = { runId: string; at: number; revision: number };
 
 /**
  * Arranges for `engine.resume(runId)` to be called at or after `at`. Timers are hints: resume
- * ignores early, duplicate, and stale deliveries, so `cancel` may be best-effort.
+ * ignores duplicate and stale deliveries, and an early one schedules a new timer for the run's
+ * persisted `dueAt`, so `cancel` may be best-effort. A scheduler that keeps one timer per run must
+ * not let a timer replace one with a higher `revision`: wakes can arrive out of order.
  */
 export type WorkflowScheduler = {
   schedule(timer: WorkflowTimer): MaybePromise<void>;

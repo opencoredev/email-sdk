@@ -104,9 +104,13 @@ export type MemoryWorkflowScheduler = WorkflowScheduler & {
   advance(duration: WorkflowDuration, engine: Pick<WorkflowEngine, "resume">): Promise<number>;
 };
 
-/** Holds timers in memory and fires them only when `runDue` or `advance` is called. */
+/**
+ * Holds one timer per run in memory and fires it only when `runDue` or `advance` is called. A
+ * timer from an older run revision than the newest one scheduled for that run is dropped.
+ */
 export function createMemoryWorkflowScheduler(clock: ManualClock): MemoryWorkflowScheduler {
   const timers = new Map<string, WorkflowTimer>();
+  const newestRevision = new Map<string, number>();
 
   const sorted = () => [...timers.values()].sort((a, b) => a.at - b.at);
 
@@ -124,10 +128,14 @@ export function createMemoryWorkflowScheduler(clock: ManualClock): MemoryWorkflo
 
   return {
     schedule(timer) {
+      if (timer.revision < (newestRevision.get(timer.runId) ?? -1)) return;
+
+      newestRevision.set(timer.runId, timer.revision);
       timers.set(timer.runId, { ...timer });
     },
     cancel(runId) {
       timers.delete(runId);
+      newestRevision.delete(runId);
     },
     pending: sorted,
     runDue: (engine) => fireDueAt(clock.now(), engine),
