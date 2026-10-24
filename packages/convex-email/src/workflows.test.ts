@@ -58,6 +58,19 @@ const parked = defineWorkflow({
   },
 });
 
+/** Counts runs of its `__proto__` step, which the Convex journal schema can't keep. */
+const protoCalls = { count: 0 };
+
+const protoStep = defineWorkflow({
+  name: "proto-step",
+  run: async (ctx) => {
+    await ctx.step("__proto__", () => {
+      protoCalls.count += 1;
+    });
+    await ctx.sleep("nap", "1h");
+  },
+});
+
 /** The app's clock. Tests move it instead of waiting, and the engine reads it through `clock`. */
 const clock = { at: Date.parse("2026-01-01T00:00:00Z") };
 
@@ -69,7 +82,7 @@ function engineFor(ctx: GenericActionCtx<GenericDataModel>) {
     store: convexWorkflowStore(component(), ctx),
     scheduler: convexWorkflowScheduler(ctx, resumeRef),
     clock: { now: () => clock.at },
-    workflows: [onboarding, parked],
+    workflows: [onboarding, parked, protoStep],
   });
 }
 
@@ -103,6 +116,11 @@ const appWorkflows = {
 
       return null;
     },
+  }),
+  startProto: actionGeneric({
+    args: { runId: v.string() },
+    returns: vRunView,
+    handler: async (ctx, args) => view(await engineFor(ctx).start(protoStep, null, { id: args.runId })),
   }),
   resumeDue: actionGeneric({
     args: { limit: v.number() },
@@ -143,6 +161,9 @@ const app = {
   resume: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>("workflows:resume"),
   sendEvent: makeFunctionReference<"action", { name: string; subject: string }, string[]>("workflows:sendEvent"),
   resumeDue: makeFunctionReference<"action", { limit: number }, number>("workflows:resumeDue"),
+  startProto: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>(
+    "workflows:startProto",
+  ),
   startParked: makeFunctionReference<"action", { count: number; subject: string }, null>("workflows:startParked"),
   get: makeFunctionReference<"action", { runId: string }, string | null>("workflows:get"),
   emailStatus: makeFunctionReference<
@@ -445,6 +466,34 @@ describe("parseWorkflowRun", () => {
     };
 
     expect(parseWorkflowRun(JSON.stringify(run))).toEqual(run);
+  });
+
+  test("a __proto__ journal key would be dropped, so that step name fails the run instead of repeating", async () => {
+    const run: WorkflowRun = {
+      id: "run-1",
+      workflow: "proto-step",
+      version: 1,
+      status: "waiting",
+      input: null,
+      journal: JSON.parse('{"__proto__":{"status":"completed","kind":"step","completedAt":1}}'),
+      inbox: [],
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    expect(Object.keys(parseWorkflowRun(JSON.stringify(run)).journal)).toEqual([]);
+
+    clock.at = Date.parse("2026-01-01T00:00:00Z");
+    protoCalls.count = 0;
+
+    const t = createApp();
+
+    expect(await t.action(app.startProto, { runId: "proto-1" })).toMatchObject({ status: "failed" });
+    clock.at += 3_600_000;
+    await t.action(app.resume, { runId: "proto-1" });
+    expect((await readRun(t, "proto-1")).status).toBe("failed");
+    expect(protoCalls.count).toBe(0);
   });
 });
 
