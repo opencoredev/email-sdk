@@ -68,9 +68,15 @@ inference (`const user = await ctx.step("load", () => loadUser(id))`). This is t
 Trigger.dev, Temporal, and Convex Workflow use, so it is familiar.
 
 Cons: code between steps re-runs on every wake, so it must be deterministic. Side effects belong in
-`ctx.step` or `ctx.send`. Step names must be unique within a run (the engine throws on a duplicate).
+`ctx.step` or `ctx.send`. Step names must be unique within a run (the engine throws on a duplicate),
+and `__proto__` is reserved, because a store that parses the journal as a record (the Convex store,
+through zod) drops that key and the step would run again on every wake.
 A step callback can't call `ctx`: the call would queue behind the step that awaits it, so the engine
-fails the run with `invalid_definition` instead of deadlocking.
+fails the run with `invalid_definition` instead of deadlocking. The engine tells such a call apart
+from one `run` makes while an earlier step is still pending with an `AsyncLocalStorage` scope per
+execution: a call from `run` queues as usual, and a callback may still start or resume other runs.
+The workflows entry imports `node:async_hooks`, which Node, Bun, Deno, Convex, and Cloudflare
+Workers with `nodejs_compat` provide.
 
 We pick B. The builder's main advantage, a drawable static graph, does not outweigh how poorly it
 handles real sequences, and the replay contract is small enough to state in one paragraph of docs.
@@ -122,11 +128,18 @@ constraint stops a `Date` from being journaled and replayed as a string. At runt
 rejects what the type can't: `NaN` and `Infinity`, arrays with empty slots (saved as `null`), and
 circular objects. A shared, acyclic object is fine; it is saved as two equal copies.
 
+Workflow code always gets a value's saved JSON form, on the first execution as well as after a wake:
+the engine round-trips the input, step results, and event payloads through JSON before handing them
+over. A shared object therefore arrives as two separate copies, and an `undefined` field is absent,
+so editing one branch can't change another and replay sees the same values the first run did.
+
 ### Input
 
 `input` is optional. Pass a Standard Schema (zod 4, valibot, arktype) to parse input at `start`, the
 boundary where it enters the system. The parsed value is stored and replayed; resume never re-parses.
-Without a schema, the type of `run`'s second parameter is the input type.
+Without a schema, the type of `run`'s second parameter is the input type. With one, `start` takes
+the schema's input type and `run` gets its output type, so a transform (`z.string().transform(Number)`)
+or a default (`.default("free")`) types correctly on both sides.
 
 ## Engine and persistence
 
@@ -252,11 +265,13 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
 4. Suspension leaves the user's `run` promise pending forever instead of throwing, so a user
    `try/catch` around `ctx.sleep` cannot swallow it. The pending promise belongs to the execution,
    so once the execution returns the abandoned call can be garbage collected.
-5. `ctx.step`, `ctx.send`, and `ctx.waitForEvent` return copies of journaled values, and `run`
-   gets a copy of the input, so editing them never changes the journal. `run` starts inside a
+5. `ctx.step`, `ctx.send`, and `ctx.waitForEvent` return fresh JSON copies of journaled values,
+   and `run` gets one of the input, so editing them never changes the journal and a wake never
+   changes what the code sees. `run` starts inside a
    promise callback, so a synchronous throw fails the run like a rejection.
 6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
-   invalid `Date`, `maxAttempts` below 1, a `ctx` call inside a step callback, or a step result
+   invalid `Date`, `maxAttempts` below 1, a `ctx` call inside a step callback, a step named
+   `__proto__`, or a step result
    or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run.
    Replaying it would throw again on every wake.
 5. When `run` resolves, the run completes and its return value is stored as `output`. When it throws,
@@ -282,7 +297,9 @@ window. The docs say so.
 - `sendEvent({ name, runId? | subject?, payload? })` targets one run or every active run for a
   subject.
 - If the event name is in the definition's `cancelOn`, the run is canceled (timers canceled,
-  `onRunCanceled` fired, `cancelReason: "event:<name>"`).
+  `onRunCanceled` fired, `cancelReason: "event:<name>"`). `sendEvent` saves the cancellation on
+  every target first, and only then cancels timers and runs `onRunCanceled`, so a slow hook can't
+  leave a subject's other runs active, sending, while it waits.
 - Otherwise the event goes into the run's inbox (capped at 50), stamped with `receivedAt`, the
   time `sendEvent` was called, before any subject lookup. Delivery never touches the run's wait or
   its deadline. `sendEvent` saves the event, with that one `receivedAt`, to every target before
@@ -309,8 +326,10 @@ window. The docs say so.
   revision-checked write of the terminal state and does not wait for a running step. The owner's next
   save sees the canceled run and stops, so no later step or send runs. An effect already in flight,
   such as a provider request, may still complete; its result is discarded.
-- `isSuppressed(address)` runs before every send. A suppressed recipient cancels the run with reason
-  `suppressed` and no send happens. Wire it to your suppression list or bounce table.
+- `isSuppressed(address)` runs before every send with each recipient's bare address, lowercased.
+  The address is the last `<...>` of a mailbox string, so `"Ada <team>" <ada@example.test>` checks
+  `ada@example.test`. A suppressed recipient cancels the run with reason `suppressed` and no send
+  happens. Wire it to your suppression list or bounce table.
 
 ### Retry policy
 
@@ -371,6 +390,14 @@ fallback, and webhook status tracking. It forwards the `ctx.send` options the qu
 (`adapter`, `fallback.adapters`, `retry.maxAttempts`, flat `metadata`) and fails the step on the
 ones it can't (`signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknownDelivery:
 "continue"`, nested metadata) instead of dropping them.
+
+The queue dedupes a workflow send by its idempotency key only while the component still has the
+email row. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email
+that many days after it reached a terminal status, and its key goes with it. A step whose action
+died after queueing but before the journal save is normally recovered within one lease plus one
+`resumeDue` cron interval (minutes). Only a recovery delayed past `cleanupAfterDays`, for example
+because the run's version was unregistered for that long, can queue the email a second time. Keep
+`cleanupAfterDays` well above the longest delay you expect, and keep old versions registered.
 
 The engine runs in a Convex action (the user's `run` function is app code the component cannot
 call). A typical app defines one internal action, `resumeWorkflow({ runId })`, that builds the
