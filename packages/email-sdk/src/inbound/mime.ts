@@ -412,13 +412,28 @@ function angleAddress(entry: string): AngleAddress | undefined {
     else if (!quoted && char === "(") comment += 1;
     else if (!quoted && char === ")" && comment) comment -= 1;
     else if (!quoted && !comment && char === "<") {
-      const end = entry.indexOf(">", index + 1);
+      const end = closingAngle(entry, index + 1);
 
       return end === -1 ? undefined : { start: index, address: entry.slice(index + 1, end) };
     }
   }
 
   return undefined;
+}
+
+/** Index of the `>` that closes an angle address, skipping a quoted local part like `"a>b"@x`. */
+function closingAngle(entry: string, from: number): number {
+  let quoted = false;
+
+  for (let index = from; index < entry.length; index += 1) {
+    const char = entry[index]!;
+
+    if (char === "\\" && quoted) index += 1;
+    else if (char === "\"") quoted = !quoted;
+    else if (char === ">" && !quoted) return index;
+  }
+
+  return -1;
 }
 
 /** Tokenize an address list, respecting quotes, comments, angle brackets, and groups. */

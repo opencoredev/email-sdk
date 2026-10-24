@@ -134,6 +134,7 @@ describe("review regressions", () => {
 
     expect(email.from).toEqual({ address: "sender@evil.test", name: "Boss <ceo@example.com>" });
     expect(parseAddressList("(note <x@y.test>) real@z.test")).toEqual([{ address: "real@z.test", name: "note <x@y.test>" }]);
+    expect(parseAddressList("Boss <\"a>b\"@example.com>, c@example.com")).toEqual([{ address: "\"a>b\"@example.com", name: "Boss" }, { address: "c@example.com" }]);
   });
 
   test("only the topmost trusted Authentication-Results header counts", () => {
