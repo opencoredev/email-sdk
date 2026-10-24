@@ -60,6 +60,7 @@ Two rules follow from that:
 
 - **Step names must be unique within a run.** The engine fails the run with `duplicate_step` if a name repeats. In a loop, put the index in the name: `` ctx.send(`reminder-${i}`, ...) ``.
 - **Code between steps must give the same answer every time.** Put database reads, API calls, and anything random inside `ctx.step` so their results are saved and replayed.
+- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A nested call fails the run with `invalid_definition`.
 
 Branching, loops, and early returns are plain TypeScript.
 
@@ -116,7 +117,9 @@ An event that arrives before the run reaches its `waitForEvent` is kept in the r
 
 `sendEvent` saves the event to every target run, all with the same receipt time, before it resumes any of them, and then resumes them side by side. One run's slow step can't delay another run's event or push it past its deadline.
 
-A timeout's deadline is fixed when the run first reaches the `waitForEvent`. The engine stamps each event with the time `sendEvent` received it and compares the two: an event received at or before the deadline wins, even if the timeout timer fires first, and an event received after the deadline loses to the timeout. A late event stays in the inbox for a later `waitForEvent` on the same event name. Each engine uses its own clock for these timestamps, so keep worker clocks in sync.
+A timeout's deadline is fixed when the run first reaches the `waitForEvent`. The engine stamps each event with the time `sendEvent` was called, before it looks up the subject's runs, and compares the two. An event sent at or before the deadline wins, even if the timeout timer has fired, as long as it is saved on the run before a worker records the timeout. An event sent after the deadline loses to the timeout and stays in the inbox for a later `waitForEvent` on the same event name. Each engine uses its own clock for these timestamps, so keep worker clocks in sync.
+
+One race is left. If a worker records the timeout while an on-time event is still being saved, the timeout stands. The event then waits in the inbox, or, when the run has already finished, is not saved and that run is missing from the ids `sendEvent` returns.
 
 ### Input
 
@@ -143,7 +146,7 @@ A failed step retries on a timer: 3 attempts by default, 1 minute before the sec
 
 Some errors fail the run right away: an `EmailSdkError` with `retryable: false` (validation errors, permanent provider rejections) and a `WorkflowNonRetryableError` thrown from your own step. When every adapter fails, the client throws one route error; the engine retries it if any adapter failure in it is retryable, such as a 503, and fails the run otherwise. A step that runs out of attempts, or an error thrown from `run` itself, marks the run `failed` with the message and step name.
 
-A mistake in the `ctx` call itself also fails the run instead of being retried on every wake: a negative duration or timeout, an invalid `Date`, a retry policy with `maxAttempts` below 1, or a step result or workflow output that isn't JSON, such as `NaN` or `Infinity`.
+A mistake in the `ctx` call itself also fails the run instead of being retried on every wake: a negative duration or timeout, an invalid `Date`, a retry policy with `maxAttempts` below 1, a `ctx` call inside a step callback, or a step result or workflow output that isn't JSON, such as `NaN`, `Infinity`, an array with empty slots, or an object that contains itself.
 
 Your email client's own `retry` option still applies inside each attempt.
 
@@ -182,7 +185,9 @@ type WorkflowScheduler = {
 
 `listActiveBySubject` must return every active run for the subject, not a first page, or `sendEvent({ subject })` skips the rest.
 
-When a save keeps losing to concurrent writes, `sendEvent` and `cancel` throw a `WorkflowError` with code `write_conflict` instead of reporting the run as missing. The call is safe to retry.
+When a save keeps losing to concurrent writes, `cancel` throws a `WorkflowError` with code `write_conflict` instead of reporting the run as missing, and is safe to retry.
+
+`sendEvent` delivers at least once. When some targets fail, it throws an `AggregateError` whose `errors` hold one error per failure, such as a `write_conflict`, but only after the other targets got the event. Those runs may already have consumed it and moved on, and a failed target may have saved the event before failing to resume. Retrying the whole call delivers the event to them again, and a run that later waits for the same event name consumes the copy. Retry only when a repeated event is harmless for your workflow; otherwise check the runs with `engine.get` first. `resumeDue` picks up a run that saved the event but failed to resume.
 
 Timers only need to be roughly right. `resume` does nothing when the run is waiting on an event or has finished, and when a timer fires before the run is due it schedules a new one for the run's `dueAt`, so duplicate, late, and early timer deliveries are harmless. Timers can arrive out of order: a scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`. A scheduler that keeps each timer as a separate job can ignore `revision`.
 
@@ -228,7 +233,7 @@ createWorkflowEngine({
 });
 ```
 
-Hooks only observe. An error thrown inside a hook is caught and does not change the run.
+Hooks only observe. Each hook gets a copy of the run, so redacting or editing it for a log doesn't change what is saved, and an error thrown inside a hook is caught and does not change the run.
 
 ## Test a workflow
 
