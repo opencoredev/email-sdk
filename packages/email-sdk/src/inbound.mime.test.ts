@@ -98,6 +98,21 @@ describe("encoded words and addresses", () => {
   });
 });
 
+describe("addr-spec comments and whitespace", () => {
+  test("drops CFWS inside an address the same way in angle and bare forms", () => {
+    expect(parseAddressList("Ada <alice(note)@example.com>")).toEqual([{ address: "alice@example.com", name: "Ada" }]);
+    expect(parseAddressList("<alice (note) @ example.com>")).toEqual([{ address: "alice@example.com" }]);
+    expect(parseAddressList("alice(note)@example.com")).toEqual([{ address: "alice@example.com", name: "note" }]);
+    expect(parseAddressList("alice @example.com")).toEqual([{ address: "alice@example.com" }]);
+    expect(parseAddressList("alice . smith @ example . com")).toEqual([{ address: "alice.smith@example.com" }]);
+  });
+
+  test("keeps quoted local parts verbatim while dropping CFWS around them", () => {
+    expect(parseAddressList("<\"a  b\" (x) @example.com>")).toEqual([{ address: "\"a  b\"@example.com" }]);
+    expect(parseAddressList("\"a (b)\" @ example.com")).toEqual([{ address: "\"a (b)\"@example.com" }]);
+  });
+});
+
 describe("emailFromMime", () => {
   test("normalizes threading, recipients, and Authentication-Results", () => {
     const email = emailFromMime({ provider: "cloudflare", raw: eml, envelope: { from: "bounce@example.net", to: ["support@acme.test"] }, trustedAuthServIds: ["mx.acme.test"] });

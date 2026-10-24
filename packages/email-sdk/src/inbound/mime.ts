@@ -526,8 +526,10 @@ interface CommentedText {
 /**
  * Drop comments and collapse whitespace outside quoted strings, keeping the first comment's text.
  * Quoted strings pass through verbatim, so `"a(b)"@x` and `"a  b"@x` keep their local parts.
+ * Each run of comments and whitespace becomes `separator`: a space in display names, nothing
+ * in an addr-spec, where CFWS around `@` and `.` carries no meaning.
  */
-function stripComments(value: string): CommentedText {
+function stripComments(value: string, separator = " "): CommentedText {
   let text = "";
   let comment: string | undefined;
   let commentText = "";
@@ -537,7 +539,7 @@ function stripComments(value: string): CommentedText {
   let pendingSpace = false;
 
   const append = (chars: string) => {
-    if (pendingSpace && text) text += " ";
+    if (pendingSpace && text) text += separator;
 
     pendingSpace = false;
     text += chars;
@@ -587,7 +589,7 @@ export function parseAddressList(value: string | undefined): InboundAddress[] {
     const angle = angleAddress(entry);
 
     if (angle) {
-      const address = angle.address.trim().replace(/^mailto:/i, "");
+      const address = stripComments(angle.address, "").text.replace(/^mailto:/i, "");
       const name = decodeEncodedWords(unquote(stripComments(entry.slice(0, angle.start)).text));
 
       if (address.includes("@")) addresses.push(name ? { address, name } : { address });
@@ -595,7 +597,7 @@ export function parseAddressList(value: string | undefined): InboundAddress[] {
       continue;
     }
 
-    const { text, comment } = stripComments(entry);
+    const { text, comment } = stripComments(entry, "");
 
     if (!text.includes("@")) continue;
 
