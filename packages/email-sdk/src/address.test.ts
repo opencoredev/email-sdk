@@ -1,19 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { mailboxAddress } from "./internal/address.js";
-import { isStringMember } from "./internal/decode.js";
 import type { EmailAddress } from "./types.js";
 import { emailAddressOf } from "./utils.js";
 
-// The helper released before mailboxAddress: the first `<...>` anywhere in the string.
-function releasedEmailAddressOf(address: EmailAddress): string {
-  if (!isStringMember(address)) return address.email;
-
-  return (address.match(/<([^>]+)>/)?.[1] ?? address).trim();
-}
-
-// `changedFromMain` marks the cases where the bare address differs from the released helper. Each
-// change is deliberate and listed in the changeset.
+// Workflows use mailboxAddress for suppression checks. `changedFromMain` marks the cases where the
+// core `emailAddressOf` helper, which this PR leaves unchanged, still reads a different address.
 const cases: ReadonlyArray<{
   readonly name: string;
   readonly address: EmailAddress;
@@ -45,7 +37,6 @@ const cases: ReadonlyArray<{
 describe("mailbox addresses", () => {
   test.each(cases)("$name", ({ address, expected, changedFromMain }) => {
     expect(mailboxAddress(address)).toBe(expected);
-    expect(emailAddressOf(address)).toBe(expected);
-    expect(releasedEmailAddressOf(address) !== expected).toBe(changedFromMain);
+    expect(emailAddressOf(address) !== expected).toBe(changedFromMain);
   });
 });
