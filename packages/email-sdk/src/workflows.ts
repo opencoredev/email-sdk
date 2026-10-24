@@ -12,6 +12,8 @@ export { createWorkflowEngine } from "./workflows/engine.js";
 
 export { WorkflowError, WorkflowNonRetryableError } from "./workflows/errors.js";
 
+export { workflowIdempotencyKey } from "./workflows/idempotency.js";
+
 export type { WorkflowErrorCode } from "./workflows/errors.js";
 
 export {
@@ -38,6 +40,7 @@ export type {
   WorkflowInboxEvent,
   WorkflowInputSchema,
   WorkflowJsonValue,
+  WorkflowLease,
   WorkflowRetryPolicy,
   WorkflowRun,
   WorkflowRunStatus,
