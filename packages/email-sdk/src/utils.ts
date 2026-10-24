@@ -48,6 +48,17 @@ export function normalizeAdapterResult<Name extends string>(
   };
 }
 
+/**
+ * Builds an adapter's static request headers on its first send, then hands each request its
+ * own copy. Cloning a Headers object is several times cheaper than parsing a record again,
+ * and a fetch wrapper that edits its copy cannot change later requests.
+ */
+export function headerTemplate(build: () => HeadersInit) {
+  let template: Headers | undefined;
+
+  return () => new Headers((template ??= new Headers(build())));
+}
+
 export function arrayify<T>(value: OneOrMany<T> | undefined): T[] {
   if (value === undefined) {
     return [];
@@ -73,7 +84,10 @@ export function formatAddress(address: EmailAddress): string {
 }
 
 export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined): string[] {
-  return arrayify(addresses).map(formatAddress);
+  if (addresses === undefined) return [];
+
+  // Map the caller's list directly; arrayify would copy it first.
+  return isList(addresses) ? addresses.map(formatAddress) : [formatAddress(addresses)];
 }
 
 export function emailAddressOf(address: EmailAddress): string {
@@ -368,6 +382,16 @@ export async function attachmentContentToString(
   }
 
   return Buffer.from(content).toString("base64");
+}
+
+/** Maps attachments concurrently, without a promise round-trip when there are none. */
+export function mapAttachments<T>(
+  attachments: readonly EmailAttachment[] | undefined,
+  map: (attachment: EmailAttachment) => Promise<T>,
+): T[] | Promise<T[]> {
+  if (!attachments?.length) return [];
+
+  return Promise.all(attachments.map(map));
 }
 
 export async function attachmentToBase64(attachment: EmailAttachment) {

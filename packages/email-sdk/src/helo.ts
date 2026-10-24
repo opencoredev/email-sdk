@@ -14,6 +14,7 @@ import {
   assertMaxItems,
   allRecipients,
   type MessageRules,
+  headerTemplate,
 } from "./utils.js";
 
 export type HeloAdapterOptions = {
@@ -63,6 +64,12 @@ export function helo(options: HeloAdapterOptions): EmailAdapter<"helo", { baseUr
   const baseUrl = options.baseUrl ?? "https://api.helohq.com";
   const fetcher = options.fetch ?? fetch;
 
+  const requestHeaders = headerTemplate(() => ({
+    Authorization: `Bearer ${options.apiKey}`,
+    "Content-Type": "application/json",
+    ...options.headers,
+  }));
+
   return {
     name: "helo",
     ...builtInAdapterDefinition("helo", heloRules),
@@ -70,11 +77,7 @@ export function helo(options: HeloAdapterOptions): EmailAdapter<"helo", { baseUr
     async send(message, context) {
       validateBuiltInAdapter("helo", message, heloRules);
 
-      const headers = new Headers({
-        Authorization: `Bearer ${options.apiKey}`,
-        "Content-Type": "application/json",
-        ...options.headers,
-      });
+      const headers = requestHeaders();
 
       if (options.channelId) {
         headers.set("X-Helo-Channel-Id", options.channelId);
