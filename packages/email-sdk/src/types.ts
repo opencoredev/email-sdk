@@ -164,13 +164,16 @@ type NativeEntries<Routes extends readonly EmailAdapter[]> = {
 /**
  * Experimental. The `native` send option for a client: one optional entry per adapter that
  * declares native options, keyed by adapter name. Each adapter receives only its own entry, so
- * options for one provider never reach another in a fallback chain. A client with no such
- * adapter accepts only an empty object.
+ * options for one provider never reach another in a fallback chain. A client whose adapters
+ * declare none accepts only an empty object. An untyped client (`EmailClient` with its default
+ * routes) accepts any adapter's entry, so every typed client stays assignable to it.
  */
 export type EmailNativeOptions<Routes extends readonly EmailAdapter[]> =
-  keyof NativeEntries<Routes> extends never
-    ? { readonly [adapter: string]: never }
-    : NativeEntries<Routes>;
+  string extends Routes[number]["name"]
+    ? EmailNativeOptionsMap
+    : keyof NativeEntries<Routes> extends never
+      ? { readonly [adapter: string]: never }
+      : NativeEntries<Routes>;
 
 export type EmailAdapterContext<Native extends EmailNativeObject = EmailNativeObject> =
   EmailAdapterValidationContext & {
@@ -388,11 +391,6 @@ export type AdapterForName<
   Name extends RouteName<Routes>,
 > = Extract<Routes[number], { name: Name }>;
 
-type ClientSendOptions<Routes extends readonly EmailAdapter[]> = EmailSendOptions<
-  RouteName<Routes>,
-  EmailNativeOptions<Routes>
->;
-
 export type EmailClient<
   Routes extends readonly EmailAdapter[] = readonly EmailAdapter[],
   Extension extends object = object,
@@ -401,19 +399,19 @@ export type EmailClient<
   readonly defaultAdapter: RouteName<Routes>;
   validate(
     message: EmailMessage,
-    options?: ClientSendOptions<Routes>,
+    options?: EmailSendOptions<RouteName<Routes>, EmailNativeOptions<Routes>>,
   ): Promise<EmailValidationResult<RouteName<Routes>>>;
   send(
     message: EmailMessage,
-    options?: ClientSendOptions<Routes>,
+    options?: EmailSendOptions<RouteName<Routes>, EmailNativeOptions<Routes>>,
   ): Promise<EmailSendResult<RouteName<Routes>>>;
   sendMany(
     items: readonly EmailSendItem<RouteName<Routes>, EmailNativeOptions<Routes>>[],
-    options?: ClientSendOptions<Routes>,
+    options?: EmailSendOptions<RouteName<Routes>, EmailNativeOptions<Routes>>,
   ): Promise<readonly EmailSendSettledResult<RouteName<Routes>>[]>;
   sendPersonalized(
     input: EmailPersonalizedInput,
-    options?: ClientSendOptions<Routes>,
+    options?: EmailSendOptions<RouteName<Routes>, EmailNativeOptions<Routes>>,
   ): Promise<EmailPersonalizedResult<RouteName<Routes>>>;
   adapter<Name extends RouteName<Routes>>(name: Name): AdapterForName<Routes, Name>;
   /**

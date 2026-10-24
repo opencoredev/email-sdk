@@ -145,6 +145,15 @@ passthrough is still keyed by adapter and can't leak.
   `EmailNativeSendOptions` (`EmailSendOptions<string, EmailNativeOptionsMap>`), which
   `EmailBeforeSendEvent.options` now exposes. That only widens a field middleware reads.
 
+- **Assignability to the untyped `EmailClient`.** `const c: EmailClient = createEmailClient(...)`
+  broke, caught by the packed-tarball consumer in `pack:check`. Two causes: the default client
+  had a closed native map, and a `ClientSendOptions<Routes>` alias made TypeScript compare
+  method parameters by the measured variance of `Routes` instead of structurally. Now a client
+  whose route names are plain `string` (the default, or adapters such as `memoryAdapter()`
+  with a non-literal name) gets the wide `EmailNativeOptionsMap`, and the method signatures
+  spell out `EmailSendOptions<RouteName<Routes>, EmailNativeOptions<Routes>>` inline.
+  `type-tests/native.ts` asserts typed clients stay assignable to `EmailClient`.
+
 ### Template semantics
 
 The unified message still requires `subject` and `html` or `text`. When a native template is
