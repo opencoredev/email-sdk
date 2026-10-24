@@ -1,0 +1,144 @@
+---
+title: Use provider-native features
+description: Send a Postmark template, turn on SendGrid sandbox mode, or pick an SES configuration set per send without leaving the unified client.
+---
+
+<Callout type="warn" title="Experimental">
+  The `native` send option is experimental. Its shape may change in a minor release while we collect feedback.
+</Callout>
+
+The unified message covers what every provider shares. For features one provider has and others don't, such as stored templates, tracking toggles, unsubscribe groups, or test modes, pass `native` on the send. Its keys are adapter names:
+
+```ts title="src/send-welcome.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [
+    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+  ],
+  fallback: { adapters: ["resend"] },
+});
+
+await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "ada@example.com",
+    subject: "Welcome to Acme",
+    text: "Thanks for signing up.",
+  },
+  {
+    native: {
+      postmark: {
+        template: { alias: "welcome", model: { name: "Ada" } },
+        trackOpens: true,
+      },
+    },
+  },
+);
+```
+
+Postmark sends its stored `welcome` template. If the route falls back to Resend ([when that happens](/docs/concepts/fallbacks-and-retries)), Resend sends the inline subject and text, because there's no `resend` entry.
+
+## How routing treats native options
+
+- Each adapter that is tried receives only its own entry. Postmark options never reach Resend, and Resend options never reach Postmark.
+- An adapter with no entry sends exactly what it would send without `native`.
+- TypeScript infers the accepted keys from the adapters you passed to `createEmailClient`. An unknown key, a key for an adapter without native options (such as SMTP), or a field from another provider fails type checking.
+- Native options aren't validated at runtime. If a JavaScript caller passes the wrong shape, the provider's own API returns the error.
+
+## Templates
+
+The message still needs a `subject` and `html` or `text`. When you set a native template, the adapter sends the template in place of the inline body, and the inline fields stay the content for other adapters in the route.
+
+| Adapter | Option | What the template replaces |
+| --- | --- | --- |
+| Resend | `template: { id, variables }` | `html`, `text`, and `subject`. Set `body: { subject }` to override the template subject. |
+| Postmark | `template: { id }` or `{ alias }`, plus `model`, `inlineCss` | Sends to `/email/withTemplate` without `Subject`, `HtmlBody`, or `TextBody`. |
+| SendGrid | `templateId`, `dynamicTemplateData` | `content`. Dynamic templates take their subject from the template. |
+| SES | `template: { name }` or `{ arn }`, plus `data` | `Content.Simple`. Headers and attachments are still sent. |
+| Mailgun | `template: { name, version, variables, renderText }` | `html` and `text`. Mailgun still uses the message subject. |
+| Brevo | `templateId`, `params` | `subject`, `htmlContent`, and `textContent`. Set `body: { subject }` to override. |
+| Loops | `transactionalId`, `dataVariables` | Overrides the adapter's `transactionalId` for this send and merges extra data variables. |
+
+With `sendPersonalized`, a SendGrid dynamic template gets each recipient's `variables` merged over `dynamicTemplateData` in that recipient's personalization.
+
+## Other options by provider
+
+Each adapter module exports its options type, for example `PostmarkNativeOptions` from `@opencoredev/email-sdk/postmark`.
+
+| Adapter | Options |
+| --- | --- |
+| Resend | `topicId` |
+| Postmark | `messageStream` (overrides the adapter option), `trackOpens`, `trackLinks`, `tag` |
+| SendGrid | `asm: { groupId, groupsToDisplay }`, `ipPoolName`, `batchId`, `sandboxMode`, `tracking: { clicks, opens, subscription }` |
+| SES | `configurationSetName` (overrides the adapter option), `listManagement: { contactListName, topicName }`, `feedbackForwardingEmailAddress` |
+| Mailgun | `tracking`, `trackingClicks`, `trackingOpens`, `testMode`, `requireTls`, `skipVerification`, `ipPool` |
+| Brevo | `batchId` |
+| Loops | `addToAudience` |
+
+## Fields the SDK doesn't model
+
+Every HTTP JSON adapter, including the seven above and adapters such as MailerSend, SparkPost, and ZeptoMail, accepts two escape hatches in its entry:
+
+- `body` is shallow-merged over the request body the adapter builds. Its top-level keys replace the SDK's, so `body.mail_settings` replaces the whole object that `sandboxMode` would set.
+- `headers` adds HTTP headers to the provider API request. These are not email headers; use `message.headers` for those. A per-send `idempotencyKey` still wins over a native `Idempotency-Key` header.
+
+```ts
+await email.send(message, {
+  native: {
+    mailersend: {
+      body: { template_id: "zr6ke4n6kzon4eqy" },
+      headers: { "X-Request-Id": requestId },
+    },
+  },
+});
+```
+
+Mailgun sends multipart form data, so its escape hatch is `fields` instead of `body`. Each field replaces the SDK's value for that name, and an array value appends one field per item: `fields: { "o:dkim": "no" }`.
+
+## Batches
+
+`sendMany` takes `native` both on the batch options and on each item. An item's entry for an adapter replaces the batch entry for that adapter. Entries for other adapters still come from the batch.
+
+```ts
+await email.sendMany(
+  [
+    { message: first },
+    { message: second, options: { native: { postmark: { tag: "vip" } } } },
+  ],
+  { native: { postmark: { messageStream: "broadcast" } } },
+);
+```
+
+The second item's Postmark entry is `{ tag: "vip" }` only, so it uses the adapter's default stream.
+
+## Native options on a custom adapter
+
+Declare the options type as the fourth type argument of `EmailAdapter`, and read it from `context.native`. Use a type alias, not an interface, so it fits the JSON-compatible constraint.
+
+```ts title="src/acme-adapter.ts"
+import type { EmailAdapter } from "@opencoredev/email-sdk";
+
+type AcmeNativeOptions = { priority?: "high" | "low" };
+
+export const acme: EmailAdapter<"acme", unknown, unknown, AcmeNativeOptions> = {
+  name: "acme",
+  capabilities: {
+    repeatedHeaders: true,
+    idempotency: "none",
+    scheduling: false,
+    personalized: "expanded",
+  },
+  async send(message, context) {
+    const priority = context.native?.priority ?? "low";
+    // Call the Acme API with `priority`.
+    return { adapter: "acme" };
+  },
+};
+```
+
+<Card title="Fallbacks and retries" href="/docs/concepts/fallbacks-and-retries" description="How a route moves from one adapter to the next." />
+<Card title="Adapter contract" href="/docs/reference/adapter-contract" description="The full EmailAdapter type and context." />
