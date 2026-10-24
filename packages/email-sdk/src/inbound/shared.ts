@@ -154,11 +154,21 @@ export function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
-/** Strict base64 for signatures and keys: malformed input throws. */
+/**
+ * Strict base64 for signatures and keys: malformed input throws instead of being repaired.
+ * Padded input must be a whole number of quads; unpadded input cannot end on a lone sixth-bit
+ * character, which `decodeBase64` would silently drop.
+ */
 export function decodeBase64Strict(value: string): Uint8Array<ArrayBuffer> {
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length % 4 === 1) throw new Error("Malformed base64.");
+  const padded = value.includes("=");
 
-  return decodeBase64(value);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value) || (padded ? value.length % 4 !== 0 : value.length % 4 === 1)) {
+    throw new Error("Malformed base64.");
+  }
+
+  const binary = atob(padded ? value : value + "=".repeat((4 - value.length % 4) % 4));
+
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
 export function decodeHexStrict(value: string): Uint8Array<ArrayBuffer> {
