@@ -113,6 +113,27 @@ describe("provider payloads", () => {
     }
   });
 
+  test("Mailchimp Transactional reports per-recipient rejections and fails when all are rejected", async () => {
+    const partial = await mailchimp({
+      apiKey: "key",
+      fetch: jsonCapture([
+        { email: "ada@example.com", status: "sent", _id: "mc_1" },
+        { email: "bob@example.com", status: "rejected", reject_reason: "hard-bounce", _id: "mc_2" },
+      ]).fetch,
+    }).send(messageWithoutReplyTo, context);
+
+    expect(partial.accepted).toEqual(["ada@example.com"]);
+    expect(partial.rejected).toEqual(["bob@example.com"]);
+
+    const allRejected = mailchimp({
+      apiKey: "key",
+      fetch: jsonCapture([{ email: "ada@example.com", status: "rejected", reject_reason: "hard-bounce", _id: "mc_3" }]).fetch,
+    }).send(messageWithoutReplyTo, context);
+
+    await expect(allRejected).rejects.toMatchObject({ adapter: "mailchimp", delivery: "not_sent", retryable: false, rejectedCount: 1 });
+    await expect(allRejected).rejects.toThrow("hard-bounce");
+  });
+
   test("Mailtrap maps the current transactional API schema", async () => {
     const capture = jsonCapture({ message_ids: ["mt_123"] });
 
