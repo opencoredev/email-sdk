@@ -22,6 +22,8 @@ disableTelemetry();
 
 const ROUNDS = 7;
 
+const SES_SECRET = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
+
 type Case = {
   name: string;
   iterations: number;
@@ -83,7 +85,7 @@ const sesClient = createEmailClient({
   adapters: [
     ses({
       accessKeyId: "AKIDEXAMPLE",
-      secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+      secretAccessKey: SES_SECRET,
       region: "us-east-1",
       fetch: mockFetch,
     }),
@@ -172,8 +174,28 @@ async function hmacRaw(key: BufferSource, value: string) {
   return crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(value));
 }
 
+async function deriveSesKey(dateStamp: string) {
+  let key = await hmacRaw(encoder.encode(`AWS4${SES_SECRET}`), dateStamp);
+  key = await hmacRaw(key, "us-east-1");
+  key = await hmacRaw(key, "ses");
+  key = await hmacRaw(key, "aws4_request");
+
+  return crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+}
+
+let cachedSesKey: { dateStamp: string; key: Promise<CryptoKey> } | undefined;
+
+// Same caching the SDK does: derive once per UTC day, reuse the imported key.
+function cachedSesKeyFor(dateStamp: string) {
+  if (cachedSesKey?.dateStamp !== dateStamp) {
+    cachedSesKey = { dateStamp, key: deriveSesKey(dateStamp) };
+  }
+
+  return cachedSesKey.key;
+}
+
 // The least a caller must do by hand to reach SES v2: SigV4 over the JSON body.
-async function rawSes() {
+async function rawSes(signingKey: (dateStamp: string) => Promise<CryptoKey>) {
   const body = JSON.stringify({
     FromEmailAddress: message.from,
     Destination: { ToAddresses: ["b@example.com"] },
@@ -213,11 +235,9 @@ async function rawSes() {
     hex(await crypto.subtle.digest("SHA-256", encoder.encode(canonical))),
   ].join("\n");
 
-  let key = await hmacRaw(encoder.encode("AWS4wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"), dateStamp);
-  key = await hmacRaw(key, "us-east-1");
-  key = await hmacRaw(key, "ses");
-  key = await hmacRaw(key, "aws4_request");
-  const signature = hex(await hmacRaw(key, toSign));
+  const signature = hex(
+    await crypto.subtle.sign("HMAC", await signingKey(dateStamp), encoder.encode(toSign)),
+  );
 
   const response = await mockFetch(`https://${host}/v2/email/outbound-emails`, {
     method: "POST",
@@ -264,7 +284,16 @@ const cases: Case[] = [
     sdk: async () => {
       await sesClient.send(message);
     },
-    raw: rawSes,
+    // Raw derives the signing key on every request, as a naive hand-rolled signer would.
+    raw: () => rawSes(deriveSesKey),
+  },
+  {
+    name: "ses send (raw caches key)",
+    iterations: 4_000,
+    sdk: async () => {
+      await sesClient.send(message);
+    },
+    raw: () => rawSes(cachedSesKeyFor),
   },
   {
     name: "resend sendMany x20",
