@@ -35,7 +35,7 @@ Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | 
 handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult>
 ```
 
-Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request and SNS subscription confirmations. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
+Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request and SNS subscription confirmations. A Graph handshake fails with `secret_missing` when `clientState` is empty, so a subscription is only confirmed once its notifications can be checked. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
 
 | `provider` | Required config | Optional |
 | --- | --- | --- |
@@ -47,7 +47,8 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 | `"graph"` | `clientState`, `api: { getAccessToken }` | `api.baseUrl` |
 | `"mailchimp"` | `secret` | `url` (defaults to `request.url`) |
 | `"sparkpost"`, `"lettr"` | `secret` (webhook token) | |
-| `"mailersend"`, `"lettermint"`, `"primitive"`, `"jetemail"` | `secret` | |
+| `"mailersend"`, `"lettermint"`, `"jetemail"` | `secret` | |
+| `"primitive"` | `secret` | `downloadOrigins` for self-hosted download URLs |
 | `"mailpace"` | `publicKey` | |
 | `"brevo"` | `auth` | `apiKey`, `baseUrl` |
 
@@ -57,24 +58,39 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 
 `verify…` functions return `{ ok: true }` or `{ ok: false, reason }` and never throw for bad input. `parse…` functions do not verify; call them only after a successful check. Every `fetch…` function takes `fetch` and `signal` options.
 
-| Provider | Verify | Parse | Fetch |
-| --- | --- | --- | --- |
-| Resend | `verifyResendInbound` | `parseResendInbound` | `fetchResendInboundEmail(id, { apiKey })` |
-| Postmark | `verifyBasicAuth` | `parsePostmarkInbound` | `fetchPostmarkInboundEmail(id, { serverToken })` |
-| Mailgun | `verifyMailgunInbound` | `parseMailgunInbound` | `fetchMailgunStoredEmail(storageUrl, { apiKey })` |
-| SendGrid | `verifySendGridInbound` | `parseSendGridInbound` | |
-| SES | `verifySnsMessage(parseSnsMessage(body))` | `parseSesInbound`, `parseSesNotification` | `fetchSesInboundFromS3({ bucket, key }, credentials)`, `confirmSnsSubscription` |
-| Cloudflare | | `parseCloudflareInbound(message)` | |
-| Microsoft Graph | `parseGraphNotifications` (checks `clientState`), `graphValidationResponse` | | `fetchGraphInboundEmail(resource, { getAccessToken })` |
-| Mailchimp Transactional | `verifyMandrillInbound` | `parseMandrillInbound` (returns an array) | |
-| SparkPost, Lettr | `verifySparkPostInbound` | `parseSparkPostInbound`, `parseLettrInbound` (arrays) | |
-| MailerSend | `verifyMailerSendInbound` | `parseMailerSendInbound` | |
-| Brevo | `verifyBasicAuth`, `verifyBearerToken` | `parseBrevoInbound` (array) | Attachments through `read()` |
-| MailPace | `verifyMailPaceInbound` | `parseMailPaceInbound` | |
-| Lettermint | `verifyLettermintInbound` | `parseLettermintInbound` | Signed-URL attachments through `read()` |
-| Primitive | `verifyPrimitiveInbound` | `parsePrimitiveInbound` | Downloads raw MIME when it is not inline |
-| JetEmail | `verifyJetEmailInbound` | `parseJetEmailInbound` | |
-| Mailtrap | `verifyMailtrapInbound` | | `fetchMailtrapInboundEmail(inboxId, messageId, { apiToken })` |
+| Provider | Verify | Parse |
+| --- | --- | --- |
+| Resend | `verifyResendInbound` | `parseResendInbound` |
+| Postmark | `verifyBasicAuth` | `parsePostmarkInbound` |
+| Mailgun | `verifyMailgunInbound` | `parseMailgunInbound` |
+| SendGrid | `verifySendGridInbound` | `parseSendGridInbound` |
+| SES | `verifySnsMessage` | `parseSesInbound`, `parseSesNotification` |
+| Cloudflare | | `parseCloudflareInbound` |
+| Microsoft Graph | `parseGraphNotifications` | |
+| Mailchimp Transactional | `verifyMandrillInbound` | `parseMandrillInbound` |
+| SparkPost, Lettr | `verifySparkPostInbound` | `parseSparkPostInbound`, `parseLettrInbound` |
+| MailerSend | `verifyMailerSendInbound` | `parseMailerSendInbound` |
+| Brevo | `verifyBasicAuth`, `verifyBearerToken` | `parseBrevoInbound` |
+| MailPace | `verifyMailPaceInbound` | `parseMailPaceInbound` |
+| Lettermint | `verifyLettermintInbound` | `parseLettermintInbound` |
+| Primitive | `verifyPrimitiveInbound` | `parsePrimitiveInbound` |
+| JetEmail | `verifyJetEmailInbound` | `parseJetEmailInbound` |
+| Mailtrap | `verifyMailtrapInbound` | |
+
+`verifySnsMessage` takes the result of `parseSnsMessage(body)`. `parseGraphNotifications` checks `clientState` on every notification, and `graphValidationResponse(url)` answers the subscription handshake. `parseMandrillInbound`, `parseSparkPostInbound`, `parseLettrInbound`, and `parseBrevoInbound` return arrays, because one post can carry several messages.
+
+### Fetching from provider APIs
+
+Some providers keep the message, or parts of it, behind their API:
+
+- `fetchResendInboundEmail(id, { apiKey })` returns bodies, headers, and attachments whose `read()` downloads them.
+- `fetchPostmarkInboundEmail(id, { serverToken })` returns the message details. That API lists attachments without their bytes, so their `read()` throws; read attachments from the webhook payload.
+- `fetchMailgunStoredEmail(storageUrl, { apiKey })` reads a message a route's `store()` action kept.
+- `fetchSesInboundFromS3({ bucket, key }, credentials)` downloads mail an S3 receipt action stored, and `confirmSnsSubscription(message)` confirms an SNS subscription.
+- `fetchGraphInboundEmail(resource, { getAccessToken })` fetches a Graph message as MIME.
+- `fetchMailtrapInboundEmail(inboxId, messageId, { apiToken })` fetches a Mailtrap message.
+- Brevo and Lettermint attachments download through `read()`. Brevo needs `apiKey`.
+- `parsePrimitiveInbound` downloads the raw message when the webhook does not include it, only from `https://*.primitive.dev`. A self-hosted Primitive lists its origins in `downloadOrigins`.
 
 `parseInbound(provider, payload, options?)` dispatches to the right parser and always returns an array. It covers every provider above except Cloudflare, Graph, and Mailtrap, which have no webhook payload to parse.
 

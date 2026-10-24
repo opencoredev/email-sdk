@@ -24,7 +24,17 @@ export async function POST(request: Request) {
     return new Response("ok");
   } catch (error) {
     if (error instanceof InboundError) {
-      return new Response(error.reason, { status: error.reason === "payload_invalid" ? 400 : 401 });
+      const status = {
+        signature_missing: 401,
+        signature_invalid: 401,
+        timestamp_expired: 401,
+        secret_missing: 500,
+        payload_invalid: 400,
+        unsupported: 200,
+        fetch_failed: 502,
+      }[error.reason];
+
+      return new Response(error.reason, { status });
     }
 
     throw error;
