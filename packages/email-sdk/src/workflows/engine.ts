@@ -405,6 +405,21 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return canceled;
   }
 
+  /** `pending` when it settles before the next timer turn, otherwise `fallback`. */
+  async function settledWithinTurn<T>(pending: Promise<T>, fallback: T): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const turn = new Promise<T>((resolve) => {
+      timer = setTimeout(() => resolve(fallback), 0);
+    });
+
+    try {
+      return await Promise.race([pending, turn]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** Replays the run's definition until it completes, fails, suspends on a wait, or loses the run. */
   async function execute(loaded: WorkflowRun, owner: string): Promise<WorkflowRun | undefined> {
     const definition = definitionFor(loaded);
@@ -839,14 +854,27 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
     );
 
-    const outcome = await Promise.race([finished, suspended]);
+    let outcome = await Promise.race([finished, suspended]);
+
+    // Every queued microtask runs before a timer does, so one timer turn lets a rejection already
+    // on its way, such as a rejected sibling in `Promise.all` beside `ctx.waitForEvent`, settle
+    // `run` before the execution counts as suspended. A rejection behind real I/O or a timer
+    // arrives later and is replayed on the run's next wake.
+    if (outcome.kind === "suspended") outcome = await settledWithinTurn(finished, outcome);
 
     // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
     if (outcome.kind !== "suspended") await Promise.race([queue, suspended]);
 
     if (infrastructureError) throw infrastructureError;
 
-    if (outcome.kind === "suspended" || stopped) return lost ? await store.get(loaded.id) : current;
+    // A sibling `ctx` call may have saved a wait after `run` rejected, as with a rejected promise in
+    // `Promise.all` beside `ctx.waitForEvent`. The rejection still fails the run. A stop that ended
+    // the run itself (a cancel, a failed step, a lost lease) stands.
+    const failedBesideWait = outcome.kind === "failed" && !lost && !isTerminalRun(current);
+
+    if (outcome.kind === "suspended" || (stopped && !failedBesideWait)) {
+      return lost ? await store.get(loaded.id) : current;
+    }
 
     stopped = true;
 

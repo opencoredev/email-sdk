@@ -1801,6 +1801,33 @@ describe("workflows: review regressions, round 3", () => {
     expect(sender.deliveries).toHaveLength(1);
   });
 
+  test.each([
+    ["without a timeout", undefined],
+    ["with a timeout", "1d"],
+  ] as const)("run rejecting beside a queued waitForEvent %s fails the run", async (_label, timeout) => {
+    const failures: string[] = [];
+
+    const rejected = defineWorkflow({
+      name: "rejected",
+      run: async (ctx) => {
+        await Promise.all([Promise.reject(new Error("sibling broke")), ctx.waitForEvent("go", { timeout })]);
+      },
+    });
+
+    const { engine, scheduler } = setup([rejected], {
+      hooks: { onRunFailed: ({ error }) => void failures.push(error.message) },
+    });
+
+    const run = await engine.start(rejected, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: "sibling broke" });
+    expect(run.wait).toBeUndefined();
+    expect((await engine.get("run-1"))?.status).toBe("failed");
+    expect(failures).toEqual(["sibling broke"]);
+    expect(scheduler.pending()).toEqual([]);
+  });
+
   test("a step callback that runs another workflow's execution may use that run's ctx", async () => {
     const child = defineWorkflow({
       name: "child",
