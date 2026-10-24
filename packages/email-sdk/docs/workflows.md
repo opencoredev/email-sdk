@@ -91,6 +91,7 @@ const engine = createWorkflowEngine({
   clock,                    // optional { now(): number }, defaults to Date.now
   isSuppressed,             // optional (address) => boolean | Promise<boolean>
   retry: { maxAttempts: 3, backoff: "1m" },
+  leaseDuration: "5m",      // optional; how long an execution holds a run
   hooks: { onStepStart, onStepComplete, onStepError, onRunComplete, onRunCanceled, onRunFailed },
 });
 
@@ -107,7 +108,7 @@ await engine.resumeDue();       // polling fallback for crons
 
 | Call | Journaled result | Notes |
 | --- | --- | --- |
-| `ctx.send(name, message, options?)` | `{ adapter, id? }` | idempotency key `wf:<runId>:<name>`; checks suppression first |
+| `ctx.send(name, message, options?)` | `{ adapter, id? }` | idempotency key `workflowIdempotencyKey(runId, name)`; checks suppression first |
 | `ctx.step(name, fn, { retry? })` | `fn`'s JSON result | retried per policy |
 | `ctx.sleep(name, duration)` | none | `"30s"`, `"15m"`, `"2h"`, `"3d"`, `"1w"`, or ms |
 | `ctx.sleepUntil(name, date)` | none | absolute time |
@@ -141,7 +142,9 @@ type WorkflowRun = {
   output?: WorkflowJsonValue;
   error?: { message: string; step?: string };
   cancelReason?: string;
+  lease?: { owner: string; until: number }; // the execution that holds the run
   revision: number;                // optimistic concurrency
+  dueAt?: number;                  // lease expiry, wait deadline, or now when runnable
   createdAt: number;
   updatedAt: number;
 };
@@ -165,9 +168,25 @@ type WorkflowStore = {
 `create` returning false makes `start` idempotent: use a deterministic id (`onboarding:${userId}`)
 and a repeated signup webhook returns the existing run instead of starting a second drip.
 
-`save` with `expectedRevision` is how two workers racing on one run stay safe: the loser's save
-fails, it stops executing, and the winner's state stands. The in-memory store also round-trips every
-run through `JSON.stringify` so tests catch values a real store would mangle.
+`save` with `expectedRevision` is the only atomic primitive the engine needs. Everything that must
+not happen twice is built on it:
+
+- **Claiming.** Before replaying, an execution saves a lease (`{ owner, until }`) with a revision
+  check. A run is claimable only when it is active, has no live lease, and its wait has passed or a
+  delivered event satisfies it. Of two workers that read the same due run, one claim wins; the other
+  sees a conflict, reloads, finds a live lease, and leaves.
+- **Renewing.** The owner renews the lease with a revision-checked save before every step's side
+  effect, and on a heartbeat (every third of `leaseDuration`) while the effect runs. Every save by
+  the owner reloads on conflict and gives up if the fresh run has another owner or is terminal, so a
+  stale worker cannot advance or commit the run. The lease is released when the run waits or ends.
+- **Other writers.** Event delivery and cancellation never take the lease. They are plain
+  revision-checked writes, so they conflict with the owner's next save, which reloads and sees them.
+
+A step can run twice only when its worker stops renewing for a whole lease (crash, hang, or a
+blocked event loop) and another worker takes over. For sends the idempotency key covers that case.
+
+The in-memory store also round-trips every run through `JSON.stringify` so tests catch values a real
+store would mangle.
 
 ### `WorkflowScheduler`
 
@@ -180,27 +199,33 @@ type WorkflowScheduler = {
 
 When a timer fires, the host calls `engine.resume(runId)`. A run waits on at most one thing at a
 time, so one timer per run is enough. Timers are hints: `resume` re-reads the run and does nothing if
-it is not due yet, already terminal, or waiting on an event. That makes duplicate, late, and spurious
+it is not due yet, already terminal, held by a live lease, or waiting on an event that has not
+arrived. That makes duplicate, late, and spurious
 timer deliveries harmless, and lets `cancel` be best-effort.
 
 Without a push scheduler, call `engine.resumeDue()` from a cron. It asks the store for runs whose
-wait has passed.
+`dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired because
+their worker crashed.
 
 The in-memory scheduler plus a manual clock (`createManualClock`) make tests deterministic: nothing
 sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due timers in order.
 
 ### Execution loop
 
-1. Load the run. Return if terminal, or if it waits on a future time or an event.
+1. Load the run. Return unless it is claimable (see above), then claim it with a lease.
 2. Call `run(ctx, input)` and race it against a suspend signal.
 3. Each `ctx` call checks the journal. A completed entry returns its result. Otherwise:
-   - `send` / `step`: fire `onStepStart`, run the side effect, journal the result, save (CAS), fire
+   - `send` / `step`: renew the lease (this is where a cancellation or a lost lease stops the run),
+     fire `onStepStart`, run the side effect with the heartbeat on, journal the result, save, fire
      `onStepComplete`. On failure, record the attempt; if attempts remain, set a retry wait and
      suspend, else fail the run.
-   - `sleep`: if no wait is set, set `wait = { kind: "sleep", until }`, save, schedule, suspend. If
-     the wait has passed, journal completion and continue.
-   - `waitForEvent`: consume a matching inbox event if present. Otherwise set an event wait (with
-     `until` when a timeout is given) and suspend. On timeout, journal `timed_out`.
+   - `sleep`: if the persisted wait has passed, journal completion and continue. Otherwise save
+     `wait = { kind: "sleep", until }`, schedule, suspend.
+   - `waitForEvent`: one revision-checked save decides between three outcomes, re-evaluated on the
+     fresh run after any conflict: consume the first inbox event with `receivedAt <= until`; journal
+     `timed_out` if `until` has passed; or save the event wait and suspend. Because a concurrent
+     delivery makes that save conflict, an event can't land between "inbox is empty" and "wait
+     saved" and be stranded.
 4. Suspension leaves the user's `run` promise pending forever instead of throwing, so a user
    `try/catch` around `ctx.sleep` cannot swallow it.
 5. When `run` resolves, the run completes and its return value is stored as `output`. When it throws,
@@ -211,7 +236,10 @@ the steps one after another rather than racing saves.
 
 ### Idempotency
 
-Each `ctx.send` passes `idempotencyKey: "wf:<runId>:<stepName>"` to `email.send`. The journal makes
+Each `ctx.send` passes `idempotencyKey: workflowIdempotencyKey(runId, stepName)` to `email.send`:
+`wf_` plus the SHA-256 hex digest of `JSON.stringify([runId, stepName])`. JSON encoding keeps the
+pair unambiguous (run `a:b` step `c` and run `a` step `b:c` used to collide as `wf:a:b:c`), and the
+hash keeps the key at 67 characters, inside provider limits such as Resend's 256. The journal makes
 replays skip completed sends; the key covers the remaining window, a crash after the provider
 accepted the message but before the journal save. On adapters with `idempotency: "native"` (Resend,
 Postmark, and others) the provider drops the duplicate; on `message_id` adapters (SMTP) the
@@ -224,10 +252,17 @@ window. The docs say so.
   subject.
 - If the event name is in the definition's `cancelOn`, the run is canceled (timers canceled,
   `onRunCanceled` fired, `cancelReason: "event:<name>"`).
-- Otherwise the event goes into the run's inbox (capped at 50). A waiting run whose wait matches is
-  resumed immediately. A run that has not reached its `waitForEvent` yet consumes the inbox event
-  when it gets there, so "user activated before the reminder step" works.
-- `engine.cancel(runId, reason)` cancels by id.
+- Otherwise the event goes into the run's inbox (capped at 50), stamped with `receivedAt`. Delivery
+  never touches the run's wait or its deadline. A waiting run whose wait matches is resumed
+  immediately. A run that has not reached its `waitForEvent` yet consumes the inbox event when it
+  gets there, so "user activated before the reminder step" works.
+- Event versus timeout is decided by persisted timestamps, not by which worker gets there first: an
+  event with `receivedAt <= wait.until` wins, a later one loses to the timeout and stays in the
+  inbox. `receivedAt` comes from the delivering engine's clock.
+- `engine.cancel(runId, reason)` cancels by id. Cancellation (by id, `cancelOn`, or suppression) is a
+  revision-checked write of the terminal state and does not wait for a running step. The owner's next
+  save sees the canceled run and stops, so no later step or send runs. An effect already in flight,
+  such as a provider request, may still complete; its result is discarded.
 - `isSuppressed(address)` runs before every send. A suppressed recipient cancels the run with reason
   `suppressed` and no send happens. Wire it to your suppression list or bounce table.
 
@@ -269,7 +304,9 @@ The workflows code lives in `src/workflows/` and is reachable only through the
 ## Convex integration
 
 `@opencoredev/convex-email` stores runs in a `workflowRuns` table and exposes
-`workflows:create/get/save/listActiveBySubject/listDue` mutations and queries. The run is stored as
+`workflows:create/get/save/listActiveBySubject/listDue` mutations and queries.
+`listActiveRunsBySubject` returns one page; `convexWorkflowStore` follows its cursor across queries
+so every active run for a subject is returned without one query reading the whole set. The run is stored as
 a JSON string plus indexed columns (`runId`, `status`, `subject`, `dueAt`, `revision`), so the
 component never depends on the engine's types, and the CAS check in `save` is transactional.
 

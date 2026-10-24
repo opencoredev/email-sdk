@@ -9,7 +9,7 @@ description: Run Email SDK workflows on Convex with the component's store, sched
 
 The component provides everything a workflow engine needs on Convex:
 
-- `convexWorkflowStore` keeps runs in the component's `workflowRuns` table. Saves check the run's revision inside one mutation, so two actions racing on a run can't overwrite each other.
+- `convexWorkflowStore` keeps runs in the component's `workflowRuns` table. Saves check the run's revision inside one mutation, so two actions racing on a run can't overwrite each other, and only the action holding the run's lease executes its steps. Subject lookups page through the table 100 runs per query, so an `unsubscribed` event reaches every run for that subject.
 - `convexWorkflowScheduler` schedules each wait with `ctx.scheduler.runAt`.
 - `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one.
 

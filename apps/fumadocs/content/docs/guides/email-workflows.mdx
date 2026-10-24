@@ -96,13 +96,15 @@ await workflows.sendEvent({ name: "unsubscribed", subject: user.email });
 await workflows.cancel(`onboarding:${user.userId}`, "account deleted");
 ```
 
+`cancel` and cancel events take effect right away, even while another worker is in the middle of a step. A send or step that is already in flight may still finish, but its result is discarded and nothing after it runs.
+
 `start` runs the workflow until its first wait and returns the saved run. `subject` is the key `sendEvent` uses to find runs, usually the recipient's address or user id.
 
 ## Steps
 
 | Call | Returns | Notes |
 | --- | --- | --- |
-| `ctx.send(name, message, options?)` | `{ adapter, id? }` | Sends through your client with idempotency key `wf:<runId>:<name>`. |
+| `ctx.send(name, message, options?)` | `{ adapter, id? }` | Sends through your client with the idempotency key `workflowIdempotencyKey(runId, name)` returns. |
 | `ctx.step(name, fn, { retry? })` | `fn`'s result | The result must be JSON. A `Date` is a type error. |
 | `ctx.sleep(name, duration)` | nothing | `"30s"`, `"15m"`, `"2h"`, `"3d"`, `"1w"`, or milliseconds. |
 | `ctx.sleepUntil(name, date)` | nothing | Waits for an absolute time. |
@@ -111,6 +113,8 @@ await workflows.cancel(`onboarding:${user.userId}`, "account deleted");
 `ctx.runId`, `ctx.workflow`, `ctx.version`, `ctx.subject`, and `ctx.startedAt` are also available and stay the same across replays.
 
 An event that arrives before the run reaches its `waitForEvent` is kept in the run's inbox and consumed when the run gets there, so a user who activates on day one still skips the nudge.
+
+A timeout's deadline is fixed when the run first reaches the `waitForEvent`. The engine stamps each event with the time `sendEvent` received it and compares the two: an event received at or before the deadline wins, even if the timeout timer fires first, and an event received after the deadline loses to the timeout. A late event stays in the inbox for a later `waitForEvent` on the same event name. Each engine uses its own clock for these timestamps, so keep worker clocks in sync.
 
 ### Input
 
@@ -143,6 +147,8 @@ Your email client's own `retry` option still applies inside each attempt.
 
 The saved progress stops a finished step from running again. One gap remains: a crash after the provider accepted an email but before the engine saved that step. On recovery, the send runs again with the same idempotency key.
 
+The key is `wf_` followed by the SHA-256 hex digest of the run id and step name, 67 characters however long they are. `workflowIdempotencyKey(runId, step)` returns it if you need to match a provider record to a step.
+
 - Adapters with native idempotency (Resend, Postmark, and others marked in [delivery capabilities](/docs/adapters/capability-groups)) drop the duplicate.
 - SMTP sets a stable `Message-ID`, which receiving systems can use to dedupe.
 - Adapters with no idempotency support may deliver that one email twice.
@@ -166,11 +172,13 @@ type WorkflowScheduler = {
 };
 ```
 
-`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run.
+`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step, and every third of `leaseDuration` (default `"5m"`) while a step runs, and stops as soon as a save shows the lease moved or the run was canceled. Another worker only takes the run over once the lease expires, so a step can run twice only if its worker stops renewing, for example because it crashed or hung.
+
+`listActiveBySubject` must return every active run for the subject, not a first page, or `sendEvent({ subject })` skips the rest.
 
 Timers only need to be roughly right. `resume` does nothing when the run isn't due yet, is waiting on an event, or has finished, so duplicate, late, and early timer deliveries are harmless.
 
-If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Run that cron even with a scheduler: it also recovers runs whose worker crashed mid-step, once their five-minute lease expires.
+If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Run that cron even with a scheduler: it also recovers runs whose worker crashed mid-step, once their lease expires.
 
 On Convex, the component provides all three pieces. See [Convex workflows](/docs/integrations/convex/workflows).
 
