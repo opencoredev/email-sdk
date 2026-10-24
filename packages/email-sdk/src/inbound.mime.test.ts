@@ -407,6 +407,11 @@ describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
     ["extended value wins over the plain one", "filename=\"plain.txt\"; filename*=UTF-8''%C3%A9.txt", "é.txt"],
     ["extended value is not decoded again as an encoded word", "filename*=UTF-8''%3D%3FUTF-8%3FB%3FYQ%3D%3D%3F%3D", "=?UTF-8?B?YQ==?="],
     ["encoded word in a quoted filename", "filename=\"=?UTF-8?B?w6kudHh0?=\"", "é.txt"],
+    ["encoded word in a quoted continuation", "filename*0=\"=?UTF-8?B?w6k=?=\"; filename*1=\".txt\"", "é.txt"],
+    ["encoded word split across quoted continuations", "filename*0=\"=?UTF-8?B?w6ku\"; filename*1=\"dHh0?=\"", "é.txt"],
+    ["encoded word beside a percent-encoded piece", "filename*0=\"=?UTF-8?B?w6k=?=\"; filename*1*=%2Etxt", "=?UTF-8?B?w6k=?=.txt"],
+    ["encoded word beside a charset piece", "filename*0*=UTF-8''a; filename*1=\"=?UTF-8?B?w6k=?=\"", "a=?UTF-8?B?w6k=?="],
+    ["encoded word beside a starred piece with no encoding", "filename*0=\"=?UTF-8?B?w6k=?=\"; filename*1*=.txt", "é.txt"],
   ];
 
   test.each(filenames)("filename: %s", (_label, disposition, expected) => {

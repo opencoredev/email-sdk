@@ -39,8 +39,11 @@ interface MimeEntity {
 interface ContentType {
   type: string;
   params: Map<string, string>;
-  /** Names of RFC 2231 parameters, whose values are already decoded text. */
-  extended: Set<string>;
+  /**
+   * Names of parameters that used RFC 2231 charset or percent encoding. Their values are already
+   * decoded text, so they must not go through RFC 2047 decoding as well.
+   */
+  rfc2231Encoded: Set<string>;
 }
 
 interface WalkState {
@@ -376,6 +379,8 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
     extended.set(name, list);
   }
 
+  const rfc2231Encoded = new Set<string>();
+
   for (const [name, pieces] of extended) {
     pieces.sort((left, right) => left.index - right.index);
     let charset = "utf-8";
@@ -405,8 +410,11 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
         if (parts) {
           charset = parts[1] || charset;
           text = parts[2] ?? "";
+          rfc2231Encoded.add(name);
         }
       }
+
+      if (text.includes("%")) rfc2231Encoded.add(name);
 
       appendPercentBytes(bytes, text);
     }
@@ -415,7 +423,7 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
     params.set(name, decoded);
   }
 
-  return { type: head.toLowerCase(), params, extended: new Set(extended.keys()) };
+  return { type: head.toLowerCase(), params, rfc2231Encoded };
 }
 
 function headerValue(headers: readonly InboundHeader[], name: string): string | undefined {
@@ -456,12 +464,13 @@ function multipartBodies(body: string, boundary: string): string[] {
 
 /**
  * A filename parameter as text. Many mailers put RFC 2047 encoded words in a plain quoted value,
- * so those decode; an RFC 2231 value is already decoded and must not be decoded again.
+ * continued or not, so those decode; a value that used RFC 2231 charset or percent encoding is
+ * already decoded and must not be decoded again.
  */
 function filenameOf(header: ContentType, param: string): string | undefined {
   const value = header.params.get(param);
 
-  if (value === undefined || header.extended.has(param)) return value;
+  if (value === undefined || header.rfc2231Encoded.has(param)) return value;
 
   return decodeEncodedWords(value);
 }
