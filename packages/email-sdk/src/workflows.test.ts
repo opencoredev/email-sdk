@@ -827,6 +827,42 @@ describe("workflows: multiple workers", () => {
     expect((await a.get("run-1"))?.status).toBe("completed");
   });
 
+  test("a claimed retry keeps its lease while the retried step runs", async () => {
+    const slow = gate();
+    let calls = 0;
+
+    const retried = defineWorkflow({
+      name: "retried",
+      retry: { maxAttempts: 3, backoff: "1m" },
+      run: async (ctx) => {
+        await ctx.step("work", async () => {
+          calls += 1;
+
+          if (calls === 1) throw new Error("flaky");
+
+          await slow.pass();
+
+          return calls;
+        });
+      },
+    });
+
+    const { clock, a, b } = sharedWorkers([retried]);
+
+    await a.start(retried, null, { id: "run-1" });
+    clock.advance("1m");
+
+    const first = a.resume("run-1");
+
+    await slow.reached;
+    expect(await b.resumeDue()).toBe(0);
+    slow.open();
+    await first;
+
+    expect(calls).toBe(2);
+    expect((await a.get("run-1"))?.status).toBe("completed");
+  });
+
   test("a worker whose lease expired cannot commit or send after another worker takes over", async () => {
     const slow = gate();
     let calls = 0;
