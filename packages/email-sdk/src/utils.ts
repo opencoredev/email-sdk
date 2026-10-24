@@ -90,12 +90,14 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
   return isList(addresses) ? addresses.map(formatAddress) : [formatAddress(addresses)];
 }
 
+const ANGLE_ADDRESS = /<([^>]+)>/;
+
 export function emailAddressOf(address: EmailAddress): string {
   if (!isStringMember(address)) {
     return address.email;
   }
 
-  const match = address.match(/<([^>]+)>/);
+  const match = address.includes("<") ? ANGLE_ADDRESS.exec(address) : null;
 
   return (match?.[1] ?? address).trim();
 }
@@ -170,12 +172,14 @@ export function assertMessage(message: EmailMessage) {
   }
 }
 
+const RFC_3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 // Past sendAt values are intentionally allowed: providers either send immediately or reject
 // with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
 export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
   if (
     isStringMember(sendAt) &&
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(sendAt)
+    !RFC_3339_TIMESTAMP.test(sendAt)
   ) {
     throw new EmailValidationError(
       `Email message sendAt must be an RFC 3339 timestamp with Z or an explicit offset: "${sendAt}".`,
