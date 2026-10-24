@@ -2,8 +2,10 @@ import { EmailAdapterError } from "./errors.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
 import {
+  arrayify,
   builtInAdapterDefinition,
   attachmentToBase64,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
@@ -56,12 +58,15 @@ export function postmark(
       }
 
       const body = await responseJson(response);
-      const to = jsonString(body, "To");
+
+      // A 200 means Postmark accepted the whole message. Its "To" field is one comma-joined
+      // string and omits Cc/Bcc, so list the submitted recipients instead.
+      const accepted = [message.to, message.cc, message.bcc].flatMap(list => arrayify(list).map(emailAddressOf));
 
       return {
         adapter: "postmark",
         id: jsonString(body, "MessageID"),
-        accepted: to ? [to] : undefined,
+        accepted,
         raw: body,
       };
     },

@@ -1,5 +1,6 @@
 import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { jsonArray } from "./internal/decode.js";
 import { apiAddress, apiAddresses, base64Attachments, optionalApiAddresses } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -54,7 +55,8 @@ export function scaleway(
     parseResponse(body) {
       return {
         adapter: "scaleway",
-        id: firstString(body, ["id", "email_id"]),
+        // CreateEmail returns { emails: [{ id, ... }] }, one entry per recipient.
+        id: firstString(body, ["id", "email_id"]) ?? firstString(jsonArray(body, "emails")[0], ["id", "message_id"]),
         raw: body,
       };
     },

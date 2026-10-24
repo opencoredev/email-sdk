@@ -1,4 +1,6 @@
+import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { jsonString } from "./internal/decode.js";
 import { base64Attachments, emailParts, sendAtUtcDateTime } from "./payloads.js";
 import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
 import {
@@ -54,12 +56,43 @@ export function mailchimp(
       };
     },
     parseResponse(body) {
-      const first = Array.isArray(body) ? body[0] : undefined;
+      const results = Array.isArray(body) ? body : [];
+      const first = results[0];
+      const accepted: string[] = [];
+      const rejected: string[] = [];
+      const reasons = new Set<string>();
+
+      // Mandrill answers 200 with one result per recipient; "rejected" and "invalid" were not sent.
+      for (const result of results) {
+        const email = jsonString(result, "email");
+        const status = jsonString(result, "status");
+
+        if (status === "rejected" || status === "invalid") {
+          if (email) rejected.push(email);
+
+          reasons.add(jsonString(result, "reject_reason") ?? status);
+        } else if (email) {
+          accepted.push(email);
+        }
+      }
+
+      if (results.length && !accepted.length && rejected.length) {
+        throw new EmailAdapterError(`Mailchimp Transactional rejected every recipient (${[...reasons].join(", ")}).`, {
+          adapter: "mailchimp",
+          retryable: false,
+          delivery: "not_sent",
+          acceptedCount: 0,
+          rejectedCount: rejected.length,
+          cause: body,
+        });
+      }
 
       return {
         adapter: "mailchimp",
         id: first ? firstString(first, ["_id", "id"]) : undefined,
         messageId: first ? firstString(first, ["_id", "id"]) : undefined,
+        accepted: results.length ? accepted : undefined,
+        rejected: results.length ? rejected : undefined,
         raw: body,
       };
     },

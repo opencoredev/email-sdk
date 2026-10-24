@@ -55,6 +55,7 @@ describe("provider payloads", () => {
     }).send(message, context);
 
     expect(response.id).toBe("postmark_123");
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
     expect(capture.calls[0]?.json).toMatchObject({
       From: "Acme <hello@example.com>",
       To: "Ada <ada@example.com>",

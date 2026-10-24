@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "Uuid": [
+        "b8d3e2d4-3a2f-4f3d-9f0e-1a2b3c4d5e6f"
+      ],
+      "MessageId": "<CAKXyz@mail.gmail.com>",
+      "InReplyTo": "<prev@brevo.test>",
+      "From": {
+        "Name": "Ada Lovelace",
+        "Address": "ada@example.com"
+      },
+      "To": [
+        {
+          "Name": null,
+          "Address": "reply@inbound.acme.test"
+        }
+      ],
+      "Recipients": [
+        "reply@inbound.acme.test"
+      ],
+      "Cc": [],
+      "ReplyTo": null,
+      "SentAtDate": "Mon, 6 Oct 2025 09:00:00 +0000",
+      "Subject": "Re: invoice",
+      "Attachments": [
+        {
+          "Name": "invoice.pdf",
+          "ContentType": "application/pdf",
+          "ContentLength": 1024,
+          "ContentID": null,
+          "DownloadToken": "tok_123"
+        }
+      ],
+      "Headers": {
+        "Received": [
+          "by a",
+          "by b"
+        ],
+        "Message-Id": "<CAKXyz@mail.gmail.com>",
+        "References": "<root@brevo.test> <prev@brevo.test>"
+      },
+      "SpamScore": 2.5,
+      "ExtractedMarkdownMessage": "Thanks!",
+      "RawHtmlBody": "<p>Thanks!</p>",
+      "RawTextBody": "Thanks!"
+    }
+  ]
+}

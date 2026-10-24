@@ -539,6 +539,14 @@ describe("graph authentication", () => {
     expect(capture.calls.filter((call) => call.url.includes("/sendMail"))).toHaveLength(2);
   });
 
+  test("sends the text body when html is an empty string", async () => {
+    const capture = graphCapture();
+
+    await graph({ getAccessToken: () => "token", user, fetch: capture.fetch }).send({ ...message, html: "", text: "Code 123456" }, context);
+
+    expect(JSON.parse(sendMailCall(capture.calls).body).message.body).toEqual({ contentType: "Text", content: "Code 123456" });
+  });
+
   test("uses getAccessToken instead of the token endpoint", async () => {
     const capture = graphCapture();
 

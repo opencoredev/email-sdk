@@ -224,6 +224,19 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
+  test("Lettermint and Primitive replace a lowercase static idempotency key instead of joining it", async () => {
+    const lettermintCapture = jsonCapture({ message_id: "lm_123", status: "pending" });
+    const primitiveCapture = jsonCapture({ success: true, data: { id: "prim_123" } });
+
+    await lettermint({ apiToken: "lm_token", headers: { "idempotency-key": "static-key" }, fetch: lettermintCapture.fetch })
+      .send(messageWithoutProviderSpecificFields, context);
+    await primitive({ apiKey: "key", headers: { "idempotency-key": "static-key" }, fetch: primitiveCapture.fetch })
+      .send({ ...messageWithoutProviderSpecificFields, to: "ada@example.com", cc: undefined, bcc: undefined, replyTo: undefined }, context);
+
+    expect(lettermintCapture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(primitiveCapture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
   test("Lettr maps normalized fields and encodes attachments", async () => {
     const capture = jsonCapture({ data: { request_id: "lttr_123", accepted: 3, rejected: 0 } });
 
