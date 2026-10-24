@@ -1025,6 +1025,27 @@ describe("workflows: multiple workers", () => {
     expect((await started).cancelReason).toBe("event:unsubscribed");
     expect(sender.calls).toHaveLength(0);
   });
+
+  test("a cancel while onStepStart runs stops the send it announced", async () => {
+    const hook = gate();
+
+    const hooked = defineWorkflow({
+      name: "hooked",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"));
+      },
+    });
+
+    const { sender, a, b } = sharedWorkers([hooked], { hooks: { onStepStart: () => hook.pass() } });
+    const started = a.start(hooked, ada, { id: "run-1" });
+
+    await hook.reached;
+    expect(await b.cancel("run-1")).toBe(true);
+    hook.open();
+
+    expect((await started).status).toBe("canceled");
+    expect(sender.calls).toHaveLength(0);
+  });
 });
 
 describe("workflows: timers", () => {
