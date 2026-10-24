@@ -178,7 +178,7 @@ function decodeQuotedPrintable(body: string): Uint8Array {
 }
 
 function decodeTransfer(body: string, encoding: string | undefined): Uint8Array {
-  switch (encoding?.trim().toLowerCase()) {
+  switch (splitParams(encoding ?? "")[0]?.toLowerCase()) {
     case "base64":
       return decodeBase64(body);
     case "quoted-printable":
@@ -188,7 +188,50 @@ function decodeTransfer(body: string, encoding: string | undefined): Uint8Array 
   }
 }
 
-/** Split a structured header value on `;`, respecting quoted strings. */
+/** Index just past the RFC 822 comment that opens at `start`, honoring nesting and `\\` escapes. */
+function commentEnd(value: string, start: number): number {
+  let depth = 0;
+
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (char === "\\") index += 1;
+    else if (char === "(") depth += 1;
+    else if (char === ")" && --depth === 0) return index + 1;
+  }
+
+  return value.length;
+}
+
+interface CommentRun {
+  /** Index of the first character after the run. */
+  end: number;
+  /** A `;` or the end of the value follows the run, so it is a removable comment. */
+  trailing: boolean;
+}
+
+/** Skip a run of comments and whitespace. */
+function commentRun(value: string, start: number): CommentRun {
+  let index = start;
+
+  while (index < value.length) {
+    const char = value[index];
+
+    if (char === ";") return { end: index, trailing: true };
+
+    if (char === "(") index = commentEnd(value, index);
+    else if (char === " " || char === "\t") index += 1;
+    else return { end: index, trailing: false };
+  }
+
+  return { end: index, trailing: true };
+}
+
+/**
+ * Split a structured header value on `;`, respecting quoted strings and dropping RFC 822
+ * comments such as `boundary=b (generated)`. A parenthesis followed by more token text, as in
+ * the unquoted `filename=scan (1).pdf` some mailers send, is kept as literal text.
+ */
 function splitParams(value: string): string[] {
   const parts: string[] = [];
   let current = "";
@@ -197,7 +240,14 @@ function splitParams(value: string): string[] {
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
 
-    if (char === "\\" && quoted) {
+    if (char === "(" && !quoted) {
+      // Consume the whole run at once so a long chain of comments is scanned only once.
+      const run = commentRun(value, index);
+
+      if (current.trim() !== "" && !run.trailing) current += value.slice(index, run.end);
+
+      index = run.end - 1;
+    } else if (char === "\\" && quoted) {
       current += char + (value[index + 1] ?? "");
       index += 1;
     } else if (char === "\"") {
