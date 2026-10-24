@@ -239,6 +239,32 @@ function hasMatchedEvent(run: WorkflowRun) {
   return run.wait?.kind === "event" && matchingEventIndex(run.inbox, run.wait.event, run.wait.until) !== -1;
 }
 
+function isSameWait(a: WorkflowWait | undefined, b: WorkflowWait | undefined) {
+  if (a === undefined || b === undefined) return a === b;
+
+  const sameEvent = a.kind !== "event" || (b.kind === "event" && a.event === b.event);
+
+  return a.kind === b.kind && a.step === b.step && a.until === b.until && sameEvent;
+}
+
+/**
+ * True when `fresh` is unclaimed and still stands where `parked` left it: the same wait and the same
+ * steps. Writes that don't claim a run, such as an event delivery, leave both alone; an execution
+ * that claimed the run and moved it on changes one of them.
+ */
+function isParkedAt(fresh: WorkflowRun, parked: WorkflowRun) {
+  if (fresh.status !== "waiting" || fresh.lease !== undefined) return false;
+
+  if (!isSameWait(fresh.wait, parked.wait)) return false;
+
+  const steps = Object.keys(parked.journal);
+
+  return (
+    Object.keys(fresh.journal).length === steps.length &&
+    steps.every((step) => fresh.journal[step]?.status === parked.journal[step]?.status)
+  );
+}
+
 /** True when a worker may claim the run now: active, unleased, and not blocked on a future wait. */
 function isRunnable(run: WorkflowRun, at: number) {
   if (isTerminalRun(run) || hasLiveLease(run, at)) return false;
@@ -317,14 +343,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * the transform to the fresh state, so concurrent event deliveries are not lost; transforms must
    * therefore decide from the run they are given. With an `owner`, every save renews that
    * execution's lease while the run is running and releases it once the run waits or ends, and the
-   * commit gives up when the fresh run is held by someone else. Returns undefined when nothing was
-   * saved: the transform declined, the run disappeared, became terminal, or changed owner. Throws
-   * `write_conflict` when every attempt lost to a concurrent write.
+   * commit gives up when the fresh run is held by someone else, unless `adopts` accepts the fresh
+   * run. Returns undefined when nothing was saved: the transform declined, the run disappeared,
+   * became terminal, or changed owner. Throws `write_conflict` when every attempt lost to a
+   * concurrent write.
    */
   async function commit(
     base: WorkflowRun,
     transform: (run: WorkflowRun) => WorkflowRun | undefined,
     owner?: string,
+    adopts?: (fresh: WorkflowRun) => boolean,
   ): Promise<WorkflowRun | undefined> {
     let current = base;
 
@@ -352,7 +380,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       if (!fresh || isTerminalRun(fresh)) return undefined;
 
-      if (owner !== undefined && fresh.lease?.owner !== owner) return undefined;
+      if (owner !== undefined && fresh.lease?.owner !== owner && adopts?.(fresh) !== true) return undefined;
       current = fresh;
     }
 
@@ -466,10 +494,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return neverSettles;
     }
 
-    async function save(transform: (run: WorkflowRun) => WorkflowRun): Promise<boolean> {
+    async function save(
+      transform: (run: WorkflowRun) => WorkflowRun,
+      adopts?: (fresh: WorkflowRun) => boolean,
+    ): Promise<boolean> {
       if (lost) return false;
 
-      const next = await commit(current, transform, owner);
+      const next = await commit(current, transform, owner, adopts);
 
       if (!next) {
         lost = true;
@@ -595,13 +626,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
     }
 
-    async function failRun(error: Error, step?: string) {
-      const failed = await save((run) => ({
-        ...run,
-        status: "failed",
-        wait: undefined,
-        error: step === undefined ? { message: error.message } : { message: error.message, step },
-      }));
+    async function failRun(error: Error, step?: string, adopts?: (fresh: WorkflowRun) => boolean) {
+      const failed = await save(
+        (run) => ({
+          ...run,
+          status: "failed",
+          wait: undefined,
+          error: step === undefined ? { message: error.message } : { message: error.message, step },
+        }),
+        adopts,
+      );
 
       if (failed) await invokeHook("onRunFailed", { run: current, error });
     }
@@ -881,7 +915,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const output = outcome.kind === "completed" ? jsonResult(outcome.output) : undefined;
 
     if (outcome.kind === "failed") {
-      await failRun(outcome.error);
+      // A wait a sibling saved has released the run, so another engine's write, such as an event
+      // delivery, may land before the failure. The failure still wins while the run stands where
+      // this execution parked it; a run another execution claimed is left to that execution.
+      const parked = current;
+
+      await failRun(outcome.error, undefined, (fresh) => isParkedAt(fresh, parked));
     } else if (!isJsonValue(output ?? null)) {
       await failRun(new WorkflowError("invalid_value", "The workflow output must be JSON."));
     } else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output: savedForm(output) }))) {
