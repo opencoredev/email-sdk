@@ -71,12 +71,18 @@ Cons: code between steps re-runs on every wake, so it must be deterministic. Sid
 `ctx.step` or `ctx.send`. Step names must be unique within a run (the engine throws on a duplicate),
 and `__proto__` is reserved, because a store that parses the journal as a record (the Convex store,
 through zod) drops that key and the step would run again on every wake.
-A step callback can't call `ctx`: the call would queue behind the step that awaits it, so the engine
-fails the run with `invalid_definition` instead of deadlocking. The engine tells such a call apart
-from one `run` makes while an earlier step is still pending with an `AsyncLocalStorage` scope per
-execution: a call from `run` queues as usual, and a callback may still start or resume other runs.
-The workflows entry imports `node:async_hooks`, which Node, Bun, Deno, Convex, and Cloudflare
-Workers with `nodejs_compat` provide.
+A step callback can't call `ctx`: the call would queue behind the step that awaits it, so it could
+never run. A call `run` makes while an earlier step is still pending is fine and queues behind that
+step. The engine tells the two apart only while the callback's synchronous part runs, before its
+first `await`: no other code can run then, so a `ctx` call in that window fails the run with
+`invalid_definition`. After the callback's first `await`, a call from the callback and a sibling
+call from `run` look the same without async context tracking (`AsyncLocalStorage`), which needs
+`node:async_hooks`. The workflows entry imports no Node built-ins, so it runs in Convex's default
+runtime, browsers, and Workers without `nodejs_compat`. A test fails if one appears in its import
+graph. The cost: a `ctx` call the callback makes after an `await` queues behind its own step, so
+the run stays `running` and the execution never returns. Canceling the run stops its lease
+heartbeat, but the stuck execution is left to the host's own timeout. A callback may still start or
+resume other runs, since each execution queues separately.
 
 We pick B. The builder's main advantage, a drawable static graph, does not outweigh how poorly it
 handles real sequences, and the replay contract is small enough to state in one paragraph of docs.

@@ -60,13 +60,24 @@ Two rules follow from that:
 
 - **Step names must be unique within a run.** The engine fails the run with `duplicate_step` if a name repeats. In a loop, put the index in the name: `` ctx.send(`reminder-${i}`, ...) ``. The name `__proto__` is reserved, because some stores can't keep it as a journal key.
 - **Code between steps must give the same answer every time.** Put database reads, API calls, and anything random inside `ctx.step` so their results are saved and replayed.
-- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A nested call fails the run with `invalid_definition`. A call from `run` while an earlier step is still pending is fine: it waits its turn.
+- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A call from `run` while an earlier step is still pending is fine: it waits its turn.
 
 Branching, loops, and early returns are plain TypeScript.
 
 Your code always sees values the way the store saves them. The input, step results, and event payloads go through a JSON round trip before `run` gets them, on the first execution and after every wake. An object returned twice in one result arrives as two separate copies, and a field set to `undefined` is left out, so nothing changes between the first run and a replay.
 
-The workflows entry tracks step callbacks with `AsyncLocalStorage` from `node:async_hooks`. Node, Bun, Deno, and Convex provide it; on Cloudflare Workers, enable `nodejs_compat`.
+The workflows entry imports no Node built-ins, so it runs in Convex's default runtime, browsers, and Workers without `nodejs_compat`. That limits how it catches a nested call. A `ctx` call made before the callback's first `await` fails the run with `invalid_definition`. One made after an `await` can't be told apart from a call `run` makes, so it waits behind its own step and the run stays `running` until you cancel it:
+
+```ts
+await ctx.step("notify", async () => {
+  await ctx.send("mail", message); // fails the run with invalid_definition
+});
+
+await ctx.step("notify", async () => {
+  await loadUser();
+  await ctx.send("mail", message); // hangs: move this call out of the step
+});
+```
 
 ## Run the engine
 

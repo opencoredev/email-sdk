@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import {
   causeArray,
   causeBoolean,
@@ -425,11 +423,26 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const neverSettles = new Promise<never>(() => {});
     const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
-    // Names the step whose callback the current async context runs in. `ctx` calls queue behind
+    // Names the step whose callback is running synchronously right now. `ctx` calls queue behind
     // that step, so a call from inside its callback would wait for the callback that awaits it.
-    // A call from `run` while the step is pending is outside the scope and queues as usual. The
-    // scope belongs to this execution, so a callback may still start or resume other runs.
-    const stepScope = new AsyncLocalStorage<string>();
+    // While the callback's synchronous part runs, no other code can, so a `ctx` call in that
+    // window comes from the callback and fails. Once the callback first awaits, `run` may make
+    // sibling calls, which queue as usual; telling those apart from a call the callback makes
+    // after an `await` needs async context tracking, which isn't portable across runtimes. The
+    // flag belongs to this execution, so a callback may still start or resume other runs.
+    let callingStep: string | undefined;
+
+    function callStep<T>(name: string, fn: () => T): T {
+      const previous = callingStep;
+
+      callingStep = name;
+
+      try {
+        return fn();
+      } finally {
+        callingStep = previous;
+      }
+    }
 
     function suspend(): Promise<never> {
       stopped = true;
@@ -487,7 +500,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
       if (stopped) return neverSettles;
 
-      const enclosing = stepScope.getStore();
+      const enclosing = callingStep;
 
       if (enclosing !== undefined) {
         return Promise.reject(
@@ -722,7 +735,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                const value = await stepScope.run(name, fn);
+                const value = await callStep(name, fn);
 
                 assertJson(value, `The result of step "${name}"`);
 
