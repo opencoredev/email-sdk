@@ -278,6 +278,25 @@ describe("SES receiving", () => {
     expect(urls).toHaveLength(1);
   });
 
+  test("rejects S3 objects that SES encrypted with the S3 encryption client", async () => {
+    const body = snsBody(sesNotification({ type: "S3", bucketName: "inbound-mail", objectKey: "mail/1" }));
+
+    for (const header of ["x-amz-meta-x-amz-key-v2", "x-amz-meta-x-amz-key"]) {
+      const fetch = stubFetch(async input => {
+        if (String(input) === certUrl) return new Response(certificatePem);
+
+        return new Response(new Uint8Array([0x8f, 0x01, 0xc3, 0x7a]), {
+          headers: { [header]: "AQIDAHh...", "x-amz-meta-x-amz-cek-alg": "AES/GCM/NoPadding", "x-amz-meta-x-amz-wrap-alg": "kms" },
+        });
+      });
+
+      const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
+
+      await expect(parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).rejects.toMatchObject({ reason: "unsupported", provider: "ses" });
+      await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/1" }, s3)).rejects.toThrow("encrypted");
+    }
+  });
+
   test("uses path-style URLs for dotted bucket names", async () => {
     const urls: string[] = [];
 

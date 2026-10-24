@@ -5,7 +5,6 @@ import {
   type InboundFetchOptions,
   decodeBase64,
   decodeBase64Strict,
-  fetchBytes,
   jsonList,
   jsonObject,
   jsonText,
@@ -400,6 +399,9 @@ export function sesEmailFromNotification(received: SesReceivedNotification, raw:
   return email;
 }
 
+/** Object metadata the S3 encryption client writes: the wrapped key (v1 and v2) and the cipher. */
+const S3_ENCRYPTION_METADATA = ["x-amz-meta-x-amz-key", "x-amz-meta-x-amz-key-v2", "x-amz-meta-x-amz-cek-alg"];
+
 /**
  * Percent-encode one S3 key segment the way SigV4 canonicalizes it: every byte except the
  * unreserved set `A-Z a-z 0-9 - _ . ~`. `encodeURIComponent` leaves `!'()*` alone, which S3
@@ -440,7 +442,18 @@ export async function fetchSesInboundFromS3(location: SesS3Location, options: Se
     headers: {},
   });
 
-  return fetchBytes(provider, url, { headers, fetch: options.fetch, signal: options.signal });
+  const response = await providerFetch(provider, url, { headers, fetch: options.fetch, signal: options.signal });
+
+  // SES "Message encryption" stores mail through the S3 encryption client, which keeps the
+  // wrapped data key in object metadata. The body is ciphertext only that client can decrypt.
+  if (S3_ENCRYPTION_METADATA.some(name => response.headers.has(name))) {
+    throw new InboundError(
+      "SES encrypted this message with KMS before storing it in S3. Decrypt it with the S3 encryption client and pass the MIME to sesEmailFromNotification.",
+      { reason: "unsupported", provider },
+    );
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 export interface SesInboundOptions extends SnsVerificationOptions {
