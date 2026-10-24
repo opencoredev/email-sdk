@@ -3,6 +3,7 @@
   "icon": "BookOpen",
   "pages": [
     "schedule-email",
+    "receive-email",
     "production-send-pipeline",
     "test-email-behavior",
     "troubleshoot-failed-sends",

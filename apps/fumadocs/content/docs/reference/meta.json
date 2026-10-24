@@ -7,6 +7,7 @@
     "adapter-contract",
     "plugin-api",
     "webhooks",
+    "inbound",
     "community-registry",
     "compatibility",
     "telemetry",

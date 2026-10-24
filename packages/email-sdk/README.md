@@ -271,6 +271,23 @@ The optional `/react` subpath also exports email-safe shadcn-themed components s
 
 Import `@opencoredev/email-sdk/ai` only when your app also installs the optional `ai` peer. `createEmailTools` returns one approval-gated `sendEmail` tool whose schema lets the model set only `to`, `subject`, `text`, and `html`; your app binds the sender.
 
+## Receiving email
+
+`@opencoredev/email-sdk/inbound` verifies and parses inbound webhooks from 17 providers, including Resend, Mailgun, SendGrid, SES, Cloudflare Email Workers, Microsoft Graph, and Postmark, into one typed `InboundEmail`. It uses only web-standard APIs and adds no dependency.
+
+```ts
+import { handleInbound } from "@opencoredev/email-sdk/inbound";
+
+export async function POST(request: Request) {
+  const result = await handleInbound(request, { provider: "mailgun", secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY! });
+  if (result.type === "handshake") return result.response;
+  for (const email of result.emails) console.log(email.from?.address, email.subject);
+  return new Response("ok");
+}
+```
+
+See [Receive email](https://email-sdk.dev/docs/guides/receive-email) and [INBOUND.md](./INBOUND.md) for provider coverage.
+
 ## Testing
 
 Use `@opencoredev/email-sdk/testing` for no-network tests.

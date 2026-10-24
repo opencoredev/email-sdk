@@ -1,0 +1,123 @@
+---
+title: Inbound
+description: Types, functions, errors, and provider coverage for @opencoredev/email-sdk/inbound.
+---
+
+Import everything on this page from `@opencoredev/email-sdk/inbound`. The module uses only `Request`, `Headers`, `Uint8Array`, `TextDecoder`, and Web Crypto, so it runs on Node 20+, Bun, Cloudflare Workers, and Convex. It adds no runtime dependency and is not part of the root entrypoint. For a walkthrough, see [Receive email](/docs/guides/receive-email).
+
+## InboundEmail
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `provider` | `InboundProvider` | Which provider delivered it |
+| `id` | `string?` | The provider's ID for the received message |
+| `messageId` | `string?` | RFC 5322 `Message-ID`, without angle brackets |
+| `from` | `InboundAddress?` | `{ address, name? }`, with RFC 2047 names decoded |
+| `to`, `cc`, `replyTo` | `InboundAddress[]` | From headers or the provider's parsed fields |
+| `bcc` | `InboundAddress[]` | Only when the provider exposes it (Postmark, Resend, JetEmail, Mailtrap) |
+| `subject`, `text`, `html` | `string?` | Decoded to Unicode |
+| `headers` | `InboundHeaders` | Ordered and case-insensitive: `get`, `getAll`, `has`, `entries`, iteration |
+| `attachments` | `InboundAttachment[]` | See below |
+| `inReplyTo` | `string?` | First `In-Reply-To` ID |
+| `references` | `string[]` | `References` IDs in order |
+| `date` | `Date?` | `Date` header, or the provider's receive time |
+| `security` | `InboundSecurity` | `spf`, `dkim`, `dmarc`, `spam`, `virus` verdicts and `spamScore` when known |
+| `envelope` | `InboundEnvelope?` | SMTP `from` and `to`, which can differ from the headers |
+| `raw` | `InboundRawPayload` | `{ kind: "json", value }`, `{ kind: "form", fields }`, or `{ kind: "mime", bytes }` |
+
+Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | "permerror" | "gray" | "processing_failed" | "unknown"`. They come from the provider's own fields where it has them, otherwise from `Authentication-Results`. Spam scores use each provider's scale, so compare them per provider.
+
+`InboundAttachment` has `filename?`, `contentType`, `size?`, `contentId?`, `disposition?` (`"attachment" | "inline"`), `content?` (bytes when delivered inline), `url?`, and `read(): Promise<Uint8Array>`. `read()` downloads from the provider when the content is remote and throws `InboundError` when it cannot, for example a Brevo attachment without `apiKey`.
+
+## handleInbound
+
+```ts
+handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult>
+```
+
+Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request and SNS subscription confirmations. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
+
+| `provider` | Required config | Optional |
+| --- | --- | --- |
+| `"resend"` | `secret` | `api: { apiKey, baseUrl? }` to fetch bodies and attachments |
+| `"postmark"` | `auth` | |
+| `"mailgun"` | `secret` (HTTP webhook signing key) | |
+| `"sendgrid"` | `publicKey`, or `auth` | |
+| `"ses"` | none | `topicArn`, `s3`, `confirmSubscription` (default `true`), `certificateCache` |
+| `"graph"` | `clientState`, `api: { getAccessToken }` | `api.baseUrl` |
+| `"mailchimp"` | `secret` | `url` (defaults to `request.url`) |
+| `"sparkpost"`, `"lettr"` | `secret` (webhook token) | |
+| `"mailersend"`, `"lettermint"`, `"primitive"`, `"jetemail"` | `secret` | |
+| `"mailpace"` | `publicKey` | |
+| `"brevo"` | `auth` | `apiKey`, `baseUrl` |
+
+`auth` is `{ basic: { username, password } }`, `{ bearer: token }`, or `{ none: true }`. Secrets and keys accept an array during rotation; any match passes.
+
+## Functions by provider
+
+`verify…` functions return `{ ok: true }` or `{ ok: false, reason }` and never throw for bad input. `parse…` functions do not verify; call them only after a successful check. Every `fetch…` function takes `fetch` and `signal` options.
+
+| Provider | Verify | Parse | Fetch |
+| --- | --- | --- | --- |
+| Resend | `verifyResendInbound` | `parseResendInbound` | `fetchResendInboundEmail(id, { apiKey })` |
+| Postmark | `verifyBasicAuth` | `parsePostmarkInbound` | `fetchPostmarkInboundEmail(id, { serverToken })` |
+| Mailgun | `verifyMailgunInbound` | `parseMailgunInbound` | `fetchMailgunStoredEmail(storageUrl, { apiKey })` |
+| SendGrid | `verifySendGridInbound` | `parseSendGridInbound` | |
+| SES | `verifySnsMessage(parseSnsMessage(body))` | `parseSesInbound`, `parseSesNotification` | `fetchSesInboundFromS3({ bucket, key }, credentials)`, `confirmSnsSubscription` |
+| Cloudflare | | `parseCloudflareInbound(message)` | |
+| Microsoft Graph | `parseGraphNotifications` (checks `clientState`), `graphValidationResponse` | | `fetchGraphInboundEmail(resource, { getAccessToken })` |
+| Mailchimp Transactional | `verifyMandrillInbound` | `parseMandrillInbound` (returns an array) | |
+| SparkPost, Lettr | `verifySparkPostInbound` | `parseSparkPostInbound`, `parseLettrInbound` (arrays) | |
+| MailerSend | `verifyMailerSendInbound` | `parseMailerSendInbound` | |
+| Brevo | `verifyBasicAuth`, `verifyBearerToken` | `parseBrevoInbound` (array) | Attachments through `read()` |
+| MailPace | `verifyMailPaceInbound` | `parseMailPaceInbound` | |
+| Lettermint | `verifyLettermintInbound` | `parseLettermintInbound` | Signed-URL attachments through `read()` |
+| Primitive | `verifyPrimitiveInbound` | `parsePrimitiveInbound` | Downloads raw MIME when it is not inline |
+| JetEmail | `verifyJetEmailInbound` | `parseJetEmailInbound` | |
+| Mailtrap | `verifyMailtrapInbound` | | `fetchMailtrapInboundEmail(inboxId, messageId, { apiToken })` |
+
+`parseInbound(provider, payload, options?)` dispatches to the right parser and always returns an array. It covers every provider above except Cloudflare, Graph, and Mailtrap, which have no webhook payload to parse.
+
+### Signature schemes
+
+| Provider | What is checked |
+| --- | --- |
+| Resend | Svix HMAC-SHA256 over `svix-id.svix-timestamp.body` with the `whsec_` secret, plus timestamp tolerance |
+| Mailgun | HMAC-SHA256 hex over `timestamp + token`, plus timestamp tolerance. The message is not covered. |
+| SendGrid | ECDSA P-256 / SHA-256 over `X-Twilio-Email-Event-Webhook-Timestamp + body`, plus timestamp tolerance |
+| SES | SNS RSA signature (v1 SHA-1, v2 SHA-256). The certificate must come from `https://sns.<region>.amazonaws.com[.cn]/….pem`. Optional `topicArn` allowlist. |
+| Graph | `clientState` equality, in constant time |
+| Mailchimp Transactional | Base64 HMAC-SHA1 over the URL followed by each sorted POST key and value |
+| SparkPost, Lettr | `X-MessageSystems-Webhook-Token` equality |
+| MailerSend | Hex HMAC-SHA256 of the body in `Signature` |
+| MailPace | Ed25519 over the body in `X-MailPace-Signature` |
+| Lettermint | `t=…,v1=…` HMAC-SHA256 over `t.body`, `X-Lettermint-Delivery` equal to `t`, plus tolerance |
+| Primitive | `t=…,v1=…` HMAC-SHA256 over `t.body`, plus tolerance |
+| JetEmail | Hex HMAC-SHA256 over `X-Webhook-ID.X-Webhook-Timestamp.body`, plus tolerance |
+| Mailtrap | Hex HMAC-SHA256 of the body in `mailtrap-signature` |
+
+All comparisons run in constant time. A valid signature does not stop a replay inside the tolerance window, so deduplicate on `email.id` or `email.messageId`.
+
+## Errors
+
+`InboundError` has `reason`, `provider`, and `status` (HTTP status for `fetch_failed`).
+
+| `reason` | Meaning | Suggested response |
+| --- | --- | --- |
+| `signature_missing` | No signature or credentials on the request | 401 |
+| `signature_invalid` | Signature, token, or certificate check failed | 401 |
+| `timestamp_expired` | Timestamp outside `toleranceSeconds` | 401 |
+| `secret_missing` | No secret or key configured, or the key is malformed | 500 (fix the config) |
+| `payload_invalid` | Body is not the provider's documented format | 400 |
+| `unsupported` | For example an SNS message that is not an email notification | 200, then ignore |
+| `fetch_failed` | A provider API or download failed; see `status` | 502, or retry |
+
+## MIME parsing
+
+`parseMimeMessage(raw)` and `emailFromMime({ provider, raw, ... })` are exported for your own sources, such as an IMAP fetch or a stored `.eml`. The parser handles nested multipart (mixed, alternative, related, digest), base64, quoted-printable, 7bit/8bit/binary, RFC 2047 encoded words, RFC 2231 parameters and continuations, `message/rfc822` parts as attachments, and charsets through `TextDecoder`. Unknown charsets fall back to UTF-8, then Latin-1. It stops at 32 nesting levels and 2,000 parts.
+
+It does not verify DKIM or S/MIME, decode TNEF (`winmail.dat`), or decode `uuencode` bodies. When there are several text or HTML parts, it joins them with a newline in message order.
+
+## Provider coverage
+
+Plunk, Sequenzy, Unosend, Loops, Iterable, Scaleway, ZeptoMail, Sendheron, Helo, and SMTP have no inbound support. Plunk's receiving feature fires a workflow event with a body you template yourself. Sequenzy tracks replies but does not return messages. The others document send-only APIs, and SMTP is a sending transport. The full audit, with provider documentation links, is in [`packages/email-sdk/INBOUND.md`](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/INBOUND.md).
