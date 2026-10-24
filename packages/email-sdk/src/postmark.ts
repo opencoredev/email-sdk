@@ -108,14 +108,10 @@ export function postmark(
 
       const body = await responseJson(response);
 
-      // A 200 means Postmark accepted the whole message. Its "To" field is one comma-joined
-      // string and omits Cc/Bcc, so list the submitted recipients instead.
-      const accepted = [message.to, message.cc, message.bcc].flatMap(list => arrayify(list).map(emailAddressOf));
-
       return {
         adapter: "postmark",
         id: jsonString(body, "MessageID"),
-        accepted,
+        accepted: replacesRecipients(native) ? undefined : submittedRecipients(message),
         raw: body,
       };
     },
@@ -169,6 +165,20 @@ function withPostmarkNative(payload: PostmarkPayload, native: PostmarkNativeOpti
   };
 
   return native.body ? { ...withNative, ...native.body } : withNative;
+}
+
+// A 200 means Postmark accepted the whole message. Its "To" field is one comma-joined string
+// and omits Cc/Bcc, so list the submitted recipients instead.
+function submittedRecipients(message: EmailMessage) {
+  return [message.to, message.cc, message.bcc].flatMap((list) => arrayify(list).map(emailAddressOf));
+}
+
+// A native body that replaces To, Cc, or Bcc sends to recipients the SDK never parsed, so it
+// can't say which addresses Postmark accepted.
+function replacesRecipients(native: PostmarkNativeOptions | undefined) {
+  const body = native?.body;
+
+  return body !== undefined && ("To" in body || "Cc" in body || "Bcc" in body);
 }
 
 async function toPostmarkAttachment(attachment: EmailAttachment) {
