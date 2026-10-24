@@ -515,16 +515,25 @@ function angleAddress(entry: string): AngleAddress | undefined {
   return undefined;
 }
 
-/** Index of the `>` that closes an angle address, skipping a quoted local part like `"a>b"@x`. */
+/**
+ * Index of the `>` that closes an angle address. A `>` in a quoted local part (`"a>b"@x`), a
+ * comment (`a(note > x)@x`), or a domain literal (`a@[x>y]`) does not close it.
+ */
 function closingAngle(entry: string, from: number): number {
   let quoted = false;
+  let comment = 0;
+  let literal = false;
 
   for (let index = from; index < entry.length; index += 1) {
     const char = entry[index]!;
 
-    if (char === "\\" && quoted) index += 1;
-    else if (char === "\"") quoted = !quoted;
-    else if (char === ">" && !quoted) return index;
+    if (char === "\\" && (quoted || comment || literal)) index += 1;
+    else if (literal) literal = char !== "]";
+    else if (char === "\"" && !comment) quoted = !quoted;
+    else if (!quoted && char === "(") comment += 1;
+    else if (!quoted && char === ")" && comment) comment -= 1;
+    else if (!quoted && !comment && char === "[" && entry[index - 1] === "@") literal = true;
+    else if (!quoted && !comment && char === ">") return index;
   }
 
   return -1;

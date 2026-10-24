@@ -343,3 +343,34 @@ describe("parseAddressList domain literals", () => {
     ]);
   });
 });
+
+describe("parseAddressList comments and quotes", () => {
+  const ada = { address: "alice@example.com", name: "Ada" };
+
+  // Each input hides an address delimiter inside a comment or quoted string.
+  const cases: [input: string, expected: { address: string; name?: string }[]][] = [
+    ["Ada <alice(note > text)@example.com>", [ada]],
+    ["Ada <alice(note < text)@example.com>", [ada]],
+    ["Ada <alice(a, b)@example.com>", [ada]],
+    ["Ada <alice(say \"hi)@example.com>", [ada]],
+    ["Ada <alice(x@evil.test)@example.com>", [ada]],
+    ["Ada <alice(a (nested > deep) b)@example.com>", [ada]],
+    ["Ada <alice(escaped \\) > still)@example.com>", [ada]],
+    ["Ada <alice(escaped \\( > still)@example.com>", [ada]],
+    ["Ada (x > y) <alice@example.com>", [ada]],
+    ["Boss <\"a(b>\"@example.com>", [{ address: "\"a(b>\"@example.com", name: "Boss" }]],
+    ["Boss <\"a>(b\"@example.com>", [{ address: "\"a>(b\"@example.com", name: "Boss" }]],
+    ["alice(note > text)@example.com", [{ address: "alice@example.com", name: "note > text" }]],
+    ["(a, \"b) alice@example.com", [{ address: "alice@example.com", name: "a, \"b" }]],
+    ["Ops <ops@[a>b]>", [{ address: "ops@[a>b]", name: "Ops" }]],
+  ];
+
+  test.each(cases)("%s", (input, expected) => {
+    const next = { address: "z@example.com" };
+
+    expect(parseAddressList(input)).toEqual(expected);
+    // The hidden delimiter must not leak into list splitting or group handling either.
+    expect(parseAddressList(`${input}, z@example.com`)).toEqual([...expected, next]);
+    expect(parseAddressList(`Team: ${input}, z@example.com;`)).toEqual([...expected, next]);
+  });
+});
