@@ -244,26 +244,33 @@ export type EmailFallbackConfig<Name extends string = string> = {
   onUnknownDelivery?: "stop" | "continue";
 };
 
-/**
- * `Native` defaults to `never`, so a plain `EmailSendOptions<Name>` stays assignable to every
- * client's send options. A client types `native` from its adapters (`EmailNativeOptions`).
- */
-export type EmailSendOptions<
-  Name extends string = string,
-  Native extends EmailNativeOptionsMap = never,
-> = {
+type EmailSendOptionsBase<Name extends string> = {
   adapter?: Name;
   fallback?: EmailFallbackConfig<Name>;
   retry?: EmailRetryConfig;
   signal?: AbortSignal;
   idempotencyKey?: string;
   metadata?: EmailSendMetadata;
-  /**
-   * Experimental. Provider-native options keyed by adapter name. Each adapter that is tried
-   * receives only its own entry; adapters without an entry send exactly what they send today.
-   */
-  native?: Native;
 };
+
+/**
+ * `Native` defaults to `never`, which leaves `native` out of the shape entirely. A plain
+ * `EmailSendOptions<Name>` is then exactly the pre-native shape: it stays assignable to every
+ * client's send options, and code annotated with it still accepts the options core, plugins, and
+ * middleware pass around. A client types `native` from its adapters (`EmailNativeOptions`).
+ */
+export type EmailSendOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = [Native] extends [never]
+  ? EmailSendOptionsBase<Name>
+  : EmailSendOptionsBase<Name> & {
+      /**
+       * Experimental. Provider-native options keyed by adapter name. Each adapter that is tried
+       * receives only its own entry; adapters without an entry send exactly what they send today.
+       */
+      native?: Native;
+    };
 
 export type EmailValidationWarning = {
   code: string;

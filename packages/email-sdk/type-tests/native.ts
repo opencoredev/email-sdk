@@ -8,6 +8,11 @@ import type {
   EmailClient,
   EmailNativeOptionsMap,
   EmailNativePassthrough,
+  EmailBeforeSendEvent,
+  EmailBeforeSendResult,
+  EmailPlugin,
+  EmailSendItem,
+  EmailSendMiddleware,
   EmailSendOptions,
 } from "../src/index.js";
 import { loops } from "../src/loops.js";
@@ -172,3 +177,46 @@ custom.send(message, resendOnly);
 
 // @ts-expect-error plain EmailSendOptions cannot carry untyped native options
 export const untypedNative: EmailSendOptions = { native: { resend: {} } };
+
+// Middleware, hooks, and helpers annotated with the exported option types before native existed
+// still compile. Core hands them options that may carry `native`, and that must stay assignable
+// to the plain `EmailSendOptions` shape.
+function normalize(options: EmailSendOptions | undefined): EmailSendOptions | undefined {
+  return options && { ...options, idempotencyKey: options.idempotencyKey ?? "generated" };
+}
+
+export const legacyMiddleware: EmailSendMiddleware = {
+  beforeSend(event) {
+    return { options: normalize(event.options) };
+  },
+};
+
+const legacyBeforeSend = (event: {
+  message: EmailMessage;
+  options?: EmailSendOptions;
+}): EmailBeforeSendResult => ({ message: event.message, options: event.options });
+
+export const legacyArrowMiddleware: EmailSendMiddleware = { beforeSend: legacyBeforeSend };
+
+const legacyEvent: EmailBeforeSendEvent = { message };
+
+export const legacyEventOptions: EmailSendOptions | undefined = legacyEvent.options;
+
+export const legacyPlugin: EmailPlugin = { id: "legacy", middleware: [legacyMiddleware] };
+
+createEmailClient({ adapters: [resendAdapter], plugins: [legacyPlugin] });
+
+// Helpers that forward plain options into an untyped or typed client keep compiling.
+export function forwardSend(target: EmailClient, options?: EmailSendOptions) {
+  return target.send(message, options);
+}
+
+export function readSendOptions(
+  options: Parameters<EmailClient["send"]>[1],
+): EmailSendOptions | undefined {
+  return options;
+}
+
+const legacyItems: EmailSendItem[] = [{ message, options: { idempotencyKey: "k" } }];
+
+export const forwardedMany = (target: EmailClient) => target.sendMany(legacyItems, legacyOptions);

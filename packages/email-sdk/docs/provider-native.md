@@ -118,8 +118,8 @@ passthrough is still keyed by adapter and can't leak.
 
 - `EmailAdapter` gains a fourth type parameter `Native` and a type-only `"~native"` marker. The
   `~` prefix follows Standard Schema's convention for type-only members.
-- `EmailSendOptions` gains `native?: Native`. Clients type it as `EmailNativeOptions<Routes>`, a
-  key-remapped object over the adapter union. Adapters whose `Native` is exactly the default
+- `EmailSendOptions` gains `native?: Native` when `Native` is given. Clients type it as
+  `EmailNativeOptions<Routes>`, a key-remapped object over the adapter union. Adapters whose `Native` is exactly the default
   (they declared nothing: SMTP, memory, plain custom adapters) get no key.
 - Each provider's options type is the curated, camelCase fields plus `EmailNativePassthrough`
   (`body` shallow-merged into the JSON request, `headers` added to the API request). Mailgun
@@ -143,7 +143,16 @@ passthrough is still keyed by adapter and can't leak.
   because the wide map isn't assignable to a client's specific map. `Native` now defaults to
   `never`, so old annotations stay assignable to every client. Core, plugins, and middleware use
   `EmailNativeSendOptions` (`EmailSendOptions<string, EmailNativeOptionsMap>`), which
-  `EmailBeforeSendEvent.options` now exposes. That only widens a field middleware reads.
+  `EmailBeforeSendEvent.options` now exposes.
+- **Legacy middleware annotations.** Defaulting to `never` still left `native?: never` in the
+  plain shape, so a `beforeSend` that passed `event.options` to a helper typed
+  `(options: EmailSendOptions | undefined)` failed with TS2345: the event's native map isn't
+  assignable to `never`. With the default, `EmailSendOptions` now leaves `native` out entirely
+  (`[Native] extends [never]`), so it is exactly the pre-native shape and the wider event
+  options are assignable to it. `type-tests/native.ts` compiles that middleware, an arrow
+  `beforeSend` with a hand-written legacy event type, a plugin carrying it, helpers forwarding
+  `EmailSendOptions` into `EmailClient`, and legacy `EmailSendItem[]` batches. The same block
+  compiles against `origin/main`.
 
 - **Assignability to the untyped `EmailClient`.** `const c: EmailClient = createEmailClient(...)`
   broke, caught by the packed-tarball consumer in `pack:check`. Two causes: the default client
