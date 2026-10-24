@@ -32,7 +32,10 @@ await email.send(
   {
     native: {
       postmark: {
-        template: { alias: "welcome", model: { name: "Ada" } },
+        template: {
+          alias: "welcome",
+          model: { name: "Ada" },
+        },
         trackOpens: true,
       },
     },
@@ -55,15 +58,13 @@ Postmark sends its stored `welcome` template. If the route falls back to Resend 
 
 The message still needs a `subject` and `html` or `text`. When you set a native template, the adapter sends the template in place of the inline body, and the inline fields stay the content for other adapters in the route.
 
-| Adapter | Option | What the template replaces |
-| --- | --- | --- |
-| Resend | `template: { id, variables, useTemplateSubject }` | `html` and `text`. The message `subject` overrides the template's default subject; set `useTemplateSubject: true` to keep the template's. |
-| Postmark | `template: { id }` or `{ alias }`, plus `model`, `inlineCss` | Sends to `/email/withTemplate` without `Subject`, `HtmlBody`, or `TextBody`. |
-| SendGrid | `templateId`, `dynamicTemplateData` | `content`. Dynamic templates take their subject from the template. |
-| SES | `template: { name }` or `{ arn }`, plus `data` | `Content.Simple`. Headers and attachments are still sent. |
-| Mailgun | `template: { name, version, variables, renderText }` | `html` and `text`. Mailgun still uses the message subject. |
-| Brevo | `templateId`, `params`, `useTemplateSubject` | `htmlContent` and `textContent`. The message `subject` overrides the template's subject; set `useTemplateSubject: true` to keep the template's. |
-| Loops | `transactionalId`, `dataVariables` | Overrides the adapter's `transactionalId` for this send and merges extra data variables. |
+- **Resend:** `template: { id, variables, useTemplateSubject }` replaces `html` and `text`. The message `subject` overrides the template's default subject; set `useTemplateSubject: true` to keep the template's.
+- **Postmark:** `template: { id }` or `{ alias }`, plus `model` and `inlineCss`, sends to `/email/withTemplate` without `Subject`, `HtmlBody`, or `TextBody`.
+- **SendGrid:** `templateId` and `dynamicTemplateData` replace `content`. Dynamic templates take their subject from the template.
+- **SES:** `template: { name }` or `{ arn }`, plus `data`, replaces `Content.Simple`. Headers and attachments are still sent.
+- **Mailgun:** `template: { name, version, variables, renderText }` replaces `html` and `text`. Mailgun still uses the message subject.
+- **Brevo:** `templateId` and `params` replace `htmlContent` and `textContent`. The message `subject` overrides the template's subject; set `useTemplateSubject: true` to keep the template's.
+- **Loops:** sends are always template-based. `transactionalId` overrides the adapter's `transactionalId` for this send, and `dataVariables` adds data variables.
 
 With `sendPersonalized`, a SendGrid dynamic template gets each recipient's `variables` merged over `dynamicTemplateData` in that recipient's personalization.
 
@@ -71,15 +72,13 @@ With `sendPersonalized`, a SendGrid dynamic template gets each recipient's `vari
 
 Each adapter module exports its options type, for example `PostmarkNativeOptions` from `@opencoredev/email-sdk/postmark`.
 
-| Adapter | Options |
-| --- | --- |
-| Resend | `topicId` |
-| Postmark | `messageStream` (overrides the adapter option), `trackOpens`, `trackLinks`, `tag` |
-| SendGrid | `asm: { groupId, groupsToDisplay }`, `ipPoolName`, `batchId`, `sandboxMode`, `tracking: { clicks, opens, subscription }` |
-| SES | `configurationSetName` (overrides the adapter option), `listManagement: { contactListName, topicName }`, `feedbackForwardingEmailAddress` |
-| Mailgun | `tracking`, `trackingClicks`, `trackingOpens`, `testMode`, `requireTls`, `skipVerification`, `ipPool` |
-| Brevo | `batchId` |
-| Loops | `addToAudience` |
+- **Resend:** `topicId`
+- **Postmark:** `messageStream` (overrides the adapter option), `trackOpens`, `trackLinks`, `tag`
+- **SendGrid:** `asm` (`groupId`, `groupsToDisplay`), `ipPoolName`, `batchId`, `sandboxMode`, `tracking` (`clicks`, `opens`, `subscription`)
+- **SES:** `configurationSetName` (overrides the adapter option), `listManagement` (`contactListName`, `topicName`), `feedbackForwardingEmailAddress`
+- **Mailgun:** `tracking`, `trackingClicks`, `trackingOpens`, `testMode`, `requireTls`, `skipVerification`, `ipPool`
+- **Brevo:** `batchId`
+- **Loops:** `addToAudience`
 
 ## Fields the SDK doesn't model
 
