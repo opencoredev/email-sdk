@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailAdapterNotFoundError, EmailValidationError } from "../errors.js";
+import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
   EmailFallbackConfig,
@@ -20,10 +21,13 @@ export function validateCapabilities(
     throw new EmailValidationError(`${adapter.name} does not support personalized email.`);
   }
 
-  if (!adapter.capabilities.repeatedHeaders) {
+  // headerList also accepts the legacy name-to-value object that JavaScript callers send.
+  const headers = headerList(message.headers);
+
+  if (!adapter.capabilities.repeatedHeaders && headers.length > 1) {
     const names = new Set<string>();
 
-    for (const header of message.headers ?? []) {
+    for (const header of headers) {
       const normalized = header.name.toLowerCase();
 
       if (names.has(normalized)) {

@@ -85,7 +85,9 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
     const event = hookEvent(input.adapter.name, input.message, attempt, input.options?.metadata);
-    await invokeHooks(input.hooks, "beforeSend", event);
+    const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
+
+    if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
 
