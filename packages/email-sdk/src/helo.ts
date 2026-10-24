@@ -1,4 +1,4 @@
-import { EmailAdapterError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { isJsonObject, jsonArray, jsonField, jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -11,6 +11,9 @@ import {
   isRetryableStatus,
   readErrorBody,
   validateBuiltInAdapter,
+  assertMaxItems,
+  allRecipients,
+  type MessageRules,
 } from "./utils.js";
 
 export type HeloAdapterOptions = {
@@ -28,16 +31,44 @@ export type HeloAdapterOptions = {
 // Helo rejects idempotency keys longer than 36 characters.
 const MAX_IDEMPOTENCY_KEY_LENGTH = 36;
 
+const heloRules: MessageRules = (message) => {
+  assertMaxItems("helo", "recipient", allRecipients(message), 50);
+
+  const tags = message.tags ?? [];
+  assertMaxItems("helo", "tag", tags, 5);
+
+  for (const tag of tags) {
+    if (tag.value.length > 100) {
+      throw new EmailValidationError("helo tag values must be 100 characters or fewer.");
+    }
+  }
+
+  const metadata = Object.entries(message.metadata ?? {});
+  assertMaxItems("helo", "metadata field", metadata, 10);
+
+  for (const [key, value] of metadata) {
+    if (key.length > 50 || String(value ?? "").length > 100) {
+      throw new EmailValidationError(
+        "helo metadata keys must be 50 characters or fewer and values 100 characters or fewer.",
+      );
+    }
+  }
+
+  if (message.subject.length > 256) {
+    throw new EmailValidationError("helo subjects must be 256 characters or fewer.");
+  }
+};
+
 export function helo(options: HeloAdapterOptions): EmailAdapter<"helo", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.helohq.com";
   const fetcher = options.fetch ?? fetch;
 
   return {
     name: "helo",
-    ...builtInAdapterDefinition("helo"),
+    ...builtInAdapterDefinition("helo", heloRules),
     raw: { baseUrl },
     async send(message, context) {
-      validateBuiltInAdapter("helo", message);
+      validateBuiltInAdapter("helo", message, heloRules);
 
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,

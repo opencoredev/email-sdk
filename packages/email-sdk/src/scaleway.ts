@@ -8,6 +8,9 @@ import {
   assertSupportedMessageFields,
   formatAddresses,
   headersToArray,
+  arrayify,
+  headerList,
+  type MessageRules,
 } from "./utils.js";
 
 export type ScalewayAdapterOptions = {
@@ -18,6 +21,18 @@ export type ScalewayAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const scalewayRules: MessageRules = (message) => {
+  if (arrayify(message.replyTo).length === 0) return;
+
+  const hasReplyHeader = headerList(message.headers).some(
+    (header) => header.name.toLowerCase() === "reply-to",
+  );
+
+  if (hasReplyHeader) {
+    throw new EmailValidationError("scaleway cannot set replyTo when headers already include Reply-To.");
+  }
+};
+
 export function scaleway(
   options: ScalewayAdapterOptions,
 ): EmailAdapter<"scaleway", { baseUrl: string }> {
@@ -25,6 +40,7 @@ export function scaleway(
 
   return jsonProvider({
     name: "scaleway",
+    rules: scalewayRules,
     baseUrl: options.baseUrl ?? "https://api.scaleway.com",
     endpoint: `/transactional-email/v1alpha1/regions/${region}/emails`,
     headers: {

@@ -1,13 +1,23 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type LoopsAdapterOptions = {
   apiKey: string;
   transactionalId: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+};
+
+const loopsRules: MessageRules = (message) => {
+  assertMaxItems("loops", "recipient", arrayify(message.to), 1);
 };
 
 export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { baseUrl: string }> {
@@ -17,6 +27,7 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
 
   return jsonProvider({
     name: "loops",
+    rules: loopsRules,
     baseUrl: options.baseUrl ?? "https://app.loops.so",
     endpoint: "/api/v1/transactional",
     headers: {

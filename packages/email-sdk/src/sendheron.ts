@@ -1,4 +1,4 @@
-import { EmailAdapterError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -13,6 +13,9 @@ import {
   isRetryableStatus,
   readErrorBody,
   validateBuiltInAdapter,
+  assertMaxItems,
+  hasDisplayName,
+  type MessageRules,
 } from "./utils.js";
 
 export type SendheronAdapterOptions = {
@@ -20,6 +23,57 @@ export type SendheronAdapterOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
+};
+
+// SendHeron refuses any attachment type outside this allowlist.
+const SENDHERON_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "text/calendar",
+  "text/csv",
+  "text/plain",
+  "application/zip",
+]);
+
+const sendheronRules: MessageRules = (message) => {
+  const to = arrayify(message.to);
+  const cc = arrayify(message.cc);
+  const bcc = arrayify(message.bcc);
+  const replyTo = arrayify(message.replyTo);
+  assertMaxItems("sendheron", "recipient", to, 1);
+  assertMaxItems("sendheron", "cc", cc, 50);
+  assertMaxItems("sendheron", "bcc", bcc, 50);
+  assertMaxItems("sendheron", "replyTo", replyTo, 1);
+
+  if ([...to, ...cc, ...bcc, ...replyTo].some(hasDisplayName)) {
+    throw new EmailValidationError(
+      "sendheron recipient and replyTo fields only support plain email addresses.",
+    );
+  }
+
+  const attachments = message.attachments ?? [];
+  assertMaxItems("sendheron", "attachment", attachments, 10);
+
+  if (attachments.length > 0 && message.sendAt !== undefined) {
+    throw new EmailValidationError("sendheron cannot schedule a message with attachments.");
+  }
+
+  for (const attachment of attachments) {
+    if (attachment.disposition === "inline" || attachment.contentId) {
+      throw new EmailValidationError("sendheron does not support inline attachments.");
+    }
+
+    if (!attachment.contentType || !SENDHERON_ATTACHMENT_TYPES.has(attachment.contentType)) {
+      throw new EmailValidationError(
+        `sendheron requires an attachment contentType from its allowlist: ${[
+          ...SENDHERON_ATTACHMENT_TYPES,
+        ].join(", ")}.`,
+      );
+    }
+  }
 };
 
 export function sendheron(
@@ -30,10 +84,10 @@ export function sendheron(
 
   return {
     name: "sendheron",
-    ...builtInAdapterDefinition("sendheron"),
+    ...builtInAdapterDefinition("sendheron", sendheronRules),
     raw: { baseUrl },
     async send(message, context) {
-      validateBuiltInAdapter("sendheron", message);
+      validateBuiltInAdapter("sendheron", message, sendheronRules);
 
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,

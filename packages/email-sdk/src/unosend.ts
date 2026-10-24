@@ -11,7 +11,13 @@ import {
   optionalStringAddresses,
 } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type UnosendAdapterOptions = {
   apiKey: string;
@@ -19,11 +25,16 @@ export type UnosendAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const unosendRules: MessageRules = (message) => {
+  assertMaxItems("unosend", "replyTo", arrayify(message.replyTo), 1);
+};
+
 export function unosend(
   options: UnosendAdapterOptions,
 ): EmailAdapter<"unosend", { baseUrl: string }> {
   return jsonProvider({
     name: "unosend",
+    rules: unosendRules,
     baseUrl: options.baseUrl ?? "https://api.unosend.co",
     endpoint: "/emails",
     headers: {

@@ -13,6 +13,8 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  arrayify,
+  type MessageRules,
 } from "./utils.js";
 
 export type PrimitiveAdapterOptions = {
@@ -20,6 +22,10 @@ export type PrimitiveAdapterOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
+};
+
+const primitiveRules: MessageRules = (message) => {
+  assertMaxItems("primitive", "recipient", arrayify(message.to), 1);
 };
 
 export function primitive(
@@ -30,7 +36,7 @@ export function primitive(
 
   return {
     name: "primitive",
-    ...builtInAdapterDefinition("primitive"),
+    ...builtInAdapterDefinition("primitive", primitiveRules),
     raw: { baseUrl },
     async send(message, context) {
       const headers = new Headers({

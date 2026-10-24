@@ -15,6 +15,7 @@ import {
   assertMaxItems,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  type MessageRules,
 } from "./utils.js";
 
 export type PostmarkAdapterOptions = {
@@ -25,6 +26,10 @@ export type PostmarkAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+const postmarkRules: MessageRules = (message) => {
+  assertMaxItems("postmark", "tag", message.tags ?? [], 1);
+};
+
 export function postmark(
   options: PostmarkAdapterOptions,
 ): EmailAdapter<"postmark", { baseUrl: string }> {
@@ -33,7 +38,7 @@ export function postmark(
 
   return {
     name: "postmark",
-    ...builtInAdapterDefinition("postmark"),
+    ...builtInAdapterDefinition("postmark", postmarkRules),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/email`, {
