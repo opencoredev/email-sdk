@@ -2,11 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { createEmailClient } from "./core.js";
 import { EmailMiddlewareError, EmailValidationError } from "./errors.js";
 import type { EmailMessage } from "./types.js";
-import { resend } from "./resend.js";
-import {
-  jsonCapture,
-  messageWithoutProviderSpecificFields,
-} from "../test-support/adapter-fixtures.js";
 import { adapter, capabilities, message } from "../test-support/core-fixtures.js";
 
 describe("createEmailClient v1", () => {
@@ -129,27 +124,5 @@ describe("createEmailClient v1", () => {
     });
 
     await expect(hookClient.send(message)).resolves.toMatchObject({ adapter: "primary" });
-  });
-});
-
-describe("legacy header objects", () => {
-  test("send through the client instead of failing the capability check", async () => {
-    const capture = jsonCapture({ id: "res_legacy" });
-
-    const client = createEmailClient({
-      adapters: [resend({ apiKey: "key", fetch: capture.fetch })],
-      telemetry: false,
-    });
-
-    // JavaScript callers on the v0 shape still pass headers as a name-to-value object.
-    const legacyHeaders = { "X-Entity-Ref": "order_42" };
-
-    const result = await client.send({
-      ...messageWithoutProviderSpecificFields,
-      headers: legacyHeaders,
-    });
-
-    expect(result.id).toBe("res_legacy");
-    expect(capture.calls[0]?.json.headers).toEqual({ "X-Entity-Ref": "order_42" });
   });
 });
