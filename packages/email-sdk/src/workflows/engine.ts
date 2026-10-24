@@ -331,12 +331,21 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return save((run) => ({ ...run }));
     }
 
-    /** Runs `body` while renewing the lease every third of its duration. */
+    /**
+     * Runs `body` while renewing the lease every third of its duration. The timer stops as soon as
+     * a renewal shows the run was canceled, finished, or taken over, even if `body` never settles.
+     * A renewal that throws (a store outage) keeps the timer, since the lease may still be held.
+     */
     async function withHeartbeat<T>(body: () => Promise<T>): Promise<T> {
       let beat: Promise<unknown> = Promise.resolve();
 
       const timer = setInterval(() => {
-        beat = beat.then(renew).catch(() => false);
+        beat = beat
+          .then(renew)
+          .catch(() => true)
+          .then((owned) => {
+            if (!owned) clearInterval(timer);
+          });
       }, Math.max(1, Math.floor(leaseMs / 3)));
 
       try {
