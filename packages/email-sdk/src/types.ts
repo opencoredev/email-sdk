@@ -132,7 +132,10 @@ export type EmailNativeObject = { readonly [key: string]: EmailNativeValue };
 export type EmailNativePassthrough = {
   /** Shallow-merged over the request body the adapter builds. Keys here replace the SDK's. */
   body?: EmailNativeObject;
-  /** Extra HTTP request headers for the provider API call. These are not email headers. */
+  /**
+   * Extra HTTP request headers for the provider API call. These are not email headers. A header
+   * the adapter already sets, compared case-insensitively, keeps the adapter's value.
+   */
   headers?: Readonly<Record<string, string>>;
 };
 

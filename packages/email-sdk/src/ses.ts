@@ -21,6 +21,7 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  withNativeRequestHeaders,
 } from "./utils.js";
 
 export type SesAdapterOptions = {
@@ -54,6 +55,8 @@ export type SesNativeOptions = EmailNativePassthrough & {
   feedbackForwardingEmailAddress?: string;
 };
 
+const SES_HEADERS = { "content-type": "application/json" };
+
 export function ses(
   options: SesAdapterOptions,
 ): EmailAdapter<"ses", { baseUrl: string; region: string }, unknown, SesNativeOptions> {
@@ -82,10 +85,10 @@ export function ses(
         method: "POST",
         url: endpoint,
         body,
-        headers: {
-          ...native?.headers,
-          "content-type": "application/json",
-        },
+        // Signed and sent as one lowercase set, so no header reaches SES under two spellings.
+        headers: native?.headers
+          ? Object.fromEntries(withNativeRequestHeaders(SES_HEADERS, native.headers))
+          : SES_HEADERS,
       });
 
       const response = await fetcher(endpoint, {

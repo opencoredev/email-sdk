@@ -15,6 +15,7 @@ import {
   isRetryableStatus,
   readErrorBody,
   httpErrorMessage,
+  withNativeRequestHeaders,
 } from "./utils.js";
 
 export type MailgunAdapterOptions = {
@@ -59,7 +60,10 @@ export type MailgunNativeOptions = {
   ipPool?: string;
   /** Extra form fields, set after the SDK's. An array appends one field per value. */
   fields?: Readonly<Record<string, string | readonly string[]>>;
-  /** Extra HTTP request headers for the provider API call. These are not email headers. */
+  /**
+   * Extra HTTP request headers for the provider API call. These are not email headers. A header
+   * the adapter already sets, compared case-insensitively, keeps the adapter's value.
+   */
   headers?: Readonly<Record<string, string>>;
 };
 
@@ -131,13 +135,14 @@ export function mailgun(
 
     const fetcher = options.fetch ?? fetch;
 
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`api:${options.apiKey}`).toString("base64")}`,
+    };
+
     const response = await fetcher(`${baseUrl}/v3/${options.domain}/messages`, {
       method: "POST",
       signal: context.signal,
-      headers: {
-        ...native?.headers,
-        Authorization: `Basic ${Buffer.from(`api:${options.apiKey}`).toString("base64")}`,
-      },
+      headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
       body,
     });
 

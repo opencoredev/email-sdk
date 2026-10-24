@@ -85,7 +85,7 @@ Each adapter module exports its options type, for example `PostmarkNativeOptions
 Resend, Postmark, SendGrid, SES, Brevo, and Loops accept two escape hatches in their entry, and so do Iterable, Mailchimp Transactional, MailerSend, MailPace, Mailtrap, Plunk, Scaleway, Sequenzy, SparkPost, Unosend, and ZeptoMail:
 
 - `body` is shallow-merged over the request body the adapter builds. Its top-level keys replace the SDK's, so `body.mail_settings` replaces the whole object that `sandboxMode` would set.
-- `headers` adds HTTP headers to the provider API request. These are not email headers; use `message.headers` for those. A per-send `idempotencyKey` still wins over a native `Idempotency-Key` header.
+- `headers` adds HTTP headers to the provider API request. These are not email headers; use `message.headers` for those. Native headers only add names. A header the adapter already sends, such as its credentials, `Content-Type`, the per-send `Idempotency-Key`, or the adapter's own `headers` option, wins over a native header with the same name in any letter case.
 
 ```ts
 await email.send(message, {
