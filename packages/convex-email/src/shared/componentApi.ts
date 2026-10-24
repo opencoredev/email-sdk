@@ -31,7 +31,7 @@ import {
   vMaybeWorkflowRunRecord,
   vSaveWorkflowRunArgs,
   vWorkflowRunIds,
-  vWorkflowRunRecords,
+  vWorkflowRunPage,
 } from "./workflowValidators.js";
 
 const vOwnedEmailArgs = { email: v.object(vSendEmailArgs), ownerId: v.string() };
@@ -88,7 +88,7 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
     listActiveRunsBySubject: ComponentRef<
       "query",
       typeof vListActiveWorkflowRunsArgs,
-      typeof vWorkflowRunRecords,
+      typeof vWorkflowRunPage,
       TName
     >;
     listDueRuns: ComponentRef<"query", typeof vListDueWorkflowRunsArgs, typeof vWorkflowRunIds, TName>;

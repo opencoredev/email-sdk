@@ -84,6 +84,7 @@ const runSchema = z.object({
   output: jsonValue.optional(),
   error: z.object({ message: z.string(), step: z.string().optional() }).optional(),
   cancelReason: z.string().optional(),
+  lease: z.object({ owner: z.string(), until: z.number() }).optional(),
   revision: z.number(),
   dueAt: z.number().optional(),
   createdAt: z.number(),
@@ -91,6 +92,8 @@ const runSchema = z.object({
 });
 
 const stringContent = z.string();
+
+const subjectPageSize = 100;
 
 const terminalStatuses = new Set(["completed", "failed", "canceled"]);
 
@@ -133,9 +136,21 @@ export function convexWorkflowStore(component: ConvexEmailComponentApi, ctx: Wor
       return await ctx.runMutation(api.saveRun, { run: toRecord(run), expectedRevision });
     },
     async listActiveBySubject(subject) {
-      const records = await ctx.runQuery(api.listActiveRunsBySubject, { subject });
+      const runs: WorkflowRun[] = [];
+      let cursor: string | null = null;
 
-      return records.map((record) => parseWorkflowRun(record.state));
+      // Each page is its own query, so a subject with many runs stays inside Convex read limits.
+      for (;;) {
+        const result: { page: WorkflowRunRecord[]; isDone: boolean; continueCursor: string } = await ctx.runQuery(
+          api.listActiveRunsBySubject,
+          { subject, paginationOpts: { numItems: subjectPageSize, cursor } },
+        );
+
+        for (const record of result.page) runs.push(parseWorkflowRun(record.state));
+
+        if (result.isDone) return runs;
+        cursor = result.continueCursor;
+      }
     },
     async listDue(now, limit) {
       return await ctx.runQuery(api.listDueRuns, { now, limit });
