@@ -129,6 +129,25 @@ describe("review regressions", () => {
     expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["attacker.test"] }).security).toEqual({ spf: "pass", dkim: "pass", dmarc: "pass" });
   });
 
+  test("a quoted display name cannot replace the sender address", () => {
+    const email = emailFromMime({ provider: "cloudflare", raw: "From: \"Boss <ceo@example.com>\" <sender@evil.test>\r\n\r\nhi" });
+
+    expect(email.from).toEqual({ address: "sender@evil.test", name: "Boss <ceo@example.com>" });
+    expect(parseAddressList("(note <x@y.test>) real@z.test")).toEqual([{ address: "real@z.test", name: "note <x@y.test>" }]);
+  });
+
+  test("only the topmost trusted Authentication-Results header counts", () => {
+    const raw = "Authentication-Results: mx.trusted.test; none\r\nAuthentication-Results: mx.trusted.test; spf=pass; dkim=pass; dmarc=pass\r\n\r\nhi";
+
+    expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["mx.trusted.test"] }).security).toEqual({});
+  });
+
+  test("an alternative made of several parts is kept whole", () => {
+    const parsed = parseMimeMessage("Content-Type: multipart/alternative; boundary=a\r\n\r\n--a\r\nContent-Type: multipart/mixed; boundary=m\r\n\r\n--m\r\nContent-Type: text/plain\r\n\r\nintroduction\r\n--m\r\nContent-Type: text/plain\r\n\r\nconclusion\r\n--m--\r\n--a--");
+
+    expect(parsed.text).toBe("introduction\nconclusion");
+  });
+
   test("a multipart child without headers keeps its body", () => {
     expect(parseMimeMessage("Content-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\n\r\nHello\r\n--x--").text).toBe("Hello");
     expect(parseMimeMessage("\r\nbody only").text).toBe("body only");

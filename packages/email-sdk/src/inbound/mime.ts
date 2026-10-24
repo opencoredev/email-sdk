@@ -318,16 +318,23 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
       return;
     }
 
-    // Alternatives are the same content in different forms; keep the last (preferred) of each.
-    const alternatives: WalkState = { parts: state.parts, text: [], html: [], attachments: state.attachments };
+    // Alternatives are the same content in different forms. Walk each one whole, then keep
+    // the last (preferred) alternative that has text and the last that has HTML.
+    let text: string[] = [];
+    let html: string[] = [];
 
-    for (const part of parts) walk(splitEntity(part), alternatives, depth + 1, childDefault);
+    for (const part of parts) {
+      const alternative: WalkState = { parts: state.parts, text: [], html: [], attachments: state.attachments };
+      walk(splitEntity(part), alternative, depth + 1, childDefault);
+      state.parts = alternative.parts;
 
-    state.parts = alternatives.parts;
+      if (alternative.text.length) text = alternative.text;
 
-    if (alternatives.text.length) state.text.push(alternatives.text.at(-1)!);
+      if (alternative.html.length) html = alternative.html;
+    }
 
-    if (alternatives.html.length) state.html.push(alternatives.html.at(-1)!);
+    state.text.push(...text);
+    state.html.push(...html);
 
     return;
   }
@@ -385,6 +392,33 @@ function headerViews(entries: readonly InboundHeader[]): ParsedMimeHeaders {
 /** Read the header block of a raw message without decoding its bodies. */
 export function parseMimeHeaders(raw: string): ParsedMimeHeaders {
   return headerViews(parseHeaderBlock(raw));
+}
+
+interface AngleAddress {
+  start: number;
+  address: string;
+}
+
+/** Find the `<addr-spec>` outside quoted strings and comments, so a quoted name cannot supply it. */
+function angleAddress(entry: string): AngleAddress | undefined {
+  let quoted = false;
+  let comment = 0;
+
+  for (let index = 0; index < entry.length; index += 1) {
+    const char = entry[index]!;
+
+    if (char === "\\" && (quoted || comment)) index += 1;
+    else if (char === "\"" && !comment) quoted = !quoted;
+    else if (!quoted && char === "(") comment += 1;
+    else if (!quoted && char === ")" && comment) comment -= 1;
+    else if (!quoted && !comment && char === "<") {
+      const end = entry.indexOf(">", index + 1);
+
+      return end === -1 ? undefined : { start: index, address: entry.slice(index + 1, end) };
+    }
+  }
+
+  return undefined;
 }
 
 /** Tokenize an address list, respecting quotes, comments, angle brackets, and groups. */
@@ -454,11 +488,11 @@ export function parseAddressList(value: string | undefined): InboundAddress[] {
   const addresses: InboundAddress[] = [];
 
   for (const entry of splitAddressList(value)) {
-    const angle = /<([^<>]*)>/.exec(entry);
+    const angle = angleAddress(entry);
 
     if (angle) {
-      const address = angle[1]!.trim().replace(/^mailto:/i, "");
-      const name = decodeEncodedWords(unquote(stripComments(entry.slice(0, angle.index)).text));
+      const address = angle.address.trim().replace(/^mailto:/i, "");
+      const name = decodeEncodedWords(unquote(stripComments(entry.slice(0, angle.start)).text));
 
       if (address.includes("@")) addresses.push(name ? { address, name } : { address });
 

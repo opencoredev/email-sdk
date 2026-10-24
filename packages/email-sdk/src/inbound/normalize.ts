@@ -81,6 +81,9 @@ export function authenticationResults(headers: InboundHeaders, trusted: readonly
 
       if (match && method && security[method] === undefined) security[method] = verdictFrom(match[2]!);
     }
+
+    // Only the topmost trusted header counts; lower ones may be forged copies.
+    break;
   }
 
   return security;
