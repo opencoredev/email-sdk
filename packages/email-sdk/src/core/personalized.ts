@@ -9,6 +9,7 @@ import type {
   EmailAdapter,
   EmailHooks,
   EmailMessage,
+  EmailNativeOptionsMap,
   EmailPersonalizedInput,
   EmailPersonalizedResult,
   EmailRetryConfig,
@@ -232,6 +233,29 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
       if (!/^[\w-]+$/.test(key)) {
         throw new EmailValidationError(
           `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
+        );
+      }
+    }
+  }
+}
+
+// The raw passthroughs can replace any top-level request field, recipients included, and the
+// personalized result must name exactly who was sent to. Typed native options can't.
+const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
+
+export function assertNativeKeepsRecipients(
+  names: readonly string[],
+  native: EmailNativeOptionsMap | undefined,
+) {
+  if (!native) return;
+
+  for (const name of names) {
+    const entry = native[name];
+
+    for (const key of RECIPIENT_REPLACING_NATIVE_KEYS) {
+      if (entry?.[key] !== undefined) {
+        throw new EmailValidationError(
+          `sendPersonalized can't use native.${name}.${key}, because it can replace the recipients the result reports. Use send() for this message, or the adapter's typed native options.`,
         );
       }
     }

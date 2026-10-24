@@ -4,6 +4,7 @@ import { createEmailClient } from "./core.js";
 import { loops } from "./loops.js";
 import { mailersend } from "./mailersend.js";
 import { mailgun } from "./mailgun.js";
+import { EmailValidationError } from "./errors.js";
 import { defaultsPlugin } from "./plugins-defaults.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
@@ -499,6 +500,71 @@ describe("provider-native options through the client", () => {
     expect(capture.calls[0]?.json.personalizations[0].dynamic_template_data).toEqual({
       name: "Ada",
     });
+  });
+});
+
+describe("personalized sends keep their reported recipients", () => {
+  const input = {
+    message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+    recipients: [{ to: "ada@example.com", variables: { name: "Ada" } }],
+  };
+
+  const recipientOverrides = {
+    sendgrid: { body: { personalizations: [{ to: [{ email: "bob@example.com" }] }] } },
+    mailgun: { fields: { to: "bob@example.com" } },
+    postmark: { body: { To: "bob@example.com" } },
+    resend: { body: { to: ["bob@example.com"] } },
+  } as const;
+
+  function clientFor(name: keyof typeof recipientOverrides) {
+    const json = jsonCapture({ id: "1", MessageID: "1" });
+    const form = formCapture({ id: "1" });
+
+    const adapter = {
+      sendgrid: () => sendgrid({ apiKey: "sg", fetch: json.fetch }),
+      mailgun: () => mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: form.fetch }),
+      postmark: () => postmark({ serverToken: "pm", fetch: json.fetch }),
+      resend: () => resend({ apiKey: "re", fetch: json.fetch }),
+    }[name]();
+
+    const client = createEmailClient({ adapters: [adapter], telemetry: false });
+
+    return { client, calls: () => json.calls.length + form.calls.length };
+  }
+
+  for (const name of ["sendgrid", "mailgun", "postmark", "resend"] as const) {
+    test(`${name} rejects a native override that could replace the recipients`, async () => {
+      const { client, calls } = clientFor(name);
+      const key = name === "mailgun" ? "fields" : "body";
+
+      await expect(
+        client.sendPersonalized(input, { native: { [name]: recipientOverrides[name] } }),
+      ).rejects.toThrow(
+        new EmailValidationError(
+          `sendPersonalized can't use native.${name}.${key}, because it can replace the recipients the result reports. Use send() for this message, or the adapter's typed native options.`,
+        ),
+      );
+      expect(calls()).toBe(0);
+    });
+  }
+
+  test("typed native options and request headers still reach a personalized send", async () => {
+    const { client, calls } = clientFor("postmark");
+
+    const result = await client.sendPersonalized(input, {
+      native: { postmark: { tag: "welcome", headers: { "X-Trace": "1" } } },
+    });
+
+    expect(result.accepted).toEqual(["ada@example.com"]);
+    expect(calls()).toBe(1);
+  });
+
+  test("an entry for an adapter outside the route doesn't block the send", async () => {
+    const { client, calls } = clientFor("resend");
+
+    await client.sendPersonalized(input, { native: { postmark: recipientOverrides.postmark } });
+
+    expect(calls()).toBe(1);
   });
 });
 

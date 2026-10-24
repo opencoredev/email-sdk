@@ -19,6 +19,7 @@ import {
   resolvePluginAdapters,
 } from "./core/lifecycle.js";
 import {
+  assertNativeKeepsRecipients,
   attemptExpandedPersonalized,
   attemptNativePersonalized,
   expandPersonalizedMessage,
@@ -529,6 +530,7 @@ export function createEmailClient<
       attemptedAdapter = route.primary;
       validateFallback(adapters, route.fallback);
       validateRetry(prepared.options?.retry);
+      assertNativeKeepsRecipients(route.names, prepared.options?.native);
 
       const expanded = input.recipients.map((recipient) => ({
         recipient,
