@@ -135,18 +135,25 @@ function isPlainObject(value: WorkflowJsonObject): boolean {
 /**
  * True when `value` survives a JSON round trip unchanged, apart from `undefined` object fields being
  * dropped. The static type already says JSON; this catches what it can't, such as NaN and Infinity
- * (saved as null) or a Date from untyped code.
+ * (saved as null), empty array slots (saved as null), a cycle (which JSON can't encode), or a Date
+ * from untyped code. `ancestors` holds the containers above `value`; a shared, acyclic reference
+ * is fine, since it saves as two equal copies.
  */
-function isJsonValue(value: WorkflowJsonValue): boolean {
+function isJsonValue(value: WorkflowJsonValue, ancestors: readonly object[] = []): boolean {
   if (value === null || isString(value) || isBoolean(value)) return true;
 
   if (isNumber(value)) return Number.isFinite(value);
 
-  if (isJsonArray(value)) return value.every((item) => item !== undefined && isJsonValue(item));
+  if (!isObjectLike(value) || ancestors.includes(value)) return false;
 
-  if (!isObjectLike(value) || !isPlainObject(value)) return false;
+  const path = [...ancestors, value];
 
-  return Object.values(value).every((field) => field === undefined || isJsonValue(field));
+  // Spreading reads empty slots as undefined, which `every` would otherwise skip.
+  if (isJsonArray(value)) return [...value].every((item) => item !== undefined && isJsonValue(item, path));
+
+  if (!isPlainObject(value)) return false;
+
+  return Object.values(value).every((field) => field === undefined || isJsonValue(field, path));
 }
 
 /** Throws `invalid_value` unless `value` is undefined (a `void` result) or JSON. */
@@ -287,7 +294,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const handlers: WorkflowHookHandlers = hooks;
 
     try {
-      await handlers[name]?.(event);
+      // A copy of the run, so a hook that edits what it was given can't change what is saved next.
+      await handlers[name]?.({ ...event, run: detached(event.run) });
     } catch {
       // Hooks are observability callbacks and never change run behavior.
     }
@@ -399,6 +407,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const neverSettles = new Promise<never>(() => {});
     const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
+    // The step whose callback is running. `ctx` calls queue behind it, so one made from inside the
+    // callback would wait for the callback that awaits it.
+    let runningStep: string | undefined;
 
     function suspend(): Promise<never> {
       stopped = true;
@@ -455,6 +466,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
       if (stopped) return neverSettles;
+
+      if (runningStep !== undefined) {
+        return Promise.reject(
+          new WorkflowError(
+            "invalid_definition",
+            `"${name}" was called inside step "${runningStep}". A step callback can't call ctx; return from the step and make the call after it.`,
+          ),
+        );
+      }
 
       if (seen.has(name)) {
         return Promise.reject(
@@ -671,7 +691,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                const value = await fn();
+                runningStep = name;
+
+                let value: WorkflowJsonValue | void;
+
+                try {
+                  value = await fn();
+                } finally {
+                  runningStep = undefined;
+                }
 
                 assertJson(value, `The result of step "${name}"`);
 
@@ -856,10 +884,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   async function sendEvent(input: WorkflowEventInput): Promise<string[]> {
     assertJson(input.payload, `The payload of event "${input.name}"`);
 
+    // Receipt is the call, so a slow subject lookup can't push an on-time event past its deadline.
+    const receivedAt = now();
+
     const targets =
       input.runId === undefined ? (await store.listActiveBySubject(input.subject)).map((run) => run.id) : [input.runId];
-
-    const receivedAt = now();
 
     const event: WorkflowInboxEvent =
       input.payload === undefined ? { name: input.name, receivedAt } : { name: input.name, payload: input.payload, receivedAt };
