@@ -1,0 +1,28 @@
+{
+  "type": "email.received",
+  "created_at": "2026-02-22T23:41:12.126Z",
+  "data": {
+    "email_id": "56761188-7520-42d8-8898-ff6fc54ce618",
+    "created_at": "2026-02-22T23:41:11.894Z",
+    "from": "onboarding@resend.dev",
+    "to": [
+      "delivered@resend.dev"
+    ],
+    "bcc": [],
+    "cc": [],
+    "received_for": [
+      "forwarded@example.com"
+    ],
+    "message_id": "<111-222-333@email.example.com>",
+    "subject": "Sending this example",
+    "attachments": [
+      {
+        "id": "2a0c9ce0-3112-4728-976e-47ddcd16a318",
+        "filename": "avatar.png",
+        "content_type": "image/png",
+        "content_disposition": "inline",
+        "content_id": "img001"
+      }
+    ]
+  }
+}

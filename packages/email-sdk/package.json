@@ -5,8 +5,10 @@
   "keywords": [
     "bun",
     "email",
+    "email-parsing",
     "email-sdk",
     "helo",
+    "inbound-email",
     "iterable",
     "mailgun",
     "microsoft-graph",
@@ -217,6 +219,12 @@
       "import": "./dist/webhooks.js",
       "require": "./dist/webhooks.cjs",
       "default": "./dist/webhooks.js"
+    },
+    "./inbound": {
+      "types": "./dist/inbound.d.ts",
+      "import": "./dist/inbound.js",
+      "require": "./dist/inbound.cjs",
+      "default": "./dist/inbound.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",
