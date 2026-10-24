@@ -61,10 +61,22 @@ export function applyClientExtension<TClient extends object, TExtension extends 
   Object.assign(client, extension);
 }
 
-export async function applyBeforeSendMiddleware(
-  middleware: EmailSendMiddleware[],
+// The lifecycle helpers below return synchronously when there is nothing to run, so a client
+// without plugins or hooks pays no promise allocation or microtask hop for them.
+
+export function applyBeforeSendMiddleware(
+  middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
-) {
+): MaybePromise<EmailBeforeSendEvent> {
+  if (middleware.length === 0) return event;
+
+  return runBeforeSendMiddleware(middleware, event);
+}
+
+async function runBeforeSendMiddleware(
+  middleware: readonly EmailSendMiddleware[],
+  event: EmailBeforeSendEvent,
+): Promise<EmailBeforeSendEvent> {
   let message = event.message;
   let options = event.options;
 
@@ -83,8 +95,17 @@ export async function applyBeforeSendMiddleware(
   return { message, options };
 }
 
-export async function invokeAfterSendMiddleware(
-  middleware: EmailSendMiddleware[],
+export function invokeAfterSendMiddleware(
+  middleware: readonly EmailSendMiddleware[],
+  event: EmailAfterSendEvent,
+): Promise<void> | undefined {
+  if (middleware.length === 0) return undefined;
+
+  return runAfterSendMiddleware(middleware, event);
+}
+
+async function runAfterSendMiddleware(
+  middleware: readonly EmailSendMiddleware[],
   event: EmailAfterSendEvent,
 ) {
   for (const item of middleware) {
@@ -96,8 +117,17 @@ export async function invokeAfterSendMiddleware(
   }
 }
 
-export async function invokeErrorMiddleware(
-  middleware: EmailSendMiddleware[],
+export function invokeErrorMiddleware(
+  middleware: readonly EmailSendMiddleware[],
+  event: EmailErrorEvent,
+): Promise<void> | undefined {
+  if (middleware.length === 0) return undefined;
+
+  return runErrorMiddleware(middleware, event);
+}
+
+async function runErrorMiddleware(
+  middleware: readonly EmailSendMiddleware[],
   event: EmailErrorEvent,
 ) {
   for (const item of middleware) {
@@ -110,8 +140,8 @@ export async function invokeErrorMiddleware(
 }
 
 export async function invokeSendFailureLifecycle(
-  middleware: EmailSendMiddleware[],
-  hooks: EmailHooks[],
+  middleware: readonly EmailSendMiddleware[],
+  hooks: readonly EmailHooks[],
   event: EmailErrorEvent,
 ) {
   await invokeErrorMiddleware(middleware, event);
@@ -127,8 +157,18 @@ type EmailHookHandlers = {
   [K in keyof EmailHooks]?: (event: EmailHookEvents[K]) => MaybePromise<void>;
 };
 
-export async function invokeHooks<K extends keyof EmailHooks>(
-  hooks: EmailHooks[],
+export function invokeHooks<K extends keyof EmailHooks>(
+  hooks: readonly EmailHooks[],
+  name: K,
+  event: EmailHookEvents[K],
+): Promise<void> | undefined {
+  if (hooks.length === 0) return undefined;
+
+  return runHooks(hooks, name, event);
+}
+
+async function runHooks<K extends keyof EmailHooks>(
+  hooks: readonly EmailHooks[],
   name: K,
   event: EmailHookEvents[K],
 ) {

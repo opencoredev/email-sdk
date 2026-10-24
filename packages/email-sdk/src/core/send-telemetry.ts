@@ -4,14 +4,23 @@ import {
   normalizeAdapterName,
   type TelemetrySource,
 } from "../telemetry.js";
-import type { EmailMessage, EmailPersonalizedInput } from "../types.js";
-import { arrayify } from "../utils.js";
+import type { EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.js";
 import { classifySendFailure, findSdkDefect, type FailureKind } from "./failure-kind.js";
+
+function listLength<T>(value: OneOrMany<T> | undefined) {
+  if (value === undefined) return 0;
+
+  return Array.isArray(value) ? value.length : 1;
+}
+
+/** to + cc + bcc, counted without copying the lists. */
+export function recipientCount(message: EmailMessage) {
+  return listLength(message.to) + listLength(message.cc) + listLength(message.bcc);
+}
 
 export function messageFacts(message: EmailMessage) {
   return {
-    recipients:
-      arrayify(message.to).length + arrayify(message.cc).length + arrayify(message.bcc).length,
+    recipients: recipientCount(message),
     has_attachments: (message.attachments?.length ?? 0) > 0,
     used_recipient_variables: false,
     used_send_at: message.sendAt !== undefined,
