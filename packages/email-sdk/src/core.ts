@@ -65,6 +65,7 @@ import type {
   EmailClientOptions,
   EmailHooks,
   EmailMessage,
+  MaybePromise,
   EmailPersonalizedInput,
   EmailPersonalizedResult,
   EmailPlugin,
@@ -275,28 +276,46 @@ export function createEmailClient<
     source: telemetrySource,
   });
 
-  const validateRoute = async (
+  const markValidatorError = (adapter: EmailAdapter, cause: unknown): never => {
+    if (!isBuiltInAdapter(adapter) && isObjectLike(cause)) callerErrors.add(cause);
+
+    throw cause;
+  };
+
+  /**
+   * Validates the message for every adapter on the route, in order. Built-in validators are
+   * synchronous, so this returns undefined without allocating a promise unless an adapter's
+   * validate() actually returns one; later adapters then wait for it.
+   */
+  const validateRoute = (
     message: EmailMessage,
     route: EmailRoute,
     operation: "send" | "personalized",
-  ) => {
-    assertMessage(message);
+    from = 0,
+  ): Promise<void> | undefined => {
+    if (from === 0) assertMessage(message);
 
-    for (const name of route.names) {
+    for (let index = from; index < route.names.length; index += 1) {
+      const name = route.names[index] ?? route.primary;
       const adapter = requireAdapter(adapters, name);
       validateCapabilities(adapter, message, operation);
+      let pending: MaybePromise<void>;
 
       try {
-        // Built-in validators are synchronous; awaiting only real promises saves a microtask.
-        const pending = adapter.validate?.(message, { adapter: name, operation });
-
-        if (pending !== undefined) await pending;
+        pending = adapter.validate?.(message, { adapter: name, operation });
       } catch (error) {
-        if (!isBuiltInAdapter(adapter) && isObjectLike(error)) callerErrors.add(error);
+        return markValidatorError(adapter, error);
+      }
 
-        throw error;
+      if (pending !== undefined) {
+        return Promise.resolve(pending).then(
+          () => validateRoute(message, route, operation, index + 1),
+          (cause: unknown) => markValidatorError(adapter, cause),
+        );
       }
     }
+
+    return undefined;
   };
 
   const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
@@ -327,13 +346,17 @@ export function createEmailClient<
     try {
       throwIfAborted(sendOptions?.signal);
 
-      const prepared = await applyBeforeSendMiddleware(middleware, {
+      const preparing = applyBeforeSendMiddleware(middleware, {
         message,
         options: sendOptions,
       });
 
+      // The lifecycle helpers return a native promise only when there is work to wait for.
+      const prepared = preparing instanceof Promise ? await preparing : preparing;
       const route = resolveCheckedRoute(prepared.options);
-      await validateRoute(prepared.message, route, "send");
+      const validating = validateRoute(prepared.message, route, "send");
+
+      if (validating) await validating;
       const retry = callerRetry(prepared.options?.retry ?? options.retry);
       const failures: EmailAdapterError[] = [];
 
