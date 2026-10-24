@@ -1,3 +1,4 @@
+import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
@@ -22,7 +23,7 @@ const loopsRules: MessageRules = (message) => {
 
 export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { baseUrl: string }> {
   if (!options.transactionalId) {
-    throw new Error("loops requires a transactionalId.");
+    throw new EmailValidationError("loops requires a transactionalId.");
   }
 
   return jsonProvider({
@@ -39,7 +40,7 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
       const attachments = await base64Attachments(message);
 
       if (recipients.length !== 1) {
-        throw new Error("loops only supports one recipient per transactional send.");
+        throw new EmailValidationError("loops only supports one recipient per transactional send.");
       }
 
       return {

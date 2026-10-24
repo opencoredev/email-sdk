@@ -220,7 +220,7 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
     tokenTimeoutMs <= 0 ||
     tokenTimeoutMs > MAX_TIMER_DELAY_MS
   ) {
-    throw new Error(
+    throw new EmailValidationError(
       "graph tokenTimeoutMs must be finite, positive, and no greater than 2147483647.",
     );
   }

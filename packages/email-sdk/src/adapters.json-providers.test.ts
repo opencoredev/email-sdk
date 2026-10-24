@@ -245,13 +245,15 @@ describe("provider payloads", () => {
   });
 
   test("Loops requires the transactional email ID provider option", () => {
-    expect(() =>
+    const create = () =>
       loops({
         apiKey: "key",
         transactionalId: "",
         fetch: jsonCapture({ success: true }).fetch,
-      }),
-    ).toThrow("loops requires a transactionalId");
+      });
+
+    expect(create).toThrow(EmailValidationError);
+    expect(create).toThrow("loops requires a transactionalId");
   });
 
   test("Loops maps transactional data variables and attachments", async () => {
