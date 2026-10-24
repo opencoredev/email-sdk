@@ -2,7 +2,7 @@ import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { jsonArray } from "./internal/decode.js";
 import { apiAddress, apiAddresses, base64Attachments, optionalApiAddresses } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailMessage, EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -35,7 +35,7 @@ const scalewayRules: MessageRules = (message) => {
 
 export function scaleway(
   options: ScalewayAdapterOptions,
-): EmailAdapter<"scaleway", { baseUrl: string }> {
+): EmailAdapter<"scaleway", { baseUrl: string }, unknown, EmailNativePassthrough> {
   const region = options.region ?? "fr-par";
 
   return jsonProvider({

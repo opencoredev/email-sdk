@@ -54,7 +54,7 @@ Built-in validation currently returns an empty warnings array on success.
 ## `send(message, options?)`
 
 ```ts title="types.ts"
-type EmailSendOptions<Name extends string> = {
+type EmailSendOptions<Name extends string = string, Native extends EmailNativeOptionsMap = never> = {
   adapter?: Name;
   fallback?: {
     adapters: readonly Name[];
@@ -68,10 +68,11 @@ type EmailSendOptions<Name extends string> = {
   signal?: AbortSignal;
   idempotencyKey?: string;
   metadata?: EmailSendMetadata;
+  native?: Native; // experimental, keyed by adapter name; omitted when Native is never
 };
 ```
 
-Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes it unchanged to hooks, plugins, and adapter contexts.
+Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes it unchanged to hooks, plugins, and adapter contexts. `native` carries provider-specific options; each adapter receives only its own entry. The client's `send()` fills `Native` with `EmailNativeOptions<typeof adapters>`, so `native` is typed from its adapters. A bare `EmailSendOptions<Name>` annotation leaves `Native` as `never` and has no `native` field, so code written before it existed still compiles. To accept native options in your own helper, type the parameter as `Parameters<typeof email.send>[1]`. See [Use provider-native features](/docs/guides/provider-native-options).
 
 By default `EmailSendMetadata` is `EmailMetadataRecord`: strings, numbers, booleans, `null`, `undefined`, `Date`, and arrays or plain objects of those. To give it your own shape, augment `EmailMetadataRegister` once in your app:
 

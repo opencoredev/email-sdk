@@ -1,6 +1,6 @@
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, emailParts } from "./payloads.js";
-import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailAdapter, OneOrMany, EmailNativePassthrough } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type ZeptoMailAdapterOptions = {
@@ -11,7 +11,7 @@ export type ZeptoMailAdapterOptions = {
 
 export function zeptomail(
   options: ZeptoMailAdapterOptions,
-): EmailAdapter<"zeptomail", { baseUrl: string }> {
+): EmailAdapter<"zeptomail", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "zeptomail",
     baseUrl: options.baseUrl ?? "https://api.zeptomail.com",

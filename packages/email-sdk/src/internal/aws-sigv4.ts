@@ -80,7 +80,9 @@ export async function signAwsRequest(signingKeys: SigningKeyCache, input: AwsSig
     ...requestHeaders,
     host: input.url.host,
   })
-    .map(([name, value]) => [name.toLowerCase(), value.trim()] as const)
+    // SigV4 trims each value and collapses sequential whitespace into one space, quoted or not,
+    // as the AWS SDKs do. `\s+` has no nested quantifier, so the replace stays linear.
+    .map(([name, value]) => [name.toLowerCase(), value.trim().replace(/\s+/g, " ")] as const)
     // SigV4 orders headers by character code, not by locale.
     .sort(([left], [right]) => compareCodeUnits(left, right));
 

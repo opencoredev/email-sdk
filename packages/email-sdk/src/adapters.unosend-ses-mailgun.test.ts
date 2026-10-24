@@ -226,7 +226,8 @@ function expectedAuthorization(
 
   const signed = [...request.headers.entries(), ["host", url.host]]
     .flatMap(([name = "", value = ""]) =>
-      name === "authorization" ? [] : [[name.toLowerCase(), value.trim()]],
+      // AWS: trim each value and convert sequential spaces to a single space.
+      name === "authorization" ? [] : [[name.toLowerCase(), value.trim().split(/\s+/).join(" ")]],
     )
     .sort(([left = ""], [right = ""]) => (left < right ? -1 : left > right ? 1 : 0));
 
@@ -366,5 +367,86 @@ describe("SES SigV4 signing", () => {
         expectedAuthorization(request, secrets.get(accessKeyId) ?? "", "eu-west-1", accessKeyId),
       );
     }
+  });
+  test("signs native request headers whose names differ only in case from the SDK's", async () => {
+    const { requests, fetch } = signedCapture();
+    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+
+    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch }).send(
+      messageWithoutMetadata,
+      {
+        ...context,
+        native: { headers: { "Content-Type": "text/plain", "X-Trace": "1" } },
+      },
+    );
+
+    const [request] = requests;
+
+    if (!request) throw new Error("Expected one SES request.");
+
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(request.headers.get("x-trace")).toBe("1");
+    expect(request.headers.get("authorization")).toBe(
+      expectedAuthorization(request, "secret", "eu-west-1"),
+    );
+  });
+
+  test("collapses repeated spaces in native header values the way AWS does", async () => {
+    const { requests, fetch } = signedCapture();
+    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+
+    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch }).send(
+      messageWithoutMetadata,
+      { ...context, native: { headers: { "X-Note": "one  two \t three", "X-Quoted": '"a   b"' } } },
+    );
+
+    const [request] = requests;
+
+    if (!request) throw new Error("Expected one SES request.");
+
+    expect(request.headers.get("x-note")).toBe("one  two \t three");
+    expect(request.headers.get("authorization")).toBe(
+      expectedAuthorization(request, "secret", "eu-west-1"),
+    );
+  });
+
+  test("rejects native headers the signer owns, whatever their case", async () => {
+    const { requests, fetch } = signedCapture();
+    const adapter = ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch });
+
+    for (const name of [
+      "Authorization",
+      "X-Amz-Date",
+      "x-amz-security-token",
+      "X-AMZ-CONTENT-SHA256",
+      "Host",
+    ]) {
+      await expect(
+        adapter.send(messageWithoutMetadata, { ...context, native: { headers: { [name]: "native" } } }),
+      ).rejects.toThrow(new EmailValidationError(
+        `SES signs requests itself, so native.headers can't set "${name}".`,
+      ));
+    }
+
+    expect(requests).toHaveLength(0);
+  });
+
+  test("a native header the signer doesn't own still matches an independent signature", async () => {
+    const { requests, fetch } = signedCapture();
+    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+
+    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", sessionToken: "tok", fetch }).send(
+      messageWithoutMetadata,
+      { ...context, native: { headers: { "X-Trace": "1" } } },
+    );
+
+    const [request] = requests;
+
+    if (!request) throw new Error("Expected one SES request.");
+
+    expect(request.headers.get("x-amz-security-token")).toBe("tok");
+    expect(request.headers.get("authorization")).toBe(
+      expectedAuthorization(request, "secret", "eu-west-1"),
+    );
   });
 });
