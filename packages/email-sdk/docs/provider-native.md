@@ -189,6 +189,11 @@ for other adapters in a fallback chain, and for logs and hooks.
   both sides carry native options.
 - Each adapter branches once on `context.native` and returns the payload it built before this
   change. The extra spreads run only when native options are present.
+- Resend builds its payload in one async step and merges native options synchronously. An
+  earlier version split the builder into two async functions, which added a promise and a
+  microtask hop to every Resend send even without `native`. An interleaved A/B against the
+  base branch (`bench/overhead.ts` cases, both builds in one process) caught it at about +4%
+  on `sendMany` x20; after the fix every case sits within run-to-run noise.
 - Evidence: every pre-existing adapter payload test passes unchanged, and
   `adapters.native.test.ts` asserts that an empty native entry produces a byte-identical
   request body for Resend, Postmark, SendGrid, Brevo, and Loops.
