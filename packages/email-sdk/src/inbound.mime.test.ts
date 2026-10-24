@@ -88,6 +88,14 @@ describe("encoded words and addresses", () => {
     expect(parseAddressList("=?UTF-8?B?Sm9zw6k=?= <jose@x.test>")).toEqual([{ address: "jose@x.test", name: "José" }]);
     expect(parseAddressList("undisclosed-recipients:;")).toEqual([]);
   });
+
+  test("keeps parentheses and spacing inside quoted strings", () => {
+    expect(parseAddressList("\"a(b)\"@example.com")).toEqual([{ address: "\"a(b)\"@example.com" }]);
+    expect(parseAddressList("\"a  b\"@example.com (Note)")).toEqual([{ address: "\"a  b\"@example.com", name: "Note" }]);
+    expect(parseAddressList("Boss <\"a(b)\"@example.com>")).toEqual([{ address: "\"a(b)\"@example.com", name: "Boss" }]);
+    expect(parseAddressList("\"Ada  (Lovelace)\" (work) <ada@example.com>")).toEqual([{ address: "ada@example.com", name: "Ada  (Lovelace)" }]);
+    expect(parseAddressList("(outer (inner) text)   a@example.com")).toEqual([{ address: "a@example.com", name: "outer (inner) text" }]);
+  });
 });
 
 describe("emailFromMime", () => {

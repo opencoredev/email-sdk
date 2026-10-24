@@ -484,16 +484,58 @@ interface CommentedText {
   comment?: string;
 }
 
+/**
+ * Drop comments and collapse whitespace outside quoted strings, keeping the first comment's text.
+ * Quoted strings pass through verbatim, so `"a(b)"@x` and `"a  b"@x` keep their local parts.
+ */
 function stripComments(value: string): CommentedText {
+  let text = "";
   let comment: string | undefined;
+  let commentText = "";
+  let depth = 0;
+  let quoted = false;
+  // Whitespace outside quotes is buffered so a run of it (or a comment) becomes one space.
+  let pendingSpace = false;
 
-  const text = value.replace(/\(((?:\\.|[^()\\])*)\)/g, (_match, inner: string) => {
-    comment ??= inner.trim();
+  const append = (chars: string) => {
+    if (pendingSpace && text) text += " ";
 
-    return " ";
-  });
+    pendingSpace = false;
+    text += chars;
+  };
 
-  return { text: text.replace(/\s+/g, " ").trim(), comment };
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+    const escaped = char === "\\" ? char + (value[index + 1] ?? "") : undefined;
+
+    if (escaped !== undefined && (quoted || depth > 0)) index += 1;
+
+    if (depth > 0) {
+      if (escaped !== undefined) commentText += escaped.slice(1);
+      else if (char === "(") depth += 1;
+      else if (char === ")") depth -= 1;
+
+      if (depth === 0) {
+        comment ??= commentText.trim();
+        pendingSpace = true;
+      } else if (escaped === undefined) commentText += char;
+    } else if (quoted) {
+      text += escaped ?? char;
+
+      if (char === "\"") quoted = false;
+    } else if (char === "(") {
+      depth = 1;
+      commentText = "";
+    } else if (/\s/.test(char)) {
+      pendingSpace = true;
+    } else {
+      append(char);
+
+      if (char === "\"") quoted = true;
+    }
+  }
+
+  return { text, comment };
 }
 
 /** Parse `"Ada, L." <ada@example.com>, bob@example.com` into addresses. */
