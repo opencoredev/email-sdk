@@ -1,0 +1,312 @@
+---
+title: Email workflows (experimental)
+description: Build onboarding drips and multi-step sequences with waits, events, branching, and cancellation that survive restarts.
+---
+
+<Callout type="warn" title="Experimental">
+`@opencoredev/email-sdk/workflows` is new in 3.1 and its API may change in a minor release. Pin the version if you depend on it.
+</Callout>
+
+A workflow is an async function that sends emails, waits, and reacts to what the user does. The engine saves its progress after every step, so a deploy, a crash, or a three-day wait does not lose its place or send anything twice.
+
+```ts title="src/workflows/onboarding.ts"
+import { defineWorkflow } from "@opencoredev/email-sdk/workflows";
+
+type OnboardingInput = { userId: string; email: string; name: string };
+
+export const onboarding = defineWorkflow({
+  name: "onboarding",
+  cancelOn: ["unsubscribed"],
+  run: async (ctx, input: OnboardingInput) => {
+    await ctx.send("welcome", {
+      from: "Acme <hello@acme.com>",
+      to: input.email,
+      subject: `Welcome, ${input.name}`,
+      text: "Your account is ready.",
+    });
+
+    await ctx.sleep("before-tip", "2d");
+
+    const activated = await ctx.waitForEvent<{ plan: string }>("activated", { timeout: "3d" });
+
+    if (activated.status === "received") {
+      await ctx.send("activated-mail", {
+        from: "Acme <hello@acme.com>",
+        to: input.email,
+        subject: "You're all set",
+        text: `Enjoy the ${activated.payload.plan} plan.`,
+      });
+
+      return;
+    }
+
+    await ctx.send("nudge", {
+      from: "Acme <hello@acme.com>",
+      to: input.email,
+      subject: "Need a hand?",
+      text: "Reply to this email and we'll help.",
+    });
+  },
+});
+```
+
+The root `@opencoredev/email-sdk` entry does not import workflows, so apps that don't use them ship no extra code.
+
+## How replay works
+
+Every `ctx` call has a step name. When a run wakes up after a sleep, an event, or a retry, the engine calls `run` again from the top. Steps that already finished return their saved result immediately, and the first unfinished step runs for real.
+
+Two rules follow from that:
+
+- **Step names must be unique within a run.** The engine fails the run with `duplicate_step` if a name repeats. In a loop, put the index in the name: `` ctx.send(`reminder-${i}`, ...) ``. The name `__proto__` is reserved, because some stores can't keep it as a journal key.
+- **Code between steps must give the same answer every time.** Put database reads, API calls, and anything random inside `ctx.step` so their results are saved and replayed.
+- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A call from `run` while an earlier step is still pending is fine: it waits its turn.
+
+Branching, loops, and early returns are plain TypeScript.
+
+Your code always sees values the way the store saves them. The input, step results, and event payloads go through a JSON round trip before `run` gets them, on the first execution and after every wake. An object returned twice in one result arrives as two separate copies, and a field set to `undefined` is left out, so nothing changes between the first run and a replay.
+
+The workflows entry imports no Node built-ins, so it runs in Convex's default runtime, browsers, and Workers without `nodejs_compat`. That limits how it catches a nested call. A `ctx` call made before the callback's first `await` fails the run with `invalid_definition`. One made after an `await` can't be told apart from a call `run` makes, so it waits behind its own step and the run stays `running` until you cancel it:
+
+```ts
+await ctx.step("notify", async () => {
+  await ctx.send("mail", message); // fails the run with invalid_definition
+});
+
+await ctx.step("notify", async () => {
+  await loadUser();
+  await ctx.send("mail", message); // hangs: move this call out of the step
+});
+```
+
+## Run the engine
+
+```ts title="src/workflows/engine.ts"
+import { createWorkflowEngine } from "@opencoredev/email-sdk/workflows";
+import { email } from "../email";
+import { onboarding } from "./onboarding";
+import { store, scheduler } from "./storage";
+
+export const workflows = createWorkflowEngine({
+  email,
+  store,
+  scheduler,
+  workflows: [onboarding],
+  isSuppressed: (address) => suppressionList.has(address),
+});
+```
+
+`isSuppressed` gets each recipient's bare address, lowercased. For a mailbox string, that is the address in its last `<...>`, so `"Ada <team>" <ada@example.test>` checks `ada@example.test`.
+
+Then call it from your app:
+
+```ts
+// Signup handler. A deterministic id makes repeated signup webhooks start one run.
+await workflows.start(onboarding, user, { id: `onboarding:${user.userId}`, subject: user.email });
+
+// When the user finishes setup.
+await workflows.sendEvent({ name: "activated", subject: user.email, payload: { plan: "pro" } });
+
+// From your unsubscribe link. Cancels the run because "unsubscribed" is in cancelOn.
+await workflows.sendEvent({ name: "unsubscribed", subject: user.email });
+
+// Or cancel one run directly.
+await workflows.cancel(`onboarding:${user.userId}`, "account deleted");
+```
+
+`cancel` and cancel events take effect right away, even while another worker is in the middle of a step. A send or step that is already in flight may still finish, but its result is discarded and nothing after it runs.
+
+`start` runs the workflow until its first wait and returns the saved run. A second `start` with the same `id` returns the existing run without checking or saving the new input. `subject` is the key `sendEvent` uses to find runs, usually the recipient's address or user id.
+
+## Steps
+
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `ctx.send(name, message, options?)` | `{ adapter, id? }` | Sends through your client with the idempotency key `workflowIdempotencyKey(runId, name)` returns. |
+| `ctx.step(name, fn, { retry? })` | `fn`'s result | The result must be JSON. A `Date` is a type error. |
+| `ctx.sleep(name, duration)` | nothing | `"30s"`, `"15m"`, `"2h"`, `"3d"`, `"1w"`, or milliseconds. |
+| `ctx.sleepUntil(name, date)` | nothing | Waits for an absolute time. An invalid `Date` fails the run. |
+| `ctx.waitForEvent<T>(name, { event?, timeout? })` | `{ status: "received", payload }` or `{ status: "timed_out" }` | `event` defaults to the step name. Without `timeout` it waits until the run is canceled. |
+
+`ctx.runId`, `ctx.workflow`, `ctx.version`, `ctx.subject`, and `ctx.startedAt` are also available and stay the same across replays.
+
+An event that arrives before the run reaches its `waitForEvent` is kept in the run's inbox and consumed when the run gets there, so a user who activates on day one still skips the nudge.
+
+`sendEvent` saves the event to every target run, all with the same receipt time, before it resumes any of them, and then resumes them side by side. One run's slow step can't delay another run's event or push it past its deadline. A cancel event works the same way: every target is canceled before `onRunCanceled` runs for any of them, so a slow hook can't leave the subject's other runs sending.
+
+A timeout's deadline is fixed when the run first reaches the `waitForEvent`. The engine stamps each event with the time `sendEvent` was called, before it looks up the subject's runs, and compares the two. An event sent at or before the deadline wins, even if the timeout timer has fired, as long as it is saved on the run before a worker records the timeout. An event sent after the deadline loses to the timeout and stays in the inbox for a later `waitForEvent` on the same event name. Each engine uses its own clock for these timestamps, so keep worker clocks in sync.
+
+One race is left. If a worker records the timeout while an on-time event is still being saved, the timeout stands. The event then waits in the inbox, or, when the run has already finished, is not saved and that run is missing from the ids `sendEvent` returns.
+
+### Input
+
+Pass a [Standard Schema](https://standardschema.dev) such as a zod object as `input` to parse input at `start`. The parsed value is saved and replayed.
+
+```ts
+import { z } from "zod";
+
+export const trial = defineWorkflow({
+  name: "trial",
+  input: z.object({ email: z.email(), trialEndsAt: z.number() }),
+  run: async (ctx, input) => {
+    await ctx.sleepUntil("three-days-left", input.trialEndsAt - 3 * 86_400_000);
+    // ...
+  },
+});
+```
+
+`start` takes what the schema accepts and `run` gets what it returns, so transforms and defaults work: with `z.object({ count: z.string().transform(Number) })`, call `start(workflow, { count: "42" })` and `run` sees `count` as a number.
+
+Without a schema, the type of `run`'s second parameter is the input type. Input and step results must be JSON values. Use `type` aliases rather than `interface` declarations for them, because TypeScript only checks type aliases against JSON-like index signatures.
+
+## Retries and failures
+
+A failed step retries on a timer: 3 attempts by default, 1 minute before the second and 2 minutes before the third. Set `retry: { maxAttempts, backoff }` on the engine, the workflow, or one `ctx.step`.
+
+Some errors fail the run right away: an `EmailSdkError` with `retryable: false` (validation errors, permanent provider rejections) and a `WorkflowNonRetryableError` thrown from your own step. When every adapter fails, the client throws one route error; the engine retries it if any adapter failure in it is retryable, such as a 503, and fails the run otherwise. A step that runs out of attempts, or an error thrown from `run` itself, marks the run `failed` with the message and step name.
+
+A mistake in the `ctx` call itself also fails the run instead of being retried on every wake: a negative duration or timeout, an invalid `Date`, a retry policy with `maxAttempts` below 1, a `ctx` call inside a step callback, a step named `__proto__`, or a step result or workflow output that isn't JSON, such as `NaN`, `Infinity`, an array with empty slots, or an object that contains itself.
+
+Your email client's own `retry` option still applies inside each attempt.
+
+## Idempotency
+
+The saved progress stops a finished step from running again. One gap remains: a crash after the provider accepted an email but before the engine saved that step. On recovery, the send runs again with the same idempotency key.
+
+The key is `wf_` followed by the SHA-256 hex digest of the JSON-encoded `[runId, step]` pair, 67 characters however long the ids are. `workflowIdempotencyKey(runId, step)` returns it if you need to match a provider record to a step.
+
+- Adapters with native idempotency (Resend and the others marked in [delivery capabilities](/docs/adapters/capability-groups)) drop the duplicate. Postmark is not one of them.
+- SMTP sets a stable `Message-ID`, which receiving systems can use to dedupe.
+- Adapters with no idempotency support may deliver that one email twice.
+
+## Storage and timers
+
+The engine stores each run as one JSON document through a `WorkflowStore`, and asks a `WorkflowScheduler` to call `engine.resume(runId)` when a wait ends.
+
+```ts
+type WorkflowStore = {
+  get(id: string): Promise<WorkflowRun | undefined>;
+  create(run: WorkflowRun): Promise<boolean>; // false when the id exists
+  save(run: WorkflowRun, expectedRevision: number): Promise<boolean>; // false on a revision conflict
+  listActiveBySubject(subject: string): Promise<WorkflowRun[]>;
+  // One page of runs whose dueAt <= now, oldest first; cursor is undefined on the last page
+  listDue(now: number, limit: number, cursor?: string): Promise<{ ids: string[]; cursor?: string }>;
+};
+
+type WorkflowScheduler = {
+  // revision: the run revision whose save asked for this wake
+  schedule(timer: { runId: string; at: number; revision: number }): void | Promise<void>;
+  cancel(runId: string): void | Promise<void>;
+};
+```
+
+`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step and again after `onStepStart`, and every third of `leaseDuration` (default `"5m"`) while a step runs. It stops as soon as a save shows the lease moved or the run was canceled, and so does the heartbeat, even when the step never returns. Another worker only takes the run over once the lease expires, so a step can run twice only if its worker stops renewing, for example because it crashed or hung.
+
+`listActiveBySubject` must return every active run for the subject, not a first page, or `sendEvent({ subject })` skips the rest.
+
+When a save keeps losing to concurrent writes, `cancel` throws a `WorkflowError` with code `write_conflict` instead of reporting the run as missing, and is safe to retry.
+
+`sendEvent` delivers at least once. When some targets fail, it throws an `AggregateError` whose `errors` hold one error per failure, such as a `write_conflict`, but only after the other targets got the event. Those runs may already have consumed it and moved on, and a failed target may have saved the event before failing to resume. Retrying the whole call delivers the event to them again, and a run that later waits for the same event name consumes the copy. Retry only when a repeated event is harmless for your workflow; otherwise check the runs with `engine.get` first. `resumeDue` picks up a run that saved the event but failed to resume.
+
+The engine schedules a timer for each wait's deadline, and one for the lease expiry each time a worker claims a run. If the worker crashes mid-step, the lease-expiry timer resumes the run once the lease runs out, so crash recovery doesn't depend on polling when you configure a scheduler. When that timer finds the lease renewed by a step that is still running, it schedules one more for the new expiry: a step that runs for an hour under the default five-minute lease adds 12 to 18 extra timers.
+
+Timers only need to be roughly right. `resume` does nothing when the run has finished or is still waiting, since the save that parked the run scheduled its own timer, so duplicate, late, and early timer deliveries are harmless. Timers can arrive out of order: a scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`. A scheduler that keeps each timer as a separate job can ignore `revision`.
+
+If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Keep that cron with a scheduler too, as a backstop for the rare run whose timer was never scheduled, such as when a worker dies between saving a run and scheduling its timer. `resumeDue({ limit, concurrency })` checks up to `limit` runs (default 25, and `0` checks none) and runs up to `concurrency` of them at once (default 10). A run stuck waiting on a slow API inside a step takes one slot, and the other due runs keep starting, though the call returns only once every run it started has settled. It pages past runs whose version isn't registered, so they can't hide later due runs, and reports them with any other failures in one `AggregateError` after the rest have run.
+
+```ts
+await engine.resumeDue({ limit: 100, concurrency: 20 });
+```
+
+On Convex, the component provides all three pieces. See [Convex workflows](/docs/integrations/convex/workflows).
+
+## Versioning in-flight runs
+
+Each run is pinned to the `version` of the definition that started it (default `1`). `start` creates a run of exactly the definition you pass it, and `resume` uses the run's own version. Registering a new version doesn't change which version new runs get, so update your `start` calls when you add one.
+
+These changes are safe without a new version: editing email content, adding steps after the point where current runs are waiting, and changing conditions for steps that haven't run.
+
+These are not: renaming or removing a step that runs have already passed, because the renamed step looks new and runs again, which for a send means a second email. Changing a sleep's duration also doesn't affect waits that already started.
+
+For those changes, bump the version and keep the old definition registered until its runs finish:
+
+```ts
+const onboardingV1 = defineWorkflow({ name: "onboarding", run: async (ctx, input: OnboardingInput) => { /* old */ } });
+const onboardingV2 = defineWorkflow({ name: "onboarding", version: 2, run: async (ctx, input: OnboardingInput) => { /* new */ } });
+
+const workflows = createWorkflowEngine({ email, store, scheduler, workflows: [onboardingV1, onboardingV2] });
+
+// New runs start on version 2; runs already on version 1 finish on it.
+await workflows.start(onboardingV2, input, { id: `onboarding:${user.id}`, subject: user.email });
+```
+
+If a run's version is missing, `resume` throws `WorkflowError` with code `workflow_not_registered` and leaves the run untouched, so redeploying with the old definition fixes it.
+
+## Observe runs
+
+```ts
+createWorkflowEngine({
+  // ...
+  hooks: {
+    onStepStart: ({ run, step, attempt }) => log.info("step start", { runId: run.id, step, attempt }),
+    onStepComplete: ({ run, step, durationMs }) => metrics.timing("workflow.step", durationMs, { step }),
+    onStepError: ({ run, step, error, willRetry }) => log.warn("step failed", { runId: run.id, step, willRetry, error }),
+    onRunComplete: ({ run }) => log.info("run complete", { runId: run.id }),
+    onRunCanceled: ({ run, reason }) => log.info("run canceled", { runId: run.id, reason }),
+    onRunFailed: ({ run, error }) => alert(error, { runId: run.id }),
+  },
+});
+```
+
+Hooks only observe. Each hook gets a copy of the run, so redacting or editing it for a log doesn't change what is saved, and an error thrown inside a hook is caught and does not change the run.
+
+## Test a workflow
+
+The in-memory store and scheduler plus a manual clock let a test play weeks of a sequence in milliseconds:
+
+```ts title="src/workflows/onboarding.test.ts"
+import { expect, test } from "bun:test";
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
+import {
+  createManualClock,
+  createMemoryWorkflowScheduler,
+  createMemoryWorkflowStore,
+  createWorkflowEngine,
+} from "@opencoredev/email-sdk/workflows";
+import { onboarding } from "./onboarding";
+
+test("a user who never activates gets a nudge", async () => {
+  const adapter = memoryAdapter();
+  const clock = createManualClock(Date.parse("2026-03-02T09:00:00Z"));
+  const scheduler = createMemoryWorkflowScheduler(clock);
+  const engine = createWorkflowEngine({
+    email: createEmailClient({ adapters: [adapter] }),
+    store: createMemoryWorkflowStore(),
+    scheduler,
+    clock,
+    workflows: [onboarding],
+  });
+
+  await engine.start(onboarding, { userId: "u_1", email: "ada@example.com", name: "Ada" });
+  await scheduler.advance("5d", engine);
+
+  expect(adapter.raw?.sent.map((sent) => sent.message.subject)).toEqual(["Welcome, Ada", "Need a hand?"]);
+});
+```
+
+`scheduler.advance` moves the clock to each timer in order and resumes its run, so nothing sleeps for real. The repository's [onboarding drip example](https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/onboarding-drip) has the full sequence and its tests.
+
+## Limits
+
+- Steps run one at a time. `Promise.all` over `ctx` calls is allowed, but they still run in order.
+- There are no child workflows yet.
+- Events sent to a subject before any run exists for it are dropped.
+- A run's inbox keeps its newest 50 unconsumed events and drops older ones.
+- The in-memory store and scheduler lose everything on restart. Use them for tests and local development only.
+
+<Cards>
+  <Card title="Convex workflows" href="/docs/integrations/convex/workflows" description="Run workflows on the Convex component's store, scheduler, and queue." />
+  <Card title="Production send pipeline" href="/docs/guides/production-send-pipeline" description="Retries, fallback, and delivery state outside workflows." />
+  <Card title="Test email behavior" href="/docs/guides/test-email-behavior" description="Memory adapters and other no-network tests." />
+</Cards>

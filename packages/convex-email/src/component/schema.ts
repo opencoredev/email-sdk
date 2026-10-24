@@ -74,6 +74,23 @@ export default defineSchema({
     .index("by_emailId", ["emailId"])
     .index("by_receivedAt", ["receivedAt"]),
 
+  // Experimental workflow runs (@opencoredev/convex-email/workflows). `state` is the engine's JSON
+  // run document; the other columns are copies of its fields that the indexes need.
+  workflowRuns: defineTable({
+    runId: v.string(),
+    workflow: v.string(),
+    status: v.string(),
+    subject: v.optional(v.string()),
+    active: v.boolean(),
+    dueAt: v.optional(v.number()),
+    revision: v.number(),
+    state: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_subject_and_active", ["subject", "active"])
+    .index("by_active_and_dueAt", ["active", "dueAt"]),
+
   config: defineTable({
     key: v.string(),
     testMode: v.optional(v.boolean()),

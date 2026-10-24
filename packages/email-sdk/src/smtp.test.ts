@@ -320,6 +320,18 @@ describe("smtp injection guards", () => {
     ).rejects.not.toBeInstanceOf(EmailValidationError);
   });
 
+  test("sends a mailbox that ends in a comment", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      from: "Acme <hello@example.test> (support)",
+      to: "Ada <ada@example.test> (work)",
+    });
+
+    expect(transmitted.commands).toContain("MAIL FROM:<HELLO@EXAMPLE.TEST>");
+    expect(transmitted.commands).toContain("RCPT TO:<ADA@EXAMPLE.TEST>");
+    expect(transmitted.result.id).toBe("test-id");
+  });
+
   test("accepts addresses with hyphens and plus signs", async () => {
     // A valid message should pass validation and fail later at the network layer,
     // never with a validation error.

@@ -1,0 +1,121 @@
+import type { Infer } from "convex/values";
+import { v } from "convex/values";
+
+import type { Doc } from "./_generated/dataModel.js";
+import { mutation, query } from "./_generated/server.js";
+import type { QueryCtx } from "./_generated/server.js";
+import {
+  vCreateWorkflowRunArgs,
+  vGetWorkflowRunArgs,
+  vListActiveWorkflowRunsArgs,
+  vListDueWorkflowRunsArgs,
+  vMaybeWorkflowRunRecord,
+  vSaveWorkflowRunArgs,
+  vWorkflowRunIdPage,
+  vWorkflowRunPage,
+} from "../shared/workflowValidators.js";
+import type { vWorkflowRunRecord } from "../shared/workflowValidators.js";
+
+const maxDueLimit = 100;
+
+type WorkflowRunRecord = Infer<typeof vWorkflowRunRecord>;
+
+function toRecord(doc: Doc<"workflowRuns">): WorkflowRunRecord {
+  const record: WorkflowRunRecord = {
+    runId: doc.runId,
+    workflow: doc.workflow,
+    status: doc.status,
+    active: doc.active,
+    revision: doc.revision,
+    state: doc.state,
+  };
+
+  if (doc.subject !== undefined) record.subject = doc.subject;
+
+  if (doc.dueAt !== undefined) record.dueAt = doc.dueAt;
+
+  return record;
+}
+
+async function findRun(ctx: QueryCtx, runId: string) {
+  return await ctx.db
+    .query("workflowRuns")
+    .withIndex("by_runId", (q) => q.eq("runId", runId))
+    .unique();
+}
+
+/** Inserts a run. Returns false, without writing, when the run id already exists. */
+export const createRun = mutation({
+  args: vCreateWorkflowRunArgs,
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    if (await findRun(ctx, args.run.runId)) return false;
+
+    await ctx.db.insert("workflowRuns", { ...args.run, updatedAt: Date.now() });
+
+    return true;
+  },
+});
+
+export const getRun = query({
+  args: vGetWorkflowRunArgs,
+  returns: vMaybeWorkflowRunRecord,
+  handler: async (ctx, args) => {
+    const doc = await findRun(ctx, args.runId);
+
+    return doc ? toRecord(doc) : null;
+  },
+});
+
+/** Replaces a run when its stored revision equals `expectedRevision`; the check and write share one transaction. */
+export const saveRun = mutation({
+  args: vSaveWorkflowRunArgs,
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const doc = await findRun(ctx, args.run.runId);
+
+    if (!doc || doc.revision !== args.expectedRevision) return false;
+
+    await ctx.db.replace(doc._id, { ...args.run, updatedAt: Date.now() });
+
+    return true;
+  },
+});
+
+/**
+ * One page of a subject's active runs. A subject can have more runs than one query should read,
+ * so the app-side store follows `continueCursor` across queries until `isDone`.
+ */
+export const listActiveRunsBySubject = query({
+  args: vListActiveWorkflowRunsArgs,
+  returns: vWorkflowRunPage,
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("workflowRuns")
+      .withIndex("by_subject_and_active", (q) => q.eq("subject", args.subject).eq("active", true))
+      .paginate({ ...args.paginationOpts, numItems: Math.min(Math.max(args.paginationOpts.numItems, 1), maxDueLimit) });
+
+    return { page: result.page.map(toRecord), isDone: result.isDone, continueCursor: result.continueCursor };
+  },
+});
+
+/**
+ * One page of due run ids, oldest due first. The engine follows `continueCursor` past runs it can't
+ * resume, so they never hide later due runs. A page size below 1 returns an empty page.
+ */
+export const listDueRuns = query({
+  args: vListDueWorkflowRunsArgs,
+  returns: vWorkflowRunIdPage,
+  handler: async (ctx, args) => {
+    if (args.paginationOpts.numItems < 1) {
+      return { page: [], isDone: true, continueCursor: args.paginationOpts.cursor ?? "" };
+    }
+
+    const result = await ctx.db
+      .query("workflowRuns")
+      .withIndex("by_active_and_dueAt", (q) => q.eq("active", true).gte("dueAt", 0).lte("dueAt", args.now))
+      .paginate({ ...args.paginationOpts, numItems: Math.min(args.paginationOpts.numItems, maxDueLimit) });
+
+    return { page: result.page.map((doc) => doc.runId), isDone: result.isDone, continueCursor: result.continueCursor };
+  },
+});

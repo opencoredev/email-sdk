@@ -60,6 +60,10 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
     },
+    "./workflows": {
+      "types": "./dist/client/workflows.d.ts",
+      "import": "./dist/client/workflows.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
@@ -102,7 +106,7 @@
     "convex-test": "0.0.53"
   },
   "peerDependencies": {
-    "@opencoredev/email-sdk": "^3.0.1",
+    "@opencoredev/email-sdk": "^3.1.0",
     "convex": "^1.36.1"
   },
   "engines": {
