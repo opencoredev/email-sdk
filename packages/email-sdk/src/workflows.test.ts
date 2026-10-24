@@ -1734,3 +1734,184 @@ describe("workflows: review regressions, round 2", () => {
     expect((await engine.start(shared, null, { id: "run-1" })).output).toEqual({ left: { n: 1 }, right: { n: 1 } });
   });
 });
+
+describe("workflows: review regressions, round 3", () => {
+  test("workflow code sees the saved JSON form of input and step results before and after a wake", async () => {
+    type Pair = { left: { n: number }; right: { n: number }; gone?: string | undefined };
+
+    const views: { right: number; stepHasGone: boolean; inputRight: number; inputHasGone: boolean }[] = [];
+
+    const replayed = defineWorkflow({
+      name: "replayed",
+      run: async (ctx, input: Pair) => {
+        const pair = await ctx.step("pair", (): Pair => {
+          const leaf = { n: 1 };
+
+          return { left: leaf, right: leaf, gone: undefined };
+        });
+
+        pair.left.n = 2;
+        input.left.n = 2;
+        views.push({ right: pair.right.n, stepHasGone: "gone" in pair, inputRight: input.right.n, inputHasGone: "gone" in input });
+        await ctx.sleep("nap", "1h");
+      },
+    });
+
+    const { engine, clock } = setup([replayed]);
+    const leaf = { n: 1 };
+
+    await engine.start(replayed, { left: leaf, right: leaf, gone: undefined }, { id: "run-1" });
+    clock.advance("1h");
+    await engine.resume("run-1");
+
+    const saved = { right: 1, stepHasGone: false, inputRight: 1, inputHasGone: false };
+
+    expect(views).toEqual([saved, saved]);
+    expect((await engine.get("run-1"))?.status).toBe("completed");
+  });
+
+  test("a ctx call from run while an earlier step's callback is pending queues behind it", async () => {
+    const slow = gate();
+
+    const sibling = defineWorkflow({
+      name: "sibling",
+      run: async (ctx, input: Input) => {
+        const counted = ctx.step("count", async () => {
+          await slow.pass();
+
+          return 1;
+        });
+
+        await slow.reached;
+
+        const sent = ctx.send("mail", mail(input.email, "Hi"));
+
+        slow.open();
+
+        return { count: await counted, adapter: (await sent).adapter };
+      },
+    });
+
+    const { engine, sender } = setup([sibling]);
+    const run = await engine.start(sibling, ada, { id: "run-1" });
+
+    expect(run.status).toBe("completed");
+    expect(run.output).toEqual({ count: 1, adapter: "recording" });
+    expect(Object.keys(run.journal)).toEqual(["count", "mail"]);
+    expect(sender.deliveries).toHaveLength(1);
+  });
+
+  test("a step callback that runs another workflow's execution may use that run's ctx", async () => {
+    const child = defineWorkflow({
+      name: "child",
+      run: async (ctx) => await ctx.step("inner", () => "inner done"),
+    });
+
+    let childOutput: WorkflowJsonValue | undefined;
+
+    const parent = defineWorkflow({
+      name: "parent",
+      run: async (ctx) => {
+        await ctx.step("spawn", async () => {
+          childOutput = (await engine.start(child, null, { id: "child-1" })).output;
+        });
+      },
+    });
+
+    const { engine } = setup([parent, child]);
+
+    expect((await engine.start(parent, null, { id: "parent-1" })).status).toBe("completed");
+    expect(childOutput).toBe("inner done");
+  });
+
+  test("an unsubscribe saves every run's cancellation before awaiting a slow onRunCanceled hook", async () => {
+    const hook = gate();
+    let calls = 0;
+
+    const { engine, scheduler, sender } = setup([activation], {
+      hooks: {
+        onRunCanceled: async () => {
+          calls += 1;
+
+          if (calls === 1) await hook.pass();
+        },
+      },
+    });
+
+    await engine.start(activation, ada, { id: "run-a", subject: "s" });
+    await engine.start(activation, ada, { id: "run-b", subject: "s" });
+
+    const delivery = engine.sendEvent({ name: "unsubscribed", subject: "s" });
+
+    await hook.reached;
+
+    expect((await engine.get("run-a"))?.status).toBe("canceled");
+    expect((await engine.get("run-b"))?.status).toBe("canceled");
+
+    hook.open();
+    expect(await delivery).toEqual(["run-a", "run-b"]);
+    expect(calls).toBe(2);
+    expect(scheduler.pending()).toEqual([]);
+    await scheduler.advance("5d", engine);
+    expect(sender.deliveries).toHaveLength(2);
+  });
+
+  test("start takes the schema's input and stores its parsed output, with defaults filled", async () => {
+    const counted = defineWorkflow({
+      name: "counted",
+      input: z.object({ count: z.string().transform(Number), plan: z.enum(["free", "pro"]).default("free") }),
+      run: async (_ctx, input) => input.count + (input.plan === "pro" ? 100 : 0),
+    });
+
+    const { engine } = setup([counted]);
+    const run = await engine.start(counted, { count: "42" }, { id: "run-1" });
+
+    expect(run.input).toEqual({ count: 42, plan: "free" });
+    expect(run.output).toBe(42);
+  });
+
+  test("a step named __proto__ fails the run before its callback runs", async () => {
+    let calls = 0;
+
+    const proto = defineWorkflow({
+      name: "proto",
+      run: async (ctx) => {
+        await ctx.step("__proto__", () => {
+          calls += 1;
+        });
+      },
+    });
+
+    const { engine } = setup([proto]);
+    const run = await engine.start(proto, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error?.message).toContain("can't name a step");
+    expect(calls).toBe(0);
+  });
+
+  test("suppression reads the mailbox, not angle brackets inside a quoted display name", async () => {
+    const checked: string[] = [];
+
+    const quoted = defineWorkflow({
+      name: "quoted",
+      run: async (ctx) => {
+        await ctx.send("hello", mail('"Ada <team>" <ADA@example.test>', "Hi"));
+      },
+    });
+
+    const { engine, sender } = setup([quoted], {
+      isSuppressed: (address) => {
+        checked.push(address);
+
+        return address === "ada@example.test";
+      },
+    });
+
+    const run = await engine.start(quoted, null, { id: "run-1" });
+
+    expect(checked).toEqual(["ada@example.test"]);
+    expect(run.status).toBe("canceled");
+    expect(sender.calls).toHaveLength(0);
+  });
+});

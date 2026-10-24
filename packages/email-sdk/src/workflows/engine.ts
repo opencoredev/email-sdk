@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   causeArray,
   causeBoolean,
@@ -6,8 +8,8 @@ import {
   isNumber,
   isObjectLike,
   isString,
-  isStringMember,
 } from "../internal/decode.js";
+import { mailboxAddress } from "../internal/address.js";
 import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
@@ -37,6 +39,10 @@ const defaultRetry = { maxAttempts: 3, backoffMs: 60_000 };
 const defaultLease: WorkflowDuration = "5m";
 
 const inboxLimit = 50;
+
+// Journal keys are step names. Schema parsers drop an own `__proto__` key from a record, so a step
+// with this name would lose its completed entry on the next read and run again.
+const reservedStepName = "__proto__";
 
 // Every conflict means another writer saved, so a write among N concurrent writers succeeds within
 // N attempts. Past this bound the store is either overloaded or broken, and the caller gets an error.
@@ -163,17 +169,24 @@ function assertJson(value: WorkflowJsonValue | void, what: string) {
   }
 }
 
-/** A copy of a saved value, so workflow code that edits what it was given can't change the journal. */
-function detached<T>(value: T): T {
-  return value === undefined ? value : structuredClone(value);
+/** A copy of a run for a hook, so a hook that edits what it was given can't change the next save. */
+function detached(run: WorkflowRun): WorkflowRun {
+  return structuredClone(run);
+}
+
+/**
+ * The value as a store gives it back: a fresh JSON round trip, with no shared references and no
+ * `undefined` object fields. Workflow code gets this form on the first execution as well as on
+ * replay, so a wake can't change what it sees, and editing it can't change the journal.
+ */
+function savedForm<T extends WorkflowJsonValue | void>(value: T): T {
+  // SAFETY: callers pass values that passed `isJsonValue` or came from the store, so the round trip
+  // yields the same JSON value; only `undefined` fields, which T allows to be absent, are dropped.
+  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
 function addressOf(address: EmailAddress): string {
-  if (!isStringMember(address)) return address.email.trim().toLowerCase();
-
-  const bracketed = /<([^>]+)>/.exec(address);
-
-  return (bracketed?.[1] ?? address).trim().toLowerCase();
+  return mailboxAddress(address).trim().toLowerCase();
 }
 
 function addressList(addresses: OneOrMany<EmailAddress> | undefined): EmailAddress[] {
@@ -375,16 +388,21 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   }
 
-  async function cancelRun(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
-    const canceled = await commit(
-      run,
-      (current) => ({ ...current, status: "canceled", cancelReason: reason, wait: undefined }),
-      owner,
-    );
+  /** Saves the cancellation. Returns undefined when the run had already ended or changed owner. */
+  async function saveCancellation(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
+    return await commit(run, (current) => ({ ...current, status: "canceled", cancelReason: reason, wait: undefined }), owner);
+  }
 
-    if (!canceled) return undefined;
-    await scheduler?.cancel(run.id);
+  /** What follows a saved cancellation: dropping the run's timer and telling `onRunCanceled`. */
+  async function afterCancellation(canceled: WorkflowRun, reason: string) {
+    await scheduler?.cancel(canceled.id);
     await invokeHook("onRunCanceled", { run: canceled, reason });
+  }
+
+  async function cancelRun(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
+    const canceled = await saveCancellation(run, reason, owner);
+
+    if (canceled) await afterCancellation(canceled, reason);
 
     return canceled;
   }
@@ -407,9 +425,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const neverSettles = new Promise<never>(() => {});
     const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
-    // The step whose callback is running. `ctx` calls queue behind it, so one made from inside the
-    // callback would wait for the callback that awaits it.
-    let runningStep: string | undefined;
+    // Names the step whose callback the current async context runs in. `ctx` calls queue behind
+    // that step, so a call from inside its callback would wait for the callback that awaits it.
+    // A call from `run` while the step is pending is outside the scope and queues as usual. The
+    // scope belongs to this execution, so a callback may still start or resume other runs.
+    const stepScope = new AsyncLocalStorage<string>();
 
     function suspend(): Promise<never> {
       stopped = true;
@@ -467,11 +487,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
       if (stopped) return neverSettles;
 
-      if (runningStep !== undefined) {
+      const enclosing = stepScope.getStore();
+
+      if (enclosing !== undefined) {
         return Promise.reject(
           new WorkflowError(
             "invalid_definition",
-            `"${name}" was called inside step "${runningStep}". A step callback can't call ctx; return from the step and make the call after it.`,
+            `"${name}" was called inside step "${enclosing}". A step callback can't call ctx; return from the step and make the call after it.`,
+          ),
+        );
+      }
+
+      if (name === reservedStepName) {
+        return Promise.reject(
+          new WorkflowError(
+            "invalid_definition",
+            `"${reservedStepName}" can't name a step: stores that parse the journal as a record, such as the Convex store, drop that key, so the step would run again on every wake.`,
           ),
         );
       }
@@ -600,7 +631,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return suspend();
       }
 
-      const stored = jsonResult(result);
+      const stored = savedForm(jsonResult(result));
 
       if (!(await save(withStep(name, { status: "completed", kind, result: stored, completedAt: now() })))) {
         return suspend();
@@ -653,7 +684,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (record) {
             // SAFETY: this journal entry was written from the WorkflowSendRecord this same step
             // returned on an earlier execution; send steps only ever journal that record.
-            return detached(record.result as WorkflowSendRecord);
+            return savedForm(record.result as WorkflowSendRecord);
           }
 
           if (options.isSuppressed) {
@@ -681,7 +712,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           });
 
           // SAFETY: sideEffect returns exactly the WorkflowSendRecord the effect above produced.
-          return detached(sent as WorkflowSendRecord);
+          return savedForm(sent as WorkflowSendRecord);
         });
       },
       step(name, fn, stepOptions) {
@@ -691,15 +722,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                runningStep = name;
-
-                let value: WorkflowJsonValue | void;
-
-                try {
-                  value = await fn();
-                } finally {
-                  runningStep = undefined;
-                }
+                const value = await stepScope.run(name, fn);
 
                 assertJson(value, `The result of step "${name}"`);
 
@@ -708,7 +731,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           // SAFETY: the journaled value is what `fn` returned for this step name, persisted as JSON;
           // TResult is constrained to JSON values, so the round trip preserves its type.
-          return detached(result as Awaited<ReturnType<typeof fn>>);
+          return savedForm(result as Awaited<ReturnType<typeof fn>>);
         });
       },
       sleep(name, duration: WorkflowDuration) {
@@ -738,7 +761,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (record) {
             // SAFETY: event steps journal a WorkflowEventResult. Event payloads are not parsed: the
             // caller's type argument states the payload contract, as it does for sendEvent.
-            return detached(record.result as WorkflowEventResult<never>);
+            return savedForm(record.result as WorkflowEventResult<never>);
           }
 
           const event = waitOptions?.event ?? name;
@@ -785,7 +808,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           if (outcome) {
             // SAFETY: see the replay branch above; the payload type is the caller's declared contract.
-            return detached(outcome as WorkflowEventResult<never>);
+            return savedForm(outcome as WorkflowEventResult<never>);
           }
 
           await scheduleWake(current);
@@ -797,7 +820,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     // Starting inside `then` turns a synchronous throw from `run` into a failed outcome.
     const finished = Promise.resolve()
-      .then(async () => await definition.run(ctx, detached(loaded.input)))
+      .then(async () => await definition.run(ctx, savedForm(loaded.input)))
       .then(
       (output): ExecutionOutcome => ({ kind: "completed", output }),
       (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
@@ -820,7 +843,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       await failRun(outcome.error);
     } else if (!isJsonValue(output ?? null)) {
       await failRun(new WorkflowError("invalid_value", "The workflow output must be JSON."));
-    } else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
+    } else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output: savedForm(output) }))) {
       await invokeHook("onRunComplete", { run: current });
     }
 
@@ -853,33 +876,43 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return { run: await execute(claimed.run, claimed.owner), executed: true };
   }
 
+  /** What delivering one event did to one run. A canceled run still needs `afterCancellation`. */
+  type Delivery =
+    | { kind: "missed" }
+    | { kind: "saved"; resume: boolean }
+    | { kind: "canceled"; run: WorkflowRun; reason: string };
+
   /**
-   * Saves one event to one run. Returns whether the run was reached and whether the event matches
-   * the run's current wait, so the caller should resume it.
+   * Saves one event to one run: a cancelOn event saves the cancellation, any other event joins the
+   * inbox. Nothing else runs, so one run's hooks or timer can't hold up delivery to the next.
    */
-  async function deliver(runId: string, event: WorkflowInboxEvent): Promise<{ reached: boolean; resume: boolean }> {
+  async function deliver(runId: string, event: WorkflowInboxEvent): Promise<Delivery> {
     const run = await store.get(runId);
 
-    if (!run || isTerminalRun(run)) return { reached: false, resume: false };
+    if (!run || isTerminalRun(run)) return { kind: "missed" };
 
     const definition = definitionFor(run);
 
     if (definition.cancelOn.includes(event.name)) {
-      return { reached: (await cancelRun(run, `event:${event.name}`)) !== undefined, resume: false };
+      const reason = `event:${event.name}`;
+      const canceled = await saveCancellation(run, reason);
+
+      return canceled ? { kind: "canceled", run: canceled, reason } : { kind: "missed" };
     }
 
     // Delivery only appends to the inbox. The run's wait, including its deadline, stays as it is:
     // the execution that consumes the event compares `receivedAt` with that deadline.
     const updated = await commit(run, (current) => ({ ...current, inbox: [...current.inbox, event].slice(-inboxLimit) }));
 
-    if (!updated) return { reached: false, resume: false };
+    if (!updated) return { kind: "missed" };
 
-    return { reached: true, resume: updated.wait?.kind === "event" && updated.wait.event === event.name };
+    return { kind: "saved", resume: updated.wait?.kind === "event" && updated.wait.event === event.name };
   }
 
   /**
-   * Saves the event, with one receipt time, to every target before any of them runs, then resumes
-   * the runs it satisfies concurrently, so one run's slow step can't delay or expire another's wait.
+   * Saves the event, with one receipt time, to every target before any of them runs. Only then does
+   * it finish cancellations (timers and hooks) and resume the runs the event satisfies, all
+   * concurrently, so one run's slow step or hook can't delay or expire another's wait or cancel.
    */
   async function sendEvent(input: WorkflowEventInput): Promise<string[]> {
     assertJson(input.payload, `The payload of event "${input.name}"`);
@@ -891,27 +924,37 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       input.runId === undefined ? (await store.listActiveBySubject(input.subject)).map((run) => run.id) : [input.runId];
 
     const event: WorkflowInboxEvent =
-      input.payload === undefined ? { name: input.name, receivedAt } : { name: input.name, payload: input.payload, receivedAt };
+      input.payload === undefined
+        ? { name: input.name, receivedAt }
+        : { name: input.name, payload: savedForm(input.payload), receivedAt };
 
     const reached: string[] = [];
-    const toResume: string[] = [];
+    const followUps: (() => Promise<void>)[] = [];
     const errors: Error[] = [];
 
     for (const runId of targets) {
       try {
         const delivered = await deliver(runId, event);
 
-        if (delivered.reached) reached.push(runId);
+        if (delivered.kind === "missed") continue;
 
-        if (delivered.resume) toResume.push(runId);
+        reached.push(runId);
+
+        if (delivered.kind === "canceled") {
+          followUps.push(async () => await afterCancellation(delivered.run, delivered.reason));
+        } else if (delivered.resume) {
+          followUps.push(async () => {
+            await resumeRun(runId);
+          });
+        }
       } catch (cause) {
         errors.push(toError(cause));
       }
     }
 
-    const resumed = await Promise.allSettled(toResume.map(async (runId) => await resumeRun(runId)));
+    const settled = await Promise.allSettled(followUps.map(async (followUp) => await followUp()));
 
-    for (const result of resumed) {
+    for (const result of settled) {
       if (result.status === "rejected") errors.push(toError(result.reason));
     }
 
@@ -1005,7 +1048,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         workflow: workflow.name,
         version: workflow.version,
         status: "running",
-        input: parsed,
+        input: savedForm(parsed),
         journal: {},
         inbox: [],
         lease,
