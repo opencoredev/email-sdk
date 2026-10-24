@@ -167,16 +167,17 @@ type WorkflowStore = {
 };
 
 type WorkflowScheduler = {
-  schedule(timer: { runId: string; at: number }): void | Promise<void>;
+  // revision: the run revision whose wait asked for this wake
+  schedule(timer: { runId: string; at: number; revision: number }): void | Promise<void>;
   cancel(runId: string): void | Promise<void>;
 };
 ```
 
-`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step, and every third of `leaseDuration` (default `"5m"`) while a step runs, and stops as soon as a save shows the lease moved or the run was canceled. Another worker only takes the run over once the lease expires, so a step can run twice only if its worker stops renewing, for example because it crashed or hung.
+`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step and again after `onStepStart`, and every third of `leaseDuration` (default `"5m"`) while a step runs. It stops as soon as a save shows the lease moved or the run was canceled, and so does the heartbeat, even when the step never returns. Another worker only takes the run over once the lease expires, so a step can run twice only if its worker stops renewing, for example because it crashed or hung.
 
 `listActiveBySubject` must return every active run for the subject, not a first page, or `sendEvent({ subject })` skips the rest.
 
-Timers only need to be roughly right. `resume` does nothing when the run isn't due yet, is waiting on an event, or has finished, so duplicate, late, and early timer deliveries are harmless.
+Timers only need to be roughly right. `resume` does nothing when the run is waiting on an event or has finished, and when a timer fires before the run is due it schedules a new one for the run's `dueAt`, so duplicate, late, and early timer deliveries are harmless. Timers can arrive out of order: a scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`. A scheduler that keeps each timer as a separate job can ignore `revision`.
 
 If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Run that cron even with a scheduler: it also recovers runs whose worker crashed mid-step, once their lease expires.
 

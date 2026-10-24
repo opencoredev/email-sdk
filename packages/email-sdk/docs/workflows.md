@@ -176,7 +176,10 @@ not happen twice is built on it:
   delivered event satisfies it. Of two workers that read the same due run, one claim wins; the other
   sees a conflict, reloads, finds a live lease, and leaves.
 - **Renewing.** The owner renews the lease with a revision-checked save before every step's side
-  effect, and on a heartbeat (every third of `leaseDuration`) while the effect runs. Every save by
+  effect, again after `onStepStart` when that hook is set (so no await separates the last ownership
+  check from the effect), and on a heartbeat (every third of `leaseDuration`) while the effect runs.
+  The heartbeat stops at the first renewal that finds the run canceled, finished, or taken over,
+  even if the effect never settles. Every save by
   the owner reloads on conflict and gives up if the fresh run has another owner or is terminal, so a
   stale worker cannot advance or commit the run. The lease is released when the run waits or ends.
 - **Other writers.** Event delivery and cancellation never take the lease. They are plain
@@ -192,16 +195,23 @@ store would mangle.
 
 ```ts
 type WorkflowScheduler = {
-  schedule(timer: { runId: string; at: number }): void | Promise<void>;
+  // revision: the run revision whose wait asked for this wake
+  schedule(timer: { runId: string; at: number; revision: number }): void | Promise<void>;
   cancel(runId: string): void | Promise<void>;
 };
 ```
 
 When a timer fires, the host calls `engine.resume(runId)`. A run waits on at most one thing at a
 time, so one timer per run is enough. Timers are hints: `resume` re-reads the run and does nothing if
-it is not due yet, already terminal, held by a live lease, or waiting on an event that has not
-arrived. That makes duplicate, late, and spurious
-timer deliveries harmless, and lets `cancel` be best-effort.
+it is already terminal or waiting on an event that has not arrived. If the run is not due yet or is
+held by a live lease, `resume` schedules a new timer for the run's persisted `dueAt`. That makes
+duplicate, late, early, and spurious timer deliveries harmless, and lets `cancel` be best-effort.
+
+A wait's save releases the run before its timer is scheduled, so a newer execution can schedule
+its own timer first and the older `schedule` call arrives late. A scheduler that keeps one timer per
+run (like the in-memory one) must ignore a timer whose `revision` is lower than the newest one it
+holds for that run. A scheduler that keeps every timer as its own job (like Convex) needs nothing
+extra: the stale job fires early and re-arms.
 
 Without a push scheduler, call `engine.resumeDue()` from a cron. It asks the store for runs whose
 `dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired because
@@ -216,7 +226,7 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
 2. Call `run(ctx, input)` and race it against a suspend signal.
 3. Each `ctx` call checks the journal. A completed entry returns its result. Otherwise:
    - `send` / `step`: renew the lease (this is where a cancellation or a lost lease stops the run),
-     fire `onStepStart`, run the side effect with the heartbeat on, journal the result, save, fire
+     fire `onStepStart` and renew again, run the side effect with the heartbeat on, journal the result, save, fire
      `onStepComplete`. On failure, record the attempt; if attempts remain, set a retry wait and
      suspend, else fail the run.
    - `sleep`: if the persisted wait has passed, journal completion and continue. Otherwise save
@@ -313,7 +323,7 @@ component never depends on the engine's types, and the CAS check in `save` is tr
 On the app side, `convexWorkflowStore(component, ctx)` adapts those functions to `WorkflowStore`
 and parses each stored run with zod at the boundary. `convexWorkflowScheduler(ctx, resumeRef)`
 implements timers with `ctx.scheduler.runAt`; `cancel` is a no-op because `resume` already ignores
-early or stale timers. `convexWorkflowEmail(component, ctx)` sends through the component's durable
+stale timers and re-arms early ones from `dueAt`. `convexWorkflowEmail(component, ctx)` sends through the component's durable
 queue (`enqueue` with the step's idempotency key), so a workflow send gets the component's retries,
 fallback, and webhook status tracking.
 
