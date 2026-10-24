@@ -6,7 +6,7 @@
  * table, waits use `ctx.scheduler.runAt`, and each `ctx.send` enqueues through the component's
  * durable queue with the step's idempotency key, so a step is queued at most once.
  */
-import type { EmailAddress, EmailAttachment, EmailMessage, OneOrMany } from "@opencoredev/email-sdk";
+import type { EmailAddress, EmailAttachment, EmailMessage, EmailSendOptions, OneOrMany } from "@opencoredev/email-sdk";
 import { WorkflowNonRetryableError } from "@opencoredev/email-sdk/workflows";
 import type {
   WorkflowEmailSender,
@@ -92,6 +92,9 @@ const runSchema = z.object({
 });
 
 const stringContent = z.string();
+
+/** The flat values the component's queue stores as send metadata. */
+const sendMetadataSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]));
 
 const subjectPageSize = 100;
 
@@ -210,8 +213,51 @@ function toConvexAttachment(attachment: EmailAttachment): ConvexEmailAttachment 
   return converted;
 }
 
-/** Maps an Email SDK message onto the component's enqueue arguments. */
-export function toConvexSendArgs(message: EmailMessage, idempotencyKey: string | undefined): ConvexEmailSendArgs {
+/**
+ * Maps per-send options onto the enqueue arguments. The queue stores routing, an attempt count,
+ * and flat metadata; options it cannot honor throw instead of being dropped.
+ */
+function applySendOptions(args: ConvexEmailSendArgs, options: EmailSendOptions) {
+  if (options.signal !== undefined) {
+    throw new WorkflowNonRetryableError("Workflow sends through Convex do not support signal: the email is queued, not sent in this call.");
+  }
+
+  if (options.retry?.delay !== undefined || options.retry?.shouldRetry !== undefined) {
+    throw new WorkflowNonRetryableError(
+      "Workflow sends through Convex support only retry.maxAttempts; the queue can't store retry.delay or retry.shouldRetry.",
+    );
+  }
+
+  if (options.fallback?.onUnknownDelivery === "continue") {
+    throw new WorkflowNonRetryableError(
+      'Workflow sends through Convex always stop on an unknown delivery; fallback.onUnknownDelivery: "continue" is not supported.',
+    );
+  }
+
+  if (options.adapter !== undefined) args.adapter = options.adapter;
+
+  if (options.fallback !== undefined) args.fallbackAdapters = [...options.fallback.adapters];
+
+  if (options.retry?.maxAttempts !== undefined) args.maxAttempts = options.retry.maxAttempts;
+
+  if (options.metadata !== undefined) {
+    const defined = Object.entries(options.metadata).filter(([, value]) => value !== undefined);
+    const metadata = sendMetadataSchema.safeParse(Object.fromEntries(defined));
+
+    if (!metadata.success) {
+      throw new WorkflowNonRetryableError(
+        "Workflow sends through Convex need flat metadata: string, number, boolean, or null values.",
+      );
+    }
+
+    args.sendMetadata = metadata.data;
+  }
+
+  if (options.idempotencyKey !== undefined) args.idempotencyKey = options.idempotencyKey;
+}
+
+/** Maps an Email SDK message and its send options onto the component's enqueue arguments. */
+export function toConvexSendArgs(message: EmailMessage, options: EmailSendOptions = {}): ConvexEmailSendArgs {
   if (message.sendAt !== undefined) {
     throw new WorkflowNonRetryableError("Workflow sends through Convex do not support sendAt; use ctx.sleepUntil before the send.");
   }
@@ -244,7 +290,7 @@ export function toConvexSendArgs(message: EmailMessage, idempotencyKey: string |
 
   if (message.attachments !== undefined) args.attachments = message.attachments.map(toConvexAttachment);
 
-  if (idempotencyKey !== undefined) args.idempotencyKey = idempotencyKey;
+  applySendOptions(args, options);
 
   return args;
 }
@@ -253,6 +299,9 @@ export function toConvexSendArgs(message: EmailMessage, idempotencyKey: string |
  * A `WorkflowEmailSender` that enqueues through the component. The step's idempotency key makes a
  * replayed step return the already-queued email instead of queueing a second one. The result id
  * is the component email id; delivery happens asynchronously in the component's worker.
+ * `ctx.send` options `adapter`, `fallback.adapters`, `retry.maxAttempts`, and flat `metadata`
+ * reach the queue; `signal`, `retry.delay`, `retry.shouldRetry`, and
+ * `fallback.onUnknownDelivery: "continue"` fail the step because the queue can't honor them.
  */
 export function convexWorkflowEmail(
   queue: ConvexWorkflowEmailQueue,
@@ -260,7 +309,7 @@ export function convexWorkflowEmail(
 ): WorkflowEmailSender {
   return {
     async send(message, options) {
-      const emailId = await queue.send(ctx, toConvexSendArgs(message, options?.idempotencyKey));
+      const emailId = await queue.send(ctx, toConvexSendArgs(message, options));
 
       return { adapter: "convex-email", id: emailId };
     },
