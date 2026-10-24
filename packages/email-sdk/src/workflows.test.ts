@@ -1942,3 +1942,194 @@ describe("workflows: review regressions, round 3", () => {
     expect(sender.calls).toHaveLength(0);
   });
 });
+
+describe("workflows: review regressions, round 6", () => {
+  const isFailed = (run: WorkflowRun) => run.status === "failed";
+
+  /** Engine `a` saves through `aStore`; engine `b` writes straight to the shared memory store. */
+  function racingEngines(
+    workflows: readonly AnyWorkflowDefinition[],
+    aStore: (memory: WorkflowStore) => WorkflowStore,
+    bStore: (memory: WorkflowStore) => WorkflowStore = (memory) => memory,
+  ) {
+    const clock = createManualClock(start);
+    const memory = createMemoryWorkflowStore();
+    const sender = recordingSender();
+    const failures: string[] = [];
+    const hooks: WorkflowHooks = { onRunFailed: ({ error }) => void failures.push(error.message) };
+
+    return {
+      memory,
+      failures,
+      a: createWorkflowEngine({ email: sender, store: aStore(memory), clock, workflows, hooks }),
+      b: createWorkflowEngine({ email: sender, store: bStore(memory), clock, workflows, hooks }),
+    };
+  }
+
+  test("a write by another engine before the failure saves still fails a run that rejected beside a wait", async () => {
+    const rejected = defineWorkflow({
+      name: "rejected",
+      run: async (ctx) => {
+        await Promise.all([Promise.reject(new Error("sibling broke")), ctx.waitForEvent("go")]);
+      },
+    });
+
+    let b: ReturnType<typeof createWorkflowEngine> | undefined;
+
+    const engines = racingEngines([rejected], (memory) =>
+      interceptingStore(memory, isFailed, async () => {
+        await b?.sendEvent({ runId: "run-1", name: "unrelated" });
+      }),
+    );
+
+    b = engines.b;
+
+    const run = await engines.a.start(rejected, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: "sibling broke" });
+    expect(run.inbox.map((event) => event.name)).toEqual(["unrelated"]);
+    expect(engines.failures).toEqual(["sibling broke"]);
+  });
+
+  test("an event that lands before the failure saves doesn't wake the run that is failing", async () => {
+    let calls = 0;
+
+    const rejected = defineWorkflow({
+      name: "rejected",
+      run: async (ctx) => {
+        calls += 1;
+        await Promise.all([Promise.reject(new Error("sibling broke")), ctx.waitForEvent("go")]);
+      },
+    });
+
+    // Engine b saves the event, then waits to resume the run until engine a has finished.
+    const resumeGate = gate();
+    let delivered = false;
+    let delivery: Promise<string[]> | undefined;
+    let b: ReturnType<typeof createWorkflowEngine> | undefined;
+
+    const engines = racingEngines(
+      [rejected],
+      (memory) =>
+        interceptingStore(memory, isFailed, async () => {
+          delivery = b?.sendEvent({ runId: "run-1", name: "go" });
+          await resumeGate.reached;
+        }),
+      (memory) => ({
+        ...memory,
+        async save(run, expectedRevision) {
+          const saved = await memory.save(run, expectedRevision);
+
+          if (saved && run.inbox.length > 0) delivered = true;
+
+          return saved;
+        },
+        async get(id) {
+          if (delivered) await resumeGate.pass();
+
+          return await memory.get(id);
+        },
+      }),
+    );
+
+    b = engines.b;
+
+    const run = await engines.a.start(rejected, null, { id: "run-1" });
+
+    resumeGate.open();
+
+    expect(await delivery).toEqual(["run-1"]);
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: "sibling broke" });
+    expect((await engines.memory.get("run-1"))?.status).toBe("failed");
+    expect(calls).toBe(1);
+    expect(engines.failures).toEqual(["sibling broke"]);
+  });
+
+  test("a run another engine claimed before the failure saves is left to that engine", async () => {
+    const held = gate();
+    let calls = 0;
+
+    const flaky = defineWorkflow({
+      name: "flaky",
+      run: async (ctx) => {
+        calls += 1;
+
+        if (calls === 1) {
+          await Promise.all([Promise.reject(new Error("sibling broke")), ctx.waitForEvent("go")]);
+        }
+
+        await ctx.waitForEvent("go");
+        await ctx.step("work", async () => await held.pass());
+
+        return "done";
+      },
+    });
+
+    let delivery: Promise<string[]> | undefined;
+    let b: ReturnType<typeof createWorkflowEngine> | undefined;
+
+    const engines = racingEngines([flaky], (memory) =>
+      interceptingStore(memory, isFailed, async () => {
+        delivery = b?.sendEvent({ runId: "run-1", name: "go" });
+        await held.reached;
+      }),
+    );
+
+    b = engines.b;
+
+    const run = await engines.a.start(flaky, null, { id: "run-1" });
+
+    expect(run.status).toBe("running");
+    expect(run.error).toBeUndefined();
+
+    held.open();
+
+    expect(await delivery).toEqual(["run-1"]);
+
+    const finished = await engines.memory.get("run-1");
+
+    expect(finished?.status).toBe("completed");
+    expect(finished?.output).toBe("done");
+    expect(engines.failures).toEqual([]);
+  });
+
+  test("a run another engine claimed and moved on from before the failure saves is left alone", async () => {
+    let calls = 0;
+
+    const flaky = defineWorkflow({
+      name: "flaky",
+      run: async (ctx) => {
+        calls += 1;
+
+        if (calls === 1) {
+          await Promise.all([Promise.reject(new Error("sibling broke")), ctx.waitForEvent("go")]);
+        }
+
+        await ctx.waitForEvent("go");
+        await ctx.waitForEvent("later");
+
+        return "done";
+      },
+    });
+
+    let b: ReturnType<typeof createWorkflowEngine> | undefined;
+
+    const engines = racingEngines([flaky], (memory) =>
+      interceptingStore(memory, isFailed, async () => {
+        await b?.sendEvent({ runId: "run-1", name: "go" });
+      }),
+    );
+
+    b = engines.b;
+
+    const run = await engines.a.start(flaky, null, { id: "run-1" });
+
+    expect(calls).toBe(2);
+    expect(run.status).toBe("waiting");
+    expect(run.wait).toEqual({ kind: "event", step: "later", event: "later" });
+    expect(run.error).toBeUndefined();
+    expect(engines.failures).toEqual([]);
+  });
+});
