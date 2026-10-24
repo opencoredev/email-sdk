@@ -12,6 +12,7 @@ import {
   formatAddress,
   formatAddresses,
   headersToArray,
+  mapAttachments,
   validateBuiltInAdapter,
   allRecipients,
   emailAddressOf,
@@ -185,7 +186,7 @@ async function toNodemailerMessage(
   const to = formatAddresses(message.to);
   const cc = formatAddresses(message.cc);
   const bcc = formatAddresses(message.bcc);
-  const attachments = await Promise.all((message.attachments ?? []).map(toNodemailerAttachment));
+  const attachments = await mapAttachments(message.attachments, toNodemailerAttachment);
 
   return {
     from: formatAddress(message.from),

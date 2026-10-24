@@ -16,6 +16,7 @@ import {
   arrayify,
   emailAddressOf,
   type MessageRules,
+  headerTemplate,
 } from "./utils.js";
 
 export type JetemailAdapterOptions = {
@@ -45,16 +46,18 @@ export function jetemail(
   const baseUrl = options.baseUrl ?? "https://api.jetemail.com";
   const fetcher = options.fetch ?? fetch;
 
+  const requestHeaders = headerTemplate(() => ({
+    Authorization: `Bearer ${options.apiKey}`,
+    "Content-Type": "application/json",
+    ...options.headers,
+  }));
+
   return {
     name: "jetemail",
     ...builtInAdapterDefinition("jetemail", jetemailRules),
     raw: { baseUrl },
     async send(message, context) {
-      const headers = new Headers({
-        Authorization: `Bearer ${options.apiKey}`,
-        "Content-Type": "application/json",
-        ...options.headers,
-      });
+      const headers = requestHeaders();
 
       if (context.idempotencyKey) {
         headers.set("Idempotency-Key", context.idempotencyKey);

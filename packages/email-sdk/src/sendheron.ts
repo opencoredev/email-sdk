@@ -16,6 +16,7 @@ import {
   assertMaxItems,
   hasDisplayName,
   type MessageRules,
+  headerTemplate,
 } from "./utils.js";
 
 export type SendheronAdapterOptions = {
@@ -82,6 +83,12 @@ export function sendheron(
   const baseUrl = options.baseUrl ?? "https://api.sendheron.com/api/v1";
   const fetcher = options.fetch ?? fetch;
 
+  const requestHeaders = headerTemplate(() => ({
+    Authorization: `Bearer ${options.apiKey}`,
+    "Content-Type": "application/json",
+    ...options.headers,
+  }));
+
   return {
     name: "sendheron",
     ...builtInAdapterDefinition("sendheron", sendheronRules),
@@ -89,11 +96,7 @@ export function sendheron(
     async send(message, context) {
       validateBuiltInAdapter("sendheron", message, sendheronRules);
 
-      const headers = new Headers({
-        Authorization: `Bearer ${options.apiKey}`,
-        "Content-Type": "application/json",
-        ...options.headers,
-      });
+      const headers = requestHeaders();
 
       // Set after construction so a per-send key replaces a static one in any casing.
       if (context.idempotencyKey) {

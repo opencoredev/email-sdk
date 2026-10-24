@@ -41,11 +41,6 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
   const rules: MessageRules | undefined = options.rules;
   const url = `${options.baseUrl}${options.endpoint}`;
 
-  const requestHeaders = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-
   return {
     name: options.name,
     capabilities: BUILT_IN_ADAPTER_CAPABILITIES[options.name],
@@ -61,8 +56,10 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
       const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
-        // A fresh copy per request, so a fetch wrapper that edits headers cannot leak edits.
-        headers: { ...requestHeaders },
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
         body: JSON.stringify(payload),
       });
 
