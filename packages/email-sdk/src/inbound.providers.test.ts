@@ -466,6 +466,20 @@ describe("SendGrid Inbound Parse", () => {
     expect(email.raw.kind).toBe("form");
   });
 
+  test("keeps the already-decoded headers field as text and still decodes RFC 2047 words", () => {
+    const body = multipart("hdr-b", [
+      { name: "headers", value: "Subject: Â£\r\nX-Note: =?UTF-8?B?w6k=?= ü\r\n" },
+      { name: "from", value: "jose@example.net" },
+      { name: "charsets", value: '{"headers":"UTF-8","from":"UTF-8"}' },
+    ]);
+
+    const email = parseSendGridInbound({ body, headers: { "content-type": "multipart/form-data; boundary=hdr-b" } });
+
+    expect(email.subject).toBe("Â£");
+    expect(email.headers.get("subject")).toBe("Â£");
+    expect(email.headers.get("x-note")).toBe("é ü");
+  });
+
   test("parses Send Raw mode from the email field", () => {
     const body = multipart("raw-b", [
       { name: "email", value: eml },

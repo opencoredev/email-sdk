@@ -105,10 +105,14 @@ function splitEntity(source: string): MimeEntity {
   const headerBlock = match ? source.slice(0, match.index) : source;
   const body = match ? source.slice(match.index + match[0].length) : "";
 
-  return { headers: parseHeaderBlock(headerBlock), body, source };
+  return { headers: parseHeaderBlock(headerBlock, headerText), body, source };
 }
 
-function parseHeaderBlock(block: string): InboundHeader[] {
+/**
+ * Split a header block into unfolded fields. `decodeValue` turns each value into text: raw MIME
+ * passes `headerText`, since its values are still one char per byte.
+ */
+function parseHeaderBlock(block: string, decodeValue: (value: string) => string): InboundHeader[] {
   const headers: InboundHeader[] = [];
 
   for (const line of block.replace(/\r?\n(?=[ \t])/g, "").split(/\r?\n/)) {
@@ -120,9 +124,9 @@ function parseHeaderBlock(block: string): InboundHeader[] {
 
     if (!/^[!-9;-~]+$/.test(name)) continue;
 
-    // Only ASCII whitespace: the value is still one char per byte, and `.trim()` would also
+    // Only ASCII whitespace: a raw MIME value is still one char per byte, and `.trim()` would also
     // eat 0x85 and 0xA0, which are continuation bytes of raw UTF-8 such as `à` (C3 A0).
-    headers.push({ name, value: headerText(trimHeaderWhitespace(line.slice(colon + 1))) });
+    headers.push({ name, value: decodeValue(trimHeaderWhitespace(line.slice(colon + 1))) });
   }
 
   return headers;
@@ -483,9 +487,12 @@ function headerViews(entries: readonly InboundHeader[]): ParsedMimeHeaders {
   };
 }
 
-/** Read the header block of a raw message without decoding its bodies. */
-export function parseMimeHeaders(raw: string): ParsedMimeHeaders {
-  return headerViews(parseHeaderBlock(raw));
+/**
+ * Read a header block that is already decoded text, such as SendGrid's parsed-mode `headers`
+ * field. Values are not re-decoded as bytes, so `Â£` stays `Â£`; RFC 2047 words still decode.
+ */
+export function parseMimeHeaders(text: string): ParsedMimeHeaders {
+  return headerViews(parseHeaderBlock(text, value => value));
 }
 
 interface AngleAddress {
