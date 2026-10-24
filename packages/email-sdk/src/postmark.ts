@@ -34,6 +34,7 @@ export type PostmarkAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+/** Which parts of the message Postmark rewrites to track link clicks (`TrackLinks`). */
 export type PostmarkTrackLinks = "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
 
 /** Identify a Postmark template by numeric ID or by alias, not both. */
