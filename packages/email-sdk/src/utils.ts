@@ -549,19 +549,6 @@ export const SUPPORTED_MESSAGE_FIELDS = {
 
 const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo"]);
 
-// SendHeron refuses any attachment type outside this allowlist.
-const SENDHERON_ATTACHMENT_TYPES = new Set([
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "text/calendar",
-  "text/csv",
-  "text/plain",
-  "application/zip",
-]);
-
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 
 const NATIVE_PERSONALIZED = new Set(["mailgun", "sendgrid"]);
@@ -582,15 +569,58 @@ export const BUILT_IN_ADAPTER_CAPABILITIES = Object.fromEntries(
       personalized: NATIVE_PERSONALIZED.has(name) ? "native" : "expanded",
     } satisfies EmailAdapterCapabilities,
   ]),
-) as Record<keyof typeof SUPPORTED_MESSAGE_FIELDS, EmailAdapterCapabilities>;
+) as Record<BuiltInAdapterName, EmailAdapterCapabilities>;
 
-export function builtInAdapterDefinition<Name extends keyof typeof SUPPORTED_MESSAGE_FIELDS>(
+export type BuiltInAdapterName = keyof typeof SUPPORTED_MESSAGE_FIELDS;
+
+/** Checks a built-in adapter runs after the shared field-support and header checks. */
+export type MessageRules = (message: EmailMessage) => void;
+
+/**
+ * Built-in adapters with provider limits beyond field support and header repetition. Each
+ * keeps its rules in its own module, so importing one adapter does not bundle every
+ * provider's limits; the compiler makes each of these supply them.
+ */
+type RuledAdapterName =
+  | "brevo"
+  | "cloudflare"
+  | "graph"
+  | "helo"
+  | "iterable"
+  | "jetemail"
+  | "lettermint"
+  | "lettr"
+  | "loops"
+  | "mailersend"
+  | "mailtrap"
+  | "plunk"
+  | "postmark"
+  | "primitive"
+  | "scaleway"
+  | "sendheron"
+  | "sequenzy"
+  | "smtp"
+  | "unosend";
+
+export type AdapterRules<Name extends BuiltInAdapterName> = Name extends RuledAdapterName
+  ? [rules: MessageRules]
+  : [];
+
+/** The `rules` option for factories, such as jsonProvider, that build a built-in adapter. */
+export type AdapterRulesOption<Name extends BuiltInAdapterName> = Name extends RuledAdapterName
+  ? { rules: MessageRules }
+  : { rules?: undefined };
+
+export function builtInAdapterDefinition<Name extends BuiltInAdapterName>(
   name: Name,
+  ...rules: AdapterRules<Name>
 ): Pick<EmailAdapter<Name>, "capabilities" | "validate"> {
+  const checks: readonly MessageRules[] = rules;
+
   return {
     capabilities: BUILT_IN_ADAPTER_CAPABILITIES[name],
     validate(message) {
-      validateBuiltInAdapter(name, message);
+      validateBuiltInMessage(name, message, checks[0]);
     },
   };
 }
@@ -617,225 +647,67 @@ export function isBuiltInAdapter(adapter: EmailAdapter | undefined) {
   return isObjectLike(capabilities) && Object.hasOwn(capabilities, BUILT_IN_ADAPTER_MARK);
 }
 
-export function validateBuiltInAdapter(
-  adapter: keyof typeof SUPPORTED_MESSAGE_FIELDS,
+export function validateBuiltInAdapter<Name extends BuiltInAdapterName>(
+  adapter: Name,
   message: EmailMessage,
+  ...rules: AdapterRules<Name>
+) {
+  const checks: readonly MessageRules[] = rules;
+  validateBuiltInMessage(adapter, message, checks[0]);
+}
+
+/** Shared built-in checks, then the adapter's own rules. Prefer the typed entry points. */
+export function validateBuiltInMessage(
+  adapter: BuiltInAdapterName,
+  message: EmailMessage,
+  rules: MessageRules | undefined,
 ) {
   assertMessage(message);
   assertSupportedMessageFields(adapter, message, SUPPORTED_MESSAGE_FIELDS[adapter]);
 
-  const capabilities = BUILT_IN_ADAPTER_CAPABILITIES[adapter];
-  const headerNames = new Set<string>();
+  if (!BUILT_IN_ADAPTER_CAPABILITIES[adapter].repeatedHeaders) {
+    assertUniqueHeaderNames(adapter, message.headers);
+  }
 
-	for (const header of headersToArray(message.headers) ?? []) {
+  rules?.(message);
+}
+
+const NO_HEADERS: readonly EmailHeader[] = [];
+
+/** Headers as a list, without copying when they already are one. */
+export function headerList(headers: HeaderInput): readonly EmailHeader[] {
+  if (!headers) return NO_HEADERS;
+
+  return isHeaderList(headers) ? headers : (headersToArray(headers) ?? NO_HEADERS);
+}
+
+function assertUniqueHeaderNames(adapter: string, headers: HeaderInput) {
+  const list = headerList(headers);
+
+  if (list.length < 2) return;
+
+  const names = new Set<string>();
+
+  for (const header of list) {
     const normalized = header.name.toLowerCase();
 
-    if (!capabilities.repeatedHeaders && headerNames.has(normalized)) {
+    if (names.has(normalized)) {
       throw new EmailValidationError(
         `${adapter} does not support repeated email header names: ${header.name}.`,
       );
     }
 
-    headerNames.add(normalized);
+    names.add(normalized);
   }
+}
 
-  const to = arrayify(message.to);
-  const replyTo = arrayify(message.replyTo);
+/** to, cc, and bcc as one list, in that order. */
+export function allRecipients(message: EmailMessage): EmailAddress[] {
+  return [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)];
+}
 
-  if (adapter === "loops" || adapter === "iterable" || adapter === "primitive") {
-    assertMaxItems(adapter, "recipient", to, 1);
-  }
-
-  if (adapter === "jetemail") {
-    if (!formatAddress(message.from).includes("<")) {
-      const from = emailAddressOf(message.from);
-      throw new EmailValidationError(
-        `jetemail requires a from address with a display name, for example "Acme <${from}>".`,
-      );
-    }
-
-    assertMaxItems(adapter, "recipient", to, 50);
-    assertMaxItems(adapter, "cc", arrayify(message.cc), 50);
-    assertMaxItems(adapter, "bcc", arrayify(message.bcc), 50);
-    assertMaxItems(adapter, "replyTo", replyTo, 50);
-  }
-
-	if (adapter === "cloudflare") {
-    assertMaxItems(
-      adapter,
-      "recipient",
-      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
-      50,
-    );
-    assertMaxItems(adapter, "replyTo", replyTo, 1);
-
-		for (const recipient of [...to, ...arrayify(message.cc), ...arrayify(message.bcc)]) {
-			if (isStringMember(recipient) ? recipient.includes("<") : Boolean(recipient.name)) {
-				throw new EmailValidationError(
-					"cloudflare recipient fields only support plain email addresses.",
-				);
-			}
-		}
-	}
-
-	if (
-		adapter === "brevo" ||
-		adapter === "mailersend" ||
-		adapter === "mailtrap" ||
-		adapter === "plunk" ||
-		adapter === "unosend" ||
-		adapter === "sequenzy" ||
-		adapter === "lettr"
-	) {
-		assertMaxItems(adapter, "replyTo", replyTo, 1);
-	}
-
-  if (adapter === "sequenzy") {
-    assertMaxItems(adapter, "recipient", to, 50);
-  }
-
-  if (adapter === "postmark" || adapter === "lettermint" || adapter === "mailtrap" || adapter === "lettr") {
-    assertMaxItems(adapter, "tag", [...(message.tags ?? [])], 1);
-  }
-
-  if (adapter === "scaleway" && replyTo.length > 0) {
-		const hasReplyHeader = (headersToArray(message.headers) ?? []).some(
-			(header) => header.name.toLowerCase() === "reply-to",
-		);
-
-    if (hasReplyHeader) {
-      throw new EmailValidationError(
-        "scaleway cannot set replyTo when headers already include Reply-To.",
-      );
-    }
-  }
-
-  if (adapter === "graph") {
-    const invalidHeaders = (headersToArray(message.headers) ?? [])
-      .filter((header) => !/^x-/i.test(header.name))
-      .map((header) => header.name);
-
-    if (invalidHeaders.length > 0) {
-      throw new EmailValidationError(
-        `graph only supports custom headers with an x- prefix: ${invalidHeaders.join(", ")}.`,
-      );
-    }
-
-    assertMaxItems(adapter, "header", headersToArray(message.headers) ?? [], 5);
-
-    assertMaxItems(
-      adapter,
-      "recipient",
-      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
-      1000,
-    );
-  }
-
-  if (adapter === "sendheron") {
-    const cc = arrayify(message.cc);
-    const bcc = arrayify(message.bcc);
-    assertMaxItems(adapter, "recipient", to, 1);
-    assertMaxItems(adapter, "cc", cc, 50);
-    assertMaxItems(adapter, "bcc", bcc, 50);
-    assertMaxItems(adapter, "replyTo", replyTo, 1);
-
-    for (const address of [...to, ...cc, ...bcc, ...replyTo]) {
-      if (isStringMember(address) ? address.includes("<") : Boolean(address.name)) {
-        throw new EmailValidationError(
-          "sendheron recipient and replyTo fields only support plain email addresses.",
-        );
-      }
-    }
-
-    const attachments = message.attachments ?? [];
-    assertMaxItems(adapter, "attachment", attachments, 10);
-
-    if (attachments.length > 0 && message.sendAt !== undefined) {
-      throw new EmailValidationError("sendheron cannot schedule a message with attachments.");
-    }
-
-    for (const attachment of attachments) {
-      if (attachment.disposition === "inline" || attachment.contentId) {
-        throw new EmailValidationError("sendheron does not support inline attachments.");
-      }
-
-      if (!attachment.contentType || !SENDHERON_ATTACHMENT_TYPES.has(attachment.contentType)) {
-        throw new EmailValidationError(
-          `sendheron requires an attachment contentType from its allowlist: ${[
-            ...SENDHERON_ATTACHMENT_TYPES,
-          ].join(", ")}.`,
-        );
-      }
-    }
-  }
-
-  if (adapter === "helo") {
-    assertMaxItems(
-      adapter,
-      "recipient",
-      [...to, ...arrayify(message.cc), ...arrayify(message.bcc)],
-      50,
-    );
-
-    const tags = message.tags ?? [];
-    assertMaxItems(adapter, "tag", tags, 5);
-
-    for (const tag of tags) {
-      if (tag.value.length > 100) {
-        throw new EmailValidationError("helo tag values must be 100 characters or fewer.");
-      }
-    }
-
-    const metadata = Object.entries(message.metadata ?? {});
-    assertMaxItems(adapter, "metadata field", metadata, 10);
-
-    for (const [key, value] of metadata) {
-      if (key.length > 50 || String(value ?? "").length > 100) {
-        throw new EmailValidationError(
-          "helo metadata keys must be 50 characters or fewer and values 100 characters or fewer.",
-        );
-      }
-    }
-
-    if (message.subject.length > 256) {
-      throw new EmailValidationError("helo subjects must be 256 characters or fewer.");
-    }
-  }
-
-  if (adapter === "smtp") {
-    for (const address of [
-      message.from,
-      ...to,
-      ...arrayify(message.cc),
-      ...arrayify(message.bcc),
-    ]) {
-      const envelope = emailAddressOf(address);
-
-      const hasInvalidCharacter = [...envelope].some((character) => {
-        const codePoint = character.codePointAt(0) ?? 0;
-
-        return codePoint <= 0x20 || codePoint >= 0x7f || character === "<" || character === ">";
-      });
-
-      if (!envelope || hasInvalidCharacter) {
-        throw new EmailValidationError(
-          `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
-        );
-      }
-    }
-
-		for (const header of headersToArray(message.headers) ?? []) {
-			if (header.name.toLowerCase() === "bcc") {
-				throw new EmailValidationError("SMTP does not allow Bcc in message headers.");
-			}
-
-			if (!/^[!-9;-~]+$/.test(header.name)) {
-				throw new EmailValidationError(
-					`SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
-				);
-			}
-		}
-  }
+export function hasDisplayName(address: EmailAddress) {
+  return isStringMember(address) ? address.includes("<") : Boolean(address.name);
 }
 
 export function assertSupportedMessageFields(

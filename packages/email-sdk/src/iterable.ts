@@ -3,7 +3,13 @@ import { jsonProvider } from "./http.js";
 import { apiAddresses, formatAddress } from "./payloads.js";
 import { isFunctionMember } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage, EmailMetadataRecord } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertMaxItems,
+  assertSupportedMessageFields,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type IterableDataFields =
   | EmailMetadataRecord
@@ -19,6 +25,10 @@ export type IterableAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const iterableRules: MessageRules = (message) => {
+  assertMaxItems("iterable", "recipient", arrayify(message.to), 1);
+};
+
 export function iterable(
   options: IterableAdapterOptions,
 ): EmailAdapter<"iterable", { baseUrl: string }> {
@@ -28,6 +38,7 @@ export function iterable(
 
   return jsonProvider({
     name: "iterable",
+    rules: iterableRules,
     baseUrl: options.baseUrl ?? "https://api.iterable.com",
     endpoint: "/api/email/target",
     headers: {
