@@ -48,17 +48,6 @@ export function normalizeAdapterResult<Name extends string>(
   };
 }
 
-/**
- * Builds an adapter's static request headers on its first send, then hands each request its
- * own copy. Cloning a Headers object is several times cheaper than parsing a record again,
- * and a fetch wrapper that edits its copy cannot change later requests.
- */
-export function headerTemplate(build: () => HeadersInit) {
-  let template: Headers | undefined;
-
-  return () => new Headers((template ??= new Headers(build())));
-}
-
 export function arrayify<T>(value: OneOrMany<T> | undefined): T[] {
   if (value === undefined) {
     return [];
