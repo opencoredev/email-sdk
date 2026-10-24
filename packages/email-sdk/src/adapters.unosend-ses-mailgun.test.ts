@@ -375,7 +375,7 @@ describe("SES SigV4 signing", () => {
       messageWithoutMetadata,
       {
         ...context,
-        native: { headers: { "Content-Type": "text/plain", "X-Amz-Date": "19700101T000000Z", "X-Trace": "1" } },
+        native: { headers: { "Content-Type": "text/plain", "X-Trace": "1" } },
       },
     );
 
@@ -384,8 +384,47 @@ describe("SES SigV4 signing", () => {
     if (!request) throw new Error("Expected one SES request.");
 
     expect(request.headers.get("content-type")).toBe("application/json");
-    expect(request.headers.get("x-amz-date")).toBe("20260301T120000Z");
     expect(request.headers.get("x-trace")).toBe("1");
+    expect(request.headers.get("authorization")).toBe(
+      expectedAuthorization(request, "secret", "eu-west-1"),
+    );
+  });
+
+  test("rejects native headers the signer owns, whatever their case", async () => {
+    const { requests, fetch } = signedCapture();
+    const adapter = ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch });
+
+    for (const name of [
+      "Authorization",
+      "X-Amz-Date",
+      "x-amz-security-token",
+      "X-AMZ-CONTENT-SHA256",
+      "Host",
+    ]) {
+      await expect(
+        adapter.send(messageWithoutMetadata, { ...context, native: { headers: { [name]: "native" } } }),
+      ).rejects.toThrow(new EmailValidationError(
+        `SES signs requests itself, so native.headers can't set "${name}".`,
+      ));
+    }
+
+    expect(requests).toHaveLength(0);
+  });
+
+  test("a native header the signer doesn't own still matches an independent signature", async () => {
+    const { requests, fetch } = signedCapture();
+    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+
+    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", sessionToken: "tok", fetch }).send(
+      messageWithoutMetadata,
+      { ...context, native: { headers: { "X-Trace": "1" } } },
+    );
+
+    const [request] = requests;
+
+    if (!request) throw new Error("Expected one SES request.");
+
+    expect(request.headers.get("x-amz-security-token")).toBe("tok");
     expect(request.headers.get("authorization")).toBe(
       expectedAuthorization(request, "secret", "eu-west-1"),
     );

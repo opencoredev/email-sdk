@@ -1,4 +1,4 @@
-import { EmailAdapterError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { createSigningKeyCache, signAwsRequest } from "./internal/aws-sigv4.js";
 import { jsonString } from "./internal/decode.js";
 import {
@@ -39,7 +39,9 @@ export type SesAdapterOptions = {
 export type SesTemplateRef = { name: string; arn?: never } | { arn: string; name?: never };
 
 /**
- * Experimental. SES-only send options, passed as `native: { ses: { ... } }`.
+ * Experimental. SES-only send options, passed as `native: { ses: { ... } }`. `headers` can't
+ * set the headers SigV4 signing owns (`Authorization`, `Host`, and `X-Amz-*` date, token, and
+ * content hash); the send throws an `EmailValidationError` instead.
  * https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
  */
 export type SesNativeOptions = EmailNativePassthrough & {
@@ -57,6 +59,26 @@ export type SesNativeOptions = EmailNativePassthrough & {
 
 const SES_HEADERS = { "content-type": "application/json" };
 
+// signAwsRequest sets these on every request. A native copy would be signed or sent beside the
+// signer's own, and SES would reject the signature.
+const SIGNER_HEADERS = new Set([
+  "authorization",
+  "host",
+  "x-amz-content-sha256",
+  "x-amz-date",
+  "x-amz-security-token",
+]);
+
+function assertNoSignerHeaders(headers: Readonly<Record<string, string>>) {
+  for (const name of Object.keys(headers)) {
+    if (SIGNER_HEADERS.has(name.toLowerCase())) {
+      throw new EmailValidationError(
+        `SES signs requests itself, so native.headers can't set "${name}".`,
+      );
+    }
+  }
+}
+
 export function ses(
   options: SesAdapterOptions,
 ): EmailAdapter<"ses", { baseUrl: string; region: string }, unknown, SesNativeOptions> {
@@ -72,6 +94,9 @@ export function ses(
       // Built per send so an invalid baseUrl still fails the send, not the adapter factory.
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
       const native = context.native;
+
+      if (native?.headers) assertNoSignerHeaders(native.headers);
+
       const payload = await toSesPayload(message, options);
       const body = JSON.stringify(native ? withSesNative(payload, native) : payload);
 
