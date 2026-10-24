@@ -8,6 +8,7 @@ import { convexTest } from "convex-test";
 import { z } from "zod";
 
 import { ConvexEmail } from "./client/index.js";
+import type { ConvexWorkflowEmailQueue } from "./client/workflows.js";
 import {
   convexWorkflowEmail,
   convexWorkflowScheduler,
@@ -17,6 +18,7 @@ import {
 } from "./client/workflows.js";
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
+import type { ConvexEmailSendArgs } from "./shared/types.js";
 import { modules, registerConvexEmail } from "./testing.js";
 
 function component() {
@@ -458,7 +460,7 @@ describe("toConvexSendArgs", () => {
           headers: [{ name: "X-Test", value: "1" }],
           attachments: [{ filename: "a.txt", content: "aGk=", contentEncoding: "base64" }],
         },
-        "wf:run-1:welcome",
+        { idempotencyKey: "wf:run-1:welcome" },
       ),
     ).toEqual({
       from: "a@acme.test",
@@ -471,14 +473,58 @@ describe("toConvexSendArgs", () => {
     });
 
     expect(() =>
-      toConvexSendArgs({ from: "a@acme.test", to: "b@acme.test", subject: "Hi", text: "Hi", sendAt: new Date() }, undefined),
+      toConvexSendArgs({ from: "a@acme.test", to: "b@acme.test", subject: "Hi", text: "Hi", sendAt: new Date() }),
     ).toThrow("sendAt");
     expect(() =>
       toConvexSendArgs(
         { from: "a@acme.test", to: "b@acme.test", subject: "Hi", text: "Hi", attachments: [{ filename: "a.bin", content: new Uint8Array([1]) }] },
-        undefined,
       ),
     ).toThrow("string content");
   });
 });
 
+describe("convexWorkflowEmail send options", () => {
+  const message = { from: "a@acme.test", to: "b@acme.test", subject: "Hi", text: "Hi" };
+
+  test("forwards routing, attempts, and metadata to the queue", async () => {
+    const queued: ConvexEmailSendArgs[] = [];
+
+    const queue: ConvexWorkflowEmailQueue = {
+      async send(_ctx, args) {
+        queued.push(args);
+
+        return "email-1";
+      },
+    };
+
+    const sender = convexWorkflowEmail(queue, { runMutation: async () => null });
+
+    await sender.send(message, {
+      adapter: "backup",
+      fallback: { adapters: ["third"] },
+      retry: { maxAttempts: 2 },
+      metadata: { userId: "u1", attempt: 1, skipped: undefined },
+      idempotencyKey: "wf_1",
+    });
+
+    expect(queued).toEqual([
+      {
+        ...message,
+        adapter: "backup",
+        fallbackAdapters: ["third"],
+        maxAttempts: 2,
+        sendMetadata: { userId: "u1", attempt: 1 },
+        idempotencyKey: "wf_1",
+      },
+    ]);
+  });
+
+  test("rejects options the queue cannot honor instead of dropping them", () => {
+    expect(() => toConvexSendArgs(message, { signal: new AbortController().signal })).toThrow("signal");
+    expect(() => toConvexSendArgs(message, { retry: { delay: () => 1 } })).toThrow("retry.maxAttempts");
+    expect(() => toConvexSendArgs(message, { fallback: { adapters: ["b"], onUnknownDelivery: "continue" } })).toThrow(
+      "onUnknownDelivery",
+    );
+    expect(() => toConvexSendArgs(message, { metadata: { nested: { a: 1 } } })).toThrow("flat metadata");
+  });
+});
