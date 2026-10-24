@@ -367,4 +367,27 @@ describe("SES SigV4 signing", () => {
       );
     }
   });
+  test("signs native request headers whose names differ only in case from the SDK's", async () => {
+    const { requests, fetch } = signedCapture();
+    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+
+    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch }).send(
+      messageWithoutMetadata,
+      {
+        ...context,
+        native: { headers: { "Content-Type": "text/plain", "X-Amz-Date": "19700101T000000Z", "X-Trace": "1" } },
+      },
+    );
+
+    const [request] = requests;
+
+    if (!request) throw new Error("Expected one SES request.");
+
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(request.headers.get("x-amz-date")).toBe("20260301T120000Z");
+    expect(request.headers.get("x-trace")).toBe("1");
+    expect(request.headers.get("authorization")).toBe(
+      expectedAuthorization(request, "secret", "eu-west-1"),
+    );
+  });
 });

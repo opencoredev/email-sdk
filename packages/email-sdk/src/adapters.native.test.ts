@@ -42,7 +42,7 @@ describe("provider-native options reach each adapter", () => {
       withNative({
         template: { id: "welcome", variables: { NAME: "Ada", COUNT: 2 } },
         topicId: "topic_1",
-        headers: { "X-Trace": "t1" },
+        headers: { "X-Trace": "t1", "idempotency-key": "native_key" },
       }),
     );
 
@@ -487,5 +487,42 @@ describe("provider-native options through the client", () => {
     expect(capture.calls[0]?.json.personalizations[0].dynamic_template_data).toEqual({
       name: "Ada",
     });
+  });
+});
+
+describe("native request headers", () => {
+  const sdkOwned = {
+    "authorization": "Bearer native",
+    "content-type": "text/plain",
+    "x-postmark-server-token": "native",
+    "X-Trace": "1",
+  };
+
+  test("add headers but never replace the adapter's, whatever their case", async () => {
+    const json = jsonCapture({ id: "1", MessageID: "1" });
+    const form = formCapture({ id: "1" });
+
+    await resend({ apiKey: "re", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
+    await postmark({ serverToken: "pm", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
+    await mailersend({ apiKey: "ms", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
+    await mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: form.fetch }).send(
+      simple,
+      withNative({ headers: sdkOwned }),
+    );
+
+    const [resendCall, postmarkCall, mailersendCall] = json.calls;
+    expect(resendCall?.headers.get("authorization")).toBe("Bearer re");
+    expect(resendCall?.headers.get("content-type")).toBe("application/json");
+    expect(postmarkCall?.headers.get("x-postmark-server-token")).toBe("pm");
+    expect(postmarkCall?.headers.get("content-type")).toBe("application/json");
+    expect(mailersendCall?.headers.get("authorization")).toBe("Bearer ms");
+    expect(mailersendCall?.headers.get("content-type")).toBe("application/json");
+    expect(form.calls[0]?.headers.get("authorization")).toBe(
+      `Basic ${Buffer.from("api:mg").toString("base64")}`,
+    );
+
+    for (const call of [...json.calls, ...form.calls]) {
+      expect(call.headers.get("x-trace")).toBe("1");
+    }
   });
 });

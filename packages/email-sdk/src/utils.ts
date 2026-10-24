@@ -113,6 +113,24 @@ export function headersToObject(headers: HeaderInput): Record<string, string> | 
   return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
+/**
+ * Add a send's `native.headers` to the HTTP request headers an adapter builds. Names compare
+ * case-insensitively, as HTTP defines them, and a native header never replaces one the adapter
+ * set, so it cannot join or swap credentials, the content type, or the idempotency key.
+ */
+export function withNativeRequestHeaders(
+  own: HeadersInit,
+  native: Readonly<Record<string, string>>,
+): Headers {
+  const headers = new Headers(own);
+
+  for (const [name, value] of Object.entries(native)) {
+    if (!headers.has(name)) headers.set(name, value);
+  }
+
+  return headers;
+}
+
 export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined {
   if (!headers) {
     return undefined;

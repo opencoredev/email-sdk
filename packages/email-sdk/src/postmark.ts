@@ -24,6 +24,7 @@ import {
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
   type MessageRules,
+  withNativeRequestHeaders,
 } from "./utils.js";
 
 export type PostmarkAdapterOptions = {
@@ -82,16 +83,17 @@ export function postmark(
       const payload = await toPostmarkPayload(message, options.messageStream);
       const endpoint = native?.template ? "/email/withTemplate" : "/email";
 
+      const headers = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Postmark-Server-Token": options.serverToken,
+        ...options.headers,
+      };
+
       const response = await fetcher(`${baseUrl}${endpoint}`, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "X-Postmark-Server-Token": options.serverToken,
-          ...options.headers,
-          ...native?.headers,
-        },
+        headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
         body: JSON.stringify(native ? withPostmarkNative(payload, native) : payload),
       });
 

@@ -15,6 +15,7 @@ import {
   normalizeAdapterResult,
   readErrorBody,
   validateBuiltInMessage,
+  withNativeRequestHeaders,
   type AdapterRulesOption,
   type BuiltInAdapterName,
   type MessageRules,
@@ -69,14 +70,12 @@ export function jsonProvider<
       const native = context.native;
       const payload = await options.buildPayload(message, native);
 
+      const headers = { "Content-Type": "application/json", ...options.headers };
+
       const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-          ...native?.headers,
-        },
+        headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
         body: JSON.stringify(native?.body ? { ...payload, ...native.body } : payload),
       });
 
