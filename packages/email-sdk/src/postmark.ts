@@ -1,6 +1,13 @@
 import { EmailAdapterError } from "./errors.js";
 import { jsonString, responseJson } from "./internal/decode.js";
-import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
+import type {
+  EmailAttachment,
+  EmailMessage,
+  EmailAdapter,
+  EmailNativeObject,
+  EmailNativePassthrough,
+  EmailTag,
+} from "./types.js";
 import {
   arrayify,
   builtInAdapterDefinition,
@@ -27,13 +34,41 @@ export type PostmarkAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+export type PostmarkTrackLinks = "None" | "HtmlAndText" | "HtmlOnly" | "TextOnly";
+
+/** Identify a Postmark template by numeric ID or by alias, not both. */
+export type PostmarkTemplateRef =
+  | { id: number; alias?: never }
+  | { alias: string; id?: never };
+
+/**
+ * Experimental. Postmark-only send options, passed as `native: { postmark: { ... } }`.
+ * https://postmarkapp.com/developer/api/email-api
+ */
+export type PostmarkNativeOptions = EmailNativePassthrough & {
+  /** Overrides the adapter's `messageStream` for this send. */
+  messageStream?: string;
+  trackOpens?: boolean;
+  trackLinks?: PostmarkTrackLinks;
+  /** Sent as Postmark's single `Tag` in place of the `name:value` tag built from `message.tags`. */
+  tag?: string;
+  /**
+   * Send through `/email/withTemplate`. The template supplies the subject and body, so the
+   * message's `subject`, `html`, and `text` are not sent.
+   */
+  template?: PostmarkTemplateRef & {
+    model?: EmailNativeObject;
+    inlineCss?: boolean;
+  };
+};
+
 const postmarkRules: MessageRules = (message) => {
   assertMaxItems("postmark", "tag", message.tags ?? [], 1);
 };
 
 export function postmark(
   options: PostmarkAdapterOptions,
-): EmailAdapter<"postmark", { baseUrl: string }> {
+): EmailAdapter<"postmark", { baseUrl: string }, unknown, PostmarkNativeOptions> {
   const baseUrl = options.baseUrl ?? "https://api.postmarkapp.com";
   const fetcher = options.fetch ?? fetch;
 
@@ -42,7 +77,11 @@ export function postmark(
     ...builtInAdapterDefinition("postmark", postmarkRules),
     raw: { baseUrl },
     async send(message, context) {
-      const response = await fetcher(`${baseUrl}/email`, {
+      const native = context.native;
+      const payload = await toPostmarkPayload(message, options.messageStream);
+      const endpoint = native?.template ? "/email/withTemplate" : "/email";
+
+      const response = await fetcher(`${baseUrl}${endpoint}`, {
         method: "POST",
         signal: context.signal,
         headers: {
@@ -50,8 +89,9 @@ export function postmark(
           "Content-Type": "application/json",
           "X-Postmark-Server-Token": options.serverToken,
           ...options.headers,
+          ...native?.headers,
         },
-        body: JSON.stringify(await toPostmarkPayload(message, options.messageStream)),
+        body: JSON.stringify(native ? withPostmarkNative(payload, native) : payload),
       });
 
       if (!response.ok) {
@@ -101,6 +141,31 @@ async function toPostmarkPayload(message: EmailMessage, messageStream?: string) 
     MessageStream: messageStream,
     Tag: tag,
   };
+}
+
+type PostmarkPayload = Awaited<ReturnType<typeof toPostmarkPayload>>;
+
+function withPostmarkNative(payload: PostmarkPayload, native: PostmarkNativeOptions) {
+  const template = native.template;
+
+  const withNative = {
+    ...payload,
+    MessageStream: native.messageStream ?? payload.MessageStream,
+    Tag: native.tag ?? payload.Tag,
+    TrackOpens: native.trackOpens,
+    TrackLinks: native.trackLinks,
+    ...(template && {
+      Subject: undefined,
+      HtmlBody: undefined,
+      TextBody: undefined,
+      TemplateId: template.id,
+      TemplateAlias: template.alias,
+      TemplateModel: template.model ?? {},
+      InlineCss: template.inlineCss,
+    }),
+  };
+
+  return native.body ? { ...withNative, ...native.body } : withNative;
 }
 
 async function toPostmarkAttachment(attachment: EmailAttachment) {

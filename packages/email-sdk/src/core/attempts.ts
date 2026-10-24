@@ -13,7 +13,7 @@ import type {
   EmailMessage,
   EmailRetryConfig,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   EmailSendResult,
 } from "../types.js";
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
@@ -62,7 +62,7 @@ export type MeasureAttempt = <T extends EmailSendResult>(
 export type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
-  options?: EmailSendOptions;
+  options?: EmailNativeSendOptions;
   retry?: EmailRetryConfig;
   hooks: readonly EmailHooks[];
   middleware: readonly EmailSendMiddleware[];
@@ -104,6 +104,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
             signal: input.options?.signal,
             idempotencyKey: input.options?.idempotencyKey,
             metadata: input.options?.metadata,
+            native: input.options?.native?.[input.adapter.name],
           }),
       );
 

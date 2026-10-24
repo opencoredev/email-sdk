@@ -8,7 +8,7 @@ import {
   optionalApiAddresses,
   optionalSingleApiAddress,
 } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailMessage, EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
@@ -30,7 +30,7 @@ const mailtrapRules: MessageRules = (message) => {
 
 export function mailtrap(
   options: MailtrapAdapterOptions,
-): EmailAdapter<"mailtrap", { baseUrl: string }> {
+): EmailAdapter<"mailtrap", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "mailtrap",
     rules: mailtrapRules,

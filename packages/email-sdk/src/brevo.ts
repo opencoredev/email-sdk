@@ -8,7 +8,7 @@ import {
   optionalSingleApiAddress,
   sendAtIso,
 } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativeObject, EmailNativePassthrough } from "./types.js";
 import {
   assertMaxItems,
   arrayify,
@@ -25,7 +25,25 @@ const brevoRules: MessageRules = (message) => {
   assertMaxItems("brevo", "replyTo", arrayify(message.replyTo), 1);
 };
 
-export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { baseUrl: string }> {
+/**
+ * Experimental. Brevo-only send options, passed as `native: { brevo: { ... } }`.
+ * https://developers.brevo.com/reference/sendtransacemail
+ */
+export type BrevoNativeOptions = EmailNativePassthrough & {
+  /**
+   * Send a stored Brevo template. The template supplies the body and subject, so the message's
+   * `subject`, `html`, and `text` are not sent. Set `body: { subject }` to override the subject.
+   */
+  templateId?: number;
+  /** Template parameters, merged over the `params` built from `message.metadata`. */
+  params?: EmailNativeObject;
+  /** UUIDv4 batch identifier. */
+  batchId?: string;
+};
+
+export function brevo(
+  options: BrevoAdapterOptions,
+): EmailAdapter<"brevo", { baseUrl: string }, unknown, BrevoNativeOptions> {
   return jsonProvider({
     name: "brevo",
     rules: brevoRules,
@@ -35,10 +53,10 @@ export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { bas
       "api-key": options.apiKey,
     },
     fetch: options.fetch,
-    async buildPayload(message) {
+    async buildPayload(message, native: BrevoNativeOptions | undefined) {
       const attachments = await base64Attachments(message);
 
-      return {
+      const payload = {
         sender: apiAddress(message.from),
         to: apiAddresses(message.to),
         cc: optionalApiAddresses(message.cc),
@@ -55,6 +73,20 @@ export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { bas
           name: attachment.filename,
           content: attachment.content,
         })),
+      };
+
+      if (!native) return payload;
+
+      const template = native.templateId !== undefined;
+
+      return {
+        ...payload,
+        subject: template ? undefined : payload.subject,
+        htmlContent: template ? undefined : payload.htmlContent,
+        textContent: template ? undefined : payload.textContent,
+        templateId: native.templateId,
+        params: native.params ? { ...payload.params, ...native.params } : payload.params,
+        batchId: native.batchId,
       };
     },
     parseResponse(body) {

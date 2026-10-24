@@ -112,12 +112,75 @@ export type EmailAdapterValidationContext = {
   operation: "send" | "personalized";
 };
 
-export type EmailAdapterContext = EmailAdapterValidationContext & {
-  attempt: number;
-  signal?: AbortSignal;
-  idempotencyKey?: string;
-  metadata?: EmailSendMetadata;
+/** A JSON-compatible value accepted inside provider-native options. */
+export type EmailNativeValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly EmailNativeValue[]
+  | { readonly [key: string]: EmailNativeValue };
+
+/** The widest shape a provider's native options can take. */
+export type EmailNativeObject = { readonly [key: string]: EmailNativeValue };
+
+/**
+ * The escape hatch every native-aware HTTP JSON adapter accepts. Use it for provider fields the
+ * SDK does not model yet.
+ */
+export type EmailNativePassthrough = {
+  /** Shallow-merged over the request body the adapter builds. Keys here replace the SDK's. */
+  body?: EmailNativeObject;
+  /** Extra HTTP request headers for the provider API call. These are not email headers. */
+  headers?: Readonly<Record<string, string>>;
 };
+
+/** Native options keyed by adapter name, as core sees them before routing picks an adapter. */
+export type EmailNativeOptionsMap = { readonly [adapter: string]: EmailNativeObject | undefined };
+
+/** The native options type an adapter declares, read from its type-only `~native` marker. */
+export type AdapterNativeOptions<Adapter> = Adapter extends {
+  readonly "~native"?: infer Native;
+}
+  ? Native
+  : never;
+
+// True only when Native is exactly the EmailAdapter default, meaning the adapter declared nothing.
+// Assignability is not enough: an all-optional options type and the default accept each other.
+type IsUndeclaredNative<Native> =
+  (<T>() => T extends Native ? 1 : 2) extends <T>() => T extends EmailNativeObject ? 1 : 2
+    ? true
+    : false;
+
+type NativeEntries<Routes extends readonly EmailAdapter[]> = {
+  readonly [Adapter in Routes[number] as IsUndeclaredNative<
+    AdapterNativeOptions<Adapter>
+  > extends true
+    ? never
+    : Adapter["name"]]?: AdapterNativeOptions<Adapter>;
+};
+
+/**
+ * Experimental. The `native` send option for a client: one optional entry per adapter that
+ * declares native options, keyed by adapter name. Each adapter receives only its own entry, so
+ * options for one provider never reach another in a fallback chain. A client with no such
+ * adapter accepts only an empty object.
+ */
+export type EmailNativeOptions<Routes extends readonly EmailAdapter[]> =
+  keyof NativeEntries<Routes> extends never
+    ? { readonly [adapter: string]: never }
+    : NativeEntries<Routes>;
+
+export type EmailAdapterContext<Native extends EmailNativeObject = EmailNativeObject> =
+  EmailAdapterValidationContext & {
+    attempt: number;
+    signal?: AbortSignal;
+    idempotencyKey?: string;
+    metadata?: EmailSendMetadata;
+    /** Experimental. This adapter's entry from the send's `native` option. */
+    native?: Native;
+  };
 
 export type EmailSendResult<Name extends string = string, Raw = unknown> = {
   adapter: Name;
@@ -142,18 +205,28 @@ export type EmailPersonalizedResult<Name extends string = string> = EmailSendRes
   rejected: readonly string[];
 };
 
-export type EmailAdapter<Name extends string = string, RawClient = unknown, RawResult = unknown> = {
+export type EmailAdapter<
+  Name extends string = string,
+  RawClient = unknown,
+  RawResult = unknown,
+  Native extends EmailNativeObject = EmailNativeObject,
+> = {
   readonly name: Name;
   readonly capabilities: EmailAdapterCapabilities;
   readonly raw?: RawClient;
+  /**
+   * Type-only marker for the native send options this adapter accepts. Adapters never set it at
+   * runtime; `createEmailClient` reads it to type the `native` send option.
+   */
+  readonly "~native"?: Native;
   validate?(message: EmailMessage, context: EmailAdapterValidationContext): MaybePromise<void>;
   send(
     message: EmailMessage,
-    context: EmailAdapterContext,
+    context: EmailAdapterContext<Native>,
   ): MaybePromise<EmailSendResult<Name, RawResult>>;
   sendPersonalized?(
     input: EmailPersonalizedInput,
-    context: EmailAdapterContext,
+    context: EmailAdapterContext<Native>,
   ): MaybePromise<EmailPersonalizedResult<Name>>;
 };
 
@@ -168,13 +241,25 @@ export type EmailFallbackConfig<Name extends string = string> = {
   onUnknownDelivery?: "stop" | "continue";
 };
 
-export type EmailSendOptions<Name extends string = string> = {
+/**
+ * `Native` defaults to `never`, so a plain `EmailSendOptions<Name>` stays assignable to every
+ * client's send options. A client types `native` from its adapters (`EmailNativeOptions`).
+ */
+export type EmailSendOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = {
   adapter?: Name;
   fallback?: EmailFallbackConfig<Name>;
   retry?: EmailRetryConfig;
   signal?: AbortSignal;
   idempotencyKey?: string;
   metadata?: EmailSendMetadata;
+  /**
+   * Experimental. Provider-native options keyed by adapter name. Each adapter that is tried
+   * receives only its own entry; adapters without an entry send exactly what they send today.
+   */
+  native?: Native;
 };
 
 export type EmailValidationWarning = {
@@ -187,9 +272,18 @@ export type EmailValidationResult<Name extends string = string> = {
   warnings: readonly EmailValidationWarning[];
 };
 
-export type EmailSendItem<Name extends string = string> = {
+/**
+ * Send options as core, plugins, and middleware see them: `native` entries for any adapter, not
+ * yet matched to the adapter that will receive them.
+ */
+export type EmailNativeSendOptions = EmailSendOptions<string, EmailNativeOptionsMap>;
+
+export type EmailSendItem<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = {
   message: EmailMessage;
-  options?: EmailSendOptions<Name>;
+  options?: EmailSendOptions<Name, Native>;
 };
 
 export type EmailSendSettledResult<Name extends string = string> =
@@ -204,12 +298,12 @@ export type EmailPluginContext = {
 
 export type EmailBeforeSendEvent = {
   message: EmailMessage;
-  options?: EmailSendOptions;
+  options?: EmailNativeSendOptions;
 };
 
 export type EmailBeforeSendResult = {
   message?: EmailMessage;
-  options?: EmailSendOptions;
+  options?: EmailNativeSendOptions;
 };
 
 export type EmailHookEvent = {
@@ -294,6 +388,11 @@ export type AdapterForName<
   Name extends RouteName<Routes>,
 > = Extract<Routes[number], { name: Name }>;
 
+type ClientSendOptions<Routes extends readonly EmailAdapter[]> = EmailSendOptions<
+  RouteName<Routes>,
+  EmailNativeOptions<Routes>
+>;
+
 export type EmailClient<
   Routes extends readonly EmailAdapter[] = readonly EmailAdapter[],
   Extension extends object = object,
@@ -302,19 +401,19 @@ export type EmailClient<
   readonly defaultAdapter: RouteName<Routes>;
   validate(
     message: EmailMessage,
-    options?: EmailSendOptions<RouteName<Routes>>,
+    options?: ClientSendOptions<Routes>,
   ): Promise<EmailValidationResult<RouteName<Routes>>>;
   send(
     message: EmailMessage,
-    options?: EmailSendOptions<RouteName<Routes>>,
+    options?: ClientSendOptions<Routes>,
   ): Promise<EmailSendResult<RouteName<Routes>>>;
   sendMany(
-    items: readonly EmailSendItem<RouteName<Routes>>[],
-    options?: EmailSendOptions<RouteName<Routes>>,
+    items: readonly EmailSendItem<RouteName<Routes>, EmailNativeOptions<Routes>>[],
+    options?: ClientSendOptions<Routes>,
   ): Promise<readonly EmailSendSettledResult<RouteName<Routes>>[]>;
   sendPersonalized(
     input: EmailPersonalizedInput,
-    options?: EmailSendOptions<RouteName<Routes>>,
+    options?: ClientSendOptions<Routes>,
   ): Promise<EmailPersonalizedResult<RouteName<Routes>>>;
   adapter<Name extends RouteName<Routes>>(name: Name): AdapterForName<Routes, Name>;
   /**
