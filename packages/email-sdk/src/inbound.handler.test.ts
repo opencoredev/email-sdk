@@ -14,6 +14,7 @@ import {
   parseInbound,
   parseSesInbound,
   parseSnsMessage,
+  type SnsVerificationOptions,
   verifySnsMessage,
 } from "./inbound.js";
 
@@ -45,7 +46,7 @@ const certificateDer = der(0x30, tbs, algorithm, der(0x03, Buffer.from([0]), Buf
 
 const certificatePem = `-----BEGIN CERTIFICATE-----\n${certificateDer.toString("base64").replace(/.{64}/g, "$&\n")}\n-----END CERTIFICATE-----\n`;
 
-const certUrl = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-test.pem";
+const certUrl = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-0123456789abcdef0123456789abcdef.pem";
 
 const topicArn = "arn:aws:sns:us-east-1:123456789012:inbound";
 
@@ -125,7 +126,7 @@ describe("SNS verification", () => {
   });
 
   test("verifies SignatureVersion 1 and 2 and rejects tampering", async () => {
-    const cache = new Map<string, CryptoKey>();
+    const cache: NonNullable<SnsVerificationOptions["certificateCache"]> = new Map();
 
     for (const version of ["1", "2"] as const) {
       const message = parseSnsMessage(snsBody("hello", { version }));
@@ -138,6 +139,61 @@ describe("SNS verification", () => {
 
     expect(await verifySnsMessage({ ...message, SigningCertURL: "https://evil.test/cert.pem" }, { fetch: certFetch, now: signedAt })).toEqual({ ok: false, reason: "signature_invalid" });
     expect(await verifySnsMessage(message, { fetch: certFetch, topicArn: "arn:aws:sns:us-east-1:1:other", now: signedAt })).toEqual({ ok: false, reason: "signature_invalid" });
+  });
+
+  test("rejects certificate URL variants before fetching and bounds the cache", async () => {
+    const message = parseSnsMessage(snsBody("hello"));
+    let fetches = 0;
+
+    const countingFetch = stubFetch(async () => {
+      fetches += 1;
+
+      return new Response(certificatePem);
+    });
+
+    const cache: NonNullable<SnsVerificationOptions["certificateCache"]> = new Map();
+    const options = { fetch: countingFetch, certificateCache: cache, topicArn, now: signedAt };
+
+    const variants = [
+      ...Array.from({ length: 40 }, (_, index) => `${certUrl}#${index}`),
+      `${certUrl}?x=1`,
+      "https://user@sns.us-east-1.amazonaws.com/SimpleNotificationService-0123456789abcdef0123456789abcdef.pem",
+      "https://sns.us-east-1.amazonaws.com:443/SimpleNotificationService-0123456789abcdef0123456789abcdef.pem",
+      "https://sns.us-east-1.amazonaws.com/other/SimpleNotificationService-0123456789abcdef0123456789abcdef.pem",
+      "https://sns.us-east-1.amazonaws.com/cert.pem",
+    ];
+
+    for (const SigningCertURL of variants) {
+      expect(await verifySnsMessage({ ...message, SigningCertURL, Signature: "AAAA" }, options)).toEqual({ ok: false, reason: "signature_invalid" });
+    }
+
+    expect(fetches).toBe(0);
+    expect(cache.size).toBe(0);
+
+    // A trusted URL with a bad signature is fetched but not cached.
+    expect(await verifySnsMessage({ ...message, Message: "forged" }, options)).toEqual({ ok: false, reason: "signature_invalid" });
+    expect(cache.size).toBe(0);
+
+    // Many distinct trusted certificates never grow the cache past its bound.
+    for (let index = 0; index < 40; index += 1) {
+      const SigningCertURL = `https://sns.us-east-1.amazonaws.com/SimpleNotificationService-${index.toString(16).padStart(32, "0")}.pem`;
+
+      expect(await verifySnsMessage({ ...message, SigningCertURL }, options)).toEqual({ ok: true });
+    }
+
+    expect(cache.size).toBeLessThanOrEqual(16);
+
+    const before = fetches;
+
+    expect(await verifySnsMessage(message, options)).toEqual({ ok: true });
+    expect(await verifySnsMessage(message, options)).toEqual({ ok: true });
+    expect(fetches).toBe(before + 1);
+
+    // Entries expire, so a rotated certificate is fetched again.
+    expect(await verifySnsMessage(message, { ...options, now: signedAt + 1000, toleranceSeconds: 365 * 86_400 })).toEqual({ ok: true });
+    expect(fetches).toBe(before + 1);
+    expect(await verifySnsMessage(message, { ...options, now: signedAt + 2 * 86_400_000, toleranceSeconds: 365 * 86_400 })).toEqual({ ok: true });
+    expect(fetches).toBe(before + 2);
   });
 
   test("rejects replayed messages outside the window", async () => {

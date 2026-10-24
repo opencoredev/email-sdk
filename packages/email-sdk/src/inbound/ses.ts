@@ -51,8 +51,16 @@ const SNS_TOLERANCE_SECONDS = 3600;
 export interface SnsVerificationOptions extends InboundFetchOptions, InboundClockOptions {
   /** Only accept messages from these topic ARNs. Required by `parseSesInbound` and `handleInbound`. */
   topicArn?: string | readonly string[];
-  /** Cache for signing certificates, keyed by URL. Defaults to a per-process cache. */
-  certificateCache?: Map<string, CryptoKey>;
+  /**
+   * Cache for signing keys, keyed by hash and certificate URL. Defaults to a per-process cache.
+   * Only keys that verified a signature are stored; the cache is trimmed to 16 entries and entries expire after a day.
+   */
+  certificateCache?: Map<string, SnsCertificateCacheEntry>;
+}
+
+export interface SnsCertificateCacheEntry {
+  key: CryptoKey;
+  expiresAt: number;
 }
 
 export interface SesS3Location {
@@ -69,7 +77,11 @@ export interface SesInboundS3Options extends InboundFetchOptions {
   endpoint?: string;
 }
 
-const defaultCertificateCache = new Map<string, CryptoKey>();
+const defaultCertificateCache = new Map<string, SnsCertificateCacheEntry>();
+
+const CERTIFICATE_CACHE_LIMIT = 16;
+
+const CERTIFICATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Parse an SNS HTTP delivery body. */
 export function parseSnsMessage(body: string | Uint8Array): SnsMessage {
@@ -122,6 +134,22 @@ export function isTrustedSnsUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Parse a signing certificate URL, accepting only the exact shape SNS uses:
+ * `https://sns.<region>.amazonaws.com[.cn]/SimpleNotificationService-<hex>.pem` with no port, userinfo, query, or fragment.
+ * Rejecting variants keeps attacker-chosen spellings of one URL from becoming separate cache entries.
+ */
+function signingCertUrl(value: string): URL | undefined {
+  if (!isTrustedSnsUrl(value)) return undefined;
+
+  const url = new URL(value);
+
+  // Requiring the serialized form to round-trip rejects `:443`, `#frag`, `?q`, mixed-case hosts, and dot segments.
+  if (url.href !== value || url.search !== "" || url.hash !== "") return undefined;
+
+  return /^\/SimpleNotificationService-[0-9a-f]+\.pem$/.test(url.pathname) ? url : undefined;
 }
 
 function canonicalString(message: SnsMessage): string {
@@ -198,27 +226,46 @@ export function certificatePublicKey(pem: string): Uint8Array<ArrayBuffer> {
   return der.slice(element.start, element.end);
 }
 
-async function signingKey(message: SnsMessage, options: SnsVerificationOptions): Promise<CryptoKey> {
-  const cache = options.certificateCache ?? defaultCertificateCache;
-  const hash = message.SignatureVersion === "1" ? "SHA-1" : "SHA-256";
-  const cacheKey = `${hash} ${message.SigningCertURL}`;
-  const cached = cache.get(cacheKey);
+async function fetchSigningKey(url: URL, hash: string, options: SnsVerificationOptions): Promise<CryptoKey> {
+  const response = await providerFetch(provider, url.href, { fetch: options.fetch, signal: options.signal });
 
-  if (cached) return cached;
-
-  const response = await providerFetch(provider, message.SigningCertURL, { fetch: options.fetch, signal: options.signal });
-
-  const key = await crypto.subtle.importKey(
+  return crypto.subtle.importKey(
     "spki",
     certificatePublicKey(await response.text()),
     { name: "RSASSA-PKCS1-v1_5", hash },
     false,
     ["verify"],
   );
+}
 
-  cache.set(cacheKey, key);
+function cachedSigningKey(
+  cache: Map<string, SnsCertificateCacheEntry>,
+  cacheKey: string,
+  now: number,
+): CryptoKey | undefined {
+  const entry = cache.get(cacheKey);
 
-  return key;
+  if (!entry) return undefined;
+
+  // Re-insert so Map order tracks recency for eviction.
+  cache.delete(cacheKey);
+
+  if (entry.expiresAt <= now) return undefined;
+
+  cache.set(cacheKey, entry);
+
+  return entry.key;
+}
+
+function cacheSigningKey(cache: Map<string, SnsCertificateCacheEntry>, cacheKey: string, key: CryptoKey, now: number): void {
+  cache.delete(cacheKey);
+  cache.set(cacheKey, { key, expiresAt: now + CERTIFICATE_CACHE_TTL_MS });
+
+  for (const oldest of cache.keys()) {
+    if (cache.size <= CERTIFICATE_CACHE_LIMIT) break;
+
+    cache.delete(oldest);
+  }
 }
 
 /**
@@ -229,9 +276,9 @@ export async function verifySnsMessage(
   message: SnsMessage,
   options: SnsVerificationOptions = {},
 ): Promise<InboundVerification> {
-  if (!isTrustedSnsUrl(message.SigningCertURL) || !new URL(message.SigningCertURL).pathname.endsWith('.pem')) {
-    return rejected("signature_invalid");
-  }
+  const certUrl = signingCertUrl(message.SigningCertURL);
+
+  if (!certUrl) return rejected("signature_invalid");
 
   if (options.topicArn !== undefined) {
     const allowed = Array.isArray(options.topicArn) ? options.topicArn : [options.topicArn];
@@ -256,10 +303,14 @@ export async function verifySnsMessage(
     return rejected("signature_invalid");
   }
 
+  const cache = options.certificateCache ?? defaultCertificateCache;
+  const hash = message.SignatureVersion === "1" ? "SHA-1" : "SHA-256";
+  const cacheKey = `${hash} ${certUrl.href}`;
+  const cached = cachedSigningKey(cache, cacheKey, now);
   let key: CryptoKey;
 
   try {
-    key = await signingKey(message, options);
+    key = cached ?? await fetchSigningKey(certUrl, hash, options);
   } catch (error) {
     if (error instanceof InboundError) throw error;
 
@@ -268,7 +319,11 @@ export async function verifySnsMessage(
 
   const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, utf8Bytes(canonicalString(message)));
 
-  return valid ? verified : rejected("signature_invalid");
+  if (!valid) return rejected("signature_invalid");
+
+  if (!cached) cacheSigningKey(cache, cacheKey, key, now);
+
+  return verified;
 }
 
 /** Confirm an SNS subscription by visiting its trusted SubscribeURL. */

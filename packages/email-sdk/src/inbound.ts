@@ -137,6 +137,7 @@ export type {
   SesInboundS3Options,
   SesReceivedNotification,
   SesS3Location,
+  SnsCertificateCacheEntry,
   SnsMessage,
   SnsVerificationOptions,
 } from "./inbound/ses.js";
