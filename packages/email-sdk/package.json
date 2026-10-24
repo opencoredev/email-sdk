@@ -226,6 +226,12 @@
       "require": "./dist/inbound.cjs",
       "default": "./dist/inbound.js"
     },
+    "./workflows": {
+      "types": "./dist/workflows.d.ts",
+      "import": "./dist/workflows.js",
+      "require": "./dist/workflows.cjs",
+      "default": "./dist/workflows.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js",
