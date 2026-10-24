@@ -414,6 +414,8 @@ describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
   });
 
   const words: [label: string, input: string, expected: string][] = [
+    ["UTF-8 character split across B words", "=?UTF-8?B?ww==?= =?UTF-8?B?qQ==?=", "é"],
+    ["UTF-8 character split across Q words", "=?UTF-8?Q?=C3?= =?UTF-8?Q?=A9?=", "é"],
     ["adjacent words in different charsets", "=?ISO-8859-1?Q?=E9?= =?UTF-8?Q?=C3=A9?=", "éé"],
     ["words separated by a folded tab", "=?UTF-8?Q?a?=\t=?UTF-8?Q?b?=", "ab"],
     ["text between words is kept", "=?UTF-8?Q?a?= and =?UTF-8?Q?b?=", "a and b"],

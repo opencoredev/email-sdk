@@ -140,20 +140,56 @@ function parseHeaderBlock(block: string, decodeValue: (value: string) => string)
  */
 export function decodeEncodedWords(value: string): string {
   const word = /=\?([!->@-~]+)\?([BbQq])\?([!->@-~]*)\?=/g;
+  const run = /(?:=\?[!->@-~]+\?[BbQq]\?[!->@-~]*\?=)+/g;
 
   return value
     .replace(/(=\?[!->@-~]+\?[BbQq]\?[!->@-~]*\?=)\s+(?==\?[!->@-~]+\?[BbQq]\?[!->@-~]*\?=)/g, "$1")
-    .replace(word, (whole, charset: string, encoding: string, text: string) => {
-      try {
-        const bytes = encoding.toUpperCase() === "B"
-          ? decodeBase64(text)
-          : binaryBytes(decodeQuotedPrintableText(text.replaceAll("_", " ")));
+    .replace(run, words => {
+      // Adjacent words in one charset decode as one byte string: mailers split a multi-byte
+      // character across words even though RFC 2047 says not to.
+      let decoded = "";
+      let charset: string | undefined;
+      let bytes: number[] = [];
 
-        return decodeCharset(bytes, charset.split("*")[0]);
-      } catch {
-        return whole;
+      const flush = () => {
+        if (charset !== undefined) decoded += decodeCharset(Uint8Array.from(bytes), charset);
+
+        charset = undefined;
+        bytes = [];
+      };
+
+      for (const [whole, label = "", encoding = "", text = ""] of words.matchAll(word)) {
+        const wordCharset = label.split("*")[0]!.toLowerCase();
+        const wordBytes = encodedWordBytes(encoding, text);
+
+        if (wordBytes === undefined) {
+          flush();
+          decoded += whole;
+          continue;
+        }
+
+        if (wordCharset !== charset) flush();
+
+        charset = wordCharset;
+
+        for (const byte of wordBytes) bytes.push(byte);
       }
+
+      flush();
+
+      return decoded;
     });
+}
+
+/** The bytes of one encoded word's text, or `undefined` when it is not valid B or Q text. */
+function encodedWordBytes(encoding: string, text: string): Uint8Array | undefined {
+  try {
+    return encoding.toUpperCase() === "B"
+      ? decodeBase64(text)
+      : binaryBytes(decodeQuotedPrintableText(text.replaceAll("_", " ")));
+  } catch {
+    return undefined;
+  }
 }
 
 function decodeQuotedPrintableText(value: string): string {
