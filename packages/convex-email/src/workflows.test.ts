@@ -102,6 +102,11 @@ const appWorkflows = {
       return null;
     },
   }),
+  resumeDue: actionGeneric({
+    args: { limit: v.number() },
+    returns: v.number(),
+    handler: async (ctx, args) => await engineFor(ctx).resumeDue(args.limit),
+  }),
   sendEvent: actionGeneric({
     args: { name: v.string(), subject: v.string() },
     returns: v.array(v.string()),
@@ -135,6 +140,7 @@ const app = {
   ),
   resume: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>("workflows:resume"),
   sendEvent: makeFunctionReference<"action", { name: string; subject: string }, string[]>("workflows:sendEvent"),
+  resumeDue: makeFunctionReference<"action", { limit: number }, number>("workflows:resumeDue"),
   startParked: makeFunctionReference<"action", { count: number; subject: string }, null>("workflows:startParked"),
   get: makeFunctionReference<"action", { runId: string }, string | null>("workflows:get"),
   emailStatus: makeFunctionReference<
@@ -225,8 +231,17 @@ describe("convex workflow store functions", () => {
       run: { ...record, runId: "done", status: "completed", active: false, dueAt: undefined },
     });
 
-    expect(await t.query(api.workflows.listDueRuns, { now: 100, limit: 10 })).toEqual(["run-1"]);
-    expect((await t.query(api.workflows.listDueRuns, { now: 1_000, limit: 10 })).sort()).toEqual(["later", "run-1"]);
+    const firstPage = { numItems: 10, cursor: null };
+
+    expect((await t.query(api.workflows.listDueRuns, { now: 100, paginationOpts: firstPage })).page).toEqual(["run-1"]);
+    expect((await t.query(api.workflows.listDueRuns, { now: 1_000, paginationOpts: firstPage })).page).toEqual([
+      "run-1",
+      "later",
+    ]);
+    expect(await t.query(api.workflows.listDueRuns, { now: 1_000, paginationOpts: { numItems: 0, cursor: null } })).toMatchObject({
+      page: [],
+      isDone: true,
+    });
 
     const active = await t.query(api.workflows.listActiveRunsBySubject, {
       subject: "ada@example.test",
@@ -235,6 +250,31 @@ describe("convex workflow store functions", () => {
 
     expect(active.isDone).toBe(true);
     expect(active.page.map((run) => run.runId).sort()).toEqual(["event-wait", "later", "run-1"]);
+  });
+
+  test("listDueRuns pages through every due run, oldest first", async () => {
+    const t = convexTest(schema, modules);
+
+    for (let index = 0; index < 5; index += 1) {
+      await t.mutation(api.workflows.createRun, { run: { ...record, runId: `run-${index}`, dueAt: 100 - index } });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let pages = 1; pages <= 5; pages += 1) {
+      const result: { page: string[]; isDone: boolean; continueCursor: string } = await t.query(
+        api.workflows.listDueRuns,
+        { now: 1_000, paginationOpts: { numItems: 2, cursor } },
+      );
+
+      seen.push(...result.page);
+
+      if (result.isDone) break;
+      cursor = result.continueCursor;
+    }
+
+    expect(seen).toEqual(["run-4", "run-3", "run-2", "run-1", "run-0"]);
   });
 
   test("listActiveRunsBySubject pages through every active run", async () => {
@@ -299,6 +339,20 @@ describe("convex workflow engine end to end", () => {
       ["Welcome", await workflowIdempotencyKey("run-1", "welcome")],
       ["Thanks for activating", await workflowIdempotencyKey("run-1", "follow-up")],
     ]);
+  });
+
+  test("resumeDue(0) executes no due run; a positive limit does", async () => {
+    clock.at = Date.parse("2026-01-01T00:00:00Z");
+
+    const t = createApp();
+
+    await t.action(app.start, { runId: "run-4", email: "ada@example.test" });
+    clock.at += 2 * 86_400_000;
+
+    expect(await t.action(app.resumeDue, { limit: 0 })).toBe(0);
+    expect((await readRun(t, "run-4")).wait).toMatchObject({ kind: "sleep" });
+    expect(await t.action(app.resumeDue, { limit: 1 })).toBe(1);
+    expect((await readRun(t, "run-4")).wait).toMatchObject({ kind: "event" });
   });
 
   test("an early wake schedules a new resume for the run's persisted due time", async () => {
@@ -427,3 +481,4 @@ describe("toConvexSendArgs", () => {
     ).toThrow("string content");
   });
 });
+

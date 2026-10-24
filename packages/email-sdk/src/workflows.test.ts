@@ -18,6 +18,7 @@ import {
 } from "./workflows.js";
 import type {
   AnyWorkflowDefinition,
+  WorkflowContext,
   WorkflowEngineOptions,
   WorkflowHooks,
   WorkflowRun,
@@ -1241,5 +1242,295 @@ describe("workflows: step and event semantics", () => {
     await engine.resume("run-1");
 
     expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["received"]);
+  });
+});
+
+describe("workflows: review regressions", () => {
+  test("editing a step result or the input does not rewrite the journal", async () => {
+    const counted = defineWorkflow({
+      name: "counted",
+      run: async (ctx, input: { tags: string[] }) => {
+        const counter = await ctx.step("counter", () => ({ n: 0 }));
+
+        counter.n += 1;
+        input.tags.push("seen");
+        await ctx.sleep("wait", "1d");
+
+        return { n: counter.n, tags: input.tags.length };
+      },
+    });
+
+    const { engine, scheduler } = setup([counted]);
+
+    await engine.start(counted, { tags: [] }, { id: "run-1" });
+    await scheduler.advance("1d", engine);
+
+    const run = await engine.get("run-1");
+
+    expect(run?.journal.counter).toMatchObject({ result: { n: 0 } });
+    expect(run?.input).toEqual({ tags: [] });
+    expect(run?.output).toEqual({ n: 1, tags: 1 });
+  });
+
+  test("a definition that throws synchronously fails the run", async () => {
+    const sync = defineWorkflow({
+      name: "sync",
+      run: () => {
+        throw new Error("sync bug");
+      },
+    });
+
+    const { engine } = setup([sync]);
+
+    const run = await engine.start(sync, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: "sync bug" });
+    expect(run.lease).toBeUndefined();
+  });
+
+  test("a temporary provider failure through a real client is retried, a rejection is not", async () => {
+    const sent: EmailMessage[] = [];
+    let failures = [new EmailAdapterError("503", { adapter: "flaky", status: 503, retryable: true })];
+
+    const flakyAdapter = {
+      ...memoryAdapter("flaky"),
+      send: (message: EmailMessage) => {
+        const failure = failures.shift();
+
+        if (failure) throw failure;
+        sent.push(message);
+
+        return { adapter: "flaky", id: `msg_${sent.length}` };
+      },
+    };
+
+    const email = createEmailClient({ adapters: [flakyAdapter], telemetry: false, retry: { maxAttempts: 1 } });
+
+    const once = defineWorkflow({
+      name: "once",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"));
+      },
+    });
+
+    const { engine, scheduler } = setup([once], { email });
+
+    expect((await engine.start(once, ada, { id: "run-1" })).wait).toMatchObject({ kind: "retry", step: "welcome" });
+    await scheduler.advance("1m", engine);
+    expect((await engine.get("run-1"))?.status).toBe("completed");
+    expect(sent).toHaveLength(1);
+
+    failures = [new EmailAdapterError("400", { adapter: "flaky", status: 400, retryable: false })];
+    expect((await engine.start(once, ada, { id: "run-2" })).status).toBe("failed");
+  });
+
+  test("an Email SDK error from another bundle is classified by its shape", async () => {
+    // A CommonJS consumer gets the root entry's errors from a different copy of the class.
+    class ForeignAdapterError extends Error {
+      readonly code = "adapter_error";
+      readonly retryable = false;
+
+      constructor() {
+        super("rejected");
+        this.name = "EmailAdapterError";
+      }
+    }
+
+    class ForeignRouteError extends Error {
+      readonly code = "route_error";
+      readonly retryable = false;
+      readonly failures = [{ code: "adapter_error", retryable: true }];
+    }
+
+    const once = defineWorkflow({
+      name: "once",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"));
+      },
+    });
+
+    const { engine, sender } = setup([once]);
+
+    sender.failNext(new ForeignAdapterError());
+    expect((await engine.start(once, ada, { id: "run-1" })).status).toBe("failed");
+
+    sender.failNext(new ForeignRouteError("all failed"));
+    expect((await engine.start(once, ada, { id: "run-2" })).status).toBe("waiting");
+  });
+
+  test("invalid durations, dates, retry policies, and values fail the run instead of stranding it", async () => {
+    const failed: string[] = [];
+
+    const bad = {
+      sleep: async (ctx: WorkflowContext) => await ctx.sleep("nap", -1),
+      timeout: async (ctx: WorkflowContext) => {
+        await ctx.waitForEvent("go", { timeout: -1 });
+      },
+      date: async (ctx: WorkflowContext) => await ctx.sleepUntil("later", new Date("not-a-date")),
+      retry: async (ctx: WorkflowContext) => {
+        await ctx.step("work", () => 1, { retry: { maxAttempts: 0 } });
+      },
+      infinity: async (ctx: WorkflowContext) => {
+        await ctx.step("ratio", () => 1 / 0);
+      },
+      output: async () => Number.NaN,
+    };
+
+    const definitions = Object.entries(bad).map(([name, run]) => defineWorkflow({ name, run }));
+    const { engine, clock } = setup(definitions, { hooks: { onRunFailed: ({ run }) => void failed.push(run.workflow) } });
+
+    for (const definition of definitions) {
+      const run = await engine.start(definition, null, { id: definition.name });
+
+      expect({ name: definition.name, status: run.status, lease: run.lease }).toEqual({
+        name: definition.name,
+        status: "failed",
+        lease: undefined,
+      });
+    }
+
+    clock.advance("1h");
+    expect(await engine.resumeDue()).toBe(0);
+    expect(failed.sort()).toEqual(Object.keys(bad).sort());
+  });
+
+  test("a duplicate start returns the existing run without validating its input", async () => {
+    const parsed = defineWorkflow({
+      name: "parsed",
+      input: z.object({ email: z.email() }),
+      run: async (ctx, input) => {
+        await ctx.sleep("wait", "1d");
+
+        return input.email;
+      },
+    });
+
+    const { engine } = setup([parsed]);
+
+    const first = await engine.start(parsed, { email: "ada@example.test" }, { id: "onboarding:u1" });
+
+    expect(await engine.start(parsed, { email: "not-an-email" }, { id: "onboarding:u1" })).toEqual(first);
+    await expect(engine.start(parsed, { email: "not-an-email" })).rejects.toThrow("Invalid input");
+  });
+
+  test("resumeDue(0) executes nothing", async () => {
+    const clock = createManualClock(start);
+    const engine = createWorkflowEngine({ email: recordingSender(), store: createMemoryWorkflowStore(), clock, workflows: [linear] });
+
+    await engine.start(linear, ada, { id: "run-1" });
+    clock.advance("2d");
+    expect(await engine.resumeDue(0)).toBe(0);
+    expect((await engine.get("run-1"))?.status).toBe("waiting");
+  });
+
+  test("runs of an unregistered version do not starve later due runs", async () => {
+    const v1 = defineWorkflow({ name: "drip", run: async (ctx) => await ctx.sleep("wait", "1d") });
+    const v2 = defineWorkflow({ name: "drip", version: 2, run: async (ctx) => await ctx.sleep("wait", "1d") });
+    const clock = createManualClock(start);
+    const store = createMemoryWorkflowStore();
+    const old = createWorkflowEngine({ email: recordingSender(), store, clock, workflows: [v1] });
+
+    for (let index = 0; index < 5; index += 1) await old.start(v1, null, { id: `old-${index}` });
+
+    const current = createWorkflowEngine({ email: recordingSender(), store, clock, workflows: [v2] });
+
+    await current.start(v2, null, { id: "new" });
+    clock.advance("1d");
+
+    await expect(current.resumeDue(2)).rejects.toThrow("5 workflow run(s) failed to resume");
+    expect((await current.get("new"))?.status).toBe("completed");
+    expect((await current.get("old-0"))?.status).toBe("waiting");
+  });
+
+  test("concurrent deliveries to one run are all kept", async () => {
+    const { engine } = setup([activation]);
+
+    await engine.start(activation, ada, { id: "run-1" });
+    await Promise.all(Array.from({ length: 8 }, () => engine.sendEvent({ name: "ping", runId: "run-1" })));
+
+    expect((await engine.get("run-1"))?.inbox).toHaveLength(8);
+  });
+
+  test("a write that keeps conflicting throws instead of reporting the run as unreachable", async () => {
+    const base = createMemoryWorkflowStore();
+    const { engine } = setup([activation], { store: base });
+
+    await engine.start(activation, ada, { id: "run-1" });
+
+    const busy = createWorkflowEngine({
+      email: recordingSender(),
+      store: { ...base, save: async () => false },
+      clock: createManualClock(start),
+      workflows: [activation],
+    });
+
+    await expect(busy.sendEvent({ name: "ping", runId: "run-1" })).rejects.toMatchObject({
+      errors: [expect.objectContaining({ code: "write_conflict" })],
+    });
+    await expect(busy.cancel("run-1")).rejects.toThrow("write conflict");
+  });
+
+  test("one run's slow follow-up does not delay delivery to the subject's other runs", async () => {
+    const slow = gate();
+
+    const follow = defineWorkflow({
+      name: "follow",
+      run: async (ctx, input: { slow: boolean }) => {
+        const activated = await ctx.waitForEvent("activated", { timeout: "10ms" });
+
+        if (input.slow) await ctx.step("slow", async () => await slow.pass());
+
+        return activated.status;
+      },
+    });
+
+    const { engine, clock } = setup([follow]);
+
+    await engine.start(follow, { slow: true }, { id: "a", subject: "s" });
+    await engine.start(follow, { slow: false }, { id: "b", subject: "s" });
+
+    const delivery = engine.sendEvent({ name: "activated", subject: "s" });
+
+    await slow.reached;
+    clock.advance("1h");
+
+    // Run b finishes while run a is still blocked in its step.
+    for (let tick = 0; tick < 100 && (await engine.get("b"))?.status !== "completed"; tick += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect((await engine.get("b"))?.output).toBe("received");
+    expect((await engine.get("a"))?.status).toBe("running");
+    slow.open();
+    expect(await delivery).toEqual(["a", "b"]);
+    expect((await engine.get("a"))?.output).toBe("received");
+  });
+
+  test("a finished execution does not keep its suspended workflow call alive", async () => {
+    const refs: WeakRef<object>[] = [];
+
+    const held = defineWorkflow({
+      name: "held",
+      run: async (ctx) => {
+        const local = { big: Array.from({ length: 1_000 }, () => 0) };
+
+        refs.push(new WeakRef(local));
+        await ctx.sleep("wait", "1d");
+        local.big.length = 0;
+      },
+    });
+
+    const { engine } = setup([held]);
+
+    for (let index = 0; index < 20; index += 1) await engine.start(held, null, { id: `run-${index}` });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    Bun.gc(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    Bun.gc(true);
+
+    // Before the fix all 20 stayed reachable. JSC scans the stack conservatively, so allow a few.
+    expect(refs.filter((ref) => ref.deref() !== undefined).length).toBeLessThan(5);
   });
 });

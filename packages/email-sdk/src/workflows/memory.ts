@@ -58,16 +58,26 @@ export function createMemoryWorkflowStore(): MemoryWorkflowStore {
         run.subject === subject && !isTerminalRun(run) ? [copyRun(run)] : [],
       );
     },
-    async listDue(now, limit) {
-      const due: string[] = [];
+    async listDue(now, limit, cursor) {
+      // The cursor is `<dueAt>:<id>` of the last id returned, ordered by (dueAt, id), so a page
+      // boundary stays put while runs that were just resumed move their dueAt into the future.
+      const split = cursor === undefined ? -1 : cursor.indexOf(":");
+      const afterDue = cursor === undefined ? undefined : Number(cursor.slice(0, split));
+      const afterId = cursor?.slice(split + 1) ?? "";
 
-      for (const run of runs.values()) {
-        if (due.length >= limit) break;
+      const isAfterCursor = (run: { dueAt: number; id: string }) =>
+        afterDue === undefined || run.dueAt > afterDue || (run.dueAt === afterDue && run.id > afterId);
 
-        if (run.dueAt !== undefined && run.dueAt <= now) due.push(run.id);
-      }
+      const due = [...runs.values()]
+        .flatMap((run) => (run.dueAt !== undefined && run.dueAt <= now ? [{ dueAt: run.dueAt, id: run.id }] : []))
+        .filter(isAfterCursor)
+        .sort((a, b) => a.dueAt - b.dueAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-      return due;
+      const page = due.slice(0, Math.max(0, limit));
+      const last = page.at(-1);
+      const ids = page.map((run) => run.id);
+
+      return due.length > page.length && last !== undefined ? { ids, cursor: `${last.dueAt}:${last.id}` } : { ids };
     },
     runs() {
       return [...runs.values()].map(copyRun);

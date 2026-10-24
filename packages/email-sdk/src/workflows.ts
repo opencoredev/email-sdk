@@ -30,6 +30,7 @@ export type {
   WorkflowClock,
   WorkflowContext,
   WorkflowDefinition,
+  WorkflowDuePage,
   WorkflowDuration,
   WorkflowEmailSender,
   WorkflowEngine,

@@ -1,5 +1,13 @@
-import { EmailSdkError } from "../errors.js";
-import { isStringMember } from "../internal/decode.js";
+import {
+  causeArray,
+  causeBoolean,
+  causeString,
+  isBoolean,
+  isNumber,
+  isObjectLike,
+  isString,
+  isStringMember,
+} from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
@@ -11,6 +19,7 @@ import type {
   WorkflowDuration,
   WorkflowEngine,
   WorkflowEngineOptions,
+  WorkflowEventInput,
   WorkflowEventResult,
   WorkflowHooks,
   WorkflowInboxEvent,
@@ -29,9 +38,26 @@ const defaultLease: WorkflowDuration = "5m";
 
 const inboxLimit = 50;
 
-const commitAttempts = 5;
+// Every conflict means another writer saved, so a write among N concurrent writers succeeds within
+// N attempts. Past this bound the store is either overloaded or broken, and the caller gets an error.
+const commitAttempts = 25;
 
-const neverSettles = new Promise<never>(() => {});
+// EmailErrorCode values. Errors are recognized by shape, because a CommonJS build bundles each
+// package entry separately and the root entry's error classes then differ from this entry's.
+const emailErrorCodes = new Set([
+  "validation_error",
+  "adapter_not_found",
+  "adapter_error",
+  "route_error",
+  "all_recipients_failed",
+  "middleware_error",
+  "aborted",
+]);
+
+const workflowErrorNames = new Set(["WorkflowError", "WorkflowNonRetryableError"]);
+
+// Mistakes in how a definition calls `ctx`, which fail the run instead of reaching the caller.
+const definitionErrorCodes = new Set(["invalid_definition", "invalid_duration", "invalid_value"]);
 
 type ResolvedRetry = { maxAttempts: number; backoffMs: number };
 
@@ -63,12 +89,76 @@ function resolveRetry(...policies: (WorkflowRetryPolicy | undefined)[]): Resolve
   return { maxAttempts, backoffMs };
 }
 
+/**
+ * Whether an Email SDK error allows a retry, or undefined for other errors. A route or
+ * all-recipients error wraps the adapter failures, and is retryable when any of them is.
+ */
+function sdkRetryable(cause: unknown): boolean | undefined {
+  const code = causeString(cause, "code");
+  const retryable = causeBoolean(cause, "retryable");
+
+  if (code === undefined || !emailErrorCodes.has(code) || retryable === undefined) return undefined;
+
+  if (code !== "route_error" && code !== "all_recipients_failed") return retryable;
+
+  return retryable || causeArray(cause, "failures").some((failure) => causeBoolean(failure, "retryable") === true);
+}
+
 function isPermanentFailure(cause: unknown): boolean {
-  return (
-    cause instanceof WorkflowNonRetryableError ||
-    cause instanceof WorkflowError ||
-    (cause instanceof EmailSdkError && !cause.retryable)
-  );
+  if (cause instanceof WorkflowNonRetryableError || cause instanceof WorkflowError) return true;
+
+  const name = causeString(cause, "name");
+
+  if (name !== undefined && workflowErrorNames.has(name)) return true;
+
+  return sdkRetryable(cause) === false;
+}
+
+/** A WorkflowError caused by the definition's own `ctx` call, such as a negative duration. */
+function isDefinitionError(cause: unknown): cause is WorkflowError {
+  return cause instanceof WorkflowError && definitionErrorCodes.has(cause.code);
+}
+
+type WorkflowJsonObject = { readonly [key: string]: WorkflowJsonValue | undefined };
+
+function isJsonArray(value: WorkflowJsonValue): value is readonly WorkflowJsonValue[] {
+  return Array.isArray(value);
+}
+
+/** Plain objects only: a Date, Map, class instance, or function has another prototype. */
+function isPlainObject(value: WorkflowJsonObject): boolean {
+  const prototype: object | null = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * True when `value` survives a JSON round trip unchanged, apart from `undefined` object fields being
+ * dropped. The static type already says JSON; this catches what it can't, such as NaN and Infinity
+ * (saved as null) or a Date from untyped code.
+ */
+function isJsonValue(value: WorkflowJsonValue): boolean {
+  if (value === null || isString(value) || isBoolean(value)) return true;
+
+  if (isNumber(value)) return Number.isFinite(value);
+
+  if (isJsonArray(value)) return value.every((item) => item !== undefined && isJsonValue(item));
+
+  if (!isObjectLike(value) || !isPlainObject(value)) return false;
+
+  return Object.values(value).every((field) => field === undefined || isJsonValue(field));
+}
+
+/** Throws `invalid_value` unless `value` is undefined (a `void` result) or JSON. */
+function assertJson(value: WorkflowJsonValue | void, what: string) {
+  if (value !== undefined && !isJsonValue(value)) {
+    throw new WorkflowError("invalid_value", `${what} must be JSON: finite numbers, strings, booleans, null, arrays, and plain objects.`);
+  }
+}
+
+/** A copy of a saved value, so workflow code that edits what it was given can't change the journal. */
+function detached<T>(value: T): T {
+  return value === undefined ? value : structuredClone(value);
 }
 
 function addressOf(address: EmailAddress): string {
@@ -209,7 +299,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * therefore decide from the run they are given. With an `owner`, every save renews that
    * execution's lease while the run is running and releases it once the run waits or ends, and the
    * commit gives up when the fresh run is held by someone else. Returns undefined when nothing was
-   * saved: the transform declined, the run disappeared, became terminal, or changed owner.
+   * saved: the transform declined, the run disappeared, became terminal, or changed owner. Throws
+   * `write_conflict` when every attempt lost to a concurrent write.
    */
   async function commit(
     base: WorkflowRun,
@@ -246,7 +337,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       current = fresh;
     }
 
-    return undefined;
+    throw new WorkflowError(
+      "write_conflict",
+      `Run ${base.id} could not be saved: write conflict after ${commitAttempts} attempts. Retry the call.`,
+    );
   }
 
   /** Takes the run for one execution. Returns undefined when it is not runnable or another worker won. */
@@ -300,6 +394,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       signalSuspended = () => resolve({ kind: "suspended" });
     });
 
+    // What suspended `ctx` calls await. It belongs to this execution, so once the execution is
+    // over nothing references the abandoned workflow call and the garbage collector can free it.
+    const neverSettles = new Promise<never>(() => {});
     const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
 
@@ -370,14 +467,27 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       seen.add(name);
 
-      // Step failures are handled inside `body`. Anything that still escapes is a store, scheduler,
-      // or suppression-check failure: the run's state is unknown, so the execution stops and the
-      // error reaches the engine's caller instead of the definition.
+      // Step failures are handled inside `body`. A definition error, such as a negative duration,
+      // fails the run: replaying it would only throw again. Anything else that escapes is a store,
+      // scheduler, or suppression-check failure: the run's state is unknown, so the execution stops
+      // and the error reaches the engine's caller instead of the definition.
       const result = queue.then(() =>
         stopped
           ? neverSettles
-          : body().catch((cause: unknown) => {
-              infrastructureError = toError(cause);
+          : body().catch(async (cause: unknown) => {
+              let escaped = cause;
+
+              if (isDefinitionError(cause)) {
+                try {
+                  await failRun(cause, name);
+
+                  return suspend();
+                } catch (failure) {
+                  escaped = failure;
+                }
+              }
+
+              infrastructureError = toError(escaped);
 
               return suspend();
             }),
@@ -523,7 +633,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (record) {
             // SAFETY: this journal entry was written from the WorkflowSendRecord this same step
             // returned on an earlier execution; send steps only ever journal that record.
-            return record.result as WorkflowSendRecord;
+            return detached(record.result as WorkflowSendRecord);
           }
 
           if (options.isSuppressed) {
@@ -551,17 +661,26 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           });
 
           // SAFETY: sideEffect returns exactly the WorkflowSendRecord the effect above produced.
-          return sent as WorkflowSendRecord;
+          return detached(sent as WorkflowSendRecord);
         });
       },
       step(name, fn, stepOptions) {
         return operation(name, async () => {
           const record = completedRecord(name);
-          const result = record ? record.result : await sideEffect(name, "step", stepOptions?.retry, async () => await fn());
+
+          const result = record
+            ? record.result
+            : await sideEffect(name, "step", stepOptions?.retry, async () => {
+                const value = await fn();
+
+                assertJson(value, `The result of step "${name}"`);
+
+                return value;
+              });
 
           // SAFETY: the journaled value is what `fn` returned for this step name, persisted as JSON;
           // TResult is constrained to JSON values, so the round trip preserves its type.
-          return result as Awaited<ReturnType<typeof fn>>;
+          return detached(result as Awaited<ReturnType<typeof fn>>);
         });
       },
       sleep(name, duration: WorkflowDuration) {
@@ -575,7 +694,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return operation(name, async () => {
           if (completedRecord(name)) return;
 
-          await sleepUntil(name, Number(at));
+          const until = Number(at);
+
+          if (!Number.isFinite(until)) {
+            throw new WorkflowError("invalid_duration", `sleepUntil "${name}" needs a valid Date or epoch milliseconds.`);
+          }
+
+          await sleepUntil(name, until);
         });
       },
       waitForEvent(name, waitOptions) {
@@ -585,7 +710,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (record) {
             // SAFETY: event steps journal a WorkflowEventResult. Event payloads are not parsed: the
             // caller's type argument states the payload contract, as it does for sendEvent.
-            return record.result as WorkflowEventResult<never>;
+            return detached(record.result as WorkflowEventResult<never>);
           }
 
           const event = waitOptions?.event ?? name;
@@ -632,7 +757,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           if (outcome) {
             // SAFETY: see the replay branch above; the payload type is the caller's declared contract.
-            return outcome as WorkflowEventResult<never>;
+            return detached(outcome as WorkflowEventResult<never>);
           }
 
           await scheduleWake(current);
@@ -642,7 +767,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       },
     };
 
-    const finished = definition.run(ctx, loaded.input).then(
+    // Starting inside `then` turns a synchronous throw from `run` into a failed outcome.
+    const finished = Promise.resolve()
+      .then(async () => await definition.run(ctx, detached(loaded.input)))
+      .then(
       (output): ExecutionOutcome => ({ kind: "completed", output }),
       (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
     );
@@ -658,14 +786,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     stopped = true;
 
+    const output = outcome.kind === "completed" ? jsonResult(outcome.output) : undefined;
+
     if (outcome.kind === "failed") {
       await failRun(outcome.error);
-    } else {
-      const output = jsonResult(outcome.output);
-
-      if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
-        await invokeHook("onRunComplete", { run: current });
-      }
+    } else if (!isJsonValue(output ?? null)) {
+      await failRun(new WorkflowError("invalid_value", "The workflow output must be JSON."));
+    } else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
+      await invokeHook("onRunComplete", { run: current });
     }
 
     if (!lost) await scheduler?.cancel(loaded.id);
@@ -697,26 +825,112 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return { run: await execute(claimed.run, claimed.owner), executed: true };
   }
 
-  async function deliver(runId: string, name: string, payload: WorkflowJsonValue | undefined) {
+  /**
+   * Saves one event to one run. Returns whether the run was reached and whether the event matches
+   * the run's current wait, so the caller should resume it.
+   */
+  async function deliver(runId: string, event: WorkflowInboxEvent): Promise<{ reached: boolean; resume: boolean }> {
     const run = await store.get(runId);
 
-    if (!run || isTerminalRun(run)) return false;
+    if (!run || isTerminalRun(run)) return { reached: false, resume: false };
 
     const definition = definitionFor(run);
 
-    if (definition.cancelOn.includes(name)) return (await cancelRun(run, `event:${name}`)) !== undefined;
-
-    const event: WorkflowInboxEvent = payload === undefined ? { name, receivedAt: now() } : { name, payload, receivedAt: now() };
+    if (definition.cancelOn.includes(event.name)) {
+      return { reached: (await cancelRun(run, `event:${event.name}`)) !== undefined, resume: false };
+    }
 
     // Delivery only appends to the inbox. The run's wait, including its deadline, stays as it is:
     // the execution that consumes the event compares `receivedAt` with that deadline.
     const updated = await commit(run, (current) => ({ ...current, inbox: [...current.inbox, event].slice(-inboxLimit) }));
 
-    if (!updated) return false;
+    if (!updated) return { reached: false, resume: false };
 
-    if (updated.wait?.kind === "event" && updated.wait.event === name) await resumeRun(runId);
+    return { reached: true, resume: updated.wait?.kind === "event" && updated.wait.event === event.name };
+  }
 
-    return true;
+  /**
+   * Saves the event, with one receipt time, to every target before any of them runs, then resumes
+   * the runs it satisfies concurrently, so one run's slow step can't delay or expire another's wait.
+   */
+  async function sendEvent(input: WorkflowEventInput): Promise<string[]> {
+    assertJson(input.payload, `The payload of event "${input.name}"`);
+
+    const targets =
+      input.runId === undefined ? (await store.listActiveBySubject(input.subject)).map((run) => run.id) : [input.runId];
+
+    const receivedAt = now();
+
+    const event: WorkflowInboxEvent =
+      input.payload === undefined ? { name: input.name, receivedAt } : { name: input.name, payload: input.payload, receivedAt };
+
+    const reached: string[] = [];
+    const toResume: string[] = [];
+    const errors: Error[] = [];
+
+    for (const runId of targets) {
+      try {
+        const delivered = await deliver(runId, event);
+
+        if (delivered.reached) reached.push(runId);
+
+        if (delivered.resume) toResume.push(runId);
+      } catch (cause) {
+        errors.push(toError(cause));
+      }
+    }
+
+    const resumed = await Promise.allSettled(toResume.map(async (runId) => await resumeRun(runId)));
+
+    for (const result of resumed) {
+      if (result.status === "rejected") errors.push(toError(result.reason));
+    }
+
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `${errors.length} workflow run(s) failed to receive event "${input.name}".`);
+    }
+
+    return reached;
+  }
+
+  /**
+   * Resumes due runs page by page until `limit` of them were checked. Runs whose version this
+   * engine doesn't register are skipped without counting, so they can't hide later due runs.
+   */
+  async function resumeDue(limit: number): Promise<number> {
+    if (!(limit > 0)) return 0;
+
+    const at = now();
+    const errors: Error[] = [];
+    let checked = 0;
+    let resumed = 0;
+    let cursor: string | undefined;
+
+    do {
+      const page = await store.listDue(at, limit, cursor);
+
+      for (const id of page.ids) {
+        if (checked >= limit) break;
+
+        try {
+          const result = await resumeRun(id);
+
+          checked += 1;
+
+          if (result.executed) resumed += 1;
+        } catch (cause) {
+          if (!(cause instanceof WorkflowError && cause.code === "workflow_not_registered")) checked += 1;
+
+          errors.push(toError(cause));
+        }
+      }
+
+      cursor = page.cursor;
+    } while (cursor !== undefined && checked < limit);
+
+    if (errors.length > 0) throw new AggregateError(errors, `${errors.length} workflow run(s) failed to resume.`);
+
+    return resumed;
   }
 
   return {
@@ -729,6 +943,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           `The workflow passed to start is not the definition registered as ${definitionKey(workflow.name, workflow.version)}.`,
         );
       }
+
+      // A repeated start returns the existing run before looking at its input, which is never used.
+      // The create below still settles two concurrent first starts.
+      const existing = startOptions?.id === undefined ? undefined : await store.get(startOptions.id);
+
+      if (existing) return existing;
 
       let parsed: WorkflowJsonValue = input;
 
@@ -744,6 +964,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
         parsed = validation.value;
       }
+
+      assertJson(parsed, `The input of workflow ${workflow.name}`);
 
       const at = now();
       const owner = crypto.randomUUID();
@@ -777,37 +999,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return (await execute(run, owner)) ?? run;
     },
     resume: async (runId) => (await resumeRun(runId)).run,
-    async resumeDue(limit = 25) {
-      const ids = await store.listDue(now(), limit);
-      const errors: Error[] = [];
-      let resumed = 0;
-
-      for (const id of ids) {
-        try {
-          if ((await resumeRun(id)).executed) resumed += 1;
-        } catch (cause) {
-          errors.push(toError(cause));
-        }
-      }
-
-      if (errors.length > 0) throw new AggregateError(errors, `${errors.length} workflow run(s) failed to resume.`);
-
-      return resumed;
-    },
-    async sendEvent(event) {
-      const targets =
-        event.runId === undefined
-          ? (await store.listActiveBySubject(event.subject)).map((run) => run.id)
-          : [event.runId];
-
-      const reached: string[] = [];
-
-      for (const runId of targets) {
-        if (await deliver(runId, event.name, event.payload)) reached.push(runId);
-      }
-
-      return reached;
-    },
+    resumeDue: async (limit = 25) => await resumeDue(limit),
+    sendEvent,
     async cancel(runId, reason = "canceled") {
       const run = await store.get(runId);
 

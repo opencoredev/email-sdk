@@ -152,8 +152,13 @@ export function convexWorkflowStore(component: ConvexEmailComponentApi, ctx: Wor
         cursor = result.continueCursor;
       }
     },
-    async listDue(now, limit) {
-      return await ctx.runQuery(api.listDueRuns, { now, limit });
+    async listDue(now, limit, cursor) {
+      const result = await ctx.runQuery(api.listDueRuns, {
+        now,
+        paginationOpts: { numItems: limit, cursor: cursor ?? null },
+      });
+
+      return result.isDone ? { ids: result.page } : { ids: result.page, cursor: result.continueCursor };
     },
   };
 }

@@ -21,7 +21,7 @@ export const vGetWorkflowRunArgs = { runId: v.string() };
 
 export const vListActiveWorkflowRunsArgs = { subject: v.string(), paginationOpts: paginationOptsValidator };
 
-export const vListDueWorkflowRunsArgs = { now: v.number(), limit: v.number() };
+export const vListDueWorkflowRunsArgs = { now: v.number(), paginationOpts: paginationOptsValidator };
 
 export const vMaybeWorkflowRunRecord = v.union(vWorkflowRunRecord, v.null());
 
@@ -34,4 +34,9 @@ export const vWorkflowRunPage = v.object({
   continueCursor: v.string(),
 });
 
-export const vWorkflowRunIds = v.array(v.string());
+/** One page of due run ids, oldest due first; callers follow `continueCursor` until `isDone`. */
+export const vWorkflowRunIdPage = v.object({
+  page: v.array(v.string()),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+});
