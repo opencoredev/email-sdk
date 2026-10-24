@@ -421,7 +421,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const policy = resolveRetry(options.retry, definition.retry, retry);
       const startedAt = now();
 
-      await invokeHook("onStepStart", { run: current, step: name, kind, attempt });
+      if (hooks.onStepStart) {
+        await invokeHook("onStepStart", { run: current, step: name, kind, attempt });
+
+        // The hook may have taken any amount of time, and the run may have been canceled
+        // meanwhile. Ownership must be proven after the last await before the effect starts.
+        if (!(await renew())) return suspend();
+      }
 
       let result: WorkflowJsonValue | void;
 
