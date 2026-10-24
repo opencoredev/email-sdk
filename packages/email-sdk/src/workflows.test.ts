@@ -21,6 +21,7 @@ import type {
   WorkflowContext,
   WorkflowEngineOptions,
   WorkflowHooks,
+  WorkflowJsonValue,
   WorkflowRun,
   WorkflowStore,
 } from "./workflows.js";
@@ -1532,5 +1533,204 @@ describe("workflows: review regressions", () => {
 
     // Before the fix all 20 stayed reachable. JSC scans the stack conservatively, so allow a few.
     expect(refs.filter((ref) => ref.deref() !== undefined).length).toBeLessThan(5);
+  });
+});
+
+describe("workflows: review regressions, round 2", () => {
+  test("hooks that edit the run they are given do not change the saved run", async () => {
+    const hooks: WorkflowHooks = {
+      onStepStart: ({ run }) => {
+        run.input = { email: "evil@example.test", name: "Mallory" };
+      },
+      onStepComplete: ({ run }) => {
+        run.journal = {};
+      },
+      onRunComplete: ({ run }) => {
+        run.output = "redacted";
+      },
+    };
+
+    const { engine, clock, sender } = setup([linear], { hooks });
+
+    await engine.start(linear, ada, { id: "run-1" });
+    clock.advance("2d");
+    await engine.resume("run-1");
+
+    const run = await engine.get("run-1");
+
+    expect(run?.input).toEqual(ada);
+    expect(Object.keys(run?.journal ?? {})).toEqual(["welcome", "wait-2d", "tips"]);
+    expect(run?.output).toEqual({ done: true });
+    expect(sender.deliveries.map((d) => d.message.to)).toEqual([ada.email, ada.email]);
+  });
+
+  test("a ctx call inside a step callback fails the run instead of deadlocking it", async () => {
+    const nested = defineWorkflow({
+      name: "nested",
+      run: async (ctx, input: Input) => {
+        await ctx.step("notify", async () => {
+          await ctx.send("mail", mail(input.email, "Hi"));
+        });
+      },
+    });
+
+    const { engine, sender } = setup([nested], { leaseDuration: "30ms" });
+
+    const settled = await Promise.race([
+      engine.start(nested, ada, { id: "run-1" }),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 500)),
+    ]);
+
+    expect(settled).not.toBe("hung");
+
+    const run = await engine.get("run-1");
+
+    expect(run?.status).toBe("failed");
+    expect(run?.error?.message).toContain("inside step \"notify\"");
+    expect(run?.lease).toBeUndefined();
+    expect(sender.calls).toHaveLength(0);
+  });
+
+  test("an event sent before the deadline wins even when the subject lookup ends after it", async () => {
+    const base = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+
+    const store: WorkflowStore = {
+      ...base,
+      async listActiveBySubject(subject) {
+        const runs = await base.listActiveBySubject(subject);
+
+        clock.advance("1h");
+
+        return runs;
+      },
+    };
+
+    const { engine } = setup([activation], { store, clock });
+
+    await engine.start(activation, ada, { id: "run-1", subject: "ada" });
+    // The deadline itself still counts as on time; the lookup then takes an hour.
+    clock.advance("3d");
+    await engine.sendEvent({ name: "activated", subject: "ada", payload: { plan: "pro" } });
+
+    expect((await engine.get("run-1"))?.output).toBe("activated");
+  });
+
+  test("a timeout recorded before an earlier event is saved stands, and sendEvent does not list the run", async () => {
+    const base = createMemoryWorkflowStore();
+    const slowGet = gate();
+    let gated = false;
+
+    const store: WorkflowStore = {
+      ...base,
+      async get(id) {
+        if (gated) {
+          gated = false;
+          await slowGet.pass();
+        }
+
+        return await base.get(id);
+      },
+    };
+
+    const { engine, clock } = setup([activation], { store });
+
+    await engine.start(activation, ada, { id: "run-1" });
+    clock.advance("3d");
+    gated = true;
+
+    const delivery = engine.sendEvent({ name: "activated", runId: "run-1", payload: { plan: "pro" } });
+
+    await slowGet.reached;
+    clock.advance("1ms");
+    await engine.resume("run-1");
+    slowGet.open();
+
+    // The event was sent at the deadline, but the timeout was saved first and the run finished.
+    expect(await delivery).toEqual([]);
+    expect((await engine.get("run-1"))?.output).toBe("nudged");
+  });
+
+  test("a sparse array is not JSON and fails the run", async () => {
+    const seen: WorkflowJsonValue[] = [];
+
+    const sparse = defineWorkflow({
+      name: "sparse",
+      run: async (ctx) => {
+        const picked = await ctx.step("pick", () => {
+          const values: WorkflowJsonValue[] = [];
+
+          values[2] = 7;
+
+          return values;
+        });
+
+        seen.push(picked);
+      },
+    });
+
+    const { engine } = setup([sparse]);
+    const run = await engine.start(sparse, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatchObject({ step: "pick" });
+    expect(run.error?.message).toContain("must be JSON");
+    expect(seen).toEqual([]);
+  });
+
+  test("a circular step result or output fails the run once", async () => {
+    function circular(): WorkflowJsonValue {
+      const node: { [key: string]: WorkflowJsonValue } = {};
+
+      node.self = node;
+
+      return node;
+    }
+
+    let calls = 0;
+
+    const cyclicStep = defineWorkflow({
+      name: "cyclic-step",
+      run: async (ctx) => {
+        await ctx.step("build", () => {
+          calls += 1;
+
+          return circular();
+        });
+      },
+    });
+
+    const cyclicOutput = defineWorkflow({ name: "cyclic-output", run: async () => circular() });
+
+    const { engine, clock } = setup([cyclicStep, cyclicOutput]);
+
+    for (const definition of [cyclicStep, cyclicOutput]) {
+      const run = await engine.start(definition, null, { id: definition.name });
+
+      expect({ name: definition.name, status: run.status, lease: run.lease }).toEqual({
+        name: definition.name,
+        status: "failed",
+        lease: undefined,
+      });
+    }
+
+    expect(calls).toBe(1);
+    clock.advance("1h");
+    expect(await engine.resumeDue()).toBe(0);
+  });
+
+  test("shared, acyclic references are still JSON", async () => {
+    const shared = defineWorkflow({
+      name: "shared",
+      run: async (ctx) => {
+        const leaf = { n: 1 };
+
+        return await ctx.step("pair", () => ({ left: leaf, right: leaf }));
+      },
+    });
+
+    const { engine } = setup([shared]);
+
+    expect((await engine.start(shared, null, { id: "run-1" })).output).toEqual({ left: { n: 1 }, right: { n: 1 } });
   });
 });
