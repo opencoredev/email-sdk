@@ -39,6 +39,9 @@ import {
 
 const provider = "resend";
 
+/** Treat a download URL this close to `expires_at` as expired, so it cannot lapse mid-request. */
+const URL_EXPIRY_MARGIN_MS = 60_000;
+
 export interface ResendInboundApiOptions extends InboundFetchOptions {
   apiKey: string;
   baseUrl?: string;
@@ -216,8 +219,20 @@ export async function fetchResendInboundEmail(id: string, options: ResendInbound
     return attachmentId ? [[attachmentId, item] as const] : [];
   }));
 
+  // Download URLs expire (`expires_at`, about an hour), so a late read asks Resend for a fresh one.
+  const downloadUrl = async (attachmentId: string) => {
+    const item = listedById.get(attachmentId);
+    const expiresAt = parseDate(jsonText(item?.expires_at))?.getTime();
+
+    if (item && (expiresAt === undefined || expiresAt - URL_EXPIRY_MARGIN_MS > Date.now())) return jsonText(item.download_url);
+
+    const fresh = await fetchJson(provider, `${baseUrl}/emails/receiving/${encoded}/attachments/${encodeURIComponent(attachmentId)}`, init);
+
+    return jsonText(fresh.download_url);
+  };
+
   const download = async (attachmentId: string) => {
-    const url = jsonText(listedById.get(attachmentId)?.download_url);
+    const url = await downloadUrl(attachmentId);
 
     if (!url) throw payloadError(provider, `Resend attachment ${attachmentId} has no download URL.`);
 

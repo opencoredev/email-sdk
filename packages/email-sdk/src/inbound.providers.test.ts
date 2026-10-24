@@ -160,6 +160,48 @@ describe("Resend", () => {
     ]);
   });
 
+  test("rejects a malformed signing secret as secret_missing instead of throwing", async () => {
+    for (const malformed of ["whsec_A==", "whsec_AB=", "whsec_A===", "whsec_"]) {
+      expect(await verifyResendInbound({ body, headers: headers() }, { secret: malformed, now })).toEqual({ ok: false, reason: "secret_missing" });
+    }
+  });
+
+  test("refreshes an expired attachment download URL before reading", async () => {
+    const requests: string[] = [];
+
+    const fetch = stubFetch(async input => {
+      const url = String(input);
+      requests.push(url);
+
+      if (url.endsWith("/attachments")) {
+        return Response.json({ object: "list", data: [
+          { id: "2a0c9ce0-3112-4728-976e-47ddcd16a318", download_url: "https://inbound-cdn.resend.com/old?sig=1", expires_at: "2020-01-01T00:00:00.000Z" },
+          { id: "fresh", download_url: "https://inbound-cdn.resend.com/fresh?sig=2", expires_at: "2999-01-01T00:00:00.000Z" },
+        ] });
+      }
+
+      if (url.endsWith("/attachments/2a0c9ce0-3112-4728-976e-47ddcd16a318")) {
+        return Response.json({ object: "attachment", id: "2a0c9ce0-3112-4728-976e-47ddcd16a318", download_url: "https://inbound-cdn.resend.com/new?sig=3", expires_at: "2999-01-01T00:00:00.000Z" });
+      }
+
+      if (url.startsWith("https://inbound-cdn.resend.com/")) return new Response(pdf);
+
+      return new Response(text("resend-received-email.json"));
+    });
+
+    const email = await fetchResendInboundEmail("56761188-7520-42d8-8898-ff6fc54ce618", { apiKey: "re_test", fetch });
+    const before = requests.length;
+
+    expect(await email.attachments[0]!.read()).toEqual(pdf);
+    expect(requests.slice(before)).toEqual([
+      "https://api.resend.com/emails/receiving/56761188-7520-42d8-8898-ff6fc54ce618/attachments/2a0c9ce0-3112-4728-976e-47ddcd16a318",
+      "https://inbound-cdn.resend.com/new?sig=3",
+    ]);
+
+    expect(await email.attachments[1]!.read()).toEqual(pdf);
+    expect(requests.at(-1)).toBe("https://inbound-cdn.resend.com/fresh?sig=2");
+  });
+
   test("maps API failures to fetch_failed with the HTTP status", async () => {
     const fetch = stubFetch(async () => new Response('{"message":"not found"}', { status: 404 }));
 
