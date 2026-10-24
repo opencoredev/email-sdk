@@ -120,7 +120,9 @@ function parseHeaderBlock(block: string): InboundHeader[] {
 
     if (!/^[!-9;-~]+$/.test(name)) continue;
 
-    headers.push({ name, value: headerText(line.slice(colon + 1).trim()) });
+    // Only ASCII whitespace: the value is still one char per byte, and `.trim()` would also
+    // eat 0x85 and 0xA0, which are continuation bytes of raw UTF-8 such as `à` (C3 A0).
+    headers.push({ name, value: headerText(trimHeaderWhitespace(line.slice(colon + 1))) });
   }
 
   return headers;
@@ -147,6 +149,14 @@ export function decodeEncodedWords(value: string): string {
 
 function decodeQuotedPrintableText(value: string): string {
   return value.replace(/=([0-9A-Fa-f]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+}
+
+function trimHeaderWhitespace(value: string): string {
+  let start = 0;
+
+  while (start < value.length && (value[start] === " " || value[start] === "\t")) start += 1;
+
+  return trimLineEnd(value.slice(start));
 }
 
 /** Drop trailing spaces and tabs with a plain scan; a regex here backtracks quadratically on long runs. */

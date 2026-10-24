@@ -284,6 +284,16 @@ describe("hostile and unusual MIME", () => {
   });
 });
 
+describe("raw UTF-8 headers", () => {
+  test("keeps raw UTF-8 header bytes that look like Latin-1 whitespace", () => {
+    const head = new TextEncoder().encode("Subject: Voilà\r\nX-Lead: \u00a0x\r\n\r\nbody");
+    const { headers } = parseMimeMessage(head);
+
+    expect(headers.get("subject")).toBe("Voilà");
+    expect(headers.get("x-lead")).toBe("\u00a0x");
+  });
+});
+
 describe("parseAddressList domain literals", () => {
   test("keeps IPv6 domain literals whose colons look like group labels", () => {
     expect(parseAddressList("user@[IPv6:2001:db8::1], Team: a@x.test;")).toEqual([{ address: "user@[IPv6:2001:db8::1]" }, { address: "a@x.test" }]);
