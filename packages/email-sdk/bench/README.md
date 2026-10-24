@@ -37,7 +37,7 @@ That run used Bun 1.4.4 on an AMD Ryzen 9 9955HX.
 
 - `sdk` is the median time per call through the SDK, `raw` the median for the hand-built request, and `overhead` is `sdk - raw`.
 - Each case warms up, then runs 7 rounds. The table reports the median round, so one GC pause does not move it.
-- `resend sendMany x20` is one `sendMany` call with 20 messages against 20 hand-built sends in a row.
+- `resend sendMany x20` is one `sendMany` call with 20 messages against 20 hand-built sends to the same 20 recipients.
 - `createEmailClient + resend()` is the one-time cost of building a client. Its `raw` column is an empty function.
 
 ## SES rows

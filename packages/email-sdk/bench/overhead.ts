@@ -93,17 +93,17 @@ const sesClient = createEmailClient({
   telemetry: false,
 });
 
-const batchItems = Array.from({ length: 20 }, (_, index) => ({
-  message: { ...message, to: [`user${index}@example.com`] },
-}));
+const batchRecipients = Array.from({ length: 20 }, (_, index) => `user${index}@example.com`);
 
-async function rawResend() {
+const batchItems = batchRecipients.map((to) => ({ message: { ...message, to: [to] } }));
+
+async function rawResend(to = "b@example.com") {
   const response = await mockFetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: "Bearer re_test", "Content-Type": "application/json" },
     body: JSON.stringify({
       from: message.from,
-      to: ["b@example.com"],
+      to: [to],
       subject: message.subject,
       html: message.html,
       text: message.text,
@@ -260,7 +260,7 @@ const cases: Case[] = [
     sdk: async () => {
       await resendClient.send(message);
     },
-    raw: rawResend,
+    raw: () => rawResend(),
   },
   {
     name: "postmark send",
@@ -302,7 +302,7 @@ const cases: Case[] = [
       await resendClient.sendMany(batchItems);
     },
     raw: async () => {
-      for (let index = 0; index < batchItems.length; index += 1) await rawResend();
+      for (const to of batchRecipients) await rawResend(to);
     },
   },
   {
