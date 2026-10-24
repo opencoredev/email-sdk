@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { decodeEncodedWords, parseAddressList, parseMimeMessage } from "./inbound/mime.js";
+import { decodeEncodedWords, parseAddressList, parseMimeMessage, parseMultipartFormData } from "./inbound/mime.js";
 import { emailFromMime } from "./inbound/normalize.js";
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`./__fixtures__/inbound/${name}`, import.meta.url)));
@@ -289,6 +289,68 @@ describe("hostile and unusual MIME", () => {
 
     expect(firstPart.html).toBe("<p>frame</p>");
     expect(firstPart.attachments.map(item => item.contentId)).toEqual(["root@x"]);
+  });
+
+  const manyParts = (boundary: string, count: number, part: string) =>
+    `${`--${boundary}\r\n${part}\r\n`.repeat(count)}--${boundary}--\r\n`;
+
+  // Header lines make each part cost more to build than to scan past.
+  const octetPart = `Content-Type: application/octet-stream\r\n${"X-Pad: y\r\n".repeat(20)}\r\nx`;
+
+  const elapsed = (run: () => void) => {
+    const started = performance.now();
+    run();
+
+    return performance.now() - started;
+  };
+
+  // Converting the input to a binary string is linear in its size whatever the part count, so
+  // the parse is timed against a single-part message of the same size.
+  const expectNoPerPartWork = (message: string, parse: () => void) => {
+    const single = elapsed(() => parseMimeMessage(`Content-Type: application/octet-stream\r\n\r\n${"x".repeat(message.length)}`));
+
+    expect(elapsed(parse)).toBeLessThan(single * 2 + 20);
+  };
+
+  test("stops scanning a multipart body once the part budget runs out", () => {
+    const message = `Content-Type: multipart/mixed; boundary=b\r\n\r\n${manyParts("b", 50_000, octetPart)}`;
+    let attachments = 0;
+
+    expectNoPerPartWork(message, () => {
+      attachments = parseMimeMessage(message).attachments.length;
+    });
+
+    // The root entity takes one slot of the 2,000-part budget.
+    expect(attachments).toBe(1999);
+  });
+
+  test("shares one part budget across nested multiparts", () => {
+    const nested = (boundary: string) => `Content-Type: multipart/mixed; boundary=${boundary}\r\n\r\n${manyParts(boundary, 25_000, octetPart)}`;
+    const message = `Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n${nested("n1")}\r\n--b\r\n${nested("n2")}\r\n--b--\r\n`;
+    let attachments = 0;
+
+    expectNoPerPartWork(message, () => {
+      attachments = parseMimeMessage(message).attachments.length;
+    });
+
+    // The root and the first nested multipart take two slots; the second nested multipart gets none.
+    expect(attachments).toBe(1998);
+  });
+
+  test("counts every form-data part against the budget, named or not", () => {
+    const unnamed = manyParts("f", 50_000, `Content-Disposition: form-data\r\n${"X-Pad: y\r\n".repeat(20)}\r\nx`).replace(/--f--\r\n$/, "");
+    const body = `${unnamed}--f\r\nContent-Disposition: form-data; name="body-mime"\r\n\r\nlate\r\n--f--\r\n`;
+    let parts: unknown[] = [];
+
+    expectNoPerPartWork(body, () => {
+      parts = parseMultipartFormData(body, "multipart/form-data; boundary=f");
+    });
+
+    expect(parts).toEqual([]);
+
+    const named = parseMultipartFormData(manyParts("f", 50_000, "Content-Disposition: form-data; name=a\r\n\r\nx"), "multipart/form-data; boundary=f");
+
+    expect(named).toHaveLength(2000);
   });
 });
 

@@ -432,32 +432,56 @@ function headerValue(headers: readonly InboundHeader[], name: string): string | 
   return headers.find(header => header.name.toLowerCase() === key)?.value;
 }
 
-function multipartBodies(body: string, boundary: string): string[] {
+/** Index where `body[start, end)` ends once one trailing line break is dropped. */
+function withoutFinalLineBreak(body: string, start: number, end: number): number {
+  if (end <= start || body[end - 1] !== "\n") return end;
+
+  return end - 1 > start && body[end - 2] === "\r" ? end - 2 : end - 1;
+}
+
+/**
+ * Yield the parts of a multipart body one at a time, scanning boundary lines by index. Callers
+ * stop pulling when their part budget runs out, so the parts after that are never scanned.
+ */
+function* multipartBodies(body: string, boundary: string): Generator<string> {
   const delimiter = `--${boundary}`;
-  const parts: string[] = [];
-  const lines = body.split(/(?<=\n)/);
-  let current: string[] | undefined;
+  let partStart: number | undefined;
+  let lineStart = 0;
 
-  for (const line of lines) {
-    const trimmed = trimLineEnd(line.replace(/\r?\n$/, ""));
+  while (lineStart < body.length) {
+    const newline = body.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? body.length : newline + 1;
 
-    if (trimmed === `${delimiter}--`) {
-      if (current) parts.push(current.join("").replace(/\r?\n$/, ""));
-      current = undefined;
-      break;
+    if (body.startsWith(delimiter, lineStart)) {
+      const rest = trimLineEnd(body.slice(lineStart + delimiter.length, withoutFinalLineBreak(body, lineStart, lineEnd)));
+
+      if (rest === "--" || rest === "") {
+        if (partStart !== undefined) yield body.slice(partStart, withoutFinalLineBreak(body, partStart, lineStart));
+
+        if (rest === "--") return;
+
+        partStart = lineEnd;
+      }
     }
 
-    if (trimmed === delimiter) {
-      if (current) parts.push(current.join("").replace(/\r?\n$/, ""));
-      current = [];
-      continue;
-    }
-
-    current?.push(line);
+    lineStart = lineEnd;
   }
 
   // No closing delimiter owns the final line break, so an unterminated last part keeps its bytes.
-  if (current?.length) parts.push(current.join(""));
+  if (partStart !== undefined && partStart < body.length) yield body.slice(partStart);
+}
+
+/** Up to `limit` parts of a multipart body; the scan stops as soon as it has them. */
+function takeParts(body: string, boundary: string, limit: number): string[] {
+  const parts: string[] = [];
+
+  if (limit <= 0) return parts;
+
+  for (const part of multipartBodies(body, boundary)) {
+    parts.push(part);
+
+    if (parts.length >= limit) break;
+  }
 
   return parts;
 }
@@ -498,11 +522,10 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
 
   if (type.startsWith("multipart/") && boundary && !isAttachment && !resource) {
     const childDefault = type === "multipart/digest" ? "message/rfc822" : "text/plain";
-    const parts = multipartBodies(entity.body, boundary);
 
     if (type === "multipart/related") {
       // The root is the part named by `start`, or the first part; the rest are its resources.
-      const children = parts.map(splitEntity);
+      const children = takeParts(entity.body, boundary, MAX_PARTS - state.parts).map(splitEntity);
       const start = contentType.params.get("start")?.trim().replace(/^<|>$/g, "");
       const named = start ? children.findIndex(child => contentIdOf(child.headers) === start) : -1;
       const root = named === -1 ? 0 : named;
@@ -513,7 +536,11 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
     }
 
     if (type !== "multipart/alternative") {
-      for (const part of parts) walk(splitEntity(part), state, depth + 1, childDefault);
+      for (const part of multipartBodies(entity.body, boundary)) {
+        if (state.parts >= MAX_PARTS) break;
+
+        walk(splitEntity(part), state, depth + 1, childDefault);
+      }
 
       return;
     }
@@ -523,7 +550,9 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
     let text: string[] = [];
     let html: string[] = [];
 
-    for (const part of parts) {
+    for (const part of multipartBodies(entity.body, boundary)) {
+      if (state.parts >= MAX_PARTS) break;
+
       const alternative: WalkState = { parts: state.parts, text: [], html: [], attachments: state.attachments };
       walk(splitEntity(part), alternative, depth + 1, childDefault);
       state.parts = alternative.parts;
@@ -808,9 +837,8 @@ export function parseMultipartFormData(body: string | Uint8Array, contentType: s
 
   const parts: MultipartFormPart[] = [];
 
-  for (const part of multipartBodies(binaryString(toBytes(body)), boundary)) {
-    if (parts.length >= MAX_PARTS) break;
-
+  // Every part counts against the budget, named or not, so unnamed parts cannot keep the scan going.
+  for (const part of takeParts(binaryString(toBytes(body)), boundary, MAX_PARTS)) {
     const entity = splitEntity(part);
     const disposition = parseStructuredHeader(headerValue(entity.headers, "content-disposition"));
     const name = disposition.params.get("name");
