@@ -42,6 +42,7 @@ export type {
   WorkflowInputSchema,
   WorkflowJsonValue,
   WorkflowLease,
+  WorkflowResumeDueOptions,
   WorkflowRetryPolicy,
   WorkflowRun,
   WorkflowRunStatus,

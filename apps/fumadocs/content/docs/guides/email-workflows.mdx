@@ -210,7 +210,11 @@ When a save keeps losing to concurrent writes, `cancel` throws a `WorkflowError`
 
 Timers only need to be roughly right. `resume` does nothing when the run is waiting on an event or has finished, and when a timer fires before the run is due it schedules a new one for the run's `dueAt`, so duplicate, late, and early timer deliveries are harmless. Timers can arrive out of order: a scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`. A scheduler that keeps each timer as a separate job can ignore `revision`.
 
-If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Run that cron even with a scheduler: it also recovers runs whose worker crashed mid-step, once their lease expires. `resumeDue(limit)` checks up to `limit` runs (default 25, and `0` checks none). It pages past runs whose version isn't registered, so they can't hide later due runs, and reports them in an `AggregateError` after the rest have run.
+If you don't have a push scheduler, call `engine.resumeDue()` from a cron every few minutes. Run that cron even with a scheduler: it also recovers runs whose worker crashed mid-step, once their lease expires. `resumeDue({ limit, concurrency })` checks up to `limit` runs (default 25, and `0` checks none) and runs up to `concurrency` of them at once (default 10). A run stuck waiting on a slow API inside a step takes one slot, and the other due runs keep starting, though the call returns only once every run it started has settled. It pages past runs whose version isn't registered, so they can't hide later due runs, and reports them with any other failures in one `AggregateError` after the rest have run.
+
+```ts
+await engine.resumeDue({ limit: 100, concurrency: 20 });
+```
 
 On Convex, the component provides all three pieces. See [Convex workflows](/docs/integrations/convex/workflows).
 

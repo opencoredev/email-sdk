@@ -90,6 +90,8 @@ crons.interval("resume email workflows", { minutes: 5 }, internal.onboarding.res
 export default crons;
 ```
 
+Each timer wake is its own scheduled action, so a run stuck in a step never delays another run's wake. The cron's `resumeDue` runs up to 10 due runs at once in one action; pass `{ concurrency }` to change that.
+
 ### Cleanup and send dedup
 
 The queue finds an email it already queued by the step's idempotency key, and only while the component still has that email. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email that many days after it was sent, failed, or canceled, and the key goes with it.

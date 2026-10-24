@@ -92,6 +92,11 @@ void engine.start(fromAnnotation, { email: "a@example.test", plan: "enterprise" 
 // @ts-expect-error events target a run id or a subject, not both
 void engine.sendEvent({ name: "activated", runId: "r", subject: "s" });
 
+const resumed: Promise<number> = engine.resumeDue({ limit: 50, concurrency: 5 });
+
+// @ts-expect-error resumeDue takes an options object, not a bare limit
+void engine.resumeDue(50);
+
 void engine.start(fromSchema, { userId: "u_1", email: "a@example.test" });
 
 // start takes what the schema accepts: a string count, and the defaulted plan may be left out.
@@ -101,6 +106,8 @@ void engine.start(transformed, { count: "42" });
 void engine.start(transformed, { count: 42 });
 
 void started;
+
+void resumed;
 
 // @ts-expect-error workflows are not exported from the package root
 import { defineWorkflow as rootDefineWorkflow } from "../src/index.js";

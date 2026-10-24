@@ -125,7 +125,7 @@ const appWorkflows = {
   resumeDue: actionGeneric({
     args: { limit: v.number() },
     returns: v.number(),
-    handler: async (ctx, args) => await engineFor(ctx).resumeDue(args.limit),
+    handler: async (ctx, args) => await engineFor(ctx).resumeDue({ limit: args.limit }),
   }),
   sendEvent: actionGeneric({
     args: { name: v.string(), subject: v.string() },

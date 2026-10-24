@@ -115,7 +115,7 @@ await engine.sendEvent({ name: "activated", subject: userEmail, payload: { plan:
 await engine.sendEvent({ name: "unsubscribed", subject: userEmail });
 await engine.cancel(run.id, "user deleted");
 await engine.resume(runId);     // what a scheduler timer calls
-await engine.resumeDue();       // polling fallback for crons
+await engine.resumeDue();       // polling fallback for crons; { limit, concurrency } optional
 ```
 
 ### Context
@@ -244,10 +244,14 @@ extra: the stale job fires early and re-arms.
 
 Without a push scheduler, call `engine.resumeDue()` from a cron. It asks the store for runs whose
 `dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired because
-their worker crashed. `listDue` returns pages oldest first with a cursor, and `resumeDue(limit)`
-follows the cursor until it has checked `limit` runs (`0` checks none). Runs whose version this
-engine doesn't register don't count toward `limit`, so after a deploy drops a version they can't
-hide later due runs; they are reported in an `AggregateError` after the rest have run.
+their worker crashed. `listDue` returns pages oldest first with a cursor, and
+`resumeDue({ limit, concurrency })` follows the cursor until it has checked `limit` runs (default
+25; `0` checks none). It runs up to `concurrency` of them at once (default 10), starting the next
+due run as soon as one settles, so a run stuck awaiting I/O in a step holds one slot instead of the
+whole batch. The call still returns only after every run it started has settled. Runs whose
+version this engine doesn't register don't count toward `limit`, so after a deploy drops a version
+they can't hide later due runs. They and any other failures are reported in one `AggregateError`
+after the rest have run, as `sendEvent` does.
 
 The in-memory scheduler plus a manual clock (`createManualClock`) make tests deterministic: nothing
 sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due timers in order.
