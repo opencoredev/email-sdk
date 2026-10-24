@@ -58,11 +58,15 @@ Every `ctx` call has a step name. When a run wakes up after a sleep, an event, o
 
 Two rules follow from that:
 
-- **Step names must be unique within a run.** The engine fails the run with `duplicate_step` if a name repeats. In a loop, put the index in the name: `` ctx.send(`reminder-${i}`, ...) ``.
+- **Step names must be unique within a run.** The engine fails the run with `duplicate_step` if a name repeats. In a loop, put the index in the name: `` ctx.send(`reminder-${i}`, ...) ``. The name `__proto__` is reserved, because some stores can't keep it as a journal key.
 - **Code between steps must give the same answer every time.** Put database reads, API calls, and anything random inside `ctx.step` so their results are saved and replayed.
-- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A nested call fails the run with `invalid_definition`.
+- **Don't call `ctx` inside a step callback.** Return from the step and make the next `ctx` call after it. A nested call fails the run with `invalid_definition`. A call from `run` while an earlier step is still pending is fine: it waits its turn.
 
 Branching, loops, and early returns are plain TypeScript.
+
+Your code always sees values the way the store saves them. The input, step results, and event payloads go through a JSON round trip before `run` gets them, on the first execution and after every wake. An object returned twice in one result arrives as two separate copies, and a field set to `undefined` is left out, so nothing changes between the first run and a replay.
+
+The workflows entry tracks step callbacks with `AsyncLocalStorage` from `node:async_hooks`. Node, Bun, Deno, and Convex provide it; on Cloudflare Workers, enable `nodejs_compat`.
 
 ## Run the engine
 
@@ -80,6 +84,8 @@ export const workflows = createWorkflowEngine({
   isSuppressed: (address) => suppressionList.has(address),
 });
 ```
+
+`isSuppressed` gets each recipient's bare address, lowercased. For a mailbox string, that is the address in its last `<...>`, so `"Ada <team>" <ada@example.test>` checks `ada@example.test`.
 
 Then call it from your app:
 
@@ -115,7 +121,7 @@ await workflows.cancel(`onboarding:${user.userId}`, "account deleted");
 
 An event that arrives before the run reaches its `waitForEvent` is kept in the run's inbox and consumed when the run gets there, so a user who activates on day one still skips the nudge.
 
-`sendEvent` saves the event to every target run, all with the same receipt time, before it resumes any of them, and then resumes them side by side. One run's slow step can't delay another run's event or push it past its deadline.
+`sendEvent` saves the event to every target run, all with the same receipt time, before it resumes any of them, and then resumes them side by side. One run's slow step can't delay another run's event or push it past its deadline. A cancel event works the same way: every target is canceled before `onRunCanceled` runs for any of them, so a slow hook can't leave the subject's other runs sending.
 
 A timeout's deadline is fixed when the run first reaches the `waitForEvent`. The engine stamps each event with the time `sendEvent` was called, before it looks up the subject's runs, and compares the two. An event sent at or before the deadline wins, even if the timeout timer has fired, as long as it is saved on the run before a worker records the timeout. An event sent after the deadline loses to the timeout and stays in the inbox for a later `waitForEvent` on the same event name. Each engine uses its own clock for these timestamps, so keep worker clocks in sync.
 
@@ -138,6 +144,8 @@ export const trial = defineWorkflow({
 });
 ```
 
+`start` takes what the schema accepts and `run` gets what it returns, so transforms and defaults work: with `z.object({ count: z.string().transform(Number) })`, call `start(workflow, { count: "42" })` and `run` sees `count` as a number.
+
 Without a schema, the type of `run`'s second parameter is the input type. Input and step results must be JSON values. Use `type` aliases rather than `interface` declarations for them, because TypeScript only checks type aliases against JSON-like index signatures.
 
 ## Retries and failures
@@ -146,7 +154,7 @@ A failed step retries on a timer: 3 attempts by default, 1 minute before the sec
 
 Some errors fail the run right away: an `EmailSdkError` with `retryable: false` (validation errors, permanent provider rejections) and a `WorkflowNonRetryableError` thrown from your own step. When every adapter fails, the client throws one route error; the engine retries it if any adapter failure in it is retryable, such as a 503, and fails the run otherwise. A step that runs out of attempts, or an error thrown from `run` itself, marks the run `failed` with the message and step name.
 
-A mistake in the `ctx` call itself also fails the run instead of being retried on every wake: a negative duration or timeout, an invalid `Date`, a retry policy with `maxAttempts` below 1, a `ctx` call inside a step callback, or a step result or workflow output that isn't JSON, such as `NaN`, `Infinity`, an array with empty slots, or an object that contains itself.
+A mistake in the `ctx` call itself also fails the run instead of being retried on every wake: a negative duration or timeout, an invalid `Date`, a retry policy with `maxAttempts` below 1, a `ctx` call inside a step callback, a step named `__proto__`, or a step result or workflow output that isn't JSON, such as `NaN`, `Infinity`, an array with empty slots, or an object that contains itself.
 
 Your email client's own `retry` option still applies inside each attempt.
 

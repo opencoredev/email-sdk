@@ -11,7 +11,7 @@ The component provides everything a workflow engine needs on Convex:
 
 - `convexWorkflowStore` keeps runs in the component's `workflowRuns` table. Saves check the run's revision inside one mutation, so two actions racing on a run can't overwrite each other, and only the action holding the run's lease executes its steps. Subject lookups page through the table 100 runs per query, so an `unsubscribed` event reaches every run for that subject.
 - `convexWorkflowScheduler` schedules each wait with `ctx.scheduler.runAt`. A resume that runs before the run is due schedules a new job for the run's persisted due time, so an early or stale job never leaves a run without a wake.
-- `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one.
+- `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one, as long as the component still has that email (see [Cleanup and send dedup](#cleanup-and-send-dedup)).
 
 ## Define the engine and its actions
 
@@ -89,6 +89,12 @@ crons.interval("resume email workflows", { minutes: 5 }, internal.onboarding.res
 
 export default crons;
 ```
+
+### Cleanup and send dedup
+
+The queue finds an email it already queued by the step's idempotency key, and only while the component still has that email. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email that many days after it was sent, failed, or canceled, and the key goes with it.
+
+That leaves one window. If an action dies after queueing an email but before saving the finished step, the cron normally recovers the run within one lease plus one cron interval, a few minutes. A recovery that comes more than `cleanupAfterDays` after the email finished, for example because the run's workflow version was unregistered all that time, queues the email again. Keep `cleanupAfterDays` far above the longest recovery delay you expect, and keep old workflow versions registered until their runs finish.
 
 ## What the queue can't carry
 
