@@ -5,6 +5,8 @@ import type {
   EmailAdapter,
   EmailMessage,
   EmailNativeOptions,
+  EmailClient,
+  EmailNativeOptionsMap,
   EmailNativePassthrough,
   EmailSendOptions,
 } from "../src/index.js";
@@ -118,14 +120,20 @@ client.send(message, { native: { ses: { template: { name: "a", arn: "b" } } } })
 client.sendMany([{ message, options: { native: { sendgrid: { sandboxMode: "yes" } } } }]);
 
 // A client without native-aware adapters accepts no native keys.
-const plain = createEmailClient({ adapters: [memoryAdapter()] });
+const plain = createEmailClient({ adapters: [smtp({ name: "relay", host: "smtp.example.com" })] });
 
-// @ts-expect-error memory adapters declare no native options
-plain.send(message, { native: { memory: {} } });
+// @ts-expect-error SMTP adapters declare no native options
+plain.send(message, { native: { relay: {} } });
 
-assertType<Equal<EmailNativeOptions<readonly EmailAdapter[]>, { readonly [adapter: string]: never }>>(
-  true,
-);
+// Adapters with a non-literal name make an untyped client, which accepts any entry.
+createEmailClient({ adapters: [memoryAdapter()] }).send(message, { native: { memory: {} } });
+
+assertType<Equal<EmailNativeOptions<readonly EmailAdapter[]>, EmailNativeOptionsMap>>(true);
+
+// Typed clients stay assignable to the untyped EmailClient, as they were before native existed.
+export const untypedClient: EmailClient = client;
+
+export const untypedPlain: EmailClient = plain;
 
 // Custom adapters opt in by declaring their native options type.
 type AcmeNative = { priority?: "high" | "low" };
