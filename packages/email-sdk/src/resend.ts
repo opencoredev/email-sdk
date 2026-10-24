@@ -13,7 +13,6 @@ import {
   readErrorBody,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
-  headerTemplate,
   mapAttachments,
 } from "./utils.js";
 
@@ -30,18 +29,17 @@ export function resend(
   const baseUrl = options.baseUrl ?? "https://api.resend.com";
   const fetcher = options.fetch ?? fetch;
 
-  const requestHeaders = headerTemplate(() => ({
-    Authorization: `Bearer ${options.apiKey}`,
-    "Content-Type": "application/json",
-    ...options.headers,
-  }));
-
   return {
     name: "resend",
     ...builtInAdapterDefinition("resend"),
     raw: { baseUrl },
     async send(message, context) {
-      const headers = requestHeaders();
+      // Read per send so a rotated apiKey or edited headers apply to the next request.
+      const headers = new Headers({
+        Authorization: `Bearer ${options.apiKey}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      });
 
       if (context.idempotencyKey) {
         headers.set("Idempotency-Key", context.idempotencyKey);

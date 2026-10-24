@@ -12,6 +12,7 @@ import {
   messageWithoutMetadata,
   messageWithoutProviderSpecificFields,
 } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 describe("provider payloads", () => {
   test("Resend maps normalized fields and encodes attachments", async () => {
@@ -45,6 +46,14 @@ describe("provider payloads", () => {
     }).send(messageWithoutMetadata, context);
 
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
+  test("Resend reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth(
+      (options) => resend(options),
+      messageWithoutMetadata,
+      { id: "res_123" },
+    );
   });
 
   test("Postmark maps metadata, headers, and attachments", async () => {
