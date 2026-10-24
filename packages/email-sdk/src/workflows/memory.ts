@@ -1,0 +1,148 @@
+import { durationToMs } from "./duration.js";
+import type {
+  WorkflowClock,
+  WorkflowDuration,
+  WorkflowEngine,
+  WorkflowRun,
+  WorkflowScheduler,
+  WorkflowStore,
+  WorkflowTimer,
+} from "./types.js";
+
+const terminalStatuses = new Set(["completed", "failed", "canceled"]);
+
+export function isTerminalRun(run: WorkflowRun): boolean {
+  return terminalStatuses.has(run.status);
+}
+
+/** Round-trips through JSON, so tests see exactly what a database-backed store would return. */
+function copyRun(run: WorkflowRun): WorkflowRun {
+  // SAFETY: the value was produced by JSON.stringify of a WorkflowRun one line earlier, and every
+  // WorkflowRun field is JSON, so parsing restores the same type.
+  return JSON.parse(JSON.stringify(run)) as WorkflowRun;
+}
+
+export type MemoryWorkflowStore = WorkflowStore & {
+  /** Every stored run, in insertion order. */
+  runs(): WorkflowRun[];
+};
+
+/** A process-local store for tests and development. State is lost on restart. */
+export function createMemoryWorkflowStore(): MemoryWorkflowStore {
+  const runs = new Map<string, WorkflowRun>();
+
+  return {
+    async get(id) {
+      const run = runs.get(id);
+
+      return run ? copyRun(run) : undefined;
+    },
+    async create(run) {
+      if (runs.has(run.id)) return false;
+      runs.set(run.id, copyRun(run));
+
+      return true;
+    },
+    async save(run, expectedRevision) {
+      const current = runs.get(run.id);
+
+      if (!current || current.revision !== expectedRevision) return false;
+      runs.set(run.id, copyRun(run));
+
+      return true;
+    },
+    async listActiveBySubject(subject) {
+      return [...runs.values()].flatMap((run) =>
+        run.subject === subject && !isTerminalRun(run) ? [copyRun(run)] : [],
+      );
+    },
+    async listDue(now, limit) {
+      const due: string[] = [];
+
+      for (const run of runs.values()) {
+        if (due.length >= limit) break;
+
+        if (run.dueAt !== undefined && run.dueAt <= now) due.push(run.id);
+      }
+
+      return due;
+    },
+    runs() {
+      return [...runs.values()].map(copyRun);
+    },
+  };
+}
+
+export type ManualClock = WorkflowClock & {
+  set(at: Date | number): void;
+  advance(duration: WorkflowDuration): number;
+};
+
+/** A clock that only moves when told to. Pair it with the memory scheduler for deterministic tests. */
+export function createManualClock(start: Date | number = 0): ManualClock {
+  let now = Number(start);
+
+  return {
+    now: () => now,
+    set(at) {
+      now = Number(at);
+    },
+    advance(duration) {
+      now += durationToMs(duration);
+
+      return now;
+    },
+  };
+}
+
+export type MemoryWorkflowScheduler = WorkflowScheduler & {
+  /** Pending timers sorted by fire time. */
+  pending(): WorkflowTimer[];
+  /** Fires, in order, every timer due at the clock's current time. Returns how many fired. */
+  runDue(engine: Pick<WorkflowEngine, "resume">): Promise<number>;
+  /** Advances the clock timer by timer, resuming runs as their timers come due. */
+  advance(duration: WorkflowDuration, engine: Pick<WorkflowEngine, "resume">): Promise<number>;
+};
+
+/** Holds timers in memory and fires them only when `runDue` or `advance` is called. */
+export function createMemoryWorkflowScheduler(clock: ManualClock): MemoryWorkflowScheduler {
+  const timers = new Map<string, WorkflowTimer>();
+
+  const sorted = () => [...timers.values()].sort((a, b) => a.at - b.at);
+
+  async function fireDueAt(now: number, engine: Pick<WorkflowEngine, "resume">) {
+    let fired = 0;
+
+    for (let next = sorted()[0]; next && next.at <= now; next = sorted()[0]) {
+      timers.delete(next.runId);
+      fired += 1;
+      await engine.resume(next.runId);
+    }
+
+    return fired;
+  }
+
+  return {
+    schedule(timer) {
+      timers.set(timer.runId, { ...timer });
+    },
+    cancel(runId) {
+      timers.delete(runId);
+    },
+    pending: sorted,
+    runDue: (engine) => fireDueAt(clock.now(), engine),
+    async advance(duration, engine) {
+      const target = clock.now() + durationToMs(duration);
+      let fired = 0;
+
+      for (let next = sorted()[0]; next && next.at <= target; next = sorted()[0]) {
+        if (next.at > clock.now()) clock.set(next.at);
+        fired += await fireDueAt(clock.now(), engine);
+      }
+
+      clock.set(target);
+
+      return fired;
+    },
+  };
+}

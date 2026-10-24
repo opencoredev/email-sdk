@@ -108,6 +108,7 @@ Available adapter entry points:
 | `@opencoredev/email-sdk/smtp` | SMTP |
 | `@opencoredev/email-sdk/testing` | Memory and failing test adapters |
 | `@opencoredev/email-sdk/inbound` | Inbound webhook verification and parsing for 17 providers (see [Receiving email](#receiving-email)) |
+| `@opencoredev/email-sdk/workflows` | Experimental durable drips and onboarding sequences |
 
 ## Message shape
 
