@@ -224,27 +224,46 @@ store would mangle.
 
 ```ts
 type WorkflowScheduler = {
-  // revision: the run revision whose wait asked for this wake
+  // revision: the run revision whose save asked for this wake
   schedule(timer: { runId: string; at: number; revision: number }): void | Promise<void>;
   cancel(runId: string): void | Promise<void>;
 };
 ```
 
-When a timer fires, the host calls `engine.resume(runId)`. A run waits on at most one thing at a
-time, so one timer per run is enough. Timers are hints: `resume` re-reads the run and does nothing if
-it is already terminal or waiting on an event that has not arrived. If the run is not due yet or is
-held by a live lease, `resume` schedules a new timer for the run's persisted `dueAt`. That makes
-duplicate, late, early, and spurious timer deliveries harmless, and lets `cancel` be best-effort.
+When a timer fires, the host calls `engine.resume(runId)`. The engine asks for two kinds of timer:
 
-A wait's save releases the run before its timer is scheduled, so a newer execution can schedule
-its own timer first and the older `schedule` call arrives late. A scheduler that keeps one timer per
-run (like the in-memory one) must ignore a timer whose `revision` is lower than the newest one it
-holds for that run. A scheduler that keeps every timer as its own job (like Convex) needs nothing
-extra: the stale job fires early and re-arms.
+- **Wait wakes.** After saving a sleep, a retry backoff, or an event wait with a timeout, the
+  execution schedules a timer for the wait's `until`.
+- **Lease-expiry wakes.** Right after a claim (and after `start` creates a run), the engine
+  schedules a timer for `lease.until`. If the worker dies mid-step, that timer resumes the run once
+  the lease expires, so crash recovery needs no `resumeDue` poll when a scheduler is configured.
 
-Without a push scheduler, call `engine.resumeDue()` from a cron. It asks the store for runs whose
-`dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired because
-their worker crashed. `listDue` returns pages oldest first with a cursor, and
+Timers are hints: `resume` re-reads the run and does nothing if it is terminal, waiting on an event
+that has not arrived, or waiting on a deadline that has not passed. The save that parked a waiting
+run scheduled its wake, so an early wake for it schedules nothing. A wake that finds the run still
+held by a live lease, because the owner renewed it after the wake was scheduled, schedules a new
+timer for the renewed `lease.until`. That makes duplicate, late, early, and spurious timer
+deliveries harmless, and lets `cancel` be best-effort.
+
+Both kinds carry the revision of the save that asked for them. A wait's save releases the run before
+its timer is scheduled, so a newer execution can schedule its own timer first and the older
+`schedule` call arrives late. A scheduler that keeps one timer per run (like the in-memory one) must
+ignore a timer whose `revision` is lower than the newest one it holds for that run. A claim is the
+run's newest save, so its lease-expiry wake never displaces a newer timer, and the wake of a wait the
+execution saves next replaces it. A scheduler that keeps every timer as its own job (like Convex)
+needs nothing extra: a stale job fires, finds nothing to do, and ends.
+
+The extra cost is bounded. Each claim schedules one lease-expiry wake, and that wake schedules one
+more for each lease period the execution is still renewing when it fires, so a step that runs for
+an hour under the default five-minute lease adds 12 to 18 wakes (the heartbeat renews every third
+of the lease, so each re-armed wake lands between 3 and 5 minutes after the last). With a scheduler that keeps
+every timer as its own job, each of these is one scheduled function call.
+
+Without a push scheduler, call `engine.resumeDue()` from a cron. Run it with a scheduler too, as a
+backstop: a worker can die between a save and the `schedule` call that follows it, a `schedule` call
+can fail, and a run can save an event and then fail to resume. `resumeDue` asks the store for runs
+whose `dueAt` has passed: expired waits, waits a delivered event satisfies, and leases that expired
+because their worker crashed. `listDue` returns pages oldest first with a cursor, and
 `resumeDue({ limit, concurrency })` follows the cursor until it has checked `limit` runs (default
 25; `0` checks none). It runs up to `concurrency` of them at once (default 10), starting the next
 due run as soon as one settles, so a run stuck awaiting I/O in a step holds one slot instead of the
@@ -258,7 +277,8 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
 
 ### Execution loop
 
-1. Load the run. Return unless it is claimable (see above), then claim it with a lease.
+1. Load the run. Return unless it is claimable (see above), then claim it with a lease and
+   schedule its lease-expiry wake.
 2. Call `run(ctx, input)` and race it against a suspend signal.
 3. Each `ctx` call checks the journal. A completed entry returns its result. Otherwise:
    - `send` / `step`: renew the lease (this is where a cancellation or a lost lease stops the run),
@@ -394,7 +414,7 @@ component never depends on the engine's types, and the CAS check in `save` is tr
 On the app side, `convexWorkflowStore(component, ctx)` adapts those functions to `WorkflowStore`
 and parses each stored run with zod at the boundary. `convexWorkflowScheduler(ctx, resumeRef)`
 implements timers with `ctx.scheduler.runAt`; `cancel` is a no-op because `resume` already ignores
-stale timers and re-arms early ones from `dueAt`. `convexWorkflowEmail(component, ctx)` sends through the component's durable
+stale timers. `convexWorkflowEmail(component, ctx)` sends through the component's durable
 queue (`enqueue` with the step's idempotency key), so a workflow send gets the component's retries,
 fallback, and webhook status tracking. It forwards the `ctx.send` options the queue can store
 (`adapter`, `fallback.adapters`, `retry.maxAttempts`, flat `metadata`) and fails the step on the
@@ -404,8 +424,8 @@ ones it can't (`signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknown
 The queue dedupes a workflow send by its idempotency key only while the component still has the
 email row. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email
 that many days after it reached a terminal status, and its key goes with it. A step whose action
-died after queueing but before the journal save is normally recovered within one lease plus one
-`resumeDue` cron interval (minutes). Only a recovery delayed past `cleanupAfterDays`, for example
+died after queueing but before the journal save is normally recovered by its lease-expiry wake,
+one lease (minutes) later, or within one more `resumeDue` cron interval if that wake was lost. Only a recovery delayed past `cleanupAfterDays`, for example
 because the run's version was unregistered for that long, can queue the email a second time. Keep
 `cleanupAfterDays` well above the longest delay you expect, and keep old versions registered.
 

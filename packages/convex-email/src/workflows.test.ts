@@ -71,6 +71,26 @@ const protoStep = defineWorkflow({
   },
 });
 
+/** Hangs the first call of its step until `stalled.release()`, standing in for an action that died. */
+const stalled = { calls: 0, release: () => {} };
+
+const stalledStep = defineWorkflow({
+  name: "stalled-step",
+  run: async (ctx) => {
+    await ctx.step("charge", async () => {
+      stalled.calls += 1;
+
+      if (stalled.calls === 1) {
+        await new Promise<void>((resolve) => {
+          stalled.release = resolve;
+        });
+      }
+
+      return stalled.calls;
+    });
+  },
+});
+
 /** The app's clock. Tests move it instead of waiting, and the engine reads it through `clock`. */
 const clock = { at: Date.parse("2026-01-01T00:00:00Z") };
 
@@ -82,7 +102,7 @@ function engineFor(ctx: GenericActionCtx<GenericDataModel>) {
     store: convexWorkflowStore(component(), ctx),
     scheduler: convexWorkflowScheduler(ctx, resumeRef),
     clock: { now: () => clock.at },
-    workflows: [onboarding, parked, protoStep],
+    workflows: [onboarding, parked, protoStep, stalledStep],
   });
 }
 
@@ -121,6 +141,11 @@ const appWorkflows = {
     args: { runId: v.string() },
     returns: vRunView,
     handler: async (ctx, args) => view(await engineFor(ctx).start(protoStep, null, { id: args.runId })),
+  }),
+  startStalled: actionGeneric({
+    args: { runId: v.string() },
+    returns: vRunView,
+    handler: async (ctx, args) => view(await engineFor(ctx).start(stalledStep, null, { id: args.runId })),
   }),
   resumeDue: actionGeneric({
     args: { limit: v.number() },
@@ -165,6 +190,9 @@ const app = {
     "workflows:startProto",
   ),
   startParked: makeFunctionReference<"action", { count: number; subject: string }, null>("workflows:startParked"),
+  startStalled: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>(
+    "workflows:startStalled",
+  ),
   get: makeFunctionReference<"action", { runId: string }, string | null>("workflows:get"),
   emailStatus: makeFunctionReference<
     "action",
@@ -378,27 +406,78 @@ describe("convex workflow engine end to end", () => {
     expect((await readRun(t, "run-4")).wait).toMatchObject({ kind: "event" });
   });
 
-  test("an early wake schedules a new resume for the run's persisted due time", async () => {
-    clock.at = Date.parse("2026-01-01T00:00:00Z");
+  test("a lease-expiry job that finds the run waiting schedules nothing more", async () => {
+    // convex-test runs jobs on real timers; a clock ahead of real time keeps them pending.
+    clock.at = Date.now() + 86_400_000;
 
     const t = createApp();
+    const startedAt = clock.at;
 
     await t.action(app.start, { runId: "run-3", email: "ada@example.test" });
 
     const run = await readRun(t, "run-3");
 
-    // Lose the real timer, as if only a stale early job had been left for this run.
-    await t.run(async (ctx) => {
-      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
-        if (job.name === "workflows:resume") await ctx.scheduler.cancel(job._id);
-      }
-    });
+    expect(await pendingResumes(t)).toEqual([
+      { at: startedAt + leaseMs, runId: "run-3" },
+      { at: run.dueAt, runId: "run-3" },
+    ]);
 
-    expect(await pendingResumes(t)).toEqual([]);
-    expect(await t.action(app.resume, { runId: "run-3" })).toMatchObject({ status: "waiting", revision: run.revision });
+    clock.at += leaseMs;
+    expect(await fireDueResumes(t)).toBe(1);
     expect(await pendingResumes(t)).toEqual([{ at: run.dueAt, runId: "run-3" }]);
+    expect((await readRun(t, "run-3")).revision).toBe(run.revision);
+  });
+
+  test("a run whose action died mid-step is resumed by its lease-expiry job, with no resumeDue", async () => {
+    clock.at = Date.now() + 86_400_000;
+    stalled.calls = 0;
+
+    const t = createApp();
+    const startedAt = clock.at;
+    const dead = t.action(app.startStalled, { runId: "run-5" });
+
+    for (let tries = 0; tries < 200 && stalled.calls === 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    expect(stalled.calls).toBe(1);
+    expect(await pendingResumes(t)).toEqual([{ at: startedAt + leaseMs, runId: "run-5" }]);
+
+    clock.at += leaseMs;
+    expect(await fireDueResumes(t)).toBe(1);
+    expect(await readRun(t, "run-5")).toMatchObject({ status: "completed", journal: { charge: { result: 2 } } });
+
+    stalled.release();
+    expect(await dead).toMatchObject({ status: "completed" });
+    expect(stalled.calls).toBe(2);
   });
 });
+
+/** The engine's default lease. */
+const leaseMs = 5 * 60_000;
+
+/**
+ * Delivers every pending resume job due at the app clock, as the Convex scheduler would: each job is
+ * marked canceled so its real timer can't run it again, then its action runs. Returns how many ran.
+ */
+async function fireDueResumes(t: ReturnType<typeof createApp>) {
+  const due = await t.run(async (ctx) => {
+    const runIds: string[] = [];
+
+    for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+      if (job.name !== "workflows:resume" || job.state.kind !== "pending" || job.scheduledTime > clock.at) continue;
+
+      await ctx.scheduler.cancel(job._id);
+      runIds.push(z.object({ runId: z.string() }).parse(job.args[0]).runId);
+    }
+
+    return runIds;
+  });
+
+  for (const runId of due) await t.action(app.resume, { runId });
+
+  return due.length;
+}
 
 async function pendingResumes(t: ReturnType<typeof createApp>) {
   return await t.run(async (ctx) => {

@@ -122,7 +122,8 @@ export type MemoryWorkflowScheduler = WorkflowScheduler & {
 
 /**
  * Holds one timer per run in memory and fires it only when `runDue` or `advance` is called. A
- * timer from an older run revision than the newest one scheduled for that run is dropped.
+ * timer from an older run revision than the newest one scheduled for that run is dropped, so a
+ * claim's lease-expiry wake and a later wait's wake replace each other in the order they were saved.
  */
 export function createMemoryWorkflowScheduler(clock: ManualClock): MemoryWorkflowScheduler {
   const timers = new Map<string, WorkflowTimer>();
