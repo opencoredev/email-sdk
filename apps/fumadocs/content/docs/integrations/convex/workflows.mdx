@@ -97,6 +97,8 @@ The component stores messages as JSON, so two message features are rejected befo
 - `sendAt`. Use `ctx.sleepUntil` before the send instead.
 - Binary attachment content (`Uint8Array`, `ArrayBuffer`, `Blob`) and `path` attachments. Pass base64 strings with `contentEncoding: "base64"`.
 
+These `ctx.send` options reach the queue: `adapter`, `fallback.adapters`, `retry.maxAttempts`, and `metadata` with string, number, boolean, or null values. The queue can't honor `signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknownDelivery: "continue"`, or nested metadata, so those fail the run the same way.
+
 `ctx.send` returns `{ adapter: "convex-email", id }`, where `id` is the component email id. Delivery happens later in the component's worker, so read its status with `email.status` as usual.
 
 <Cards>
