@@ -207,7 +207,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * Applies `transform` and saves with a revision check. On a conflict it reloads and re-applies
    * the transform to the fresh state, so concurrent event deliveries are not lost; transforms must
    * therefore decide from the run they are given. With an `owner`, every save renews that
-   * execution's lease while the run keeps going and releases it once the run waits or ends, and the
+   * execution's lease while the run is running and releases it once the run waits or ends, and the
    * commit gives up when the fresh run is held by someone else. Returns undefined when nothing was
    * saved: the transform declined, the run disappeared, became terminal, or changed owner.
    */
@@ -225,7 +225,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (!next) return undefined;
 
       if (owner !== undefined) {
-        next.lease = isTerminalRun(next) || next.wait ? undefined : { owner, until: at + leaseMs };
+        // A claimed run keeps its persisted wait (sleep target, event deadline, retry) until the
+        // step resolves it, so status, not the wait, says whether the execution still holds it.
+        next.lease = isTerminalRun(next) || next.status === "waiting" ? undefined : { owner, until: at + leaseMs };
       } else if (isTerminalRun(next)) {
         next.lease = undefined;
       }
