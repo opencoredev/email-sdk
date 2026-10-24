@@ -447,6 +447,9 @@ export async function fetchSesInboundFromS3(location: SesS3Location, options: Se
   // SES "Message encryption" stores mail through the S3 encryption client, which keeps the
   // wrapped data key in object metadata. The body is ciphertext only that client can decrypt.
   if (S3_ENCRYPTION_METADATA.some(name => response.headers.has(name))) {
+    // Release the connection; Node's fetch holds it until the unread body is consumed.
+    void response.body?.cancel().catch(() => {});
+
     throw new InboundError(
       "SES encrypted this message with KMS before storing it in S3. Decrypt it with the S3 encryption client and pass the MIME to sesEmailFromNotification.",
       { reason: "unsupported", provider },

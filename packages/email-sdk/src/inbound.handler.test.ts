@@ -297,6 +297,20 @@ describe("SES receiving", () => {
     }
   });
 
+  test("cancels the S3 response body when it rejects an encrypted object", async () => {
+    let cancelled = false;
+
+    const fetch = stubFetch(async () => new Response(
+      new ReadableStream({ cancel: () => { cancelled = true; } }),
+      { headers: { "x-amz-meta-x-amz-key-v2": "AQIDAHh..." } },
+    ));
+
+    const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
+
+    await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/1" }, s3)).rejects.toMatchObject({ reason: "unsupported" });
+    expect(cancelled).toBe(true);
+  });
+
   test("uses path-style URLs for dotted bucket names", async () => {
     const urls: string[] = [];
 
