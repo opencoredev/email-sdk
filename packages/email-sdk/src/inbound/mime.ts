@@ -367,7 +367,8 @@ function multipartBodies(body: string, boundary: string): string[] {
     current?.push(line);
   }
 
-  if (current?.length) parts.push(current.join("").replace(/\r?\n$/, ""));
+  // No closing delimiter owns the final line break, so an unterminated last part keeps its bytes.
+  if (current?.length) parts.push(current.join(""));
 
   return parts;
 }

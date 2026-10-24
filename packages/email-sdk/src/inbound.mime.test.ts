@@ -255,6 +255,14 @@ describe("hostile and unusual MIME", () => {
     expect(() => emailFromMime({ provider: "sparkpost", raw: "Content-Transfer-Encoding: base64\r\n\r\nA" })).not.toThrow();
   });
 
+  test("keeps the trailing line break of a final part that has no closing boundary", async () => {
+    const parsed = parseMimeMessage("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: application/octet-stream\r\n\r\nABC\r\n");
+    const closed = parseMimeMessage("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: application/octet-stream\r\n\r\nABC\r\n--b--\r\n");
+
+    expect(await parsed.attachments[0]!.read()).toEqual(new TextEncoder().encode("ABC\r\n"));
+    expect(await closed.attachments[0]!.read()).toEqual(new TextEncoder().encode("ABC"));
+  });
+
   test("keeps multipart/related resources as attachments and picks the root from start", () => {
     const related = (start: string) => parseMimeMessage([
       `Content-Type: multipart/related; boundary=r; type="text/html"${start}`,
