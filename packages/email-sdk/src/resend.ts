@@ -61,6 +61,8 @@ export function resend(
     raw: { baseUrl },
     async send(message, context) {
       const native = context.native;
+      const payload = await toResendPayload(message);
+
       // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
@@ -77,7 +79,7 @@ export function resend(
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toResendPayload(message, native)),
+        body: JSON.stringify(native ? withResendNative(payload, native) : payload),
       });
 
       if (!response.ok) {
@@ -100,28 +102,9 @@ export function resend(
   };
 }
 
-async function toResendPayload(message: EmailMessage, native: ResendNativeOptions | undefined) {
+async function toResendPayload(message: EmailMessage) {
   assertSupportedMessageFields("resend", message, SUPPORTED_MESSAGE_FIELDS.resend);
-  const payload = await toResendBasePayload(message);
 
-  if (!native) return payload;
-
-  const template = native.template && {
-    id: native.template.id,
-    variables: native.template.variables,
-  };
-
-  const withNative = {
-    ...payload,
-    ...(template && { html: undefined, text: undefined, template }),
-    ...(native.template?.useTemplateSubject && { subject: undefined }),
-    topic_id: native.topicId,
-  };
-
-  return native.body ? { ...withNative, ...native.body } : withNative;
-}
-
-async function toResendBasePayload(message: EmailMessage) {
   return {
     from: formatAddress(message.from),
     to: formatAddresses(message.to),
@@ -136,6 +119,24 @@ async function toResendBasePayload(message: EmailMessage) {
     tags: message.tags,
     scheduled_at: sendAtIso(message),
   };
+}
+
+type ResendPayload = Awaited<ReturnType<typeof toResendPayload>>;
+
+function withResendNative(payload: ResendPayload, native: ResendNativeOptions) {
+  const template = native.template && {
+    id: native.template.id,
+    variables: native.template.variables,
+  };
+
+  const withNative = {
+    ...payload,
+    ...(template && { html: undefined, text: undefined, template }),
+    ...(native.template?.useTemplateSubject && { subject: undefined }),
+    topic_id: native.topicId,
+  };
+
+  return native.body ? { ...withNative, ...native.body } : withNative;
 }
 
 async function toResendAttachment(attachment: EmailAttachment) {
