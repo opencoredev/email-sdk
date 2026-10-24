@@ -134,12 +134,15 @@ function parseHeaderBlock(block: string, decodeValue: (value: string) => string)
   return headers;
 }
 
-/** Decode RFC 2047 encoded words such as `=?UTF-8?B?w6k=?=`. */
+/**
+ * Decode RFC 2047 encoded words such as `=?UTF-8?B?w6k=?=`. An encoded word is printable ASCII
+ * without `?`, so a run holding other characters is left alone rather than truncated to bytes.
+ */
 export function decodeEncodedWords(value: string): string {
-  const word = /=\?([^?\s]+)\?([BbQq])\?([^?\s]*)\?=/g;
+  const word = /=\?([!->@-~]+)\?([BbQq])\?([!->@-~]*)\?=/g;
 
   return value
-    .replace(/(=\?[^?\s]+\?[BbQq]\?[^?\s]*\?=)\s+(?==\?[^?\s]+\?[BbQq]\?[^?\s]*\?=)/g, "$1")
+    .replace(/(=\?[!->@-~]+\?[BbQq]\?[!->@-~]*\?=)\s+(?==\?[!->@-~]+\?[BbQq]\?[!->@-~]*\?=)/g, "$1")
     .replace(word, (whole, charset: string, encoding: string, text: string) => {
       try {
         const bytes = encoding.toUpperCase() === "B"

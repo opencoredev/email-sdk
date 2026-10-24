@@ -417,6 +417,7 @@ describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
     ["adjacent words in different charsets", "=?ISO-8859-1?Q?=E9?= =?UTF-8?Q?=C3=A9?=", "éé"],
     ["words separated by a folded tab", "=?UTF-8?Q?a?=\t=?UTF-8?Q?b?=", "ab"],
     ["text between words is kept", "=?UTF-8?Q?a?= and =?UTF-8?Q?b?=", "a and b"],
+    ["non-ASCII inside a Q word is not an encoded word", "=?UTF-8?Q?Ā?=", "=?UTF-8?Q?Ā?="],
     ["language suffix on the charset", "=?UTF-8*en?Q?=C3=A9?=", "é"],
   ];
 
