@@ -196,6 +196,25 @@ describe("SNS verification", () => {
     expect(fetches).toBe(before + 2);
   });
 
+  test("refuses redirects when fetching certificates and confirming subscriptions", async () => {
+    const redirects: (RequestRedirect | undefined)[] = [];
+
+    const fetch = stubFetch(async (input, init) => {
+      redirects.push(init?.redirect);
+
+      return String(input) === certUrl ? new Response(certificatePem) : new Response("<ConfirmSubscriptionResponse/>");
+    });
+
+    const subscribeUrl = "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription&Token=tok";
+    const body = snsBody("confirm", { type: "SubscriptionConfirmation", extra: { Token: "tok", SubscribeURL: subscribeUrl } });
+
+    await handleInbound(new Request("https://example.test/ses", { method: "POST", body }), {
+      provider: "ses", fetch, topicArn, now: signedAt, certificateCache: new Map(),
+    });
+
+    expect(redirects).toEqual(["error", "error"]);
+  });
+
   test("rejects replayed messages outside the window", async () => {
     const message = parseSnsMessage(snsBody("hello"));
 
@@ -236,6 +255,64 @@ describe("SES receiving", () => {
     expect((await parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).messageId).toBe("msg-42@example.net");
     await expect(parseSesInbound({ body }, { fetch, topicArn, now: signedAt })).rejects.toThrow("Pass s3 credentials");
     expect(await fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/abc 1" }, s3)).toEqual(eml);
+  });
+
+  test("escapes S3 keys the way SigV4 signs them and rejects dot segments", async () => {
+    const urls: string[] = [];
+
+    const fetch = stubFetch(async input => {
+      urls.push(String(input));
+
+      return new Response(eml);
+    });
+
+    const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
+
+    await fetchSesInboundFromS3({ bucket: "inbound-mail", key: "archive(1)/inbound!/it's*~.eml" }, s3);
+    expect(urls).toEqual(["https://inbound-mail.s3.us-east-1.amazonaws.com/archive%281%29/inbound%21/it%27s%2A~.eml"]);
+
+    for (const key of ["mail/../abc", "./abc", "mail/."]) {
+      await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key }, s3)).rejects.toMatchObject({ reason: "payload_invalid" });
+    }
+
+    expect(urls).toHaveLength(1);
+  });
+
+  test("uses path-style URLs for dotted bucket names", async () => {
+    const urls: string[] = [];
+
+    const fetch = stubFetch(async input => {
+      urls.push(String(input));
+
+      return new Response(eml);
+    });
+
+    await fetchSesInboundFromS3({ bucket: "inbound.acme", key: "mail/1" }, { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "eu-west-1", fetch });
+    expect(urls).toEqual(["https://s3.eu-west-1.amazonaws.com/inbound.acme/mail/1"]);
+  });
+
+  test("downloads S3 mail with the caller's fetch and signal unless s3 overrides them", async () => {
+    const body = snsBody(sesNotification({ type: "S3", bucketName: "inbound-mail", objectKey: "mail/1" }));
+    const controller = new AbortController();
+    const signals: (AbortSignal | null | undefined)[] = [];
+
+    const fetch = stubFetch(async (input, init) => {
+      if (String(input) === certUrl) return new Response(certificatePem);
+
+      signals.push(init?.signal);
+
+      return new Response(eml);
+    });
+
+    const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1" };
+
+    expect((await parseSesInbound({ body }, { fetch, signal: controller.signal, s3, topicArn, now: signedAt })).messageId).toBe("msg-42@example.net");
+    expect(signals).toEqual([controller.signal]);
+
+    const override = stubFetch(async () => new Response(eml));
+
+    await parseSesInbound({ body }, { fetch, s3: { ...s3, fetch: override }, topicArn, now: signedAt });
+    expect(signals).toHaveLength(1);
   });
 
   test("rejects unsigned or non-Received messages", async () => {
@@ -342,6 +419,12 @@ describe("handleInbound", () => {
     const result = await handleInbound(post(body), { provider: "graph", clientState: "s", api: { getAccessToken: () => "t", fetch } });
 
     expect(result.type === "emails" && result.emails.map(email => email.id)).toEqual(["m1"]);
+  });
+
+  test("refuses the Graph handshake when no clientState is configured", async () => {
+    const handshake = post("", {}, "https://example.test/graph?validationToken=abc");
+
+    await expect(handleInbound(handshake, { provider: "graph", clientState: "", api: { getAccessToken: () => "t" } })).rejects.toMatchObject({ reason: "secret_missing", provider: "graph" });
   });
 
   test("confirms SNS subscriptions only after verifying them", async () => {

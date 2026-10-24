@@ -500,6 +500,38 @@ describe("Primitive", () => {
   });
 });
 
+describe("Primitive download URLs", () => {
+  const body = text("primitive-email-received.json").replace('"included": true', '"included": false');
+  const withUrl = (url: string) => body.replace("https://api.primitive.dev/v1/emails/em_01HZYABCDEF1234567890/raw?token=download-token", url);
+
+  test("downloads only from primitive.dev over https, without following redirects", async () => {
+    const requests: string[] = [];
+
+    const fetch = stubFetch(async (input, init) => {
+      requests.push(`${String(input)} ${init?.redirect ?? ""}`);
+
+      return new Response("Subject: downloaded\r\n\r\nbody");
+    });
+
+    expect((await parsePrimitiveInbound({ body }, { fetch })).subject).toBe("downloaded");
+    expect(requests).toEqual(["https://api.primitive.dev/v1/emails/em_01HZYABCDEF1234567890/raw?token=download-token error"]);
+
+    for (const url of ["http://169.254.169.254/latest/meta-data", "https://evil.test/raw", "http://api.primitive.dev/raw", "https://api.primitive.dev:8443/raw", "https://primitive.dev.evil.test/raw", "https://u:p@api.primitive.dev/raw"]) {
+      await expect(parsePrimitiveInbound({ body: withUrl(url) }, { fetch })).rejects.toMatchObject({ reason: "payload_invalid", provider: "primitive" });
+    }
+
+    expect(requests).toHaveLength(1);
+  });
+
+  test("allows self-hosted origins the caller lists", async () => {
+    const fetch = stubFetch(async () => new Response("Subject: self-hosted\r\n\r\nbody"));
+    const local = withUrl("http://localhost:4001/emails/em_1/raw?token=t");
+
+    expect((await parsePrimitiveInbound({ body: local }, { fetch, downloadOrigins: ["http://localhost:4001"] })).subject).toBe("self-hosted");
+    await expect(parsePrimitiveInbound({ body: local }, { fetch, downloadOrigins: ["http://localhost:4002"] })).rejects.toMatchObject({ reason: "payload_invalid" });
+  });
+});
+
 describe("JetEmail", () => {
   const body = text("jetemail-inbound.json");
 

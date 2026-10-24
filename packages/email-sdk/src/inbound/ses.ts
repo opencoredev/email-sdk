@@ -227,7 +227,8 @@ export function certificatePublicKey(pem: string): Uint8Array<ArrayBuffer> {
 }
 
 async function fetchSigningKey(url: URL, hash: string, options: SnsVerificationOptions): Promise<CryptoKey> {
-  const response = await providerFetch(provider, url.href, { fetch: options.fetch, signal: options.signal });
+  // A redirect would leave the checked SNS host, so it is an error rather than followed.
+  const response = await providerFetch(provider, url.href, { fetch: options.fetch, signal: options.signal, redirect: "error" });
 
   return crypto.subtle.importKey(
     "spki",
@@ -332,7 +333,7 @@ export async function confirmSnsSubscription(message: SnsMessage, options: Inbou
     throw payloadError(provider, "SNS message is not a confirmable subscription from an amazonaws.com host.");
   }
 
-  await providerFetch(provider, message.SubscribeURL, { fetch: options.fetch, signal: options.signal });
+  await providerFetch(provider, message.SubscribeURL, { fetch: options.fetch, signal: options.signal, redirect: "error" });
 }
 
 function sesVerdict(receipt: JsonObject | undefined, field: string) {
@@ -399,13 +400,33 @@ export function sesEmailFromNotification(received: SesReceivedNotification, raw:
   return email;
 }
 
+/**
+ * Percent-encode one S3 key segment the way SigV4 canonicalizes it: every byte except the
+ * unreserved set `A-Z a-z 0-9 - _ . ~`. `encodeURIComponent` leaves `!'()*` alone, which S3
+ * signs as escaped, so those would not match.
+ */
+function s3PathSegment(segment: string): string {
+  return encodeURIComponent(segment).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 /** Download a message an SES S3 receipt action stored, signed with SigV4. */
 export async function fetchSesInboundFromS3(location: SesS3Location, options: SesInboundS3Options): Promise<Uint8Array> {
-  const path = location.key.split("/").map(encodeURIComponent).join("/");
+  const segments = location.key.split("/");
 
+  // URL parsing collapses `.` and `..` segments, which would sign and fetch a different key.
+  if (segments.some(segment => segment === "." || segment === "..")) {
+    throw payloadError(provider, "SES S3 object key has a . or .. path segment and cannot be fetched by URL.");
+  }
+
+  const path = segments.map(s3PathSegment).join("/");
+  const bucket = s3PathSegment(location.bucket);
+
+  // The S3 wildcard certificate covers one label, so dotted bucket names need path-style URLs.
   const url = options.endpoint
-    ? new URL(`${options.endpoint.replace(/\/$/, "")}/${encodeURIComponent(location.bucket)}/${path}`)
-    : new URL(`https://${location.bucket}.s3.${options.region}.amazonaws.com/${path}`);
+    ? new URL(`${options.endpoint.replace(/\/$/, "")}/${bucket}/${path}`)
+    : location.bucket.includes(".")
+      ? new URL(`https://s3.${options.region}.amazonaws.com/${bucket}/${path}`)
+      : new URL(`https://${location.bucket}.s3.${options.region}.amazonaws.com/${path}`);
 
   const headers = await signAwsRequest({
     accessKeyId: options.accessKeyId,
@@ -477,7 +498,9 @@ export async function parseSesInbound(
   if (received.content) return sesEmailFromNotification(received, received.content);
 
   if (received.s3 && options.s3) {
-    return sesEmailFromNotification(received, await fetchSesInboundFromS3(received.s3, options.s3));
+    const s3 = { ...options.s3, fetch: options.s3.fetch ?? options.fetch, signal: options.s3.signal ?? options.signal };
+
+    return sesEmailFromNotification(received, await fetchSesInboundFromS3(received.s3, s3));
   }
 
   throw payloadError(

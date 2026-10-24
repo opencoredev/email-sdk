@@ -7,7 +7,7 @@ import { parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/maile
 import { parseMailgunInbound, verifyMailgunInbound } from "./inbound/mailgun.js";
 import { parseMailPaceInbound, verifyMailPaceInbound } from "./inbound/mailpace.js";
 import { parsePostmarkInbound } from "./inbound/postmark.js";
-import { parsePrimitiveInbound, verifyPrimitiveInbound } from "./inbound/primitive.js";
+import { parsePrimitiveInbound, verifyPrimitiveInbound, type PrimitiveInboundOptions } from "./inbound/primitive.js";
 import { fetchResendInboundEmail, parseResendInbound, verifyResendInbound, type ResendInboundApiOptions } from "./inbound/resend.js";
 import { parseSendGridInbound, verifySendGridInbound } from "./inbound/sendgrid.js";
 import {
@@ -112,6 +112,8 @@ export type { PostmarkInboundApiOptions } from "./inbound/postmark.js";
 
 export { parsePrimitiveInbound, verifyPrimitiveInbound } from "./inbound/primitive.js";
 
+export type { PrimitiveInboundOptions } from "./inbound/primitive.js";
+
 export { fetchResendInboundEmail, parseResendInbound, verifyResendInbound } from "./inbound/resend.js";
 
 export type { ResendInboundApiOptions } from "./inbound/resend.js";
@@ -167,7 +169,7 @@ export type InboundHandlerConfig = InboundClockOptions & InboundFetchOptions & (
   | { provider: "mailersend"; secret: Secret }
   | { provider: "mailpace"; publicKey: Secret }
   | { provider: "lettermint"; secret: Secret }
-  | { provider: "primitive"; secret: Secret }
+  | ({ provider: "primitive"; secret: Secret } & Pick<PrimitiveInboundOptions, "downloadOrigins">)
   | { provider: "jetemail"; secret: Secret }
   | ({ provider: "brevo"; auth: InboundEndpointAuth } & BrevoInboundOptions)
 );
@@ -193,7 +195,7 @@ function endpointAuth(payload: InboundRequestPayload, auth: InboundEndpointAuth)
 export async function parseInbound(
   provider: Exclude<InboundProvider, "cloudflare" | "graph" | "mailtrap">,
   payload: InboundRequestPayload,
-  options: InboundFetchOptions & SesInboundOptions = {},
+  options: InboundFetchOptions & SesInboundOptions & BrevoInboundOptions & PrimitiveInboundOptions = {},
 ): Promise<InboundEmail[]> {
   switch (provider) {
     case "resend":
@@ -239,6 +241,11 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
   const clock = { now: config.now, toleranceSeconds: config.toleranceSeconds };
 
   if (config.provider === "graph") {
+    // Refuse to confirm a subscription this handler could never verify notifications for.
+    if (!config.clientState) {
+      throw new InboundError("Graph notifications need the subscription clientState.", { reason: "secret_missing", provider: "graph" });
+    }
+
     const validation = graphValidationResponse(request.url);
 
     if (validation) return { type: "handshake", response: validation };
@@ -327,7 +334,7 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
     case "primitive":
       assertVerified("primitive", await verifyPrimitiveInbound(payload, { ...clock, secret: config.secret }));
 
-      return { type: "emails", emails: [await parsePrimitiveInbound(payload, fetchOptions)] };
+      return { type: "emails", emails: [await parsePrimitiveInbound(payload, { ...fetchOptions, downloadOrigins: config.downloadOrigins })] };
     case "jetemail":
       assertVerified("jetemail", await verifyJetEmailInbound(payload, { ...clock, secret: config.secret }));
 

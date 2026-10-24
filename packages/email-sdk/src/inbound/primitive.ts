@@ -24,6 +24,37 @@ import type {
 
 const provider = "primitive";
 
+export interface PrimitiveInboundOptions extends InboundFetchOptions {
+  /**
+   * Extra origins (`https://mail.example.com`, `http://localhost:4001`) a self-hosted Primitive
+   * may issue raw download URLs from. Managed Primitive's `https://*.primitive.dev` is always allowed.
+   */
+  downloadOrigins?: readonly string[];
+}
+
+/**
+ * The download URL arrives in the webhook body, so it is only fetched from Primitive's own hosts
+ * (or origins the caller lists). Anything else could point the webhook host at internal services.
+ */
+function downloadUrl(value: string, origins: readonly string[]): URL {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw payloadError(provider, "Primitive download URL is not a valid URL.");
+  }
+
+  const managed = url.protocol === "https:" && url.port === "" &&
+    (url.hostname === "primitive.dev" || url.hostname.endsWith(".primitive.dev"));
+
+  if (url.username || url.password || !(managed || origins.includes(url.origin))) {
+    throw payloadError(provider, `Primitive download URL ${url.origin} is not a primitive.dev host or a configured downloadOrigins entry.`);
+  }
+
+  return url;
+}
+
 /** Verify `Primitive-Signature: t=<unix>,v1=<hex>`: HMAC-SHA256 over `<t>.<raw body>`. */
 export function verifyPrimitiveInbound(
   payload: InboundRequestPayload,
@@ -46,11 +77,12 @@ function primitiveSecurity(email: JsonObject): InboundSecurity {
 
 /**
  * Parse a Primitive `email.received` webhook. The raw message is used when inlined; larger
- * messages are downloaded from the event's signed `content.download.url`.
+ * messages are downloaded from the event's signed `content.download.url`, which must be an
+ * `https://*.primitive.dev` URL or match `downloadOrigins`.
  */
 export async function parsePrimitiveInbound(
   payload: InboundRequestPayload,
-  options: InboundFetchOptions = {},
+  options: PrimitiveInboundOptions = {},
 ): Promise<InboundEmail> {
   const root = parseJsonObjectBody(provider, payload.body);
 
@@ -65,13 +97,18 @@ export async function parsePrimitiveInbound(
   const content = jsonObject(email.content);
   const inline = jsonObject(content?.raw);
   const data = inline?.included === true ? jsonText(inline.data) : undefined;
-  const downloadUrl = jsonText(jsonObject(content?.download)?.url);
+  const download = jsonText(jsonObject(content?.download)?.url);
   let raw: Uint8Array;
 
   if (data !== undefined) {
     raw = decodeBase64(data);
-  } else if (downloadUrl) {
-    raw = await fetchBytes(provider, downloadUrl, options);
+  } else if (download) {
+    // Primitive serves raw mail directly; refusing redirects keeps the host check meaningful.
+    raw = await fetchBytes(provider, downloadUrl(download, options.downloadOrigins ?? []), {
+      fetch: options.fetch,
+      signal: options.signal,
+      redirect: "error",
+    });
   } else {
     throw payloadError(provider, "Primitive webhook has neither inline raw content nor a download URL.");
   }
