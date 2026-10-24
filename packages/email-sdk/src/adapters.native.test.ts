@@ -4,6 +4,7 @@ import { createEmailClient } from "./core.js";
 import { loops } from "./loops.js";
 import { mailersend } from "./mailersend.js";
 import { mailgun } from "./mailgun.js";
+import { defaultsPlugin } from "./plugins-defaults.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
@@ -401,6 +402,20 @@ describe("provider-native options through the client", () => {
 
     expect(first.seen).toEqual([{ flag: "batch" }, { flag: "item" }]);
     expect(second.seen).toEqual([{ flag: "batch-second" }]);
+  });
+
+  test("middleware that rewrites send options keeps native entries", async () => {
+    const only = recordingAdapter("only", false);
+
+    const client = createEmailClient({
+      adapters: [only.adapter],
+      plugins: [defaultsPlugin({ sendMetadata: { tenant: "t1" } })],
+      telemetry: false,
+    });
+
+    await client.send(simple, { native: { only: { flag: "kept" } } });
+
+    expect(only.seen).toEqual([{ flag: "kept" }]);
   });
 
   test("withAdapter forwards native options", async () => {
