@@ -14,7 +14,6 @@ import {
   isStringMember,
   readJson,
 } from "./internal/decode.js";
-import { mailboxAddress } from "./internal/address.js";
 import type { JsonValue } from "./internal/decode.js";
 import type {
   EmailAddress,
@@ -78,7 +77,13 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
 }
 
 export function emailAddressOf(address: EmailAddress): string {
-  return mailboxAddress(address);
+  if (!isStringMember(address)) {
+    return address.email;
+  }
+
+  const match = address.match(/<([^>]+)>/);
+
+  return (match?.[1] ?? address).trim();
 }
 
 /**
