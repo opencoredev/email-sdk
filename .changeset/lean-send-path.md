@@ -6,7 +6,7 @@ Sending adds much less work on top of the provider's HTTP call. A client with no
 
 SES caches its SigV4 signing key for each UTC day instead of deriving it on every send, which makes a signed SES send about three times faster. It also sorts canonical headers by character code, as SigV4 requires, instead of by locale.
 
-Each adapter now keeps its provider limits in its own module, so importing one adapter no longer bundles every provider's validation rules. The minified Resend entry shrinks from 11.4 KB to 8.1 KB.
+Each adapter now keeps its provider limits in its own module, so importing one adapter no longer bundles every provider's validation rules. The minified Resend entry shrinks from 11.4 KB to 8.3 KB.
 
 Fixes:
 
