@@ -51,7 +51,7 @@ Postmark sends its stored `welcome` template. If the route falls back to Resend 
 - An adapter with no entry sends exactly what it would send without `native`.
 - TypeScript infers the accepted keys from the adapters you passed to `createEmailClient`. An unknown key, a key for an adapter without native options (such as SMTP), or a field from another provider fails type checking.
 - That check needs a literal name for every adapter, the same as `adapter` and `fallback` route names. An unnamed `smtp({ host })` written inside the `adapters` array gets the name type `string`, and the client then accepts any key. Pass `name: "smtp"` to keep the check.
-- Native options aren't validated at runtime. If a JavaScript caller passes the wrong shape, the provider's own API returns the error.
+- The SDK doesn't check the shape of native options at runtime. If a JavaScript caller passes the wrong shape, the provider's own API returns the error. The only runtime checks are the two rules below for the `body`, `fields`, and SES `headers` escape hatches.
 - Existing code annotated with `EmailSendOptions<Name>` keeps compiling. That type has no `native` field; to pass native options through your own helper, type the parameter as `Parameters<typeof email.send>[1]`.
 
 ## Templates
@@ -99,6 +99,8 @@ await email.send(message, {
 ```
 
 Mailgun sends multipart form data, so its escape hatch is `fields` instead of `body`. Each field replaces the SDK's value for that name, and an array value appends one field per item: `fields: { "o:dkim": "no" }`.
+
+`sendPersonalized` rejects `body` and `fields` with an `EmailValidationError` before anything is sent. Either one can replace the recipients, such as SendGrid's `personalizations` or Mailgun's `to`, and the result's `accepted` list would then name people the provider never received. Typed options and `headers` still work in personalized sends. To use `body` or `fields`, call `send()` for each recipient.
 
 SMTP, Cloudflare, Microsoft Graph, Helo, Sendheron, JetEmail, Primitive, Lettermint, and Lettr don't take native options yet.
 
