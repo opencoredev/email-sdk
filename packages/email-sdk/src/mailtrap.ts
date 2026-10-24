@@ -9,7 +9,13 @@ import {
   optionalSingleApiAddress,
 } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertMaxItems, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertMaxItems,
+  assertSupportedMessageFields,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type MailtrapAdapterOptions = {
   apiKey: string;
@@ -17,11 +23,17 @@ export type MailtrapAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const mailtrapRules: MessageRules = (message) => {
+  assertMaxItems("mailtrap", "replyTo", arrayify(message.replyTo), 1);
+  assertMaxItems("mailtrap", "tag", message.tags ?? [], 1);
+};
+
 export function mailtrap(
   options: MailtrapAdapterOptions,
 ): EmailAdapter<"mailtrap", { baseUrl: string }> {
   return jsonProvider({
     name: "mailtrap",
+    rules: mailtrapRules,
     baseUrl: options.baseUrl ?? "https://send.api.mailtrap.io",
     endpoint: "/api/send",
     headers: {

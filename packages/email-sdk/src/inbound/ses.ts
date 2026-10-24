@@ -1,4 +1,4 @@
-import { signAwsRequest } from "../internal/aws-sigv4.js";
+import { createSigningKeyCache, signAwsRequest } from "../internal/aws-sigv4.js";
 import type { JsonObject, JsonValue } from "../internal/decode.js";
 import { emailFromMime } from "./normalize.js";
 import {
@@ -77,6 +77,9 @@ export interface SesInboundS3Options extends InboundFetchOptions {
 }
 
 const defaultCertificateCache = new Map<string, SnsCertificateCacheEntry>();
+
+// Holds only the derived key for the most recent (secret, UTC day, region) S3 scope.
+const s3SigningKeys = createSigningKeyCache();
 
 const CERTIFICATE_CACHE_LIMIT = 16;
 
@@ -430,7 +433,7 @@ export async function fetchSesInboundFromS3(location: SesS3Location, options: Se
       ? new URL(`https://s3.${options.region}.amazonaws.com/${bucket}/${path}`)
       : new URL(`https://${location.bucket}.s3.${options.region}.amazonaws.com/${path}`);
 
-  const headers = await signAwsRequest({
+  const headers = await signAwsRequest(s3SigningKeys, {
     accessKeyId: options.accessKeyId,
     secretAccessKey: options.secretAccessKey,
     sessionToken: options.sessionToken,

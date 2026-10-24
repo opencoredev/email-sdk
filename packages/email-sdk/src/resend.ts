@@ -13,6 +13,7 @@ import {
   readErrorBody,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  mapAttachments,
 } from "./utils.js";
 
 export type ResendAdapterOptions = {
@@ -33,6 +34,7 @@ export function resend(
     ...builtInAdapterDefinition("resend"),
     raw: { baseUrl },
     async send(message, context) {
+      // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
@@ -83,7 +85,7 @@ async function toResendPayload(message: EmailMessage) {
     bcc: formatAddresses(message.bcc),
     reply_to: formatAddresses(message.replyTo),
     headers: headersToObject(message.headers),
-    attachments: await Promise.all((message.attachments ?? []).map(toResendAttachment)),
+    attachments: await mapAttachments(message.attachments, toResendAttachment),
     tags: message.tags,
     scheduled_at: sendAtIso(message),
   };

@@ -1,7 +1,14 @@
+import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type LoopsAdapterOptions = {
   apiKey: string;
@@ -10,13 +17,18 @@ export type LoopsAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const loopsRules: MessageRules = (message) => {
+  assertMaxItems("loops", "recipient", arrayify(message.to), 1);
+};
+
 export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { baseUrl: string }> {
   if (!options.transactionalId) {
-    throw new Error("loops requires a transactionalId.");
+    throw new EmailValidationError("loops requires a transactionalId.");
   }
 
   return jsonProvider({
     name: "loops",
+    rules: loopsRules,
     baseUrl: options.baseUrl ?? "https://app.loops.so",
     endpoint: "/api/v1/transactional",
     headers: {
@@ -28,7 +40,7 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
       const attachments = await base64Attachments(message);
 
       if (recipients.length !== 1) {
-        throw new Error("loops only supports one recipient per transactional send.");
+        throw new EmailValidationError("loops only supports one recipient per transactional send.");
       }
 
       return {

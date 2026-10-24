@@ -9,6 +9,11 @@ import {
   sendAtIso,
 } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
+import {
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type BrevoAdapterOptions = {
   apiKey: string;
@@ -16,9 +21,14 @@ export type BrevoAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const brevoRules: MessageRules = (message) => {
+  assertMaxItems("brevo", "replyTo", arrayify(message.replyTo), 1);
+};
+
 export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { baseUrl: string }> {
   return jsonProvider({
     name: "brevo",
+    rules: brevoRules,
     baseUrl: options.baseUrl ?? "https://api.brevo.com",
     endpoint: "/v3/smtp/email",
     headers: {

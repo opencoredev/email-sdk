@@ -9,7 +9,13 @@ import {
   optionalSingleApiAddress,
 } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type PlunkAdapterOptions = {
   apiKey: string;
@@ -17,9 +23,14 @@ export type PlunkAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const plunkRules: MessageRules = (message) => {
+  assertMaxItems("plunk", "replyTo", arrayify(message.replyTo), 1);
+};
+
 export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { baseUrl: string }> {
   return jsonProvider({
     name: "plunk",
+    rules: plunkRules,
     baseUrl: options.baseUrl ?? "https://next-api.useplunk.com",
     endpoint: "/v1/send",
     headers: { Authorization: `Bearer ${options.apiKey}` },

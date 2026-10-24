@@ -3,13 +3,15 @@ import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 import {
-  SUPPORTED_MESSAGE_FIELDS,
-  builtInAdapterDefinition,
+  BUILT_IN_ADAPTER_CAPABILITIES,
   httpErrorMessage,
   isRetryableStatus,
   normalizeAdapterResult,
   readErrorBody,
-  validateBuiltInAdapter,
+  validateBuiltInMessage,
+  type AdapterRulesOption,
+  type BuiltInAdapterName,
+  type MessageRules,
 } from "./utils.js";
 
 type LegacyAdapterResult = Omit<EmailSendResult, "adapter"> & {
@@ -18,7 +20,7 @@ type LegacyAdapterResult = Omit<EmailSendResult, "adapter"> & {
   messageId?: string;
 };
 
-export type JsonProviderOptions<Name extends string, TPayload> = {
+export type JsonProviderOptions<Name extends BuiltInAdapterName, TPayload> = AdapterRulesOption<Name> & {
   name: Name;
   baseUrl: string;
   endpoint: string;
@@ -33,26 +35,32 @@ export type JsonProviderOptions<Name extends string, TPayload> = {
   ) => LegacyAdapterResult;
 };
 
-export function jsonProvider<
-  const Name extends keyof typeof SUPPORTED_MESSAGE_FIELDS,
-  TPayload,
->(options: JsonProviderOptions<Name, TPayload>): EmailAdapter<Name, { baseUrl: string }> {
+export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
+  options: JsonProviderOptions<Name, TPayload>,
+): EmailAdapter<Name, { baseUrl: string }> {
+  const rules: MessageRules | undefined = options.rules;
+  const url = `${options.baseUrl}${options.endpoint}`;
+
   return {
     name: options.name,
-    ...builtInAdapterDefinition(options.name),
+    capabilities: BUILT_IN_ADAPTER_CAPABILITIES[options.name],
+    validate(message) {
+      validateBuiltInMessage(options.name, message, rules);
+    },
     raw: { baseUrl: options.baseUrl },
     async send(message, context) {
-      validateBuiltInAdapter(options.name, message);
+      validateBuiltInMessage(options.name, message, rules);
       const fetcher = options.fetch ?? fetch;
+      const payload = await options.buildPayload(message);
 
-      const response = await fetcher(`${options.baseUrl}${options.endpoint}`, {
+      const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
         headers: {
           "Content-Type": "application/json",
           ...options.headers,
         },
-        body: JSON.stringify(await options.buildPayload(message)),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

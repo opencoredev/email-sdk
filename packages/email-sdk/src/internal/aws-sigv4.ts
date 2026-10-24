@@ -1,21 +1,67 @@
-import { isStringMember } from "./decode.js";
-
-export interface AwsSignatureInput {
-  accessKeyId: string;
+export interface AwsCredentialScope {
   secretAccessKey: string;
-  sessionToken?: string;
   region: string;
   service: string;
+}
+
+export interface AwsSignatureInput extends AwsCredentialScope {
+  accessKeyId: string;
+  sessionToken?: string;
   method: string;
   url: URL;
   body: string;
   headers: Record<string, string>;
 }
 
-/** Sign a request with AWS Signature Version 4. */
-export async function signAwsRequest(input: AwsSignatureInput) {
-  const now = new Date();
-  const amzDate = toAmzDate(now);
+interface CachedSigningKey extends AwsCredentialScope {
+  dateStamp: string;
+  key: Promise<CryptoKey>;
+}
+
+/**
+ * The derived SigV4 signing key depends only on the secret, UTC date, region, and service, so
+ * it is reused while all four stay the same instead of running four HMAC rounds per request.
+ * A rotated secret or a new day derives a fresh key. Credentials themselves are never cached:
+ * callers pass them on every request.
+ */
+export function createSigningKeyCache() {
+  let cached: CachedSigningKey | undefined;
+
+  return (scope: AwsCredentialScope, dateStamp: string) => {
+    if (
+      cached?.dateStamp === dateStamp &&
+      cached.secretAccessKey === scope.secretAccessKey &&
+      cached.region === scope.region &&
+      cached.service === scope.service
+    ) {
+      return cached.key;
+    }
+
+    const key = deriveSigningKey(scope, dateStamp);
+
+    const entry: CachedSigningKey = {
+      secretAccessKey: scope.secretAccessKey,
+      region: scope.region,
+      service: scope.service,
+      dateStamp,
+      key,
+    };
+
+    cached = entry;
+    // A failed derivation must not poison later requests.
+    key.catch(() => {
+      if (cached === entry) cached = undefined;
+    });
+
+    return key;
+  };
+}
+
+export type SigningKeyCache = ReturnType<typeof createSigningKeyCache>;
+
+/** Sign a request with AWS Signature Version 4, reusing a derived key from `signingKeys`. */
+export async function signAwsRequest(signingKeys: SigningKeyCache, input: AwsSignatureInput) {
+  const amzDate = toAmzDate(new Date());
   const dateStamp = amzDate.slice(0, 8);
   const payloadHash = await sha256Hex(input.body);
 
@@ -35,7 +81,8 @@ export async function signAwsRequest(input: AwsSignatureInput) {
     host: input.url.host,
   })
     .map(([name, value]) => [name.toLowerCase(), value.trim()] as const)
-    .sort(([left], [right]) => left.localeCompare(right));
+    // SigV4 orders headers by character code, not by locale.
+    .sort(([left], [right]) => compareCodeUnits(left, right));
 
   const signedHeaders = canonicalHeaders.map(([name]) => name).join(";");
   const credentialScope = `${dateStamp}/${input.region}/${input.service}/aws4_request`;
@@ -56,23 +103,35 @@ export async function signAwsRequest(input: AwsSignatureInput) {
     await sha256Hex(canonicalRequest),
   ].join("\n");
 
-  const signingKey = await getSigningKey(
-    input.secretAccessKey,
-    dateStamp,
-    input.region,
-    input.service,
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    await signingKeys(input, dateStamp),
+    textBytes(stringToSign),
   );
-
-  const signature = await hmacHex(signingKey, stringToSign);
 
   return {
     ...requestHeaders,
     Authorization: [
       `AWS4-HMAC-SHA256 Credential=${input.accessKeyId}/${credentialScope}`,
       `SignedHeaders=${signedHeaders}`,
-      `Signature=${signature}`,
+      `Signature=${bytesToHex(new Uint8Array(signature))}`,
     ].join(", "),
   };
+}
+
+async function deriveSigningKey(scope: AwsCredentialScope, dateStamp: string) {
+  const dateKey = await hmac(textBytes(`AWS4${scope.secretAccessKey}`), dateStamp);
+  const regionKey = await hmac(dateKey, scope.region);
+  const serviceKey = await hmac(regionKey, scope.service);
+  const signingKey = await hmac(serviceKey, "aws4_request");
+
+  return importHmacKey(signingKey);
+}
+
+function compareCodeUnits(left: string, right: string) {
+  if (left === right) return 0;
+
+  return left < right ? -1 : 1;
 }
 
 function toAmzDate(date: Date) {
@@ -86,12 +145,14 @@ async function sha256Hex(value: string) {
 }
 
 function canonicalQueryString(searchParams: URLSearchParams) {
+  if (searchParams.size === 0) return "";
+
   return [...searchParams.entries()]
     .map(([key, value]) => [awsEncode(key), awsEncode(value)] as const)
     .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
-      const keyOrder = leftKey.localeCompare(rightKey);
+      const keyOrder = compareCodeUnits(leftKey, rightKey);
 
-      return keyOrder === 0 ? leftValue.localeCompare(rightValue) : keyOrder;
+      return keyOrder === 0 ? compareCodeUnits(leftValue, rightValue) : keyOrder;
     })
     .map(([key, value]) => `${key}=${value}`)
     .join("&");
@@ -104,48 +165,28 @@ function awsEncode(value: string) {
   );
 }
 
-async function hmac(key: string | Uint8Array, value: string) {
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    isStringMember(key) ? textBytes(key) : toArrayBuffer(key),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+function importHmacKey(key: Uint8Array<ArrayBuffer>) {
+  return crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+}
 
-  const signature = await crypto.subtle.sign("HMAC", cryptoKey, textBytes(value));
+async function hmac(key: Uint8Array<ArrayBuffer>, value: string) {
+  const signature = await crypto.subtle.sign("HMAC", await importHmacKey(key), textBytes(value));
 
   return new Uint8Array(signature);
 }
 
-async function hmacHex(key: string | Uint8Array, value: string) {
-  return bytesToHex(await hmac(key, value));
-}
-
-async function getSigningKey(
-  secretAccessKey: string,
-  dateStamp: string,
-  region: string,
-  service: string,
-) {
-  const dateKey = await hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const regionKey = await hmac(dateKey, region);
-  const serviceKey = await hmac(regionKey, service);
-
-  return hmac(serviceKey, "aws4_request");
-}
+const encoder = new TextEncoder();
 
 function textBytes(value: string) {
-  return new TextEncoder().encode(value);
+  return encoder.encode(value);
 }
 
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-
-  return copy.buffer;
-}
+const HEX = Array.from({ length: 256 }, (_, byte) => byte.toString(16).padStart(2, "0"));
 
 function bytesToHex(bytes: Uint8Array) {
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  let hex = "";
+
+  for (const byte of bytes) hex += HEX[byte];
+
+  return hex;
 }

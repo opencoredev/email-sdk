@@ -403,6 +403,18 @@ describe("graph authentication", () => {
     expect(capture.calls).toHaveLength(0);
   });
 
+  test("rejects an out-of-range tokenTimeoutMs as a validation error", () => {
+    expect(() =>
+      graph({
+        user,
+        tenantId: "tenant",
+        clientId: "client",
+        clientSecret: "secret",
+        tokenTimeoutMs: 0,
+      }),
+    ).toThrow(EmailValidationError);
+  });
+
   test("aborts while an injected token provider is pending", async () => {
     const controller = new AbortController();
 

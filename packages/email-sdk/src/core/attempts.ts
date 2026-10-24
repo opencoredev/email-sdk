@@ -19,7 +19,7 @@ import type {
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
 import { isAbort, sleep, throwIfAborted } from "./failures.js";
 import { hookEvent, invokeAfterSendMiddleware, invokeHooks } from "./lifecycle.js";
-import { messageFacts } from "./send-telemetry.js";
+import { recipientCount } from "./send-telemetry.js";
 
 export const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
@@ -49,22 +49,25 @@ export function acceptanceCounts(
   };
 }
 
+export type AttemptPath = "single" | "personalized_native" | "personalized_expanded";
+
+/** Runs one adapter call, timing it for telemetry when telemetry is on. */
 export type MeasureAttempt = <T extends EmailSendResult>(
   adapter: EmailAdapter,
-  path: "single" | "personalized_native" | "personalized_expanded",
+  path: AttemptPath,
   recipients: number,
   invoke: () => T | PromiseLike<T>,
-) => Promise<T>;
+) => T | PromiseLike<T>;
 
 export type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
   options?: EmailSendOptions;
   retry?: EmailRetryConfig;
-  hooks: EmailHooks[];
-  middleware: EmailSendMiddleware[];
+  hooks: readonly EmailHooks[];
+  middleware: readonly EmailSendMiddleware[];
   measureAttempt: MeasureAttempt;
-  path?: "single" | "personalized_expanded";
+  path?: Exclude<AttemptPath, "personalized_native">;
 };
 
 export class AttemptFailure {
@@ -82,7 +85,9 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
     const event = hookEvent(input.adapter.name, input.message, attempt, input.options?.metadata);
-    await invokeHooks(input.hooks, "beforeSend", event);
+    const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
+
+    if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
 
@@ -90,7 +95,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       const adapterResult = await input.measureAttempt(
         input.adapter,
         input.path ?? "single",
-        messageFacts(input.message).recipients,
+        recipientCount(input.message),
         () =>
           input.adapter.send(input.message, {
             adapter: input.adapter.name,
@@ -127,9 +132,11 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       continue;
     }
 
-    const afterEvent: EmailAfterSendEvent = { ...event, response: result };
-    await invokeAfterSendMiddleware(input.middleware, afterEvent);
-    await invokeHooks(input.hooks, "afterSend", afterEvent);
+    if (input.middleware.length > 0 || input.hooks.length > 0) {
+      const afterEvent: EmailAfterSendEvent = { ...event, response: result };
+      await invokeAfterSendMiddleware(input.middleware, afterEvent);
+      await invokeHooks(input.hooks, "afterSend", afterEvent);
+    }
 
     return result;
   }

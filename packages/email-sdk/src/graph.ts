@@ -1,4 +1,4 @@
-import { EmailAbortError, EmailAdapterError } from "./errors.js";
+import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
 import { isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersArray, emailParts } from "./payloads.js";
@@ -11,6 +11,10 @@ import {
   readErrorBody,
   toProviderError,
   validateBuiltInAdapter,
+  assertMaxItems,
+  headerList,
+  allRecipients,
+  type MessageRules,
 } from "./utils.js";
 
 type GraphSharedOptions = {
@@ -55,6 +59,20 @@ type TokenProvider = {
   invalidate: (token: string) => boolean;
 };
 
+const graphRules: MessageRules = (message) => {
+  const headers = headerList(message.headers);
+  const invalidHeaders = headers.flatMap((header) => (/^x-/i.test(header.name) ? [] : [header.name]));
+
+  if (invalidHeaders.length > 0) {
+    throw new EmailValidationError(
+      `graph only supports custom headers with an x- prefix: ${invalidHeaders.join(", ")}.`,
+    );
+  }
+
+  assertMaxItems("graph", "header", headers, 5);
+  assertMaxItems("graph", "recipient", allRecipients(message), 1000);
+};
+
 export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetcher = options.fetch ?? fetch;
@@ -62,10 +80,10 @@ export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { bas
 
   return {
     name: "graph",
-    ...builtInAdapterDefinition("graph"),
+    ...builtInAdapterDefinition("graph", graphRules),
     raw: { baseUrl },
     async send(message, context) {
-      validateBuiltInAdapter("graph", message);
+      validateBuiltInAdapter("graph", message, graphRules);
 
       let token = await resolveAccessToken(accessToken, context.signal);
       const payload = JSON.stringify(await toGraphPayload(message, options.saveToSentItems));
@@ -202,7 +220,7 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
     tokenTimeoutMs <= 0 ||
     tokenTimeoutMs > MAX_TIMER_DELAY_MS
   ) {
-    throw new Error(
+    throw new EmailValidationError(
       "graph tokenTimeoutMs must be finite, positive, and no greater than 2147483647.",
     );
   }
