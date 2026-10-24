@@ -405,6 +405,7 @@ describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
     ["out-of-order pieces", "filename*1=\".txt\"; filename*0=\"a\"", "a.txt"],
     ["Latin-1 charset with a language", "filename*=iso-8859-1'fr'%E9t%E9.txt", "été.txt"],
     ["extended value wins over the plain one", "filename=\"plain.txt\"; filename*=UTF-8''%C3%A9.txt", "é.txt"],
+    ["extended value is not decoded again as an encoded word", "filename*=UTF-8''%3D%3FUTF-8%3FB%3FYQ%3D%3D%3F%3D", "=?UTF-8?B?YQ==?="],
     ["encoded word in a quoted filename", "filename=\"=?UTF-8?B?w6kudHh0?=\"", "é.txt"],
   ];
 

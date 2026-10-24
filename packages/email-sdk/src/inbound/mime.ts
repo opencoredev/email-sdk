@@ -39,6 +39,8 @@ interface MimeEntity {
 interface ContentType {
   type: string;
   params: Map<string, string>;
+  /** Names of RFC 2231 parameters, whose values are already decoded text. */
+  extended: Set<string>;
 }
 
 interface WalkState {
@@ -374,7 +376,7 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
     params.set(name, decoded);
   }
 
-  return { type: head.toLowerCase(), params };
+  return { type: head.toLowerCase(), params, extended: new Set(extended.keys()) };
 }
 
 function headerValue(headers: readonly InboundHeader[], name: string): string | undefined {
@@ -413,6 +415,18 @@ function multipartBodies(body: string, boundary: string): string[] {
   return parts;
 }
 
+/**
+ * A filename parameter as text. Many mailers put RFC 2047 encoded words in a plain quoted value,
+ * so those decode; an RFC 2231 value is already decoded and must not be decoded again.
+ */
+function filenameOf(header: ContentType, param: string): string | undefined {
+  const value = header.params.get(param);
+
+  if (value === undefined || header.extended.has(param)) return value;
+
+  return decodeEncodedWords(value);
+}
+
 function contentIdOf(headers: readonly InboundHeader[]): string | undefined {
   return headerValue(headers, "content-id")?.trim().replace(/^<|>$/g, "") || undefined;
 }
@@ -431,8 +445,7 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
   const disposition = parseStructuredHeader(headerValue(entity.headers, "content-disposition"));
   const boundary = contentType.params.get("boundary");
 
-  const rawName = disposition.params.get("filename") ?? contentType.params.get("name");
-  const filename = rawName === undefined ? undefined : decodeEncodedWords(rawName);
+  const filename = filenameOf(disposition, "filename") ?? filenameOf(contentType, "name");
   const isAttachment = disposition.type === "attachment";
 
   if (type.startsWith("multipart/") && boundary && !isAttachment && !resource) {
