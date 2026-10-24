@@ -156,7 +156,7 @@ export type WorkflowSendOptions = Omit<EmailSendOptions, "idempotencyKey">;
 /** What `ctx.send` journals and returns: the adapter that accepted the email and its provider id. */
 export type WorkflowSendRecord = { adapter: string; id?: string };
 
-/** What `ctx.waitForEvent` resolves with. `receivedAt` is when `sendEvent` delivered the event. */
+/** What `ctx.waitForEvent` resolves with. `receivedAt` is when `sendEvent` was called. */
 export type WorkflowEventResult<TPayload> =
   | { status: "received"; payload: TPayload; receivedAt: number }
   | { status: "timed_out" };
@@ -237,8 +237,8 @@ type WorkflowRunEvent = { run: WorkflowRun };
 type WorkflowStepEvent = WorkflowRunEvent & { step: string; kind: WorkflowStepKind; attempt: number };
 
 /**
- * Observers for run and step lifecycle events. Hooks can't change a run: errors they throw are
- * caught and ignored.
+ * Observers for run and step lifecycle events. Hooks can't change a run: each gets a copy of it,
+ * and errors they throw are caught and ignored.
  */
 export type WorkflowHooks = {
   onStepStart?: (event: WorkflowStepEvent) => MaybePromise<void>;
@@ -310,9 +310,10 @@ export type WorkflowEngine = {
    */
   resumeDue(limit?: number): Promise<number>;
   /**
-   * Delivers an event, stamped with one receipt time, to every target, then resumes the runs it
-   * satisfies concurrently. Returns the ids of the runs it reached. When a target fails, the rest
-   * still get the event, and an AggregateError reports the failures.
+   * Delivers an event, stamped with the time of this call, to every target, then resumes the runs it
+   * satisfies concurrently. Returns the ids of the runs that saved the event. When a target fails,
+   * the rest still get the event, and an AggregateError reports the failures. Delivery is at least
+   * once: retrying after an AggregateError sends the event again to targets that already got it.
    */
   sendEvent(event: WorkflowEventInput): Promise<string[]>;
   /**

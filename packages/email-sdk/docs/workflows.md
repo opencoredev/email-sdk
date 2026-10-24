@@ -69,6 +69,8 @@ Trigger.dev, Temporal, and Convex Workflow use, so it is familiar.
 
 Cons: code between steps re-runs on every wake, so it must be deterministic. Side effects belong in
 `ctx.step` or `ctx.send`. Step names must be unique within a run (the engine throws on a duplicate).
+A step callback can't call `ctx`: the call would queue behind the step that awaits it, so the engine
+fails the run with `invalid_definition` instead of deadlocking.
 
 We pick B. The builder's main advantage, a drawable static graph, does not outweigh how poorly it
 handles real sequences, and the replay contract is small enough to state in one paragraph of docs.
@@ -116,7 +118,9 @@ await engine.resumeDue();       // polling fallback for crons
 | `ctx.runId`, `ctx.workflow`, `ctx.version`, `ctx.subject`, `ctx.startedAt` | | stable across replays |
 
 Step results must be JSON values (`WorkflowJsonValue`) because stores persist them. The type
-constraint stops a `Date` from being journaled and replayed as a string.
+constraint stops a `Date` from being journaled and replayed as a string. At runtime the engine also
+rejects what the type can't: `NaN` and `Infinity`, arrays with empty slots (saved as `null`), and
+circular objects. A shared, acyclic object is fine; it is saved as two equal copies.
 
 ### Input
 
@@ -252,8 +256,9 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
    gets a copy of the input, so editing them never changes the journal. `run` starts inside a
    promise callback, so a synchronous throw fails the run like a rejection.
 6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
-   invalid `Date`, `maxAttempts` below 1, or a step result or output that isn't JSON, such as
-   `NaN` or `Infinity`) fails the run. Replaying it would throw again on every wake.
+   invalid `Date`, `maxAttempts` below 1, a `ctx` call inside a step callback, or a step result
+   or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run.
+   Replaying it would throw again on every wake.
 5. When `run` resolves, the run completes and its return value is stored as `output`. When it throws,
    the run fails.
 
@@ -278,15 +283,28 @@ window. The docs say so.
   subject.
 - If the event name is in the definition's `cancelOn`, the run is canceled (timers canceled,
   `onRunCanceled` fired, `cancelReason: "event:<name>"`).
-- Otherwise the event goes into the run's inbox (capped at 50), stamped with `receivedAt`. Delivery
-  never touches the run's wait or its deadline. `sendEvent` saves the event, with one `receivedAt`,
-  to every target before resuming any, then resumes the runs whose wait matches concurrently, so one
-  run's slow step can't delay another's delivery or push it past its deadline. A failure on one
-  target doesn't stop the others; the failures are reported in an `AggregateError`. A run that has not reached its `waitForEvent` yet consumes the inbox event when it
-  gets there, so "user activated before the reminder step" works.
+- Otherwise the event goes into the run's inbox (capped at 50), stamped with `receivedAt`, the
+  time `sendEvent` was called, before any subject lookup. Delivery never touches the run's wait or
+  its deadline. `sendEvent` saves the event, with that one `receivedAt`, to every target before
+  resuming any, then resumes the runs whose wait matches concurrently, so one run's slow step can't
+  delay another's delivery or push it past its deadline. A run that has not reached its
+  `waitForEvent` yet consumes the inbox event when it gets there, so "user activated before the
+  reminder step" works.
 - Event versus timeout is decided by persisted timestamps, not by which worker gets there first: an
-  event with `receivedAt <= wait.until` wins, a later one loses to the timeout and stays in the
-  inbox. `receivedAt` comes from the delivering engine's clock.
+  event with `receivedAt <= wait.until` that is saved on the run before the timeout is recorded wins,
+  even when the timer has already fired. A later event loses to the timeout and stays in the inbox.
+  The one race timestamps can't settle: a worker may record the timeout while an on-time event is
+  still being saved. The timeout then stands, and the event stays in the inbox, or is not saved at
+  all when the run has finished (`sendEvent` leaves that run out of its result). `receivedAt` comes
+  from the delivering engine's clock.
+- A failure on one target doesn't stop the others; the failures are reported in an
+  `AggregateError`, with a `WorkflowError` coded `write_conflict` for a save that kept losing to
+  concurrent writes. Delivery is at least once, not exactly once. By the time the error is thrown,
+  the other targets may have received the event, consumed it, and run further steps, and a failed
+  target may have saved the event and failed only while resuming. Retrying the whole call delivers
+  the event again to those runs, and a run that later waits for the same event name consumes the
+  copy. Retry only when a repeated event is harmless for the workflow; otherwise inspect the runs
+  with `engine.get`. A run that saved the event but failed to resume is picked up by `resumeDue`.
 - `engine.cancel(runId, reason)` cancels by id. Cancellation (by id, `cancelOn`, or suppression) is a
   revision-checked write of the terminal state and does not wait for a running step. The owner's next
   save sees the canceled run and stops, so no later step or send runs. An effect already in flight,
@@ -325,7 +343,8 @@ the run's version when keeping two copies is not worth it.
 
 Engine hooks: `onStepStart`, `onStepComplete` (with `durationMs`), `onStepError` (with `willRetry`),
 `onRunComplete`, `onRunCanceled`, `onRunFailed`. Hooks are observability only: like the core
-client's hooks, a throwing hook is swallowed and never changes run behavior.
+client's hooks, a throwing hook is swallowed and never changes run behavior. Each hook gets a copy
+of the run, so a hook that redacts or edits it for logging doesn't change what is saved.
 
 ## Bundle impact
 
