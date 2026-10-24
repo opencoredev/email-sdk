@@ -300,7 +300,40 @@ describe("convex workflow engine end to end", () => {
       ["Thanks for activating", await workflowIdempotencyKey("run-1", "follow-up")],
     ]);
   });
+
+  test("an early wake schedules a new resume for the run's persisted due time", async () => {
+    clock.at = Date.parse("2026-01-01T00:00:00Z");
+
+    const t = createApp();
+
+    await t.action(app.start, { runId: "run-3", email: "ada@example.test" });
+
+    const run = await readRun(t, "run-3");
+
+    // Lose the real timer, as if only a stale early job had been left for this run.
+    await t.run(async (ctx) => {
+      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+        if (job.name === "workflows:resume") await ctx.scheduler.cancel(job._id);
+      }
+    });
+
+    expect(await pendingResumes(t)).toEqual([]);
+    expect(await t.action(app.resume, { runId: "run-3" })).toMatchObject({ status: "waiting", revision: run.revision });
+    expect(await pendingResumes(t)).toEqual([{ at: run.dueAt, runId: "run-3" }]);
+  });
 });
+
+async function pendingResumes(t: ReturnType<typeof createApp>) {
+  return await t.run(async (ctx) => {
+    const jobs = await ctx.db.system.query("_scheduled_functions").collect();
+
+    return jobs.flatMap((job) =>
+      job.name === "workflows:resume" && job.state.kind === "pending"
+        ? [{ at: job.scheduledTime, runId: z.object({ runId: z.string() }).parse(job.args[0]).runId }]
+        : [],
+    );
+  });
+}
 
 describe("convex workflow cancellation", () => {
   test("an unsubscribe event cancels the run and takes it off the due index", async () => {

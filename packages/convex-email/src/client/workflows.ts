@@ -159,8 +159,10 @@ export function convexWorkflowStore(component: ConvexEmailComponentApi, ctx: Wor
 }
 
 /**
- * A `WorkflowScheduler` on `ctx.scheduler.runAt`. `cancel` is a no-op: `engine.resume` ignores
- * timers for runs that are canceled, finished, or not yet due.
+ * A `WorkflowScheduler` on `ctx.scheduler.runAt`. Each wake is its own job, so a late, stale wake
+ * never replaces a newer one, and `timer.revision` is not needed. `cancel` is a no-op:
+ * `engine.resume` ignores wakes for runs that are canceled or finished, and a wake that fires
+ * before the run is due schedules a new job for the run's persisted `dueAt`.
  */
 export function convexWorkflowScheduler(ctx: WorkflowSchedulerCtx, resume: ConvexWorkflowResumeRef): WorkflowScheduler {
   return {

@@ -133,7 +133,7 @@ describe("workflows: linear sequences and sleeps", () => {
     expect(run.status).toBe("waiting");
     expect(run.wait).toEqual({ kind: "sleep", step: "wait-2d", until: start + 2 * day });
     expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["Welcome Ada"]);
-    expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 2 * day }]);
+    expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 2 * day, revision: run.revision }]);
 
     await scheduler.advance("1d", engine);
     expect(sender.deliveries).toHaveLength(1);
@@ -187,8 +187,9 @@ describe("workflows: linear sequences and sleeps", () => {
 
     const { engine, scheduler, sender } = setup([until]);
 
-    await engine.start(until, ada, { id: "run-1" });
-    expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 5 * day }]);
+    const run = await engine.start(until, ada, { id: "run-1" });
+
+    expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 5 * day, revision: run.revision }]);
 
     await scheduler.advance("5d", engine);
     expect(sender.deliveries).toHaveLength(1);
@@ -1023,6 +1024,69 @@ describe("workflows: multiple workers", () => {
 
     expect((await started).cancelReason).toBe("event:unsubscribed");
     expect(sender.calls).toHaveLength(0);
+  });
+});
+
+describe("workflows: timers", () => {
+  test("a stale wake scheduled by a superseded wait does not replace the newer one", async () => {
+    const clock = createManualClock(start);
+    const scheduler = createMemoryWorkflowScheduler(clock);
+    const memory = createMemoryWorkflowStore();
+    const sender = recordingSender();
+    const held = gate();
+    let paused = false;
+
+    const replyThenSleep = defineWorkflow({
+      name: "reply-then-sleep",
+      run: async (ctx, input: Input) => {
+        await ctx.waitForEvent("reply", { timeout: 100 });
+        await ctx.sleep("later", 1000);
+        await ctx.send("done", mail(input.email, "Done"));
+      },
+    });
+
+    // Persists the event wait, then holds the save's response, so its wake is scheduled late.
+    const store: WorkflowStore = {
+      ...memory,
+      async save(run, expectedRevision) {
+        const saved = await memory.save(run, expectedRevision);
+
+        if (!paused && run.wait?.kind === "event") {
+          paused = true;
+          await held.pass();
+        }
+
+        return saved;
+      },
+    };
+
+    const engine = createWorkflowEngine({ email: sender, store, scheduler, clock, workflows: [replyThenSleep] });
+    const started = engine.start(replyThenSleep, ada, { id: "run-1" });
+
+    await held.reached;
+    expect(await engine.sendEvent({ name: "reply", runId: "run-1" })).toEqual(["run-1"]);
+    expect((await engine.get("run-1"))?.wait).toEqual({ kind: "sleep", step: "later", until: start + 1000 });
+
+    held.open();
+    await started;
+    expect(scheduler.pending().map((timer) => timer.at)).toEqual([start + 1000]);
+
+    await scheduler.advance(2000, engine);
+    expect((await engine.get("run-1"))?.status).toBe("completed");
+    expect(sender.deliveries).toHaveLength(1);
+  });
+
+  test("an early timer re-arms the wake from the run's persisted due time", async () => {
+    const { engine, scheduler, sender } = setup([linear]);
+    const run = await engine.start(linear, ada, { id: "run-1" });
+
+    // A scheduler whose jobs cannot be replaced (Convex) may hold an early wake and nothing else.
+    scheduler.cancel("run-1");
+    await scheduler.schedule({ runId: "run-1", at: start + 1, revision: run.revision });
+
+    await scheduler.advance("2d", engine);
+    expect((await engine.get("run-1"))?.status).toBe("completed");
+    expect(sender.deliveries).toHaveLength(2);
   });
 });
 
