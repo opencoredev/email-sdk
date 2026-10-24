@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
+import { createHash, createHmac, createSign, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { stubFetch } from "../test-support/fetch.js";
 import {
@@ -110,6 +110,28 @@ const certFetch = stubFetch(async input => {
 
   return new Response("unexpected", { status: 500 });
 });
+
+/** S3 GET SigV4 written straight from the AWS spec with node:crypto, independent of the SDK. */
+function expectedS3Authorization(request: { url: URL; headers: Headers }, secret: string) {
+  const amzDate = request.headers.get("x-amz-date") ?? "";
+  const dateStamp = amzDate.slice(0, 8);
+  const hmac = (key: string | Buffer, value: string) => createHmac("sha256", key).update(value).digest();
+
+  const signed = [...request.headers.entries(), ["host", request.url.host]]
+    .flatMap(([name = "", value = ""]) => (name === "authorization" ? [] : [[name.toLowerCase(), value.trim()]]))
+    .sort(([left = ""], [right = ""]) => (left < right ? -1 : left > right ? 1 : 0));
+
+  const signedHeaders = signed.map(([name]) => name).join(";");
+  const payloadHash = createHash("sha256").update("").digest("hex");
+
+  const canonicalRequest = ["GET", request.url.pathname, "", signed.map(([name, value]) => `${name}:${value}\n`).join(""), signedHeaders, payloadHash].join("\n");
+
+  const scope = `${dateStamp}/us-east-1/s3/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, createHash("sha256").update(canonicalRequest).digest("hex")].join("\n");
+  const key = hmac(hmac(hmac(hmac(`AWS4${secret}`, dateStamp), "us-east-1"), "s3"), "aws4_request");
+
+  return `AWS4-HMAC-SHA256 Credential=AKIATEST/${scope}, SignedHeaders=${signedHeaders}, Signature=${createHmac("sha256", key).update(stringToSign).digest("hex")}`;
+}
 
 describe("SNS verification", () => {
   test("extracts the public key from a certificate", () => {
@@ -255,6 +277,29 @@ describe("SES receiving", () => {
     expect((await parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).messageId).toBe("msg-42@example.net");
     await expect(parseSesInbound({ body }, { fetch, topicArn, now: signedAt })).rejects.toThrow("Pass s3 credentials");
     expect(await fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/abc 1" }, s3)).toEqual(eml);
+  });
+
+  test("signs each S3 fetch with the secret passed to it, even after a rotation", async () => {
+    const authorizations: { url: URL; headers: Headers }[] = [];
+
+    const fetch = stubFetch(async (input, init) => {
+      authorizations.push({ url: new URL(String(input)), headers: new Headers(init?.headers) });
+
+      return new Response(eml);
+    });
+
+    const location = { bucket: "inbound-mail", key: "mail/abc 1" };
+    const base = { accessKeyId: "AKIATEST", region: "us-east-1", fetch };
+
+    await fetchSesInboundFromS3(location, { ...base, secretAccessKey: "first-secret" });
+    await fetchSesInboundFromS3(location, { ...base, secretAccessKey: "second-secret" });
+    await fetchSesInboundFromS3(location, { ...base, secretAccessKey: "first-secret" });
+
+    const secrets = ["first-secret", "second-secret", "first-secret"];
+
+    for (const [index, request] of authorizations.entries()) {
+      expect(request.headers.get("authorization")).toBe(expectedS3Authorization(request, secrets[index] ?? ""));
+    }
   });
 
   test("escapes S3 keys the way SigV4 signs them and rejects dot segments", async () => {
