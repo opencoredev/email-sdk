@@ -206,23 +206,36 @@ export type WorkflowContext = {
   ): Promise<WorkflowEventResult<TPayload>>;
 };
 
-/** Standard Schema v1 subset; zod 4, valibot, and arktype schemas satisfy it. */
-export type WorkflowInputSchema<TInput> = {
+/**
+ * Standard Schema v1 subset; zod 4, valibot, and arktype schemas satisfy it. `TInput` is what the
+ * schema returns and `run` receives; `TStartInput` is what it accepts, which `start` takes. They
+ * differ when the schema transforms values or fills defaults. Schemas declare both through
+ * Standard Schema's `types`; without it, `start` takes `TInput`.
+ */
+export type WorkflowInputSchema<TInput, TStartInput = TInput> = {
   readonly "~standard": {
     readonly validate: (value: WorkflowJsonValue) => MaybePromise<
       | { readonly value: TInput; readonly issues?: undefined }
       | { readonly issues: ReadonlyArray<{ readonly message: string }> }
     >;
+    readonly types?: { readonly input: TStartInput; readonly output: TInput } | undefined;
   };
 };
 
-/** A workflow returned by `defineWorkflow`. Register it with `createWorkflowEngine({ workflows })`. */
-export type WorkflowDefinition<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void> = {
+/**
+ * A workflow returned by `defineWorkflow`. Register it with `createWorkflowEngine({ workflows })`.
+ * `TStartInput` is what `start` accepts, before the input schema parses it into `TInput`.
+ */
+export type WorkflowDefinition<
+  TInput extends WorkflowJsonValue,
+  TOutput extends WorkflowJsonValue | void,
+  TStartInput extends WorkflowJsonValue = TInput,
+> = {
   readonly name: string;
   readonly version: number;
   readonly cancelOn: readonly string[];
   readonly retry?: WorkflowRetryPolicy;
-  readonly input?: WorkflowInputSchema<TInput>;
+  readonly input?: WorkflowInputSchema<TInput, TStartInput>;
   run(ctx: WorkflowContext, input: TInput): Promise<TOutput>;
 };
 
@@ -230,7 +243,7 @@ export type WorkflowDefinition<TInput extends WorkflowJsonValue, TOutput extends
  * A definition with its input erased, for registries. `run` is a method, so a definition with a
  * narrower input type stays assignable here.
  */
-export type AnyWorkflowDefinition = WorkflowDefinition<WorkflowJsonValue, WorkflowJsonValue | void>;
+export type AnyWorkflowDefinition = WorkflowDefinition<WorkflowJsonValue, WorkflowJsonValue | void, WorkflowJsonValue>;
 
 type WorkflowRunEvent = { run: WorkflowRun };
 
@@ -293,11 +306,11 @@ export type WorkflowEngine = {
   /**
    * Creates a run of exactly this definition and version, and executes it until its first wait or
    * the end. With an `id` that already exists, returns the stored run without validating `input` or
-   * running anything.
+   * running anything. `input` is what the definition's schema accepts; the parsed value is stored.
    */
-  start<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void>(
-    workflow: WorkflowDefinition<TInput, TOutput>,
-    input: TInput,
+  start<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void, TStartInput extends WorkflowJsonValue>(
+    workflow: WorkflowDefinition<TInput, TOutput, TStartInput>,
+    input: NoInfer<TStartInput>,
     options?: WorkflowStartOptions,
   ): Promise<WorkflowRun>;
   /** Continues a run whose timer fired. Safe to call at any time; it no-ops when nothing is due. */

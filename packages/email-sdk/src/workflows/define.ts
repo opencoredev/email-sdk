@@ -8,7 +8,11 @@ import type {
 } from "./types.js";
 
 /** Options for `defineWorkflow`. */
-export type DefineWorkflowOptions<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void> = {
+export type DefineWorkflowOptions<
+  TInput extends WorkflowJsonValue,
+  TOutput extends WorkflowJsonValue | void,
+  TStartInput extends WorkflowJsonValue = TInput,
+> = {
   /** Stored on each run. Letters, digits, `_`, `-`, `.`, and `:` only. */
   name: string;
   /** Bump when a change would break in-flight runs, and keep the old version registered until they drain. */
@@ -17,8 +21,11 @@ export type DefineWorkflowOptions<TInput extends WorkflowJsonValue, TOutput exte
   cancelOn?: readonly string[];
   /** Default retry policy for this workflow's steps. */
   retry?: WorkflowRetryPolicy;
-  /** Parses input at `start`. The parsed value is stored and replayed. */
-  input?: WorkflowInputSchema<TInput>;
+  /**
+   * Parses input at `start`. `start` takes the schema's input type and `run` gets its output, so
+   * transforms and defaults work. The parsed value is stored and replayed.
+   */
+  input?: WorkflowInputSchema<TInput, TStartInput>;
   /** The workflow body. Replayed from the top on every wake; its return value is saved as the run's `output`. */
   run: (ctx: WorkflowContext, input: TInput) => Promise<TOutput>;
 };
@@ -32,7 +39,8 @@ const namePattern = /^[\w.:-]+$/;
 export function defineWorkflow<
   TInput extends WorkflowJsonValue,
   TOutput extends WorkflowJsonValue | void = void,
->(options: DefineWorkflowOptions<TInput, TOutput>): WorkflowDefinition<TInput, TOutput> {
+  TStartInput extends WorkflowJsonValue = TInput,
+>(options: DefineWorkflowOptions<TInput, TOutput, TStartInput>): WorkflowDefinition<TInput, TOutput, TStartInput> {
   if (!namePattern.test(options.name)) {
     throw new WorkflowError(
       "invalid_definition",

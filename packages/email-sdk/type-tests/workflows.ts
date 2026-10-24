@@ -61,6 +61,19 @@ const fromSchema = defineWorkflow({
   },
 });
 
+// The schema accepts a string and fills a default; `run` sees the parsed output.
+const transformed = defineWorkflow({
+  name: "transformed",
+  input: z.object({ count: z.string().transform(Number), plan: z.enum(["free", "pro"]).default("free") }),
+  run: async (_ctx, input) => {
+    const count: number = input.count;
+    const plan: "free" | "pro" = input.plan;
+
+    void count;
+    void plan;
+  },
+});
+
 const clock = createManualClock(0);
 
 const engine = createWorkflowEngine({
@@ -68,7 +81,7 @@ const engine = createWorkflowEngine({
   store: createMemoryWorkflowStore(),
   scheduler: createMemoryWorkflowScheduler(clock),
   clock,
-  workflows: [fromAnnotation, fromSchema],
+  workflows: [fromAnnotation, fromSchema, transformed],
 });
 
 const started: Promise<WorkflowRun> = engine.start(fromAnnotation, { email: "a@example.test", plan: "pro" });
@@ -80,6 +93,12 @@ void engine.start(fromAnnotation, { email: "a@example.test", plan: "enterprise" 
 void engine.sendEvent({ name: "activated", runId: "r", subject: "s" });
 
 void engine.start(fromSchema, { userId: "u_1", email: "a@example.test" });
+
+// start takes what the schema accepts: a string count, and the defaulted plan may be left out.
+void engine.start(transformed, { count: "42" });
+
+// @ts-expect-error start takes the schema's input, not its parsed output
+void engine.start(transformed, { count: 42 });
 
 void started;
 
