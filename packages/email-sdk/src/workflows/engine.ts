@@ -38,6 +38,10 @@ const defaultLease: WorkflowDuration = "5m";
 
 const inboxLimit = 50;
 
+const defaultResumeDueLimit = 25;
+
+const defaultResumeDueConcurrency = 10;
+
 // Journal keys are step names. Schema parsers drop an own `__proto__` key from a record, so a step
 // with this name would lose its completed entry on the next read and run again.
 const reservedStepName = "__proto__";
@@ -1046,39 +1050,79 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   }
 
   /**
-   * Resumes due runs page by page until `limit` of them were checked. Runs whose version this
-   * engine doesn't register are skipped without counting, so they can't hide later due runs.
+   * Resumes due runs page by page until `limit` of them were checked, with up to `concurrency`
+   * running at once, so a run stuck in a step can't keep the next due run from starting. Runs whose
+   * version this engine doesn't register are skipped without counting, so they can't hide later due
+   * runs. A run in flight counts toward `limit` until it settles, so no more than `limit` run.
    */
-  async function resumeDue(limit: number): Promise<number> {
+  async function resumeDue(limit: number, concurrency: number): Promise<number> {
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new WorkflowError("invalid_definition", "resumeDue concurrency must be a positive integer.");
+    }
+
     if (!(limit > 0)) return 0;
 
     const at = now();
     const errors: Error[] = [];
+    const running = new Set<Promise<void>>();
+    let queued: string[] = [];
+    let cursor: string | undefined;
+    let listedAll = false;
     let checked = 0;
     let resumed = 0;
-    let cursor: string | undefined;
 
-    do {
-      const page = await store.listDue(at, limit, cursor);
+    const nextId = async (): Promise<string | undefined> => {
+      while (queued.length === 0 && !listedAll) {
+        const page = await store.listDue(at, limit, cursor);
 
-      for (const id of page.ids) {
-        if (checked >= limit) break;
-
-        try {
-          const result = await resumeRun(id);
-
-          checked += 1;
-
-          if (result.executed) resumed += 1;
-        } catch (cause) {
-          if (!(cause instanceof WorkflowError && cause.code === "workflow_not_registered")) checked += 1;
-
-          errors.push(toError(cause));
-        }
+        queued = [...page.ids];
+        cursor = page.cursor;
+        listedAll = cursor === undefined;
       }
 
-      cursor = page.cursor;
-    } while (cursor !== undefined && checked < limit);
+      return queued.shift();
+    };
+
+    const check = async (id: string) => {
+      try {
+        const result = await resumeRun(id);
+
+        checked += 1;
+
+        if (result.executed) resumed += 1;
+      } catch (cause) {
+        if (!(cause instanceof WorkflowError && cause.code === "workflow_not_registered")) checked += 1;
+
+        errors.push(toError(cause));
+      }
+    };
+
+    let exhausted = false;
+
+    // Starts runs while a slot is free and `limit` leaves room. A settled run frees its slot, and an
+    // unregistered one also gives its share of `limit` back.
+    const fill = async () => {
+      while (!exhausted && running.size < concurrency && checked + running.size < limit) {
+        const id = await nextId();
+
+        if (id === undefined) {
+          exhausted = true;
+
+          return;
+        }
+
+        const task: Promise<void> = check(id).finally(() => running.delete(task));
+
+        running.add(task);
+      }
+    };
+
+    await fill();
+
+    while (running.size > 0) {
+      await Promise.race(running);
+      await fill();
+    }
 
     if (errors.length > 0) throw new AggregateError(errors, `${errors.length} workflow run(s) failed to resume.`);
 
@@ -1151,7 +1195,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return (await execute(run, owner)) ?? run;
     },
     resume: async (runId) => (await resumeRun(runId)).run,
-    resumeDue: async (limit = 25) => await resumeDue(limit),
+    resumeDue: async (resumeOptions) =>
+      await resumeDue(resumeOptions?.limit ?? defaultResumeDueLimit, resumeOptions?.concurrency ?? defaultResumeDueConcurrency),
     sendEvent,
     async cancel(runId, reason = "canceled") {
       const run = await store.get(runId);

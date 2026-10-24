@@ -295,6 +295,14 @@ export type WorkflowStartOptions = {
   subject?: string;
 };
 
+/** Options for `engine.resumeDue`. */
+export type WorkflowResumeDueOptions = {
+  /** How many due runs to check in this call. Defaults to 25; 0 or less checks none. */
+  limit?: number;
+  /** How many runs execute at once, a positive integer. Defaults to 10. */
+  concurrency?: number;
+};
+
 /** An event for `engine.sendEvent`, addressed to one run by `runId` or to every active run of a `subject`. */
 export type WorkflowEventInput = {
   name: string;
@@ -317,11 +325,12 @@ export type WorkflowEngine = {
   resume(runId: string): Promise<WorkflowRun | undefined>;
   /**
    * Resumes every due run the store reports, for cron-driven hosts without a push scheduler.
-   * Checks at most `limit` runs per call (default 25; 0 checks none). Runs whose version this engine
-   * doesn't register are skipped without counting toward `limit`, and reported, with any other
-   * failures, in an AggregateError after the rest ran. Returns how many runs it executed.
+   * Checks at most `limit` runs per call and runs up to `concurrency` of them at once, so a run
+   * stuck in a step doesn't hold up the others. Runs whose version this engine doesn't register are
+   * skipped without counting toward `limit`, and reported, with any other failures, in an
+   * AggregateError after the rest ran. Returns how many runs it executed.
    */
-  resumeDue(limit?: number): Promise<number>;
+  resumeDue(options?: WorkflowResumeDueOptions): Promise<number>;
   /**
    * Delivers an event, stamped with the time of this call, to every target, then resumes the runs it
    * satisfies concurrently. Returns the ids of the runs that saved the event. When a target fails,

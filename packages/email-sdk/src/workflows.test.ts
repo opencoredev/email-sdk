@@ -1415,14 +1415,94 @@ describe("workflows: review regressions", () => {
     await expect(engine.start(parsed, { email: "not-an-email" })).rejects.toThrow("Invalid input");
   });
 
-  test("resumeDue(0) executes nothing", async () => {
+  test("resumeDue({ limit: 0 }) executes nothing", async () => {
     const clock = createManualClock(start);
     const engine = createWorkflowEngine({ email: recordingSender(), store: createMemoryWorkflowStore(), clock, workflows: [linear] });
 
     await engine.start(linear, ada, { id: "run-1" });
     clock.advance("2d");
-    expect(await engine.resumeDue(0)).toBe(0);
+    expect(await engine.resumeDue({ limit: 0 })).toBe(0);
     expect((await engine.get("run-1"))?.status).toBe("waiting");
+  });
+
+  /** A workflow whose step hangs, for the run ids in `stuck`, until `release` is called. */
+  function hangingWorkflow(stuck: readonly string[]) {
+    const gate = Promise.withResolvers<void>();
+    const entered: string[] = [];
+
+    const workflow = defineWorkflow({
+      name: "hanging",
+      run: async (ctx, input: Input) => {
+        await ctx.sleep("wait", "1d");
+        await ctx.step("fetch", async () => {
+          entered.push(ctx.runId);
+
+          if (stuck.includes(ctx.runId)) await gate.promise;
+
+          return null;
+        });
+        await ctx.send("next", mail(input.email, "Next"));
+      },
+    });
+
+    return { workflow, entered, release: () => gate.resolve() };
+  }
+
+  test("one run stuck in a step does not stop resumeDue from running the next due run", async () => {
+    const { workflow, release } = hangingWorkflow(["run-1"]);
+    const secondDone = Promise.withResolvers<void>();
+    const clock = createManualClock(start);
+    const sender = recordingSender();
+
+    const engine = createWorkflowEngine({
+      email: sender,
+      store: createMemoryWorkflowStore(),
+      clock,
+      workflows: [workflow],
+      hooks: { onRunComplete: ({ run }) => void (run.id === "run-2" && secondDone.resolve()) },
+    });
+
+    await engine.start(workflow, ada, { id: "run-1" });
+    await engine.start(workflow, grace, { id: "run-2" });
+    clock.advance("1d");
+
+    const batch = engine.resumeDue();
+
+    expect(await settledSoon(secondDone.promise)).toBeUndefined();
+    expect((await engine.get("run-2"))?.status).toBe("completed");
+    expect((await engine.get("run-1"))?.status).toBe("running");
+    expect(await settledSoon(batch)).toBe("pending");
+
+    release();
+    expect(await batch).toBe(2);
+    expect(sender.deliveries.map((delivery) => delivery.message.to).sort()).toEqual([ada.email, grace.email]);
+  });
+
+  test("resumeDue starts at most `concurrency` runs at once", async () => {
+    const { workflow, entered, release } = hangingWorkflow(["run-1", "run-2", "run-3"]);
+    const clock = createManualClock(start);
+    const engine = createWorkflowEngine({ email: recordingSender(), store: createMemoryWorkflowStore(), clock, workflows: [workflow] });
+
+    for (const id of ["run-1", "run-2", "run-3"]) await engine.start(workflow, ada, { id });
+
+    clock.advance("1d");
+
+    const batch = engine.resumeDue({ concurrency: 2 });
+
+    expect(await settledSoon(batch)).toBe("pending");
+    expect(entered).toEqual(["run-1", "run-2"]);
+
+    release();
+    expect(await batch).toBe(3);
+    expect(entered).toEqual(["run-1", "run-2", "run-3"]);
+  });
+
+  test("resumeDue rejects a concurrency that is not a positive integer", async () => {
+    const { engine } = setup([linear]);
+
+    for (const concurrency of [0, -1, 1.5, Number.NaN]) {
+      await expect(engine.resumeDue({ concurrency })).rejects.toMatchObject({ code: "invalid_definition" });
+    }
   });
 
   test("runs of an unregistered version do not starve later due runs", async () => {
@@ -1439,7 +1519,7 @@ describe("workflows: review regressions", () => {
     await current.start(v2, null, { id: "new" });
     clock.advance("1d");
 
-    await expect(current.resumeDue(2)).rejects.toThrow("5 workflow run(s) failed to resume");
+    await expect(current.resumeDue({ limit: 2 })).rejects.toThrow("5 workflow run(s) failed to resume");
     expect((await current.get("new"))?.status).toBe("completed");
     expect((await current.get("old-0"))?.status).toBe("waiting");
   });
