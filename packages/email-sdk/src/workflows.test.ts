@@ -14,6 +14,7 @@ import {
   durationToMs,
   WorkflowError,
   WorkflowNonRetryableError,
+  workflowIdempotencyKey,
 } from "./workflows.js";
 import type {
   AnyWorkflowDefinition,
@@ -116,6 +117,11 @@ function setup(
 
 const ada = { email: "ada@example.test", name: "Ada" };
 
+/** The idempotency keys `ctx.send` uses for these run and step pairs, in order. */
+async function keys(...pairs: [runId: string, step: string][]) {
+  return await Promise.all(pairs.map(([runId, step]) => workflowIdempotencyKey(runId, step)));
+}
+
 const grace = { email: "grace@example.test", name: "Grace" };
 
 describe("workflows: linear sequences and sleeps", () => {
@@ -139,7 +145,7 @@ describe("workflows: linear sequences and sleeps", () => {
     expect(done?.status).toBe("completed");
     expect(done?.output).toEqual({ done: true });
     expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["Welcome Ada", "Tips"]);
-    expect(sender.deliveries.map((d) => d.idempotencyKey)).toEqual(["wf:run-1:welcome", "wf:run-1:tips"]);
+    expect(sender.deliveries.map((d) => d.idempotencyKey)).toEqual(await keys(["run-1", "welcome"], ["run-1", "tips"]));
   });
 
   test("ignores early, duplicate, and stale timer deliveries", async () => {
@@ -371,8 +377,9 @@ describe("workflows: idempotency and crash recovery", () => {
     const memory = createMemoryWorkflowStore();
     const sender = recordingSender();
 
-    // Save 1 journals "welcome". Crashing there loses the journal entry after the send succeeded.
-    const crashed = createWorkflowEngine({ email: sender, store: crashingStore(memory, 1), clock, workflows: [linear] });
+    // Save 1 renews the lease before the send; save 2 journals "welcome". Crashing there loses the
+    // journal entry after the send succeeded.
+    const crashed = createWorkflowEngine({ email: sender, store: crashingStore(memory, 2), clock, workflows: [linear] });
 
     await expect(crashed.start(linear, ada, { id: "run-1" })).rejects.toThrow("process crashed");
     expect((await memory.get("run-1"))?.journal).toEqual({});
@@ -384,7 +391,7 @@ describe("workflows: idempotency and crash recovery", () => {
     clock.advance("5m");
     expect(await recovered.resumeDue()).toBe(1);
 
-    expect(sender.calls.map((c) => c.idempotencyKey)).toEqual(["wf:run-1:welcome", "wf:run-1:welcome"]);
+    expect(sender.calls.map((c) => c.idempotencyKey)).toEqual(await keys(["run-1", "welcome"], ["run-1", "welcome"]));
     expect(sender.deliveries).toHaveLength(1);
     expect((await memory.get("run-1"))?.status).toBe("waiting");
   });
@@ -394,8 +401,8 @@ describe("workflows: idempotency and crash recovery", () => {
     const memory = createMemoryWorkflowStore();
     const sender = recordingSender();
 
-    // Save 2 is the sleep's wait. Crashing there leaves "welcome" journaled and no wait recorded.
-    const crashed = createWorkflowEngine({ email: sender, store: crashingStore(memory, 2), clock, workflows: [linear] });
+    // Save 3 is the sleep's wait. Crashing there leaves "welcome" journaled and no wait recorded.
+    const crashed = createWorkflowEngine({ email: sender, store: crashingStore(memory, 3), clock, workflows: [linear] });
 
     await expect(crashed.start(linear, ada, { id: "run-1" })).rejects.toThrow("process crashed");
 
@@ -406,7 +413,7 @@ describe("workflows: idempotency and crash recovery", () => {
     clock.advance("2d");
     await recovered.resumeDue();
 
-    expect(sender.calls.map((c) => c.idempotencyKey)).toEqual(["wf:run-1:welcome", "wf:run-1:tips"]);
+    expect(sender.calls.map((c) => c.idempotencyKey)).toEqual(await keys(["run-1", "welcome"], ["run-1", "tips"]));
     expect((await memory.get("run-1"))?.status).toBe("completed");
   });
 
@@ -582,12 +589,9 @@ describe("workflows: isolation and concurrency", () => {
 
     expect((await engine.get("a"))?.output).toBe("activated");
     expect((await engine.get("g"))?.output).toBe("nudged");
-    expect(sender.deliveries.map((d) => d.idempotencyKey)).toEqual([
-      "wf:a:welcome",
-      "wf:g:welcome",
-      "wf:a:tips",
-      "wf:g:nudge",
-    ]);
+    expect(sender.deliveries.map((d) => d.idempotencyKey)).toEqual(
+      await keys(["a", "welcome"], ["g", "welcome"], ["a", "tips"], ["g", "nudge"]),
+    );
   });
 
   test("an event delivered by another engine during a step is merged, not lost", async () => {
@@ -724,5 +728,354 @@ describe("workflows: definitions, input, and versions", () => {
     expect(durationToMs(250)).toBe(250);
     expect(() => durationToMs(-1)).toThrow(WorkflowError);
     expect(() => durationToMs(Number.NaN)).toThrow(WorkflowError);
+  });
+});
+
+/** A promise the test resolves by hand, plus a signal for when the workflow reached it. */
+function gate() {
+  let open: () => void = () => {};
+
+  let markReached: () => void = () => {};
+
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+
+  const reached = new Promise<void>((resolve) => {
+    markReached = resolve;
+  });
+
+  return {
+    open,
+    reached,
+    async pass() {
+      markReached();
+      await opened;
+    },
+  };
+}
+
+/** Settles with "pending" when `promise` has not settled after the current macrotask queue drains. */
+async function settledSoon<T>(promise: Promise<T>): Promise<T | "pending"> {
+  return await Promise.race([promise, new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20))]);
+}
+
+/** Wraps a store so `beforeSave` runs, once, just before the first save that matches. */
+function interceptingStore(inner: WorkflowStore, matches: (run: WorkflowRun) => boolean, beforeSave: () => Promise<void>) {
+  let fired = false;
+
+  const store: WorkflowStore = {
+    ...inner,
+    async save(run, expectedRevision) {
+      if (!fired && matches(run)) {
+        fired = true;
+        await beforeSave();
+      }
+
+      return await inner.save(run, expectedRevision);
+    },
+  };
+
+  return store;
+}
+
+describe("workflows: multiple workers", () => {
+  function sharedWorkers(workflows: readonly AnyWorkflowDefinition[], overrides: Partial<Omit<WorkflowEngineOptions, "workflows">> = {}) {
+    const clock = createManualClock(start);
+    const store = createMemoryWorkflowStore();
+    const sender = recordingSender();
+    const options = { email: sender, store, clock, workflows, ...overrides };
+
+    return { clock, store, sender, a: createWorkflowEngine(options), b: createWorkflowEngine(options) };
+  }
+
+  test("two engines resuming one due run execute its step once", async () => {
+    const slow = gate();
+    let calls = 0;
+
+    const sleepy = defineWorkflow({
+      name: "sleepy",
+      run: async (ctx, input: Input) => {
+        await ctx.sleep("wait", "1d");
+        await ctx.step("charge", async () => {
+          calls += 1;
+          await slow.pass();
+
+          return calls;
+        });
+        await ctx.send("receipt", mail(input.email, "Receipt"));
+      },
+    });
+
+    const { clock, sender, a, b } = sharedWorkers([sleepy]);
+
+    await a.start(sleepy, ada, { id: "run-1" });
+    clock.advance("1d");
+
+    // Both workers read the due run before either writes.
+    const first = a.resume("run-1");
+    const second = b.resume("run-1");
+
+    await slow.reached;
+    expect(await settledSoon(second)).toMatchObject({ status: "running" });
+    expect(await b.resumeDue()).toBe(0);
+    slow.open();
+    await first;
+
+    expect(calls).toBe(1);
+    expect(sender.deliveries).toHaveLength(1);
+    expect((await a.get("run-1"))?.status).toBe("completed");
+  });
+
+  test("a worker whose lease expired cannot commit or send after another worker takes over", async () => {
+    const slow = gate();
+    let calls = 0;
+
+    const leased = defineWorkflow({
+      name: "leased",
+      run: async (ctx, input: Input) => {
+        const attempt = await ctx.step("work", async () => {
+          calls += 1;
+
+          if (calls === 1) await slow.pass();
+
+          return calls;
+        });
+
+        await ctx.send("done", mail(input.email, `attempt ${attempt}`));
+      },
+    });
+
+    const { clock, sender, a, b } = sharedWorkers([leased], { leaseDuration: "1m" });
+
+    const stale = a.start(leased, ada, { id: "run-1" });
+
+    await slow.reached;
+    clock.advance("2m");
+    expect((await b.resume("run-1"))?.status).toBe("completed");
+
+    slow.open();
+    await stale;
+
+    const run = await a.get("run-1");
+
+    expect(run?.journal.work).toMatchObject({ status: "completed", result: 2 });
+    expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["attempt 2"]);
+  });
+
+  test("a long step renews its lease, so no other worker claims the run meanwhile", async () => {
+    const slow = gate();
+
+    const long = defineWorkflow({
+      name: "long",
+      run: async (ctx) => {
+        await ctx.step("work", async () => {
+          await slow.pass();
+
+          return 1;
+        });
+      },
+    });
+
+    const { clock, store, a, b } = sharedWorkers([long], { leaseDuration: "90ms" });
+    const started = a.start(long, null, { id: "run-1" });
+
+    await slow.reached;
+
+    const firstLease = (await store.get("run-1"))?.lease?.until ?? 0;
+
+    clock.advance("60ms");
+
+    // Wait, bounded, for the heartbeat (every lease/3 of real time) to push the lease forward.
+    for (let tries = 0; tries < 200 && ((await store.get("run-1"))?.lease?.until ?? 0) <= firstLease; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    clock.advance("60ms");
+    expect(clock.now()).toBeGreaterThan(firstLease);
+    expect(await b.resumeDue()).toBe(0);
+
+    slow.open();
+    expect((await started).status).toBe("completed");
+  });
+
+  test("an event delivered between the inbox check and saving the wait is consumed, not stranded", async () => {
+    const clock = createManualClock(start);
+    const memory = createMemoryWorkflowStore();
+    const sender = recordingSender();
+
+    const waiter = defineWorkflow({
+      name: "waiter",
+      run: async (ctx, input: Input) => {
+        const activated = await ctx.waitForEvent("activated");
+
+        await ctx.send("after", mail(input.email, activated.status));
+      },
+    });
+
+    const other = createWorkflowEngine({ email: sender, store: memory, clock, workflows: [waiter] });
+
+    const store = interceptingStore(
+      memory,
+      (run) => run.wait?.kind === "event",
+      async () => {
+        await other.sendEvent({ name: "activated", runId: "run-1" });
+      },
+    );
+
+    const engine = createWorkflowEngine({ email: sender, store, clock, workflows: [waiter] });
+    const run = await engine.start(waiter, ada, { id: "run-1" });
+
+    expect(run.status).toBe("completed");
+    expect(run.inbox).toEqual([]);
+    expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["received"]);
+  });
+
+  test("cancel returns at once while a step is blocked, and no later effect runs", async () => {
+    const slow = gate();
+
+    const blocked = defineWorkflow({
+      name: "blocked",
+      run: async (ctx, input: Input) => {
+        await ctx.step("slow", async () => {
+          await slow.pass();
+
+          return 1;
+        });
+        await ctx.send("follow-up", mail(input.email, "Follow-up"));
+      },
+    });
+
+    const { sender, a, b } = sharedWorkers([blocked]);
+    const started = a.start(blocked, ada, { id: "run-1" });
+
+    await slow.reached;
+    expect(await settledSoon(a.cancel("run-1", "user deleted"))).toBe(true);
+    expect(await settledSoon(b.cancel("run-1"))).toBe(false);
+
+    slow.open();
+
+    const run = await started;
+
+    expect(run.status).toBe("canceled");
+    expect(run.cancelReason).toBe("user deleted");
+    expect(sender.calls).toHaveLength(0);
+  });
+
+  test("a cancelOn event from another engine stops the run before its next send", async () => {
+    const slow = gate();
+
+    const blocked = defineWorkflow({
+      name: "blocked-event",
+      cancelOn: ["unsubscribed"],
+      run: async (ctx, input: Input) => {
+        await ctx.step("slow", async () => {
+          await slow.pass();
+
+          return 1;
+        });
+        await ctx.send("follow-up", mail(input.email, "Follow-up"));
+      },
+    });
+
+    const { sender, a, b } = sharedWorkers([blocked]);
+    const started = a.start(blocked, ada, { id: "run-1", subject: ada.email });
+
+    await slow.reached;
+    expect(await settledSoon(b.sendEvent({ name: "unsubscribed", subject: ada.email }))).toEqual(["run-1"]);
+    slow.open();
+
+    expect((await started).cancelReason).toBe("event:unsubscribed");
+    expect(sender.calls).toHaveLength(0);
+  });
+});
+
+describe("workflows: step and event semantics", () => {
+  test("idempotency keys are unambiguous and bounded", async () => {
+    const one = defineWorkflow({
+      name: "one",
+      run: async (ctx, input: { step: string }) => {
+        await ctx.send(input.step, mail("ada@example.test", "Hi"));
+      },
+    });
+
+    const { engine, sender } = setup([one]);
+
+    await engine.start(one, { step: "c" }, { id: "a:b" });
+    await engine.start(one, { step: "b:c" }, { id: "a" });
+    await engine.start(one, { step: "x".repeat(500) }, { id: "y".repeat(500) });
+
+    const keys = sender.calls.map((c) => c.idempotencyKey ?? "");
+
+    expect(new Set(keys).size).toBe(3);
+    expect(keys[0]).toBe(await workflowIdempotencyKey("a:b", "c"));
+    expect(keys.every((key) => /^wf_[0-9a-f]{64}$/.test(key))).toBe(true);
+  });
+
+  test("null step results and outputs survive replay", async () => {
+    const seen: unknown[] = [];
+
+    const nullable = defineWorkflow({
+      name: "nullable",
+      run: async (ctx) => {
+        const found = await ctx.step("lookup", () => null);
+
+        seen.push(found);
+        await ctx.sleep("wait", "1d");
+
+        return found;
+      },
+    });
+
+    const { engine, scheduler } = setup([nullable]);
+
+    await engine.start(nullable, null, { id: "run-1" });
+    await scheduler.advance("1d", engine);
+
+    const run = await engine.get("run-1");
+
+    expect(seen).toEqual([null, null]);
+    expect(run?.journal.lookup).toMatchObject({ status: "completed", result: null });
+    expect(run?.status).toBe("completed");
+    expect(run?.output).toBeNull();
+  });
+
+  test("an event delivered after the timeout deadline loses to the timeout", async () => {
+    const timed = defineWorkflow({
+      name: "timed",
+      run: async (ctx, input: Input) => {
+        const activated = await ctx.waitForEvent("activated", { timeout: "10ms" });
+
+        await ctx.send("result", mail(input.email, activated.status));
+      },
+    });
+
+    const { engine, clock, sender } = setup([timed]);
+
+    await engine.start(timed, ada, { id: "run-1" });
+    clock.advance("11ms");
+    await engine.sendEvent({ name: "activated", runId: "run-1" });
+
+    expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["timed_out"]);
+  });
+
+  test("an event delivered at or before the deadline wins even if the timer fires first", async () => {
+    const timed = defineWorkflow({
+      name: "timed-ok",
+      run: async (ctx, input: Input) => {
+        const activated = await ctx.waitForEvent("activated", { timeout: "10ms" });
+
+        await ctx.send("result", mail(input.email, activated.status));
+      },
+    });
+
+    const { engine, clock, sender } = setup([timed]);
+
+    await engine.start(timed, ada, { id: "run-1" });
+    clock.advance("10ms");
+    await engine.sendEvent({ name: "activated", runId: "run-1" });
+    await engine.resume("run-1");
+
+    expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["received"]);
   });
 });

@@ -52,6 +52,9 @@ export type WorkflowWait =
   | { kind: "retry"; step: string; until: number }
   | { kind: "event"; step: string; event: string; until?: number };
 
+/** Which execution holds a run, and until when. Expired leases may be claimed by any worker. */
+export type WorkflowLease = { owner: string; until: number };
+
 export type WorkflowInboxEvent = {
   name: string;
   payload?: WorkflowJsonValue;
@@ -72,10 +75,13 @@ export type WorkflowRun = {
   output?: WorkflowJsonValue;
   error?: { message: string; step?: string };
   cancelReason?: string;
+  /** Set while an execution owns the run. Every engine write that executes steps checks it. */
+  lease?: WorkflowLease;
   revision: number;
   /**
-   * When a resume is next due: the wait's `until`, or a lease while the run is executing so a
-   * crashed worker's run is picked up again. Undefined for terminal runs and untimed event waits.
+   * When a resume is next due: the lease's `until` while the run is executing, so a crashed
+   * worker's run is picked up again; otherwise the wait's `until`, or now when a delivered event
+   * already satisfies the wait. Undefined for terminal runs and untimed event waits.
    */
   dueAt?: number;
   createdAt: number;
@@ -139,7 +145,7 @@ export type WorkflowContext = {
   readonly version: number;
   readonly subject?: string;
   readonly startedAt: number;
-  /** Sends once per run and step name, with idempotency key `wf:<runId>:<name>`. */
+  /** Sends once per run and step name, with idempotency key `workflowIdempotencyKey(runId, name)`. */
   send(name: string, message: EmailMessage, options?: WorkflowSendOptions): Promise<WorkflowSendRecord>;
   /** Runs `fn` once and journals its JSON result. Retried per policy when it throws. */
   step<TResult extends WorkflowJsonValue | void>(
@@ -205,6 +211,11 @@ export type WorkflowEngineOptions = {
   isSuppressed?: (address: string) => MaybePromise<boolean>;
   /** Generates run ids when `start` gets none. Defaults to `crypto.randomUUID()`. */
   generateId?: () => string;
+  /**
+   * How long an execution holds a run before another worker may take it over. Renewed before
+   * every step and, while a step runs, every third of this duration. Defaults to `"5m"`.
+   */
+  leaseDuration?: WorkflowDuration;
 };
 
 export type WorkflowStartOptions = {
@@ -227,10 +238,18 @@ export type WorkflowEngine = {
   ): Promise<WorkflowRun>;
   /** Continues a run whose timer fired. Safe to call at any time; it no-ops when nothing is due. */
   resume(runId: string): Promise<WorkflowRun | undefined>;
-  /** Resumes every due run the store reports, for cron-driven hosts without a push scheduler. */
+  /**
+   * Resumes every due run the store reports, for cron-driven hosts without a push scheduler.
+   * Returns how many runs it executed.
+   */
   resumeDue(limit?: number): Promise<number>;
   /** Delivers an event. Returns the ids of the runs it reached. */
   sendEvent(event: WorkflowEventInput): Promise<string[]>;
+  /**
+   * Cancels a run without waiting for a running step. A step or send already in flight may still
+   * finish, but its result is discarded and nothing after it runs. Returns false when the run is
+   * missing or already terminal.
+   */
   cancel(runId: string, reason?: string): Promise<boolean>;
   get(runId: string): Promise<WorkflowRun | undefined>;
 };

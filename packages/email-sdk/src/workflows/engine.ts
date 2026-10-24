@@ -3,6 +3,7 @@ import { isStringMember } from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
+import { workflowIdempotencyKey } from "./idempotency.js";
 import { isTerminalRun } from "./memory.js";
 import type {
   AnyWorkflowDefinition,
@@ -14,15 +15,17 @@ import type {
   WorkflowHooks,
   WorkflowInboxEvent,
   WorkflowJsonValue,
+  WorkflowLease,
   WorkflowRetryPolicy,
   WorkflowRun,
   WorkflowSendRecord,
   WorkflowStepRecord,
+  WorkflowWait,
 } from "./types.js";
 
 const defaultRetry = { maxAttempts: 3, backoffMs: 60_000 };
 
-const defaultLeaseMs = 5 * 60_000;
+const defaultLease: WorkflowDuration = "5m";
 
 const inboxLimit = 50;
 
@@ -101,19 +104,57 @@ type WorkflowHookHandlers = {
   [K in keyof WorkflowHooks]?: (event: WorkflowHookEvents[K]) => MaybePromise<void>;
 };
 
-function withoutFirst(inbox: readonly WorkflowInboxEvent[], name: string): WorkflowInboxEvent[] {
-  const index = inbox.findIndex((event) => event.name === name);
+/** The first inbox event that satisfies an event wait: same name, received by the deadline. */
+function matchingEventIndex(inbox: readonly WorkflowInboxEvent[], event: string, until: number | undefined) {
+  return inbox.findIndex((delivered) => delivered.name === event && (until === undefined || delivered.receivedAt <= until));
+}
 
-  return index === -1 ? [...inbox] : [...inbox.slice(0, index), ...inbox.slice(index + 1)];
+function withoutIndex(inbox: readonly WorkflowInboxEvent[], index: number): WorkflowInboxEvent[] {
+  return [...inbox.slice(0, index), ...inbox.slice(index + 1)];
 }
 
 function definitionKey(name: string, version: number) {
   return `${name}@${version}`;
 }
 
+/** The stored step result, or the workflow output, with `undefined` (a `void` return) left out. */
+function jsonResult(value: WorkflowJsonValue | void): WorkflowJsonValue | undefined {
+  return value === undefined ? undefined : value;
+}
+
+function hasLiveLease(run: WorkflowRun, at: number) {
+  return run.lease !== undefined && run.lease.until > at;
+}
+
+/** True when the run's wait has a delivered event that satisfies it. */
+function hasMatchedEvent(run: WorkflowRun) {
+  return run.wait?.kind === "event" && matchingEventIndex(run.inbox, run.wait.event, run.wait.until) !== -1;
+}
+
+/** True when a worker may claim the run now: active, unleased, and not blocked on a future wait. */
+function isRunnable(run: WorkflowRun, at: number) {
+  if (isTerminalRun(run) || hasLiveLease(run, at)) return false;
+
+  if (!run.wait) return true;
+
+  return (run.wait.until !== undefined && run.wait.until <= at) || hasMatchedEvent(run);
+}
+
+function dueAtFor(run: WorkflowRun, at: number): number | undefined {
+  if (isTerminalRun(run)) return undefined;
+
+  if (run.lease) return run.lease.until;
+
+  if (!run.wait || hasMatchedEvent(run)) return at;
+
+  return run.wait.until;
+}
+
 /**
- * Creates a workflow engine over a store and scheduler. The engine itself is stateless apart from
- * per-run locks, so several engines (processes) may share one store; revision checks keep them safe.
+ * Creates a workflow engine over a store and scheduler. The engine keeps no per-run state, so
+ * several engines (processes) may share one store. An execution first claims the run with a
+ * revision-checked lease, renews it before every step, and stops as soon as a save shows that it
+ * lost the lease or that the run was canceled.
  */
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
   const definitions = new Map<string, AnyWorkflowDefinition>();
@@ -122,7 +163,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   const hooks: WorkflowHooks = options.hooks ?? {};
   const now = () => (options.clock ? options.clock.now() : Date.now());
   const generateId = options.generateId ?? (() => crypto.randomUUID());
-  const locks = new Map<string, Promise<void>>();
+  const leaseMs = durationToMs(options.leaseDuration ?? defaultLease);
+
+  if (leaseMs <= 0) throw new WorkflowError("invalid_definition", "leaseDuration must be positive.");
 
   for (const definition of options.workflows) {
     const key = definitionKey(definition.name, definition.version);
@@ -160,43 +203,32 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   }
 
-  async function withLock<T>(runId: string, task: () => Promise<T>): Promise<T> {
-    const previous = locks.get(runId) ?? Promise.resolve();
-    const result = previous.then(task);
-
-    const settled = result.then(
-      () => undefined,
-      () => undefined,
-    );
-
-    locks.set(runId, settled);
-
-    try {
-      return await result;
-    } finally {
-      if (locks.get(runId) === settled) locks.delete(runId);
-    }
-  }
-
-  function dueAtFor(run: WorkflowRun, at: number): number | undefined {
-    if (isTerminalRun(run)) return undefined;
-
-    if (run.wait) return run.wait.until;
-
-    return at + defaultLeaseMs;
-  }
-
   /**
    * Applies `transform` and saves with a revision check. On a conflict it reloads and re-applies
-   * the transform to the fresh state, so concurrent event deliveries are not lost. Returns
-   * undefined when the run disappeared or became terminal in the meantime.
+   * the transform to the fresh state, so concurrent event deliveries are not lost; transforms must
+   * therefore decide from the run they are given. With an `owner`, every save renews that
+   * execution's lease while the run keeps going and releases it once the run waits or ends, and the
+   * commit gives up when the fresh run is held by someone else. Returns undefined when nothing was
+   * saved: the transform declined, the run disappeared, became terminal, or changed owner.
    */
-  async function commit(base: WorkflowRun, transform: RunTransform): Promise<WorkflowRun | undefined> {
+  async function commit(
+    base: WorkflowRun,
+    transform: (run: WorkflowRun) => WorkflowRun | undefined,
+    owner?: string,
+  ): Promise<WorkflowRun | undefined> {
     let current = base;
 
     for (let attempt = 0; attempt < commitAttempts; attempt += 1) {
       const at = now();
       const next = transform(current);
+
+      if (!next) return undefined;
+
+      if (owner !== undefined) {
+        next.lease = isTerminalRun(next) || next.wait ? undefined : { owner, until: at + leaseMs };
+      } else if (isTerminalRun(next)) {
+        next.lease = undefined;
+      }
 
       next.revision = current.revision + 1;
       next.updatedAt = at;
@@ -207,23 +239,37 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const fresh = await store.get(base.id);
 
       if (!fresh || isTerminalRun(fresh)) return undefined;
+
+      if (owner !== undefined && fresh.lease?.owner !== owner) return undefined;
       current = fresh;
     }
 
     return undefined;
   }
 
+  /** Takes the run for one execution. Returns undefined when it is not runnable or another worker won. */
+  async function claim(base: WorkflowRun): Promise<{ run: WorkflowRun; owner: string } | undefined> {
+    const owner = crypto.randomUUID();
+
+    const claimed = await commit(base, (run) =>
+      isRunnable(run, now())
+        ? { ...run, status: "running", lease: { owner, until: now() + leaseMs } }
+        : undefined,
+    );
+
+    return claimed ? { run: claimed, owner } : undefined;
+  }
+
   async function scheduleWake(run: WorkflowRun) {
     if (run.wait?.until !== undefined) await scheduler?.schedule({ runId: run.id, at: run.wait.until });
   }
 
-  async function cancelRun(run: WorkflowRun, reason: string): Promise<WorkflowRun | undefined> {
-    const canceled = await commit(run, (current) => ({
-      ...current,
-      status: "canceled",
-      cancelReason: reason,
-      wait: undefined,
-    }));
+  async function cancelRun(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
+    const canceled = await commit(
+      run,
+      (current) => ({ ...current, status: "canceled", cancelReason: reason, wait: undefined }),
+      owner,
+    );
 
     if (!canceled) return undefined;
     await scheduler?.cancel(run.id);
@@ -232,8 +278,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     return canceled;
   }
 
-  /** Replays the run's definition until it completes, fails, or suspends on a wait. */
-  async function execute(loaded: WorkflowRun): Promise<WorkflowRun | undefined> {
+  /** Replays the run's definition until it completes, fails, suspends on a wait, or loses the run. */
+  async function execute(loaded: WorkflowRun, owner: string): Promise<WorkflowRun | undefined> {
     const definition = definitionFor(loaded);
     let current: WorkflowRun = loaded;
     let stopped = false;
@@ -255,8 +301,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return neverSettles;
     }
 
-    async function save(transform: RunTransform): Promise<boolean> {
-      const next = await commit(current, transform);
+    async function save(transform: (run: WorkflowRun) => WorkflowRun): Promise<boolean> {
+      if (lost) return false;
+
+      const next = await commit(current, transform, owner);
 
       if (!next) {
         lost = true;
@@ -267,6 +315,27 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       current = next;
 
       return true;
+    }
+
+    /** Proves this execution still owns an active run, and extends the lease, before an effect. */
+    function renew() {
+      return save((run) => ({ ...run }));
+    }
+
+    /** Runs `body` while renewing the lease every third of its duration. */
+    async function withHeartbeat<T>(body: () => Promise<T>): Promise<T> {
+      let beat: Promise<unknown> = Promise.resolve();
+
+      const timer = setInterval(() => {
+        beat = beat.then(renew).catch(() => false);
+      }, Math.max(1, Math.floor(leaseMs / 3)));
+
+      try {
+        return await body();
+      } finally {
+        clearInterval(timer);
+        await beat;
+      }
     }
 
     function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
@@ -336,6 +405,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       retry: WorkflowRetryPolicy | undefined,
       effect: () => Promise<WorkflowJsonValue | void>,
     ): Promise<WorkflowJsonValue | undefined> {
+      if (!(await renew())) return suspend();
+
       const previous = current.journal[name];
       const attempt = (previous?.status === "retrying" ? previous.attempts : 0) + 1;
       const policy = resolveRetry(options.retry, definition.retry, retry);
@@ -346,10 +417,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       let result: WorkflowJsonValue | void;
 
       try {
-        result = await effect();
+        result = await withHeartbeat(effect);
       } catch (cause) {
         const error = toError(cause);
         const willRetry = !isPermanentFailure(cause) && attempt < policy.maxAttempts;
+
+        if (lost) return suspend();
 
         await invokeHook("onStepError", { run: current, step: name, kind, attempt, error, willRetry });
 
@@ -373,7 +446,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return suspend();
       }
 
-      const stored = result ?? undefined;
+      const stored = jsonResult(result);
 
       if (!(await save(withStep(name, { status: "completed", kind, result: stored, completedAt: now() })))) {
         return suspend();
@@ -390,7 +463,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return stored;
     }
 
-    /** Completes the sleep once its persisted `until` has passed; otherwise waits and suspends. */
+    /**
+     * Completes the sleep once its persisted `until` has passed; otherwise records the wait,
+     * releasing the lease, and suspends.
+     */
     async function sleepUntil(name: string, until: number) {
       const wait = current.wait;
       const target = wait?.kind === "sleep" && wait.step === name ? wait.until : until;
@@ -402,8 +478,6 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
         return;
       }
-
-      if (wait?.kind === "sleep" && wait.step === name) return suspend();
 
       if (await save((run) => ({ ...run, status: "waiting", wait: { kind: "sleep", step: name, until: target } }))) {
         await scheduleWake(current);
@@ -431,7 +505,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (options.isSuppressed) {
             for (const address of recipientsOf(message)) {
               if (await options.isSuppressed(address)) {
-                const canceled = await cancelRun(current, "suppressed");
+                const canceled = await cancelRun(current, "suppressed", owner);
 
                 if (canceled) current = canceled;
                 else lost = true;
@@ -441,12 +515,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             }
           }
 
-          const sent = await sideEffect(name, "send", undefined, async () => {
-            const response = await email.send(message, {
-              ...sendOptions,
-              idempotencyKey: `wf:${loaded.id}:${name}`,
-            });
+          const idempotencyKey = await workflowIdempotencyKey(loaded.id, name);
 
+          const sent = await sideEffect(name, "send", undefined, async () => {
+            const response = await email.send(message, { ...sendOptions, idempotencyKey });
             const sendRecord: WorkflowSendRecord = { adapter: response.adapter };
 
             if (response.id !== undefined) sendRecord.id = response.id;
@@ -492,50 +564,54 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             return record.result as WorkflowEventResult<never>;
           }
 
-          const eventName = waitOptions?.event ?? name;
-          const delivered = current.inbox.find((event) => event.name === eventName);
+          const event = waitOptions?.event ?? name;
+          const persisted = current.wait?.kind === "event" && current.wait.step === name ? current.wait : undefined;
 
-          if (delivered) {
-            const result: WorkflowEventResult<WorkflowJsonValue | undefined> = {
-              status: "received",
-              payload: delivered.payload,
-              receivedAt: delivered.receivedAt,
-            };
+          // The deadline is fixed the first time the run reaches this step and persisted with the
+          // wait, so every worker resolves event versus timeout against the same timestamps.
+          const until = persisted
+            ? persisted.until
+            : waitOptions?.timeout === undefined
+              ? undefined
+              : now() + durationToMs(waitOptions.timeout);
 
-            const consumed = await save((run) => ({
-              ...withStep(name, { status: "completed", kind: "event", result, completedAt: now() })(run),
-              inbox: withoutFirst(run.inbox, eventName),
-            }));
+          const wait: WorkflowWait = until === undefined ? { kind: "event", step: name, event } : { kind: "event", step: name, event, until };
+          let outcome: WorkflowEventResult<WorkflowJsonValue | undefined> | undefined;
 
-            if (!consumed) return suspend();
+          // One revision-checked save decides between consuming an event, timing out, and waiting.
+          // A delivery that lands first makes the save conflict, and the retry sees its event.
+          const saved = await save((run) => {
+            const index = matchingEventIndex(run.inbox, event, until);
+            const delivered = run.inbox[index];
 
-            // SAFETY: see the replay branch above; the payload type is the caller's declared contract.
-            return result as WorkflowEventResult<never>;
-          }
+            if (delivered) {
+              outcome = { status: "received", payload: delivered.payload, receivedAt: delivered.receivedAt };
 
-          const wait = current.wait;
-
-          if (wait?.kind === "event" && wait.step === name) {
-            if (wait.until === undefined || wait.until > now()) return suspend();
-
-            const timedOut: WorkflowEventResult<never> = { status: "timed_out" };
-
-            if (!(await save(withStep(name, { status: "completed", kind: "event", result: timedOut, completedAt: now() })))) {
-              return suspend();
+              return {
+                ...withStep(name, { status: "completed", kind: "event", result: outcome, completedAt: now() })(run),
+                inbox: withoutIndex(run.inbox, index),
+              };
             }
 
-            return timedOut;
+            if (until !== undefined && until <= now()) {
+              outcome = { status: "timed_out" };
+
+              return withStep(name, { status: "completed", kind: "event", result: outcome, completedAt: now() })(run);
+            }
+
+            outcome = undefined;
+
+            return { ...run, status: "waiting", wait };
+          });
+
+          if (!saved) return suspend();
+
+          if (outcome) {
+            // SAFETY: see the replay branch above; the payload type is the caller's declared contract.
+            return outcome as WorkflowEventResult<never>;
           }
 
-          const until = waitOptions?.timeout === undefined ? undefined : now() + durationToMs(waitOptions.timeout);
-
-          const waiting = await save((run) => ({
-            ...run,
-            status: "waiting",
-            wait: until === undefined ? { kind: "event", step: name, event: eventName } : { kind: "event", step: name, event: eventName, until },
-          }));
-
-          if (waiting) await scheduleWake(current);
+          await scheduleWake(current);
 
           return suspend();
         });
@@ -560,69 +636,55 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     if (outcome.kind === "failed") {
       await failRun(outcome.error);
+    } else {
+      const output = jsonResult(outcome.output);
 
-      return lost ? await store.get(loaded.id) : current;
+      if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
+        await invokeHook("onRunComplete", { run: current });
+      }
     }
 
-    const output = outcome.output ?? undefined;
-    const completed = await save((run) => ({ ...run, status: "completed", wait: undefined, output }));
-
-    if (completed) await invokeHook("onRunComplete", { run: current });
+    if (!lost) await scheduler?.cancel(loaded.id);
 
     return lost ? await store.get(loaded.id) : current;
   }
 
-  /** True when a resume should leave the run alone: terminal, not yet due, or held by a live worker. */
-  function isIdle(run: WorkflowRun, at: number) {
-    if (isTerminalRun(run)) return true;
+  /** Claims and executes the run when it is runnable. `executed` is false when it was left alone. */
+  async function resumeRun(runId: string): Promise<{ run: WorkflowRun | undefined; executed: boolean }> {
+    const run = await store.get(runId);
 
-    if (run.wait) return run.wait.until === undefined || run.wait.until > at;
+    if (!run || !isRunnable(run, now())) return { run, executed: false };
 
-    return run.dueAt !== undefined && run.dueAt > at;
-  }
+    // Resolve the definition before writing, so a missing version leaves the run untouched.
+    definitionFor(run);
 
-  async function resumeRun(runId: string) {
-    return await withLock(runId, async () => {
-      const run = await store.get(runId);
+    const claimed = await claim(run);
 
-      if (!run || isIdle(run, now())) return run;
+    if (!claimed) return { run: await store.get(runId), executed: false };
 
-      return await execute(run);
-    });
+    return { run: await execute(claimed.run, claimed.owner), executed: true };
   }
 
   async function deliver(runId: string, name: string, payload: WorkflowJsonValue | undefined) {
-    return await withLock(runId, async () => {
-      const run = await store.get(runId);
+    const run = await store.get(runId);
 
-      if (!run || isTerminalRun(run)) return false;
+    if (!run || isTerminalRun(run)) return false;
 
-      const definition = definitionFor(run);
+    const definition = definitionFor(run);
 
-      if (definition.cancelOn.includes(name)) return (await cancelRun(run, `event:${name}`)) !== undefined;
+    if (definition.cancelOn.includes(name)) return (await cancelRun(run, `event:${name}`)) !== undefined;
 
-      const event: WorkflowInboxEvent = payload === undefined ? { name, receivedAt: now() } : { name, payload, receivedAt: now() };
+    const event: WorkflowInboxEvent = payload === undefined ? { name, receivedAt: now() } : { name, payload, receivedAt: now() };
 
-      const updated = await commit(run, (current) => {
-        const awaiting = current.wait?.kind === "event" && current.wait.event === name;
+    // Delivery only appends to the inbox. The run's wait, including its deadline, stays as it is:
+    // the execution that consumes the event compares `receivedAt` with that deadline.
+    const updated = await commit(run, (current) => ({ ...current, inbox: [...current.inbox, event].slice(-inboxLimit) }));
 
-        return {
-          ...current,
-          inbox: [...current.inbox, event].slice(-inboxLimit),
-          status: awaiting ? "running" : current.status,
-          wait: awaiting ? undefined : current.wait,
-        };
-      });
+    if (!updated) return false;
 
-      if (!updated) return false;
+    if (updated.wait?.kind === "event" && updated.wait.event === name) await resumeRun(runId);
 
-      if (run.wait?.kind === "event" && run.wait.event === name) {
-        if (run.wait.until !== undefined) await scheduler?.cancel(runId);
-        await execute(updated);
-      }
-
-      return true;
-    });
+    return true;
   }
 
   return {
@@ -652,6 +714,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       }
 
       const at = now();
+      const owner = crypto.randomUUID();
+      const lease: WorkflowLease = { owner, until: at + leaseMs };
 
       const run: WorkflowRun = {
         id: startOptions?.id ?? generateId(),
@@ -661,10 +725,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         input: parsed,
         journal: {},
         inbox: [],
+        lease,
         revision: 0,
         createdAt: at,
         updatedAt: at,
-        dueAt: at + defaultLeaseMs,
+        dueAt: lease.until,
       };
 
       if (startOptions?.subject !== undefined) run.subject = startOptions.subject;
@@ -677,18 +742,17 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return existing;
       }
 
-      const result = await withLock(run.id, () => execute(run));
-
-      return result ?? run;
+      return (await execute(run, owner)) ?? run;
     },
-    resume: resumeRun,
+    resume: async (runId) => (await resumeRun(runId)).run,
     async resumeDue(limit = 25) {
       const ids = await store.listDue(now(), limit);
       const errors: Error[] = [];
+      let resumed = 0;
 
       for (const id of ids) {
         try {
-          await resumeRun(id);
+          if ((await resumeRun(id)).executed) resumed += 1;
         } catch (cause) {
           errors.push(toError(cause));
         }
@@ -696,7 +760,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       if (errors.length > 0) throw new AggregateError(errors, `${errors.length} workflow run(s) failed to resume.`);
 
-      return ids.length;
+      return resumed;
     },
     async sendEvent(event) {
       const targets =
@@ -713,13 +777,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return reached;
     },
     async cancel(runId, reason = "canceled") {
-      return await withLock(runId, async () => {
-        const run = await store.get(runId);
+      const run = await store.get(runId);
 
-        if (!run || isTerminalRun(run)) return false;
+      if (!run || isTerminalRun(run)) return false;
 
-        return (await cancelRun(run, reason)) !== undefined;
-      });
+      // A plain revision-checked write, independent of any execution: the owner's next save sees
+      // the terminal run and stops before its next effect.
+      return (await cancelRun(run, reason)) !== undefined;
     },
     get: (runId) => store.get(runId),
   };
