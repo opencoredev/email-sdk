@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { z } from "zod";
 
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
@@ -1045,6 +1045,49 @@ describe("workflows: multiple workers", () => {
 
     expect((await started).status).toBe("canceled");
     expect(sender.calls).toHaveLength(0);
+  });
+
+  test("the heartbeat stops once a renewal finds the run canceled, while the step still hangs", async () => {
+    const hung = gate();
+
+    const stuck = defineWorkflow({
+      name: "stuck",
+      run: async (ctx) => {
+        await ctx.step("hang", async () => {
+          await hung.pass();
+
+          return 1;
+        });
+      },
+    });
+
+    const intervals = spyOn(globalThis, "setInterval");
+    const cleared = spyOn(globalThis, "clearInterval");
+
+    try {
+      const { a, b } = sharedWorkers([stuck], { leaseDuration: "30ms" });
+      const started = a.start(stuck, null, { id: "run-1" });
+
+      await hung.reached;
+
+      const heartbeat = intervals.mock.results.at(-1)?.value;
+
+      expect(heartbeat).toBeDefined();
+      expect(await b.cancel("run-1")).toBe(true);
+
+      // Bounded wait (real time) for the next beat to see the cancellation and stop the timer.
+      for (let tries = 0; tries < 100 && !cleared.mock.calls.some(([id]) => id === heartbeat); tries += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      expect(cleared.mock.calls.some(([id]) => id === heartbeat)).toBe(true);
+
+      hung.open();
+      expect((await started).status).toBe("canceled");
+    } finally {
+      intervals.mockRestore();
+      cleared.mockRestore();
+    }
   });
 });
 
