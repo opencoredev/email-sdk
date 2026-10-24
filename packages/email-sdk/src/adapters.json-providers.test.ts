@@ -171,6 +171,15 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Scaleway reads the message ID from the CreateEmail emails envelope", async () => {
+    const capture = jsonCapture({ emails: [{ id: "scw_email_1", message_id: "msg-1", rcpt_to: "ada@example.com" }] });
+
+    const response = await scaleway({ secretKey: "secret", projectId: "project", fetch: capture.fetch })
+      .send({ ...messageWithoutMetadata, tags: undefined }, context);
+
+    expect(response.id).toBe("scw_email_1");
+  });
+
   test("Scaleway maps the REST API address, header, and attachment schema", async () => {
     const capture = jsonCapture({ id: "scale_123" });
 
