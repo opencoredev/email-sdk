@@ -7,12 +7,12 @@ import {
   jsonNumber,
   jsonObject,
   jsonText,
-  messageIds,
   parseDate,
   parseJsonObjectBody,
   payloadError,
   remoteAttachment,
 } from "./shared.js";
+import { headerFields } from "./normalize.js";
 import {
   type InboundAddress,
   type InboundEmail,
@@ -51,6 +51,7 @@ function emailFromItem(item: JsonObject, options: BrevoInboundOptions): InboundE
     });
   }));
 
+  const thread = headerFields(headers);
   const baseUrl = options.baseUrl ?? "https://api.brevo.com/v3";
   const spam = jsonObject(item.Spam);
   const uuid = jsonList(item.Uuid).flatMap(entry => jsonText(entry) ?? []);
@@ -59,7 +60,7 @@ function emailFromItem(item: JsonObject, options: BrevoInboundOptions): InboundE
   return {
     provider,
     id: uuid[0],
-    messageId: firstMessageId(jsonText(item.MessageId)) ?? jsonText(item.MessageId),
+    messageId: firstMessageId(jsonText(item.MessageId)) ?? jsonText(item.MessageId) ?? thread.messageId,
     from: mailbox(item.From),
     to: mailboxes(item.To),
     cc: mailboxes(item.Cc),
@@ -95,8 +96,8 @@ function emailFromItem(item: JsonObject, options: BrevoInboundOptions): InboundE
         });
       })];
     }),
-    inReplyTo: firstMessageId(jsonText(item.InReplyTo)),
-    references: messageIds(headers.get("references")),
+    inReplyTo: firstMessageId(jsonText(item.InReplyTo)) ?? thread.inReplyTo,
+    references: thread.references,
     date: parseDate(jsonText(item.SentAtDate)),
     security: { spamScore: jsonNumber(item.SpamScore) ?? jsonNumber(spam?.Score) },
     envelope: {

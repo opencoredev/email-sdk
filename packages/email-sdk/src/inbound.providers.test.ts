@@ -360,7 +360,7 @@ describe("Mailchimp Transactional (Mandrill)", () => {
 
   const events = JSON.stringify([
     { event: "inbound", ts: 1_700_000_000, msg: { raw_msg: new TextDecoder("latin1").decode(eml), email: "support@acme.test", spf: { result: "pass" }, dkim: { signed: true, valid: false }, spam_report: { score: 2.1, matched_rules: [] } } },
-    { event: "inbound", ts: 1_700_000_001, msg: { from_email: "ada@example.com", from_name: "Ada", to: [["support@acme.test", null]], email: "support@acme.test", subject: "Hi", text: "Hello", headers: { Received: ["a", "b"] }, attachments: { "note.txt": { name: "note.txt", type: "text/plain", content: "aGk=", base64: true } } } },
+    { event: "inbound", ts: 1_700_000_001, msg: { from_email: "ada@example.com", from_name: "Ada", to: [["support@acme.test", null]], email: "support@acme.test", subject: "Hi", text: "Hello", headers: { Received: ["a", "b"], "Message-Id": "<m2@example.com>", "In-Reply-To": "<m1@example.com>", References: "<m0@example.com> <m1@example.com>" }, attachments: { "note.txt": { name: "note.txt", type: "text/plain", content: "aGk=", base64: true } } } },
     { event: "send", ts: 1, msg: {} },
   ]);
 
@@ -381,6 +381,9 @@ describe("Mailchimp Transactional (Mandrill)", () => {
     expect(raw!.security).toEqual({ spf: "pass", dkim: "fail", spamScore: 2.1 });
     expect(parsed!.to).toEqual([{ address: "support@acme.test" }]);
     expect(parsed!.headers.getAll("received")).toEqual(["a", "b"]);
+    expect(parsed!.messageId).toBe("m2@example.com");
+    expect(parsed!.inReplyTo).toBe("m1@example.com");
+    expect(parsed!.references).toEqual(["m0@example.com", "m1@example.com"]);
     expect(new TextDecoder().decode(await parsed!.attachments[0]!.read())).toBe("hi");
   });
 });
@@ -543,6 +546,15 @@ describe("Brevo", () => {
     expect(await email!.attachments[0]!.read()).toEqual(pdf);
     await expect(parseBrevoInbound({ body: text("brevo-inbound.json") })[0]!.attachments[0]!.read()).rejects.toThrow("apiKey");
   });
+
+  test("falls back to headers for threading fields", () => {
+    const body = JSON.stringify({ items: [{ Headers: { "Message-ID": "<b2@brevo.test>", "In-Reply-To": "<b1@brevo.test>", References: "<b1@brevo.test>" } }] });
+    const [email] = parseBrevoInbound({ body });
+
+    expect(email!.messageId).toBe("b2@brevo.test");
+    expect(email!.inReplyTo).toBe("b1@brevo.test");
+    expect(email!.references).toEqual(["b1@brevo.test"]);
+  });
 });
 
 describe("Mailtrap", () => {
@@ -565,6 +577,19 @@ describe("Mailtrap", () => {
 
     expect(email.id).toBe("m1");
     expect(email.attachments).toHaveLength(3);
+  });
+
+  test("falls back to headers for threading fields without a raw message", async () => {
+    const fetch = stubFetch(async () => Response.json({
+      id: "m2",
+      headers: { "Message-ID": "<t2@mailtrap.test>", "In-Reply-To": "<t1@mailtrap.test>", References: "<t0@mailtrap.test> <t1@mailtrap.test>" },
+    }));
+
+    const email = await fetchMailtrapInboundEmail(42, "m2", { apiToken: "mt_token", fetch });
+
+    expect(email.messageId).toBe("t2@mailtrap.test");
+    expect(email.inReplyTo).toBe("t1@mailtrap.test");
+    expect(email.references).toEqual(["t0@mailtrap.test", "t1@mailtrap.test"]);
   });
 });
 

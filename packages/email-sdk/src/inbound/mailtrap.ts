@@ -1,6 +1,6 @@
 import type { JsonObject } from "../internal/decode.js";
 import { parseAddress, parseAddressList } from "./mime.js";
-import { emailFromMime } from "./normalize.js";
+import { emailFromMime, headerFields } from "./normalize.js";
 import {
   type InboundFetchOptions,
   fetchBytes,
@@ -47,12 +47,14 @@ function emailFromDetails(details: JsonObject, options: MailtrapInboundApiOption
     return text === undefined ? [] : [{ name, value: text }];
   }));
 
+  const thread = headerFields(headers);
+  const references = jsonList(details.references).flatMap(entry => messageIds(jsonText(entry)));
   const list = (key: string) => jsonList(details[key]).flatMap(entry => parseAddressList(jsonText(entry)));
 
   return {
     provider,
     id: jsonText(details.id),
-    messageId: firstMessageId(jsonText(details.rfc_message_id)) ?? jsonText(details.rfc_message_id),
+    messageId: firstMessageId(jsonText(details.rfc_message_id)) ?? jsonText(details.rfc_message_id) ?? thread.messageId,
     from: parseAddress(jsonText(details.from)),
     to: list("to"),
     cc: list("cc"),
@@ -79,8 +81,8 @@ function emailFromDetails(details: JsonObject, options: MailtrapInboundApiOption
         ? fetchBytes(provider, url, { fetch: options.fetch, signal: options.signal })
         : Promise.reject(new Error("Mailtrap attachment has no download URL.")))];
     }),
-    inReplyTo: firstMessageId(jsonText(details.in_reply_to)),
-    references: jsonList(details.references).flatMap(entry => messageIds(jsonText(entry))),
+    inReplyTo: firstMessageId(jsonText(details.in_reply_to)) ?? thread.inReplyTo,
+    references: references.length ? references : thread.references,
     date: parseDate(jsonText(details.received_at)),
     security: {},
     raw: { kind: "json", value: details },

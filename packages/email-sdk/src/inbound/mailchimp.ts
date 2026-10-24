@@ -1,5 +1,5 @@
 import { type JsonObject, type JsonValue, isJsonBoolean, isJsonString } from "../internal/decode.js";
-import { emailFromMime, mergeSecurity } from "./normalize.js";
+import { emailFromMime, headerFields, mergeSecurity } from "./normalize.js";
 import {
   decodeBase64,
   inlineAttachment,
@@ -23,7 +23,6 @@ import {
   type InboundSecurity,
   type InboundVerification,
 } from "./types.js";
-import { parseAddressList } from "./mime.js";
 
 const provider = "mailchimp";
 
@@ -97,9 +96,13 @@ function emailFromEvent(event: JsonObject): InboundEmail {
   const address = jsonText(message.from_email);
   const attachments = [...Object.values(jsonObject(message.attachments) ?? {}), ...Object.values(jsonObject(message.images) ?? {})];
 
+  const fields = headerFields(headers);
+
+  // Header fields fill in what the parsed payload omits, like Message-ID and References.
   return {
+    ...fields,
     provider,
-    from: address ? (name ? { address, name } : { address }) : undefined,
+    from: address ? (name ? { address, name } : { address }) : fields.from,
     to: jsonList(message.to).flatMap(pair => {
       const [entry, label] = jsonList(pair);
       const to = jsonText(entry);
@@ -107,10 +110,7 @@ function emailFromEvent(event: JsonObject): InboundEmail {
 
       return to ? [display ? { address: to, name: display } : { address: to }] : [];
     }),
-    cc: parseAddressList(headers.get("cc")),
-    bcc: [],
-    replyTo: parseAddressList(headers.get("reply-to")),
-    subject: jsonText(message.subject),
+    subject: jsonText(message.subject) ?? fields.subject,
     text: jsonText(message.text),
     html: jsonText(message.html),
     headers,
@@ -127,7 +127,6 @@ function emailFromEvent(event: JsonObject): InboundEmail {
         content: item.base64 === false ? utf8Bytes(content) : decodeBase64(content),
       })];
     }),
-    references: [],
     security: mandrillSecurity(message),
     envelope,
     raw: payload,
