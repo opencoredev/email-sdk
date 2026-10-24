@@ -34,7 +34,7 @@ function withNative<Native extends EmailAdapterContext["native"]>(native: Native
 const sesOptions = { accessKeyId: "a", secretAccessKey: "s", region: "us-east-1" };
 
 describe("provider-native options reach each adapter", () => {
-  test("Resend sends a template without html, text, or subject", async () => {
+  test("Resend sends a template with the message subject but without html or text", async () => {
     const capture = jsonCapture({ id: "res_1" });
 
     await resend({ apiKey: "key", fetch: capture.fetch }).send(
@@ -43,20 +43,34 @@ describe("provider-native options reach each adapter", () => {
         template: { id: "welcome", variables: { NAME: "Ada", COUNT: 2 } },
         topicId: "topic_1",
         headers: { "X-Trace": "t1" },
-        body: { subject: "Template subject override" },
       }),
     );
 
     const json = capture.calls[0]?.json;
     expect(json.template).toEqual({ id: "welcome", variables: { NAME: "Ada", COUNT: 2 } });
     expect(json.topic_id).toBe("topic_1");
-    expect(json.subject).toBe("Template subject override");
+    expect(json.subject).toBe("Welcome");
     expect(json).not.toHaveProperty("html");
     expect(json).not.toHaveProperty("text");
     expect(json.from).toBe("Acme <hello@example.com>");
     expect(capture.calls[0]?.headers.get("x-trace")).toBe("t1");
     // The per-send idempotency key still wins over native request headers.
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
+  test("Resend leaves the subject to the template only when asked", async () => {
+    const capture = jsonCapture({ id: "res_1" });
+
+    await resend({ apiKey: "key", fetch: capture.fetch }).send(
+      simple,
+      withNative({ template: { id: "welcome", useTemplateSubject: true } }),
+    );
+
+    const json = capture.calls[0]?.json;
+    expect(json.template).toEqual({ id: "welcome" });
+    expect(json).not.toHaveProperty("subject");
+    expect(json).not.toHaveProperty("html");
+    expect(json).not.toHaveProperty("text");
   });
 
   test("Postmark switches to the template endpoint and maps tracking and stream", async () => {
@@ -241,9 +255,35 @@ describe("provider-native options reach each adapter", () => {
       params: { userId: "u_1", plan: "pro" },
       batchId: "b-1",
     });
-    expect(json).not.toHaveProperty("subject");
+    expect(json.subject).toBe("Welcome");
     expect(json).not.toHaveProperty("htmlContent");
     expect(json).not.toHaveProperty("textContent");
+  });
+
+  test("Brevo leaves the subject to the template only when asked", async () => {
+    const capture = jsonCapture({ messageId: "br_1" });
+
+    await brevo({ apiKey: "br", fetch: capture.fetch }).send(
+      simple,
+      withNative({ templateId: 7, useTemplateSubject: true }),
+    );
+
+    const json = capture.calls[0]?.json;
+    expect(json.templateId).toBe(7);
+    expect(json).not.toHaveProperty("subject");
+    expect(json).not.toHaveProperty("htmlContent");
+    expect(json).not.toHaveProperty("useTemplateSubject");
+  });
+
+  test("Brevo ignores useTemplateSubject without a template", async () => {
+    const capture = jsonCapture({ messageId: "br_1" });
+
+    await brevo({ apiKey: "br", fetch: capture.fetch }).send(
+      simple,
+      withNative({ useTemplateSubject: true }),
+    );
+
+    expect(capture.calls[0]?.json.subject).toBe("Welcome");
   });
 
   test("Loops overrides the transactional ID and merges data variables", async () => {

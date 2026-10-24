@@ -31,10 +31,13 @@ const brevoRules: MessageRules = (message) => {
  */
 export type BrevoNativeOptions = EmailNativePassthrough & {
   /**
-   * Send a stored Brevo template. The template supplies the body and subject, so the message's
-   * `subject`, `html`, and `text` are not sent. Set `body: { subject }` to override the subject.
+   * Send a stored Brevo template. The template supplies the body, so the message's `html` and
+   * `text` are not sent. The message subject is still sent and overrides the template's subject,
+   * unless `useTemplateSubject` is set.
    */
   templateId?: number;
+  /** With `templateId`, leave `message.subject` out so the template's own subject applies. */
+  useTemplateSubject?: boolean;
   /** Template parameters, merged over the `params` built from `message.metadata`. */
   params?: EmailNativeObject;
   /** UUIDv4 batch identifier. */
@@ -81,7 +84,7 @@ export function brevo(
 
       return {
         ...payload,
-        subject: template ? undefined : payload.subject,
+        subject: template && native.useTemplateSubject ? undefined : payload.subject,
         htmlContent: template ? undefined : payload.htmlContent,
         textContent: template ? undefined : payload.textContent,
         templateId: native.templateId,

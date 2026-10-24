@@ -171,12 +171,12 @@ for other adapters in a fallback chain, and for logs and hooks.
 
 | Adapter | Template field | Dropped from the request |
 | --- | --- | --- |
-| Resend | `template` | `html`, `text`, `subject` (template default; override with `body.subject`) |
+| Resend | `template` | `html`, `text` (`subject` is sent and overrides the template default unless `template.useTemplateSubject`) |
 | Postmark | `template` → `/email/withTemplate` | `Subject`, `HtmlBody`, `TextBody` |
 | SendGrid | `templateId` | `content` (dynamic templates take the subject from the template) |
 | SES | `template` → `Content.Template` | `Content.Simple` (headers and attachments move into `Template`) |
 | Mailgun | `template` | `html`, `text` (Mailgun keeps using `subject`) |
-| Brevo | `templateId` | `subject`, `htmlContent`, `textContent` (override with `body.subject`) |
+| Brevo | `templateId` | `htmlContent`, `textContent` (`subject` is sent and overrides the template subject unless `useTemplateSubject`) |
 | Loops | always template-based | nothing; `transactionalId` and `dataVariables` override per send |
 
 ### Runtime cost when unused
@@ -201,9 +201,11 @@ validation error.
 
 ## 5. Open questions
 
-1. Template-only sends still need a placeholder `subject` and `text`. Relaxing
-   `assertMessage` when the primary adapter has a native template would be nicer for
-   single-provider users, but it touches validation, hooks, and telemetry facts.
+1. Template-only sends still need a placeholder `text` (or `html`). `EmailMessage` encodes
+   "html or text" as a type union and `assertMessage` enforces it at runtime, so relaxing it
+   for native templates changes the public message type plus validation, hooks, and telemetry
+   facts. Left as is for this experimental release. `subject` is not a placeholder: Resend and
+   Brevo send it as an override of the template subject.
 2. Should adapter factories accept default native options (e.g. `postmark({ native: {
    trackOpens: true } })`), generalizing `messageStream`/`configurationSetName`? A custom
    `beforeSend` middleware can already inject them.

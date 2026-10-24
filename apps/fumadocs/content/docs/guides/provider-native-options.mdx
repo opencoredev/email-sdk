@@ -55,12 +55,12 @@ The message still needs a `subject` and `html` or `text`. When you set a native 
 
 | Adapter | Option | What the template replaces |
 | --- | --- | --- |
-| Resend | `template: { id, variables }` | `html`, `text`, and `subject`. Set `body: { subject }` to override the template subject. |
+| Resend | `template: { id, variables, useTemplateSubject }` | `html` and `text`. The message `subject` overrides the template's default subject; set `useTemplateSubject: true` to keep the template's. |
 | Postmark | `template: { id }` or `{ alias }`, plus `model`, `inlineCss` | Sends to `/email/withTemplate` without `Subject`, `HtmlBody`, or `TextBody`. |
 | SendGrid | `templateId`, `dynamicTemplateData` | `content`. Dynamic templates take their subject from the template. |
 | SES | `template: { name }` or `{ arn }`, plus `data` | `Content.Simple`. Headers and attachments are still sent. |
 | Mailgun | `template: { name, version, variables, renderText }` | `html` and `text`. Mailgun still uses the message subject. |
-| Brevo | `templateId`, `params` | `subject`, `htmlContent`, and `textContent`. Set `body: { subject }` to override. |
+| Brevo | `templateId`, `params`, `useTemplateSubject` | `htmlContent` and `textContent`. The message `subject` overrides the template's subject; set `useTemplateSubject: true` to keep the template's. |
 | Loops | `transactionalId`, `dataVariables` | Overrides the adapter's `transactionalId` for this send and merges extra data variables. |
 
 With `sendPersonalized`, a SendGrid dynamic template gets each recipient's `variables` merged over `dynamicTemplateData` in that recipient's personalization.

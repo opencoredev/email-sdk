@@ -35,13 +35,15 @@ export type ResendAdapterOptions = {
 export type ResendNativeOptions = EmailNativePassthrough & {
   /**
    * Send a published Resend template. Resend rejects `html` and `text` alongside a template, so
-   * the adapter drops them and the message subject; the template's defaults apply. Set
-   * `body: { subject }` to override the template subject.
+   * the adapter drops them. The message subject is still sent and overrides the template's
+   * default subject, unless `useTemplateSubject` is set.
    */
   template?: {
     /** Template ID or alias. */
     id: string;
     variables?: Readonly<Record<string, string | number>>;
+    /** Leave `message.subject` out so the template's own default subject applies. */
+    useTemplateSubject?: boolean;
   };
   /** Subscription topic the recipient must be opted in to (`topic_id`). */
   topicId?: string;
@@ -104,11 +106,15 @@ async function toResendPayload(message: EmailMessage, native: ResendNativeOption
 
   if (!native) return payload;
 
-  const template = native.template;
+  const template = native.template && {
+    id: native.template.id,
+    variables: native.template.variables,
+  };
 
   const withNative = {
     ...payload,
-    ...(template && { subject: undefined, html: undefined, text: undefined, template }),
+    ...(template && { html: undefined, text: undefined, template }),
+    ...(native.template?.useTemplateSubject && { subject: undefined }),
     topic_id: native.topicId,
   };
 
