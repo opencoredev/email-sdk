@@ -7,7 +7,9 @@ import type {
   WorkflowRetryPolicy,
 } from "./types.js";
 
+/** Options for `defineWorkflow`. */
 export type DefineWorkflowOptions<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void> = {
+  /** Stored on each run. Letters, digits, `_`, `-`, `.`, and `:` only. */
   name: string;
   /** Bump when a change would break in-flight runs, and keep the old version registered until they drain. */
   version?: number;
@@ -17,6 +19,7 @@ export type DefineWorkflowOptions<TInput extends WorkflowJsonValue, TOutput exte
   retry?: WorkflowRetryPolicy;
   /** Parses input at `start`. The parsed value is stored and replayed. */
   input?: WorkflowInputSchema<TInput>;
+  /** The workflow body. Replayed from the top on every wake; its return value is saved as the run's `output`. */
   run: (ctx: WorkflowContext, input: TInput) => Promise<TOutput>;
 };
 
