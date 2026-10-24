@@ -149,8 +149,22 @@ function decodeQuotedPrintableText(value: string): string {
   return value.replace(/=([0-9A-Fa-f]{2})/g, (_match, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
 }
 
+/** Drop trailing spaces and tabs with a plain scan; a regex here backtracks quadratically on long runs. */
+function trimLineEnd(line: string): string {
+  let end = line.length;
+
+  while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) end -= 1;
+
+  return line.slice(0, end);
+}
+
 function decodeQuotedPrintable(body: string): Uint8Array {
-  return binaryBytes(decodeQuotedPrintableText(body.replace(/[ \t]+(?=\r?\n)/g, "").replace(/=\r?\n/g, "")));
+  const lines = body.split("\n").map(line => line.endsWith("\r") ? `${trimLineEnd(line.slice(0, -1))}\r` : trimLineEnd(line));
+
+  // The last line has no line break after it, so its trailing whitespace is content.
+  lines[lines.length - 1] = body.slice(body.lastIndexOf("\n") + 1);
+
+  return binaryBytes(decodeQuotedPrintableText(lines.join("\n").replace(/=\r?\n/g, "")));
 }
 
 function decodeTransfer(body: string, encoding: string | undefined): Uint8Array {
@@ -272,7 +286,7 @@ function multipartBodies(body: string, boundary: string): string[] {
   let current: string[] | undefined;
 
   for (const line of lines) {
-    const trimmed = line.replace(/\r?\n$/, "").replace(/[ \t]+$/, "");
+    const trimmed = trimLineEnd(line.replace(/\r?\n$/, ""));
 
     if (trimmed === `${delimiter}--`) {
       if (current) parts.push(current.join("").replace(/\r?\n$/, ""));
@@ -294,7 +308,15 @@ function multipartBodies(body: string, boundary: string): string[] {
   return parts;
 }
 
-function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType = "text/plain"): void {
+function contentIdOf(headers: readonly InboundHeader[]): string | undefined {
+  return headerValue(headers, "content-id")?.trim().replace(/^<|>$/g, "") || undefined;
+}
+
+/**
+ * Walk one entity. A `resource` is a non-root part of `multipart/related` (RFC 2387), such as an
+ * image or stylesheet the root references by `cid:`; it is always kept as an attachment.
+ */
+function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType = "text/plain", resource = false): void {
   state.parts += 1;
 
   if (state.parts > MAX_PARTS || depth > MAX_DEPTH) return;
@@ -308,9 +330,21 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
   const filename = rawName === undefined ? undefined : decodeEncodedWords(rawName);
   const isAttachment = disposition.type === "attachment";
 
-  if (type.startsWith("multipart/") && boundary && !isAttachment) {
+  if (type.startsWith("multipart/") && boundary && !isAttachment && !resource) {
     const childDefault = type === "multipart/digest" ? "message/rfc822" : "text/plain";
     const parts = multipartBodies(entity.body, boundary);
+
+    if (type === "multipart/related") {
+      // The root is the part named by `start`, or the first part; the rest are its resources.
+      const children = parts.map(splitEntity);
+      const start = contentType.params.get("start")?.trim().replace(/^<|>$/g, "");
+      const named = start ? children.findIndex(child => contentIdOf(child.headers) === start) : -1;
+      const root = named === -1 ? 0 : named;
+
+      for (const [index, child] of children.entries()) walk(child, state, depth + 1, childDefault, index !== root);
+
+      return;
+    }
 
     if (type !== "multipart/alternative") {
       for (const part of parts) walk(splitEntity(part), state, depth + 1, childDefault);
@@ -344,7 +378,7 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
     ? binaryBytes(entity.source)
     : decodeTransfer(entity.body, headerValue(entity.headers, "content-transfer-encoding"));
 
-  const isBodyText = (type === "text/plain" || type === "text/html") && !isAttachment && filename === undefined;
+  const isBodyText = (type === "text/plain" || type === "text/html") && !isAttachment && !resource && filename === undefined;
 
   if (isBodyText) {
     if (!bytes.length) return;
@@ -357,12 +391,12 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
     return;
   }
 
-  const contentId = headerValue(entity.headers, "content-id")?.replace(/^<|>$/g, "");
+  const contentId = contentIdOf(entity.headers);
 
   state.attachments.push(inlineAttachment({
     filename,
     contentType: type,
-    contentId: contentId || undefined,
+    contentId,
     disposition: isAttachment ? "attachment" : disposition.type === "inline" || contentId ? "inline" : "attachment",
     content: bytes,
   }));
@@ -443,29 +477,34 @@ function splitAddressList(value: string): string[] {
   let quoted = false;
   let angle = 0;
   let comment = 0;
+  // Inside a domain literal such as `[IPv6:2001:db8::1]`, colons are part of the address.
+  let literal = false;
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
 
-    if (char === "\\" && (quoted || comment)) {
+    if (char === "\\" && (quoted || comment || literal)) {
       current += char + (value[index + 1] ?? "");
       index += 1;
       continue;
     }
 
-    if (char === "\"" && !comment) quoted = !quoted;
+    if (literal) {
+      if (char === "]") literal = false;
+    } else if (char === "\"" && !comment) quoted = !quoted;
     else if (!quoted && char === "(") comment += 1;
     else if (!quoted && char === ")" && comment) comment -= 1;
+    else if (!quoted && !comment && char === "[" && value[index - 1] === "@") literal = true;
     else if (!quoted && !comment && char === "<") angle += 1;
     else if (!quoted && !comment && char === ">" && angle) angle -= 1;
 
-    if (!quoted && !comment && !angle && (char === "," || char === ";")) {
+    if (!quoted && !comment && !angle && !literal && (char === "," || char === ";")) {
       entries.push(current);
       current = "";
       continue;
     }
 
-    if (!quoted && !comment && !angle && char === ":") {
+    if (!quoted && !comment && !angle && !literal && char === ":") {
       // A group name ("Team: a@x, b@y;") is a label, not an address.
       current = "";
       continue;

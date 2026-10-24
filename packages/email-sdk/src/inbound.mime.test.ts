@@ -220,3 +220,61 @@ describe("review regressions", () => {
     expect(parsed.attachments).toHaveLength(1);
   });
 });
+
+describe("hostile and unusual MIME", () => {
+  test("trims trailing whitespace in linear time on sender-controlled lines", () => {
+    const line = `${" ".repeat(100_000)}x`;
+    const started = performance.now();
+    const multipart = parseMimeMessage(`Content-Type: multipart/mixed; boundary=b\r\n\r\n--b  \r\n\r\n${line}\r\n--b--\r\n`);
+    const quoted = parseMimeMessage(`Content-Transfer-Encoding: quoted-printable\r\n\r\n${line}  \t\r\nnext =\r\nline  `);
+
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(multipart.text).toBe(line);
+    expect(quoted.text).toBe(`${line}\r\nnext line  `);
+  });
+
+  test("decodes truncated base64 leniently instead of throwing", async () => {
+    const parsed = parseMimeMessage("Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nQUJD\r\nA\r\n");
+
+    expect(await parsed.attachments[0]!.read()).toEqual(new TextEncoder().encode("ABC"));
+    expect(() => emailFromMime({ provider: "sparkpost", raw: "Content-Transfer-Encoding: base64\r\n\r\nA" })).not.toThrow();
+  });
+
+  test("keeps multipart/related resources as attachments and picks the root from start", () => {
+    const related = (start: string) => parseMimeMessage([
+      `Content-Type: multipart/related; boundary=r; type="text/html"${start}`,
+      "",
+      "--r",
+      "Content-Type: text/html",
+      "Content-ID: <frame@x>",
+      "",
+      "<p>frame</p>",
+      "--r",
+      "Content-Type: text/html",
+      "Content-ID: <root@x>",
+      "",
+      "<p>root <iframe src=\"cid:frame@x\"></iframe></p>",
+      "--r--",
+    ].join("\r\n"));
+
+    const byStart = related("; start=\"<root@x>\"");
+
+    expect(byStart.html).toBe("<p>root <iframe src=\"cid:frame@x\"></iframe></p>");
+    expect(byStart.attachments.map(item => [item.contentType, item.contentId, item.disposition])).toEqual([["text/html", "frame@x", "inline"]]);
+
+    const firstPart = related("");
+
+    expect(firstPart.html).toBe("<p>frame</p>");
+    expect(firstPart.attachments.map(item => item.contentId)).toEqual(["root@x"]);
+  });
+});
+
+describe("parseAddressList domain literals", () => {
+  test("keeps IPv6 domain literals whose colons look like group labels", () => {
+    expect(parseAddressList("user@[IPv6:2001:db8::1], Team: a@x.test;")).toEqual([{ address: "user@[IPv6:2001:db8::1]" }, { address: "a@x.test" }]);
+    expect(parseAddressList("Ops <ops@[IPv6:2001:db8::2]>, [External] Bob <bob@x.test>")).toEqual([
+      { address: "ops@[IPv6:2001:db8::2]", name: "Ops" },
+      { address: "bob@x.test", name: "[External] Bob" },
+    ]);
+  });
+});

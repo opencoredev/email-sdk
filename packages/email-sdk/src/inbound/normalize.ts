@@ -1,5 +1,5 @@
-import { decodeEncodedWords, parseAddress, parseAddressList, parseMimeMessage } from "./mime.js";
-import { firstMessageId, messageIds, parseDate, toBytes } from "./shared.js";
+import { type ParsedMimeMessage, decodeEncodedWords, parseAddress, parseAddressList, parseMimeMessage } from "./mime.js";
+import { firstMessageId, messageIds, parseDate, payloadError, toBytes } from "./shared.js";
 import type {
   InboundEmail,
   InboundEnvelope,
@@ -129,7 +129,13 @@ export interface MimeEmailOptions {
 /** Build an `InboundEmail` from a raw RFC 5322 message. */
 export function emailFromMime(options: MimeEmailOptions): InboundEmail {
   const bytes = toBytes(options.raw);
-  const parsed = parseMimeMessage(bytes);
+  let parsed: ParsedMimeMessage;
+
+  try {
+    parsed = parseMimeMessage(bytes);
+  } catch (error) {
+    throw payloadError(options.provider, `${options.provider} inbound message is not readable MIME.`, error instanceof Error ? error : undefined);
+  }
 
   return {
     provider: options.provider,

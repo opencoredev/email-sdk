@@ -145,8 +145,10 @@ export function formField(fields: InboundFormFields, name: string): string | und
   return value === undefined || value === "" ? undefined : value;
 }
 
+/** Lenient base64 for message content. A dangling sixth-bit character carries no byte and is dropped. */
 export function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
-  const clean = value.replace(/[^A-Za-z0-9+/_-]/g, "").replaceAll("-", "+").replaceAll("_", "/");
+  const alphabet = value.replace(/[^A-Za-z0-9+/_-]/g, "").replaceAll("-", "+").replaceAll("_", "/");
+  const clean = alphabet.length % 4 === 1 ? alphabet.slice(0, -1) : alphabet;
   const binary = atob(clean + "=".repeat((4 - clean.length % 4) % 4));
 
   return Uint8Array.from(binary, char => char.charCodeAt(0));
