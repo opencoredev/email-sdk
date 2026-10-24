@@ -1,6 +1,6 @@
 import { parseJson } from "../internal/decode.js";
 import { decodeCharset, parseAddress, parseAddressList, parseMimeHeaders, parseMultipartFormData } from "./mime.js";
-import { emailFromMime, headerFields, mergeSecurity, authenticationResults } from "./normalize.js";
+import { emailFromMime, headerFields, mergeSecurity } from "./normalize.js";
 import {
   decodeBase64Strict,
   inlineAttachment,
@@ -198,8 +198,8 @@ export function parseSendGridInbound(payload: InboundRequestPayload): InboundEma
     return email;
   }
 
-  const headers = parseMimeHeaders(fields.get("headers") ?? "");
-  const fromHeaders = headerFields(headers);
+  const { headers, rawHeaders } = parseMimeHeaders(fields.get("headers") ?? "");
+  const fromHeaders = headerFields(rawHeaders);
 
   return {
     provider,
@@ -213,7 +213,7 @@ export function parseSendGridInbound(payload: InboundRequestPayload): InboundEma
     html: fields.get("html"),
     headers,
     attachments: files,
-    security: mergeSecurity(authenticationResults(headers), security),
+    security,
     envelope,
     raw,
   };

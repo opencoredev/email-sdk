@@ -2,6 +2,7 @@ import { type JsonObject, type JsonValue, isJsonString } from "../internal/decod
 import { parseAddress, parseAddressList } from "./mime.js";
 import {
   type InboundFetchOptions,
+  concatBytes,
   decodeBase64Strict,
   fetchBytes,
   fetchJson,
@@ -21,7 +22,7 @@ import {
   signingSecrets,
   timestampFresh,
   timingSafeEqual,
-  toText,
+  toBytes,
   utf8Bytes,
   verdict,
   verified,
@@ -79,7 +80,7 @@ export async function verifyResendInbound(
 
   if (!candidates.length) return rejected("signature_missing");
 
-  const content = utf8Bytes(`${id}.${timestamp}.${toText(payload.body)}`);
+  const content = concatBytes(utf8Bytes(`${id}.${timestamp}.`), toBytes(payload.body));
 
   for (const secret of secrets) {
     let key: Uint8Array<ArrayBuffer>;

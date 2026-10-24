@@ -3,6 +3,7 @@ import { emailFromMime, mergeSecurity } from "./normalize.js";
 import {
   decodeBase64,
   inlineAttachment,
+  jsonContent,
   jsonList,
   jsonNumber,
   jsonObject,
@@ -115,7 +116,7 @@ function emailFromEvent(event: JsonObject): InboundEmail {
     headers,
     attachments: attachments.flatMap(entry => {
       const item = jsonObject(entry);
-      const content = jsonText(item?.content);
+      const content = jsonContent(item?.content);
 
       if (!item || content === undefined) return [];
 

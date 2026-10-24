@@ -19,6 +19,7 @@ import {
   verified,
 } from "./shared.js";
 import {
+  type InboundClockOptions,
   type InboundEmail,
   InboundError,
   type InboundRequestPayload,
@@ -44,8 +45,11 @@ export interface SnsMessage {
   UnsubscribeURL?: string;
 }
 
-export interface SnsVerificationOptions extends InboundFetchOptions {
-  /** Only accept messages from these topic ARNs. Strongly recommended. */
+/** SNS retries can arrive minutes after signing, so the default window is wider than webhooks'. */
+const SNS_TOLERANCE_SECONDS = 3600;
+
+export interface SnsVerificationOptions extends InboundFetchOptions, InboundClockOptions {
+  /** Only accept messages from these topic ARNs. Required by `parseSesInbound` and `handleInbound`. */
   topicArn?: string | readonly string[];
   /** Cache for signing certificates, keyed by URL. Defaults to a per-process cache. */
   certificateCache?: Map<string, CryptoKey>;
@@ -235,6 +239,15 @@ export async function verifySnsMessage(
     if (!allowed.includes(message.TopicArn)) return rejected("signature_invalid");
   }
 
+  const signedAt = Date.parse(message.Timestamp);
+  const now = options.now ?? Date.now();
+  const tolerance = options.toleranceSeconds ?? SNS_TOLERANCE_SECONDS;
+
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(message.Timestamp) || !Number.isFinite(signedAt) ||
+    !(tolerance >= 0) || Math.abs(now - signedAt) > tolerance * 1000) {
+    return rejected("timestamp_expired");
+  }
+
   let signature: Uint8Array<ArrayBuffer>;
 
   try {
@@ -359,6 +372,25 @@ export interface SesInboundOptions extends SnsVerificationOptions {
   s3?: SesInboundS3Options;
   /** Skip SNS signature verification. Only for trusted transports such as SQS or Lambda. */
   skipVerification?: boolean;
+  /**
+   * Accept SNS messages from any topic. A valid SNS signature only proves that some AWS
+   * account's topic sent the message, so leave this off and set `topicArn` instead.
+   */
+  allowAnyTopic?: boolean;
+}
+
+/** Throw unless the caller pinned a topic or explicitly accepted any topic. */
+export function assertSesTopicConfigured(options: SesInboundOptions): void {
+  if (options.skipVerification || options.allowAnyTopic === true) return;
+
+  const topics = options.topicArn === undefined ? [] : Array.isArray(options.topicArn) ? options.topicArn : [options.topicArn];
+
+  if (!topics.some(Boolean)) {
+    throw new InboundError("SES inbound needs topicArn (or allowAnyTopic: true) so other AWS accounts cannot post mail.", {
+      reason: "secret_missing",
+      provider,
+    });
+  }
 }
 
 /**
@@ -369,6 +401,8 @@ export async function parseSesInbound(
   payload: InboundRequestPayload,
   options: SesInboundOptions = {},
 ): Promise<InboundEmail> {
+  assertSesTopicConfigured(options);
+
   const message = parseSnsMessage(payload.body);
 
   if (!options.skipVerification) {

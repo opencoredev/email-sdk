@@ -1,6 +1,6 @@
 import { type JsonValue, isJsonString, parseJson } from "../internal/decode.js";
 import { parseAddress, parseAddressList } from "./mime.js";
-import { emailFromMime, headerFields, mergeSecurity, authenticationResults } from "./normalize.js";
+import { emailFromMime, headerFields, mergeSecurity } from "./normalize.js";
 import {
   type InboundFetchOptions,
   type InboundForm,
@@ -53,7 +53,7 @@ function headerPairs(value: string | undefined): InboundHeaders {
 function mailgunSecurity(headers: InboundHeaders): InboundSecurity {
   const flag = headers.get("x-mailgun-sflag")?.trim().toLowerCase();
 
-  return mergeSecurity(authenticationResults(headers), {
+  return mergeSecurity({}, {
     spf: verdict(headers.get("x-mailgun-spf")),
     dkim: verdict(headers.get("x-mailgun-dkim-check-result")),
     spam: flag === "yes" ? "fail" : flag === "no" ? "pass" : undefined,

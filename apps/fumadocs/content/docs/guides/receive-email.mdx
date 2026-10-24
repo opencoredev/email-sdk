@@ -111,7 +111,7 @@ await handleInbound(request, {
 });
 ```
 
-Always set `topicArn`. A valid SNS signature only proves that some SNS topic sent the message.
+`topicArn` is required. A valid SNS signature only proves that some AWS account's topic sent the message, so without it anyone could post mail to your endpoint. Pass `allowAnyTopic: true` only if you check the topic yourself. SNS messages older than one hour are rejected; change that with `toleranceSeconds`.
 
 ### Cloudflare Email Workers
 
@@ -128,7 +128,7 @@ export default {
 };
 ```
 
-The raw stream can be read once. Parse before calling `message.forward()`, or keep `email.raw.bytes`.
+The raw stream can be read once. Parse before calling `message.forward()`, or keep `email.raw.bytes`. To fill `email.security` from the `Authentication-Results` header your zone adds, pass its authserv-id: `parseCloudflareInbound(message, { trustedAuthServIds: ["mx.example.com"] })`.
 
 ### Microsoft Graph
 

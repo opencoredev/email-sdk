@@ -6,6 +6,7 @@ import {
   fetchBytes,
   firstMessageId,
   inlineAttachment,
+  jsonContent,
   jsonList,
   jsonNumber,
   jsonObject,
@@ -103,7 +104,7 @@ function emailFromData(data: JsonObject, root: JsonObject, options: InboundFetch
         disposition: contentId ? "inline" as const : "attachment" as const,
       };
 
-      const content = jsonText(item.content);
+      const content = jsonContent(item.content);
       const url = jsonText(item.url);
 
       if (content !== undefined) return [inlineAttachment({ ...details, content: decodeBase64(content) })];

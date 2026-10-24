@@ -15,11 +15,22 @@ export interface CloudflareEmailMessage {
   readonly rawSize: number;
 }
 
+export interface CloudflareInboundOptions {
+  /**
+   * Authserv-ids whose `Authentication-Results` headers to trust for `security`, for example
+   * the one your Email Routing zone stamps. Headers from other servers are ignored.
+   */
+  trustedAuthServIds?: readonly string[];
+}
+
 /**
  * Parse the email an Email Worker received. The raw stream can only be read once, so call
  * this before `message.forward()` if you need both, or keep the returned `raw.bytes`.
  */
-export async function parseCloudflareInbound(message: CloudflareEmailMessage): Promise<InboundEmail> {
+export async function parseCloudflareInbound(
+  message: CloudflareEmailMessage,
+  options: CloudflareInboundOptions = {},
+): Promise<InboundEmail> {
   let bytes: Uint8Array;
 
   try {
@@ -28,5 +39,10 @@ export async function parseCloudflareInbound(message: CloudflareEmailMessage): P
     throw payloadError(provider, "Cloudflare email raw stream could not be read; it may already be consumed.", error instanceof Error ? error : undefined);
   }
 
-  return emailFromMime({ provider, raw: bytes, envelope: { from: message.from, to: [message.to] } });
+  return emailFromMime({
+    provider,
+    raw: bytes,
+    envelope: { from: message.from, to: [message.to] },
+    trustedAuthServIds: options.trustedAuthServIds,
+  });
 }

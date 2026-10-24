@@ -17,8 +17,14 @@ const MAX_DEPTH = 32;
 
 const MAX_PARTS = 2000;
 
-export interface ParsedMimeMessage {
+export interface ParsedMimeHeaders {
+  /** Header values with RFC 2047 encoded words decoded, for display. */
   headers: InboundHeaders;
+  /** Header values as sent. Parse structured headers such as addresses from these. */
+  rawHeaders: InboundHeaders;
+}
+
+export interface ParsedMimeMessage extends ParsedMimeHeaders {
   text?: string;
   html?: string;
   attachments: InboundAttachment[];
@@ -27,6 +33,7 @@ export interface ParsedMimeMessage {
 interface MimeEntity {
   headers: InboundHeader[];
   body: string;
+  source: string;
 }
 
 interface ContentType {
@@ -89,11 +96,16 @@ function headerText(value: string): string {
 }
 
 function splitEntity(source: string): MimeEntity {
+  // A part may have no headers at all, in which case it starts with the blank line.
+  const leading = /^\r?\n/.exec(source);
+
+  if (leading) return { headers: [], body: source.slice(leading[0].length), source };
+
   const match = /\r?\n\r?\n/.exec(source);
   const headerBlock = match ? source.slice(0, match.index) : source;
   const body = match ? source.slice(match.index + match[0].length) : "";
 
-  return { headers: parseHeaderBlock(headerBlock), body };
+  return { headers: parseHeaderBlock(headerBlock), body, source };
 }
 
 function parseHeaderBlock(block: string): InboundHeader[] {
@@ -292,18 +304,39 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
   const disposition = parseStructuredHeader(headerValue(entity.headers, "content-disposition"));
   const boundary = contentType.params.get("boundary");
 
-  if (type.startsWith("multipart/") && boundary) {
-    const childDefault = type === "multipart/digest" ? "message/rfc822" : "text/plain";
+  const rawName = disposition.params.get("filename") ?? contentType.params.get("name");
+  const filename = rawName === undefined ? undefined : decodeEncodedWords(rawName);
+  const isAttachment = disposition.type === "attachment";
 
-    for (const part of multipartBodies(entity.body, boundary)) walk(splitEntity(part), state, depth + 1, childDefault);
+  if (type.startsWith("multipart/") && boundary && !isAttachment) {
+    const childDefault = type === "multipart/digest" ? "message/rfc822" : "text/plain";
+    const parts = multipartBodies(entity.body, boundary);
+
+    if (type !== "multipart/alternative") {
+      for (const part of parts) walk(splitEntity(part), state, depth + 1, childDefault);
+
+      return;
+    }
+
+    // Alternatives are the same content in different forms; keep the last (preferred) of each.
+    const alternatives: WalkState = { parts: state.parts, text: [], html: [], attachments: state.attachments };
+
+    for (const part of parts) walk(splitEntity(part), alternatives, depth + 1, childDefault);
+
+    state.parts = alternatives.parts;
+
+    if (alternatives.text.length) state.text.push(alternatives.text.at(-1)!);
+
+    if (alternatives.html.length) state.html.push(alternatives.html.at(-1)!);
 
     return;
   }
 
-  const bytes = decodeTransfer(entity.body, headerValue(entity.headers, "content-transfer-encoding"));
-  const rawName = disposition.params.get("filename") ?? contentType.params.get("name");
-  const filename = rawName === undefined ? undefined : decodeEncodedWords(rawName);
-  const isAttachment = disposition.type === "attachment";
+  // An attached multipart entity is kept whole, headers included.
+  const bytes = type.startsWith("multipart/")
+    ? binaryBytes(entity.source)
+    : decodeTransfer(entity.body, headerValue(entity.headers, "content-transfer-encoding"));
+
   const isBodyText = (type === "text/plain" || type === "text/html") && !isAttachment && filename === undefined;
 
   if (isBodyText) {
@@ -334,25 +367,24 @@ export function parseMimeMessage(raw: string | Uint8Array): ParsedMimeMessage {
   const state: WalkState = { parts: 0, text: [], html: [], attachments: [] };
   walk(entity, state, 0);
 
-  const headers = new InboundHeaders(entity.headers.map(header => ({
-    name: header.name,
-    value: decodeEncodedWords(header.value),
-  })));
-
   return {
-    headers,
+    ...headerViews(entity.headers),
     text: state.text.length ? state.text.join("\n") : undefined,
     html: state.html.length ? state.html.join("\n") : undefined,
     attachments: state.attachments,
   };
 }
 
+function headerViews(entries: readonly InboundHeader[]): ParsedMimeHeaders {
+  return {
+    headers: new InboundHeaders(entries.map(header => ({ name: header.name, value: decodeEncodedWords(header.value) }))),
+    rawHeaders: new InboundHeaders(entries),
+  };
+}
+
 /** Read the header block of a raw message without decoding its bodies. */
-export function parseMimeHeaders(raw: string): InboundHeaders {
-  return new InboundHeaders(parseHeaderBlock(raw).map(header => ({
-    name: header.name,
-    value: decodeEncodedWords(header.value),
-  })));
+export function parseMimeHeaders(raw: string): ParsedMimeHeaders {
+  return headerViews(parseHeaderBlock(raw));
 }
 
 /** Tokenize an address list, respecting quotes, comments, angle brackets, and groups. */

@@ -86,6 +86,11 @@ export function jsonText(value: JsonValue | undefined): string | undefined {
   return isJsonString(value) && value.length > 0 ? value : undefined;
 }
 
+/** A JSON string, including the empty string (valid zero-byte attachment content). */
+export function jsonContent(value: JsonValue | undefined): string | undefined {
+  return isJsonString(value) ? value : undefined;
+}
+
 export function jsonNumber(value: JsonValue | undefined): number | undefined {
   if (isJsonNumber(value) && Number.isFinite(value)) return value;
 

@@ -92,7 +92,7 @@ describe("encoded words and addresses", () => {
 
 describe("emailFromMime", () => {
   test("normalizes threading, recipients, and Authentication-Results", () => {
-    const email = emailFromMime({ provider: "cloudflare", raw: eml, envelope: { from: "bounce@example.net", to: ["support@acme.test"] } });
+    const email = emailFromMime({ provider: "cloudflare", raw: eml, envelope: { from: "bounce@example.net", to: ["support@acme.test"] }, trustedAuthServIds: ["mx.acme.test"] });
 
     expect(email.messageId).toBe("msg-42@example.net");
     expect(email.inReplyTo).toBe("msg-41@acme.test");
@@ -104,5 +104,91 @@ describe("emailFromMime", () => {
     expect(email.date?.toISOString()).toBe("2025-10-06T09:00:00.000Z");
     expect(email.security).toEqual({ spf: "pass", dkim: "pass", dmarc: "pass" });
     expect(email.raw).toEqual({ kind: "mime", bytes: eml });
+  });
+});
+
+describe("review regressions", () => {
+  test("an encoded display name cannot replace the sender address", () => {
+    const email = emailFromMime({ provider: "cloudflare", raw: "From: =?UTF-8?Q?Boss_=3Cceo@example.com=3E?= <sender@evil.test>\r\nSubject: x\r\n\r\nhi" });
+
+    expect(email.from).toEqual({ address: "sender@evil.test", name: "Boss <ceo@example.com>" });
+    expect(email.headers.get("from")).toBe("Boss <ceo@example.com> <sender@evil.test>");
+  });
+
+  test("Authentication-Results only counts from trusted authserv-ids, parsed structurally", () => {
+    const raw = [
+      "Authentication-Results: mx.trusted.test; spf=fail smtp.mailfrom=x.test; dkim=none reason=\"dkim=pass\"",
+      "Authentication-Results: attacker.test; spf=pass; dkim=pass; dmarc=pass",
+      "Subject: x",
+      "",
+      "hi",
+    ].join("\r\n");
+
+    expect(emailFromMime({ provider: "cloudflare", raw }).security).toEqual({});
+    expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["mx.trusted.test"] }).security).toEqual({ spf: "fail", dkim: "none" });
+    expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["attacker.test"] }).security).toEqual({ spf: "pass", dkim: "pass", dmarc: "pass" });
+  });
+
+  test("a multipart child without headers keeps its body", () => {
+    expect(parseMimeMessage("Content-Type: multipart/mixed; boundary=x\r\n\r\n--x\r\n\r\nHello\r\n--x--").text).toBe("Hello");
+    expect(parseMimeMessage("\r\nbody only").text).toBe("body only");
+  });
+
+  test("an attached multipart entity stays an attachment", () => {
+    const parsed = parseMimeMessage([
+      "Content-Type: multipart/mixed; boundary=outer",
+      "",
+      "--outer",
+      "Content-Type: text/plain",
+      "",
+      "real body",
+      "--outer",
+      "Content-Type: multipart/mixed; boundary=inner",
+      "Content-Disposition: attachment; filename=\"bundle.mime\"",
+      "",
+      "--inner",
+      "Content-Type: text/plain",
+      "",
+      "attached content",
+      "--inner--",
+      "--outer--",
+    ].join("\r\n"));
+
+    expect(parsed.text).toBe("real body");
+    expect(parsed.attachments.map(item => [item.filename, item.contentType])).toEqual([["bundle.mime", "multipart/mixed"]]);
+    expect(new TextDecoder().decode(parsed.attachments[0]!.content)).toContain("attached content");
+  });
+
+  test("multipart/alternative keeps the last alternative of each type", () => {
+    const parsed = parseMimeMessage([
+      "Content-Type: multipart/alternative; boundary=a",
+      "",
+      "--a",
+      "Content-Type: text/plain",
+      "",
+      "fallback",
+      "--a",
+      "Content-Type: text/plain",
+      "",
+      "preferred",
+      "--a",
+      "Content-Type: multipart/related; boundary=r",
+      "",
+      "--r",
+      "Content-Type: text/html",
+      "",
+      "<p>rich</p>",
+      "--r",
+      "Content-Type: image/png",
+      "Content-ID: <i@x>",
+      "",
+      "png",
+      "--r--",
+      "--a--",
+    ].join("\r\n"));
+
+    expect(parsed.text).toBe("preferred");
+    expect(parsed.html).toBe("<p>rich</p>");
+    expect(parsed.attachments).toHaveLength(1);
   });
 });

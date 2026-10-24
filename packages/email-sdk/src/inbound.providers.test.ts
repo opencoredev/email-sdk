@@ -90,6 +90,16 @@ describe("Resend", () => {
     expect(await verifyResendInbound({ body, headers: headers() }, { secret: ["whsec_b3RoZXI=", secret], now })).toEqual({ ok: true });
   });
 
+  test("verifies the exact body bytes, not a decoded copy", async () => {
+    const original = new Uint8Array([...new TextEncoder().encode('{"type":"email.received","data":{"subject":"'), 0xef, 0xbf, 0xbd, ...new TextEncoder().encode('"}}')]);
+    const signature = createHmac("sha256", key).update(Buffer.concat([Buffer.from(`msg_1.${seconds}.`), original])).digest("base64");
+    const headers = { "svix-id": "msg_1", "svix-timestamp": seconds, "svix-signature": `v1,${signature}` };
+    const tampered = new Uint8Array([...original.subarray(0, original.length - 6), 0xff, ...original.subarray(original.length - 3)]);
+
+    expect(await verifyResendInbound({ body: original, headers }, { secret, now })).toEqual({ ok: true });
+    expect(await verifyResendInbound({ body: tampered, headers }, { secret, now })).toEqual({ ok: false, reason: "signature_invalid" });
+  });
+
   test("parses email.received metadata and rejects other event types", async () => {
     const email = parseResendInbound({ body });
 
@@ -138,6 +148,14 @@ describe("Resend", () => {
 });
 
 describe("Postmark", () => {
+  test("keeps zero-byte attachments", async () => {
+    const body = JSON.stringify({ Attachments: [{ Name: "empty.txt", ContentType: "text/plain", Content: "", ContentLength: 0 }] });
+    const [attachment] = parsePostmarkInbound({ body }).attachments;
+
+    expect(attachment).toMatchObject({ filename: "empty.txt", size: 0 });
+    expect(await attachment!.read()).toEqual(new Uint8Array());
+  });
+
   test("parses the documented inbound payload, including Bcc, spam headers, and attachments", async () => {
     const email = parsePostmarkInbound({ body: text("postmark-inbound.json") });
 
@@ -312,7 +330,7 @@ describe("SendGrid Inbound Parse", () => {
     expect(email.inReplyTo).toBe("prev@acme.test");
     expect(email.cc).toEqual([{ address: "ops@acme.test", name: "Ops" }]);
     expect(email.envelope).toEqual({ from: "bounce@example.net", to: ["support@acme.test"] });
-    expect(email.security).toEqual({ dmarc: "pass", spf: "pass", dkim: "pass", spamScore: 0.012 });
+    expect(email.security).toEqual({ spf: "pass", dkim: "pass", spamScore: 0.012 });
     expect(await email.attachments[0]!.read()).toEqual(pdf);
     expect(email.raw.kind).toBe("form");
   });
@@ -360,7 +378,7 @@ describe("Mailchimp Transactional (Mandrill)", () => {
 
     expect(rest).toEqual([]);
     expect(raw!.subject).toBe("Café order ✉ #42");
-    expect(raw!.security).toEqual({ spf: "pass", dkim: "fail", dmarc: "pass", spamScore: 2.1 });
+    expect(raw!.security).toEqual({ spf: "pass", dkim: "fail", spamScore: 2.1 });
     expect(parsed!.to).toEqual([{ address: "support@acme.test" }]);
     expect(parsed!.headers.getAll("received")).toEqual(["a", "b"]);
     expect(new TextDecoder().decode(await parsed!.attachments[0]!.read())).toBe("hi");
@@ -400,7 +418,7 @@ describe("MailerSend", () => {
     expect(email.id).toBe("msg_ms_1");
     expect(email.subject).toBe("Café order ✉ #42");
     expect(email.envelope).toEqual({ from: "bounce@example.net", to: ["support@acme.test"] });
-    expect(email.security).toEqual({ spf: "pass", dkim: "fail", dmarc: "pass" });
+    expect(email.security).toEqual({ spf: "pass", dkim: "fail" });
   });
 });
 
@@ -487,6 +505,14 @@ describe("JetEmail", () => {
 
     expect(await verifyJetEmailInbound({ body, headers }, { secret: "jet", now })).toEqual({ ok: true });
     expect(await verifyJetEmailInbound({ body, headers: { ...headers, "x-webhook-id": "job_2" } }, { secret: "jet", now })).toEqual({ ok: false, reason: "signature_invalid" });
+
+    const replaced = new Uint8Array(Buffer.from(body.replace("Order", "\uFFFDrder")));
+    const invalid = new Uint8Array(replaced);
+    invalid.set([0xff, 0x20, 0x20], replaced.indexOf(0xef));
+    const signedReplaced = { ...headers, "x-webhook-signature": hex("jet", Buffer.concat([Buffer.from(`job_1.${seconds}.`), replaced])) };
+
+    expect(await verifyJetEmailInbound({ body: replaced, headers: signedReplaced }, { secret: "jet", now })).toEqual({ ok: true });
+    expect(await verifyJetEmailInbound({ body: invalid, headers: signedReplaced }, { secret: "jet", now })).toEqual({ ok: false, reason: "signature_invalid" });
   });
 
   test("parses the documented payload", async () => {

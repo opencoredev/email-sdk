@@ -102,6 +102,8 @@ function sesNotification(action: Record<string, string>, content?: string) {
   });
 }
 
+const signedAt = Date.parse("2025-10-06T09:00:00.000Z");
+
 const certFetch = stubFetch(async input => {
   if (String(input) === certUrl) return new Response(certificatePem);
 
@@ -128,21 +130,30 @@ describe("SNS verification", () => {
     for (const version of ["1", "2"] as const) {
       const message = parseSnsMessage(snsBody("hello", { version }));
 
-      expect(await verifySnsMessage(message, { fetch: certFetch, certificateCache: cache })).toEqual({ ok: true });
-      expect(await verifySnsMessage({ ...message, Message: "changed" }, { fetch: certFetch, certificateCache: cache })).toEqual({ ok: false, reason: "signature_invalid" });
+      expect(await verifySnsMessage(message, { fetch: certFetch, certificateCache: cache, now: signedAt })).toEqual({ ok: true });
+      expect(await verifySnsMessage({ ...message, Message: "changed" }, { fetch: certFetch, certificateCache: cache, now: signedAt })).toEqual({ ok: false, reason: "signature_invalid" });
     }
 
     const message = parseSnsMessage(snsBody("hello"));
 
-    expect(await verifySnsMessage({ ...message, SigningCertURL: "https://evil.test/cert.pem" }, { fetch: certFetch })).toEqual({ ok: false, reason: "signature_invalid" });
-    expect(await verifySnsMessage(message, { fetch: certFetch, topicArn: "arn:aws:sns:us-east-1:1:other" })).toEqual({ ok: false, reason: "signature_invalid" });
+    expect(await verifySnsMessage({ ...message, SigningCertURL: "https://evil.test/cert.pem" }, { fetch: certFetch, now: signedAt })).toEqual({ ok: false, reason: "signature_invalid" });
+    expect(await verifySnsMessage(message, { fetch: certFetch, topicArn: "arn:aws:sns:us-east-1:1:other", now: signedAt })).toEqual({ ok: false, reason: "signature_invalid" });
+  });
+
+  test("rejects replayed messages outside the window", async () => {
+    const message = parseSnsMessage(snsBody("hello"));
+
+    expect(await verifySnsMessage(message, { fetch: certFetch, now: signedAt + 3_599_000 })).toEqual({ ok: true });
+    expect(await verifySnsMessage(message, { fetch: certFetch, now: signedAt + 3_601_000 })).toEqual({ ok: false, reason: "timestamp_expired" });
+    expect(await verifySnsMessage(message, { fetch: certFetch, now: signedAt + 400_000, toleranceSeconds: 300 })).toEqual({ ok: false, reason: "timestamp_expired" });
+    expect(await verifySnsMessage({ ...message, Timestamp: "yesterday" }, { fetch: certFetch, now: signedAt })).toEqual({ ok: false, reason: "timestamp_expired" });
   });
 });
 
 describe("SES receiving", () => {
   test("parses an SNS action notification with base64 content and SES verdicts", async () => {
     const body = snsBody(sesNotification({ type: "SNS", topicArn, encoding: "BASE64" }, Buffer.from(eml).toString("base64")));
-    const email = await parseSesInbound({ body }, { fetch: certFetch, topicArn });
+    const email = await parseSesInbound({ body }, { fetch: certFetch, topicArn, now: signedAt });
 
     expect(email.id).toBe("ses-msg-1");
     expect(email.subject).toBe("Café order ✉ #42");
@@ -166,8 +177,8 @@ describe("SES receiving", () => {
 
     const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
 
-    expect((await parseSesInbound({ body }, { fetch, s3 })).messageId).toBe("msg-42@example.net");
-    await expect(parseSesInbound({ body }, { fetch })).rejects.toThrow("Pass s3 credentials");
+    expect((await parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).messageId).toBe("msg-42@example.net");
+    await expect(parseSesInbound({ body }, { fetch, topicArn, now: signedAt })).rejects.toThrow("Pass s3 credentials");
     expect(await fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/abc 1" }, s3)).toEqual(eml);
   });
 
@@ -175,8 +186,9 @@ describe("SES receiving", () => {
     const forged = JSON.parse(snsBody(sesNotification({ type: "SNS" }, emlText)));
     forged.Message = sesNotification({ type: "SNS" }, "From: attacker@example.com\r\n\r\nhi");
 
-    await expect(parseSesInbound({ body: JSON.stringify(forged) }, { fetch: certFetch })).rejects.toMatchObject({ reason: "signature_invalid" });
-    await expect(parseSesInbound({ body: snsBody('{"notificationType":"Bounce"}') }, { fetch: certFetch })).rejects.toThrow("not a Received notification");
+    await expect(parseSesInbound({ body: JSON.stringify(forged) }, { fetch: certFetch, topicArn, now: signedAt })).rejects.toMatchObject({ reason: "signature_invalid" });
+    await expect(parseSesInbound({ body: snsBody('{"notificationType":"Bounce"}') }, { fetch: certFetch, allowAnyTopic: true, now: signedAt })).rejects.toThrow("not a Received notification");
+    await expect(parseSesInbound({ body: snsBody('{"notificationType":"Bounce"}') }, { fetch: certFetch, now: signedAt })).rejects.toMatchObject({ reason: "secret_missing" });
     expect(() => parseSnsMessage('{"Type":"Notification"}')).toThrow(InboundError);
   });
 });
@@ -287,7 +299,9 @@ describe("handleInbound", () => {
     });
 
     const body = snsBody("confirm", { type: "SubscriptionConfirmation", extra: { Token: "tok", SubscribeURL: subscribeUrl } });
-    const result = await handleInbound(post(body), { provider: "ses", fetch, topicArn });
+    const result = await handleInbound(post(body), { provider: "ses", fetch, topicArn, now: signedAt });
+
+    await expect(handleInbound(post(body), { provider: "ses", fetch, now: signedAt })).rejects.toMatchObject({ reason: "secret_missing" });
 
     expect(result.type).toBe("handshake");
     expect(visited).toContain(subscribeUrl);

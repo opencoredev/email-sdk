@@ -25,7 +25,7 @@ Import everything on this page from `@opencoredev/email-sdk/inbound`. The module
 | `envelope` | `InboundEnvelope?` | SMTP `from` and `to`, which can differ from the headers |
 | `raw` | `InboundRawPayload` | `{ kind: "json", value }`, `{ kind: "form", fields }`, or `{ kind: "mime", bytes }` |
 
-Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | "permerror" | "gray" | "processing_failed" | "unknown"`. They come from the provider's own fields where it has them, otherwise from `Authentication-Results`. Spam scores use each provider's scale, so compare them per provider.
+Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | "permerror" | "gray" | "processing_failed" | "unknown"`. They come from fields the provider adds after its own checks (SES receipt verdicts, SendGrid `SPF`/`dkim`, Mandrill `spf`/`dkim`, Lettermint and Primitive auth results, Mailgun `X-Mailgun-*` headers). `Authentication-Results` headers count only when their authserv-id is trusted, because a sender can write that header into the message: JetEmail trusts `smtp.jetsmtp.net`, and `parseCloudflareInbound` and `emailFromMime` take a `trustedAuthServIds` option. Spam scores use each provider's scale, so compare them per provider.
 
 `InboundAttachment` has `filename?`, `contentType`, `size?`, `contentId?`, `disposition?` (`"attachment" | "inline"`), `content?` (bytes when delivered inline), `url?`, and `read(): Promise<Uint8Array>`. `read()` downloads from the provider when the content is remote and throws `InboundError` when it cannot, for example a Brevo attachment without `apiKey`.
 
@@ -43,7 +43,7 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 | `"postmark"` | `auth` | |
 | `"mailgun"` | `secret` (HTTP webhook signing key) | |
 | `"sendgrid"` | `publicKey`, or `auth` | |
-| `"ses"` | none | `topicArn`, `s3`, `confirmSubscription` (default `true`), `certificateCache` |
+| `"ses"` | `topicArn`, or `allowAnyTopic: true` | `s3`, `confirmSubscription` (default `true`), `certificateCache`. `toleranceSeconds` defaults to `3600` for SNS. |
 | `"graph"` | `clientState`, `api: { getAccessToken }` | `api.baseUrl` |
 | `"mailchimp"` | `secret` | `url` (defaults to `request.url`) |
 | `"sparkpost"`, `"lettr"` | `secret` (webhook token) | |
@@ -85,7 +85,7 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 | Resend | Svix HMAC-SHA256 over `svix-id.svix-timestamp.body` with the `whsec_` secret, plus timestamp tolerance |
 | Mailgun | HMAC-SHA256 hex over `timestamp + token`, plus timestamp tolerance. The message is not covered. |
 | SendGrid | ECDSA P-256 / SHA-256 over `X-Twilio-Email-Event-Webhook-Timestamp + body`, plus timestamp tolerance |
-| SES | SNS RSA signature (v1 SHA-1, v2 SHA-256). The certificate must come from `https://sns.<region>.amazonaws.com[.cn]/….pem`. Optional `topicArn` allowlist. |
+| SES | SNS RSA signature (v1 SHA-1, v2 SHA-256). The certificate must come from `https://sns.<region>.amazonaws.com[.cn]/….pem`, the topic must be in `topicArn`, and the signed `Timestamp` must be within `toleranceSeconds` (default 1 hour). |
 | Graph | `clientState` equality, in constant time |
 | Mailchimp Transactional | Base64 HMAC-SHA1 over the URL followed by each sorted POST key and value |
 | SparkPost, Lettr | `X-MessageSystems-Webhook-Token` equality |
@@ -114,9 +114,9 @@ All comparisons run in constant time. A valid signature does not stop a replay i
 
 ## MIME parsing
 
-`parseMimeMessage(raw)` and `emailFromMime({ provider, raw, ... })` are exported for your own sources, such as an IMAP fetch or a stored `.eml`. The parser handles nested multipart (mixed, alternative, related, digest), base64, quoted-printable, 7bit/8bit/binary, RFC 2047 encoded words, RFC 2231 parameters and continuations, `message/rfc822` parts as attachments, and charsets through `TextDecoder`. Unknown charsets fall back to UTF-8, then Latin-1. It stops at 32 nesting levels and 2,000 parts.
+`parseMimeMessage(raw)` and `emailFromMime({ provider, raw, ... })` are exported for your own sources, such as an IMAP fetch or a stored `.eml`. `parseMimeMessage` returns `headers` with encoded words decoded for display, and `rawHeaders` as sent; addresses are always parsed from the raw values, so an encoded display name cannot change the address. The parser handles nested multipart (mixed, alternative, related, digest), base64, quoted-printable, 7bit/8bit/binary, RFC 2047 encoded words, RFC 2231 parameters and continuations, `message/rfc822` parts as attachments, and charsets through `TextDecoder`. Unknown charsets fall back to UTF-8, then Latin-1. It stops at 32 nesting levels and 2,000 parts.
 
-It does not verify DKIM or S/MIME, decode TNEF (`winmail.dat`), or decode `uuencode` bodies. When there are several text or HTML parts, it joins them with a newline in message order.
+It does not verify DKIM or S/MIME, decode TNEF (`winmail.dat`), or decode `uuencode` bodies. Within `multipart/alternative` it keeps the last (preferred) text and HTML part. Elsewhere, several inline text or HTML parts are joined with a newline in message order.
 
 ## Provider coverage
 

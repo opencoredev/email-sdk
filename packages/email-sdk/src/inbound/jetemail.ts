@@ -1,9 +1,11 @@
 import { parseAddress, parseAddressList } from "./mime.js";
 import { authenticationResults } from "./normalize.js";
 import {
+  concatBytes,
   decodeBase64,
   firstMessageId,
   inlineAttachment,
+  jsonContent,
   jsonList,
   jsonNumber,
   jsonObject,
@@ -15,7 +17,7 @@ import {
   rejected,
   signingSecrets,
   timestampFresh,
-  toText,
+  toBytes,
   utf8Bytes,
   verifyHmac,
 } from "./shared.js";
@@ -28,6 +30,9 @@ import {
 } from "./types.js";
 
 const provider = "jetemail";
+
+/** The authserv-id JetEmail stamps on `Authentication-Results`, per its payload docs. */
+const JETEMAIL_AUTHSERV_IDS = ["smtp.jetsmtp.net"];
 
 /** Verify `X-Webhook-Signature`: hex HMAC-SHA256 over `<X-Webhook-ID>.<X-Webhook-Timestamp>.<body>`. */
 export async function verifyJetEmailInbound(
@@ -44,7 +49,7 @@ export async function verifyJetEmailInbound(
 
   if (!timestampFresh(timestamp, options)) return rejected("timestamp_expired");
 
-  return verifyHmac("SHA-256", signature, "hex", options.secret, utf8Bytes(`${id}.${timestamp}.${toText(payload.body)}`));
+  return verifyHmac("SHA-256", signature, "hex", options.secret, concatBytes(utf8Bytes(`${id}.${timestamp}.`), toBytes(payload.body)));
 }
 
 /** Parse a JetEmail inbound webhook. */
@@ -82,7 +87,7 @@ export function parseJetEmailInbound(payload: InboundRequestPayload): InboundEma
     headers,
     attachments: jsonList(root.attachments).flatMap(entry => {
       const item = jsonObject(entry);
-      const content = jsonText(item?.content);
+      const content = jsonContent(item?.content);
 
       if (!item || content === undefined) return [];
 
@@ -98,7 +103,7 @@ export function parseJetEmailInbound(payload: InboundRequestPayload): InboundEma
     inReplyTo: firstMessageId(headers.get("in-reply-to")),
     references: messageIds(headers.get("references")),
     date: parseDate(jsonText(root.date)),
-    security: authenticationResults(headers),
+    security: authenticationResults(headers, JETEMAIL_AUTHSERV_IDS),
     raw: { kind: "json", value: root },
   };
 }

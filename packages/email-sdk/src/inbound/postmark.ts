@@ -1,12 +1,13 @@
 import type { JsonObject, JsonValue } from "../internal/decode.js";
 import { parseAddressList } from "./mime.js";
-import { authenticationResults, mergeSecurity } from "./normalize.js";
+import { mergeSecurity } from "./normalize.js";
 import {
   type InboundFetchOptions,
   decodeBase64,
   fetchJson,
   firstMessageId,
   inlineAttachment,
+  jsonContent,
   jsonList,
   jsonNumber,
   jsonObject,
@@ -72,7 +73,7 @@ function emailFromJson(data: JsonObject): InboundEmail {
     headers,
     attachments: jsonList(data.Attachments).flatMap(entry => {
       const item = jsonObject(entry);
-      const content = jsonText(item?.Content);
+      const content = jsonContent(item?.Content);
 
       if (!item || content === undefined) return [];
 
@@ -89,7 +90,7 @@ function emailFromJson(data: JsonObject): InboundEmail {
     inReplyTo: firstMessageId(headers.get("in-reply-to")),
     references: messageIds(headers.get("references")),
     date: parseDate(jsonText(data.Date)),
-    security: mergeSecurity(authenticationResults(headers), {
+    security: mergeSecurity({}, {
       spam: spamStatus?.startsWith("yes") ? "fail" : spamStatus?.startsWith("no") ? "pass" : undefined,
       spamScore: jsonNumber(headers.get("x-spam-score")),
     }),

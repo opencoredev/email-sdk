@@ -11,6 +11,7 @@ import { parsePrimitiveInbound, verifyPrimitiveInbound } from "./inbound/primiti
 import { fetchResendInboundEmail, parseResendInbound, verifyResendInbound, type ResendInboundApiOptions } from "./inbound/resend.js";
 import { parseSendGridInbound, verifySendGridInbound } from "./inbound/sendgrid.js";
 import {
+  assertSesTopicConfigured,
   confirmSnsSubscription,
   parseSesInbound,
   parseSnsMessage,
@@ -272,6 +273,8 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
 
       return { type: "emails", emails: [parseSendGridInbound(payload)] };
     case "ses": {
+      assertSesTopicConfigured(config);
+
       const message = parseSnsMessage(payload.body);
       assertVerified("ses", await verifySnsMessage(message, { ...config, ...fetchOptions }));
 
