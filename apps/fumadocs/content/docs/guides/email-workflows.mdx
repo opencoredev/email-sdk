@@ -147,7 +147,7 @@ Your email client's own `retry` option still applies inside each attempt.
 
 The saved progress stops a finished step from running again. One gap remains: a crash after the provider accepted an email but before the engine saved that step. On recovery, the send runs again with the same idempotency key.
 
-The key is `wf_` followed by the SHA-256 hex digest of the run id and step name, 67 characters however long they are. `workflowIdempotencyKey(runId, step)` returns it if you need to match a provider record to a step.
+The key is `wf_` followed by the SHA-256 hex digest of the JSON-encoded `[runId, step]` pair, 67 characters however long the ids are. `workflowIdempotencyKey(runId, step)` returns it if you need to match a provider record to a step.
 
 - Adapters with native idempotency (Resend, Postmark, and others marked in [delivery capabilities](/docs/adapters/capability-groups)) drop the duplicate.
 - SMTP sets a stable `Message-ID`, which receiving systems can use to dedupe.
@@ -262,6 +262,7 @@ test("a user who never activates gets a nudge", async () => {
 - Steps run one at a time. `Promise.all` over `ctx` calls is allowed, but they still run in order.
 - There are no child workflows yet.
 - Events sent to a subject before any run exists for it are dropped.
+- A run's inbox keeps its newest 50 unconsumed events and drops older ones.
 - The in-memory store and scheduler lose everything on restart. Use them for tests and local development only.
 
 <Cards>
