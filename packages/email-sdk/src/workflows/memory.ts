@@ -11,6 +11,7 @@ import type {
 
 const terminalStatuses = new Set(["completed", "failed", "canceled"]);
 
+/** True for `completed`, `failed`, and `canceled` runs, which never execute again. */
 export function isTerminalRun(run: WorkflowRun): boolean {
   return terminalStatuses.has(run.status);
 }
@@ -22,6 +23,7 @@ function copyRun(run: WorkflowRun): WorkflowRun {
   return JSON.parse(JSON.stringify(run)) as WorkflowRun;
 }
 
+/** The store `createMemoryWorkflowStore` returns, with `runs()` for test assertions. */
 export type MemoryWorkflowStore = WorkflowStore & {
   /** Every stored run, in insertion order. */
   runs(): WorkflowRun[];
@@ -73,8 +75,11 @@ export function createMemoryWorkflowStore(): MemoryWorkflowStore {
   };
 }
 
+/** The clock `createManualClock` returns. */
 export type ManualClock = WorkflowClock & {
+  /** Jumps to an absolute time. */
   set(at: Date | number): void;
+  /** Moves forward by `duration` and returns the new time. Fires no timers on its own. */
   advance(duration: WorkflowDuration): number;
 };
 
@@ -95,6 +100,7 @@ export function createManualClock(start: Date | number = 0): ManualClock {
   };
 }
 
+/** The scheduler `createMemoryWorkflowScheduler` returns, with controls for firing timers in tests. */
 export type MemoryWorkflowScheduler = WorkflowScheduler & {
   /** Pending timers sorted by fire time. */
   pending(): WorkflowTimer[];

@@ -1,10 +1,14 @@
+/**
+ * Why a `WorkflowError` was thrown: a bad definition or engine option, a malformed duration, input
+ * the workflow's schema rejected, a step name used twice in one run, or a run whose workflow version
+ * this engine doesn't register.
+ */
 export type WorkflowErrorCode =
   | "invalid_definition"
   | "invalid_duration"
   | "invalid_input"
   | "duplicate_step"
-  | "workflow_not_registered"
-  | "step_failed";
+  | "workflow_not_registered";
 
 /** Errors the workflow engine raises about definitions, input, and registration. */
 export class WorkflowError extends Error {

@@ -22,6 +22,7 @@ export type WorkflowDuration =
   | `${number}d`
   | `${number}w`;
 
+/** How often a failed `ctx.send` or `ctx.step` retries. Set on the engine, a workflow, or one step. */
 export type WorkflowRetryPolicy = {
   /** Total attempts including the first. Defaults to 3. */
   maxAttempts?: number;
@@ -29,10 +30,19 @@ export type WorkflowRetryPolicy = {
   backoff?: WorkflowDuration;
 };
 
+/**
+ * `running` while an execution holds the run, `waiting` on a sleep, retry, or event, and one of the
+ * terminal states once it ends.
+ */
 export type WorkflowRunStatus = "running" | "waiting" | "completed" | "failed" | "canceled";
 
+/** Which `ctx` call produced a journal entry: `send`, `step`, `sleep` (also `sleepUntil`), or `event`. */
 export type WorkflowStepKind = "send" | "step" | "sleep" | "event";
 
+/**
+ * One journal entry, keyed by step name. A completed entry replays its `result`; a retrying entry
+ * counts failed attempts of a send or step that will run again.
+ */
 export type WorkflowStepRecord =
   | {
       status: "completed";
@@ -47,6 +57,10 @@ export type WorkflowStepRecord =
       lastError: string;
     };
 
+/**
+ * What a waiting run is blocked on. `until` is when its timer is due; an event wait without `until`
+ * has no timeout and waits until the event arrives or the run is canceled.
+ */
 export type WorkflowWait =
   | { kind: "sleep"; step: string; until: number }
   | { kind: "retry"; step: string; until: number }
@@ -55,6 +69,10 @@ export type WorkflowWait =
 /** Which execution holds a run, and until when. Expired leases may be claimed by any worker. */
 export type WorkflowLease = { owner: string; until: number };
 
+/**
+ * A delivered event the run has not consumed yet. `receivedAt` is the delivering engine's clock time,
+ * compared with the wait's deadline. The inbox keeps the newest 50 events.
+ */
 export type WorkflowInboxEvent = {
   name: string;
   payload?: WorkflowJsonValue;
@@ -118,6 +136,7 @@ export type WorkflowScheduler = {
   cancel(runId: string): MaybePromise<void>;
 };
 
+/** Source of the current time in epoch milliseconds. Defaults to `Date.now`. */
 export type WorkflowClock = { now(): number };
 
 /** The part of an EmailClient a workflow needs. */
@@ -125,14 +144,18 @@ export type WorkflowEmailSender = {
   send(message: EmailMessage, options?: EmailSendOptions): Promise<EmailSendResult>;
 };
 
+/** Per-send options for `ctx.send`. The engine supplies the idempotency key, so it can't be set here. */
 export type WorkflowSendOptions = Omit<EmailSendOptions, "idempotencyKey">;
 
+/** What `ctx.send` journals and returns: the adapter that accepted the email and its provider id. */
 export type WorkflowSendRecord = { adapter: string; id?: string };
 
+/** What `ctx.waitForEvent` resolves with. `receivedAt` is when `sendEvent` delivered the event. */
 export type WorkflowEventResult<TPayload> =
   | { status: "received"; payload: TPayload; receivedAt: number }
   | { status: "timed_out" };
 
+/** Options for `ctx.waitForEvent`. */
 export type WorkflowWaitForEventOptions = {
   /** Event name to wait for. Defaults to the step name. */
   event?: string;
@@ -140,13 +163,20 @@ export type WorkflowWaitForEventOptions = {
   timeout?: WorkflowDuration;
 };
 
+/** Options for one `ctx.step`. Its `retry` overrides the workflow and engine policies. */
 export type WorkflowStepOptions = { retry?: WorkflowRetryPolicy };
 
+/**
+ * The `ctx` passed to a workflow's `run`. Every call takes a step name that must be unique within the
+ * run; finished steps return their journaled result on replay. The read-only fields stay the same
+ * across replays.
+ */
 export type WorkflowContext = {
   readonly runId: string;
   readonly workflow: string;
   readonly version: number;
   readonly subject?: string;
+  /** The run's `createdAt`, in epoch milliseconds. */
   readonly startedAt: number;
   /** Sends once per run and step name, with idempotency key `workflowIdempotencyKey(runId, name)`. */
   send(name: string, message: EmailMessage, options?: WorkflowSendOptions): Promise<WorkflowSendRecord>;
@@ -156,8 +186,14 @@ export type WorkflowContext = {
     fn: () => MaybePromise<TResult>,
     options?: WorkflowStepOptions,
   ): Promise<TResult>;
+  /** Pauses the run for `duration`, measured from when the run first reaches this step. */
   sleep(name: string, duration: WorkflowDuration): Promise<void>;
+  /** Pauses the run until an absolute time. A time in the past continues immediately. */
   sleepUntil(name: string, at: Date | number): Promise<void>;
+  /**
+   * Waits for an event sent to this run or its subject. An event delivered before the run gets here
+   * is taken from the inbox. With `timeout`, an event received after the deadline loses to it.
+   */
   waitForEvent<TPayload extends WorkflowJsonValue | undefined = undefined>(
     name: string,
     options?: WorkflowWaitForEventOptions,
@@ -174,6 +210,7 @@ export type WorkflowInputSchema<TInput> = {
   };
 };
 
+/** A workflow returned by `defineWorkflow`. Register it with `createWorkflowEngine({ workflows })`. */
 export type WorkflowDefinition<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void> = {
   readonly name: string;
   readonly version: number;
@@ -193,6 +230,10 @@ type WorkflowRunEvent = { run: WorkflowRun };
 
 type WorkflowStepEvent = WorkflowRunEvent & { step: string; kind: WorkflowStepKind; attempt: number };
 
+/**
+ * Observers for run and step lifecycle events. Hooks can't change a run: errors they throw are
+ * caught and ignored.
+ */
 export type WorkflowHooks = {
   onStepStart?: (event: WorkflowStepEvent) => MaybePromise<void>;
   onStepComplete?: (event: WorkflowStepEvent & { durationMs: number }) => MaybePromise<void>;
@@ -202,12 +243,18 @@ export type WorkflowHooks = {
   onRunFailed?: (event: WorkflowRunEvent & { error: Error }) => MaybePromise<void>;
 };
 
+/** Options for `createWorkflowEngine`. */
 export type WorkflowEngineOptions = {
+  /** Sends each `ctx.send`. An `EmailClient` works as is. */
   email: WorkflowEmailSender;
   store: WorkflowStore;
+  /** Wakes runs when a wait ends. Without one, call `resumeDue` from a cron. */
   scheduler?: WorkflowScheduler;
+  /** Every definition this engine may start or resume, including old versions with runs in flight. */
   workflows: readonly AnyWorkflowDefinition[];
+  /** Defaults to `Date.now`. Event deadlines compare times from each worker's clock, so keep them in sync. */
   clock?: WorkflowClock;
+  /** Default retry policy for every workflow. Workflow and step policies override it. */
   retry?: WorkflowRetryPolicy;
   hooks?: WorkflowHooks;
   /** Called for every recipient before a send. A true result cancels the run with reason `suppressed`. */
@@ -221,6 +268,7 @@ export type WorkflowEngineOptions = {
   leaseDuration?: WorkflowDuration;
 };
 
+/** Options for `engine.start`. */
 export type WorkflowStartOptions = {
   /** Deterministic ids make start idempotent: a second start returns the existing run. */
   id?: string;
@@ -228,12 +276,18 @@ export type WorkflowStartOptions = {
   subject?: string;
 };
 
+/** An event for `engine.sendEvent`, addressed to one run by `runId` or to every active run of a `subject`. */
 export type WorkflowEventInput = {
   name: string;
   payload?: WorkflowJsonValue;
 } & ({ runId: string; subject?: never } | { subject: string; runId?: never });
 
+/** The engine `createWorkflowEngine` returns. */
 export type WorkflowEngine = {
+  /**
+   * Creates a run and executes it until its first wait or the end. With an `id` that already exists,
+   * returns the stored run without running anything.
+   */
   start<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void>(
     workflow: WorkflowDefinition<TInput, TOutput>,
     input: TInput,
@@ -243,7 +297,7 @@ export type WorkflowEngine = {
   resume(runId: string): Promise<WorkflowRun | undefined>;
   /**
    * Resumes every due run the store reports, for cron-driven hosts without a push scheduler.
-   * Returns how many runs it executed.
+   * Checks at most `limit` runs per call (default 25). Returns how many runs it executed.
    */
   resumeDue(limit?: number): Promise<number>;
   /** Delivers an event. Returns the ids of the runs it reached. */
@@ -254,5 +308,6 @@ export type WorkflowEngine = {
    * missing or already terminal.
    */
   cancel(runId: string, reason?: string): Promise<boolean>;
+  /** Reads a run from the store. */
   get(runId: string): Promise<WorkflowRun | undefined>;
 };
