@@ -1,7 +1,12 @@
 import { EmailAdapterError } from "./errors.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
-import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
+import type {
+  EmailAttachment,
+  EmailMessage,
+  EmailAdapter,
+  EmailNativePassthrough,
+} from "./types.js";
 import {
   builtInAdapterDefinition,
   attachmentToBase64,
@@ -23,9 +28,28 @@ export type ResendAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+/**
+ * Experimental. Resend-only send options, passed as `native: { resend: { ... } }`.
+ * https://resend.com/docs/api-reference/emails/send-email
+ */
+export type ResendNativeOptions = EmailNativePassthrough & {
+  /**
+   * Send a published Resend template. Resend rejects `html` and `text` alongside a template, so
+   * the adapter drops them and the message subject; the template's defaults apply. Set
+   * `body: { subject }` to override the template subject.
+   */
+  template?: {
+    /** Template ID or alias. */
+    id: string;
+    variables?: Readonly<Record<string, string | number>>;
+  };
+  /** Subscription topic the recipient must be opted in to (`topic_id`). */
+  topicId?: string;
+};
+
 export function resend(
   options: ResendAdapterOptions,
-): EmailAdapter<"resend", { baseUrl: string }> {
+): EmailAdapter<"resend", { baseUrl: string }, unknown, ResendNativeOptions> {
   const baseUrl = options.baseUrl ?? "https://api.resend.com";
   const fetcher = options.fetch ?? fetch;
 
@@ -34,11 +58,13 @@ export function resend(
     ...builtInAdapterDefinition("resend"),
     raw: { baseUrl },
     async send(message, context) {
+      const native = context.native;
       // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
         ...options.headers,
+        ...native?.headers,
       });
 
       if (context.idempotencyKey) {
@@ -49,7 +75,7 @@ export function resend(
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toResendPayload(message)),
+        body: JSON.stringify(await toResendPayload(message, native)),
       });
 
       if (!response.ok) {
@@ -72,9 +98,24 @@ export function resend(
   };
 }
 
-async function toResendPayload(message: EmailMessage) {
+async function toResendPayload(message: EmailMessage, native: ResendNativeOptions | undefined) {
   assertSupportedMessageFields("resend", message, SUPPORTED_MESSAGE_FIELDS.resend);
+  const payload = await toResendBasePayload(message);
 
+  if (!native) return payload;
+
+  const template = native.template;
+
+  const withNative = {
+    ...payload,
+    ...(template && { subject: undefined, html: undefined, text: undefined, template }),
+    topic_id: native.topicId,
+  };
+
+  return native.body ? { ...withNative, ...native.body } : withNative;
+}
+
+async function toResendBasePayload(message: EmailMessage) {
   return {
     from: formatAddress(message.from),
     to: formatAddresses(message.to),

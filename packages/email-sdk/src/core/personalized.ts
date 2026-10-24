@@ -13,7 +13,7 @@ import type {
   EmailPersonalizedResult,
   EmailRetryConfig,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   EmailSendResult,
 } from "../types.js";
 import { emailAddressOf, normalizeAdapterResult } from "../utils.js";
@@ -36,7 +36,7 @@ export async function attemptNativePersonalized(
   adapter: EmailAdapter,
   input: EmailPersonalizedInput,
   hookMessage: EmailMessage,
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
@@ -63,6 +63,7 @@ export async function attemptNativePersonalized(
             signal: sendOptions?.signal,
             idempotencyKey: sendOptions?.idempotencyKey,
             metadata: sendOptions?.metadata,
+            native: sendOptions?.native?.[adapter.name],
           }),
       );
 
@@ -144,7 +145,7 @@ export type PersonalizedAttempt = EmailPersonalizedResult & {
 export async function attemptExpandedPersonalized(
   adapter: EmailAdapter,
   expanded: readonly ExpandedRecipient[],
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
