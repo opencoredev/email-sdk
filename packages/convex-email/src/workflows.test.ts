@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createWorkflowEngine, defineWorkflow } from "@opencoredev/email-sdk/workflows";
+import { createWorkflowEngine, defineWorkflow, workflowIdempotencyKey } from "@opencoredev/email-sdk/workflows";
 import type { WorkflowRun } from "@opencoredev/email-sdk/workflows";
 import { actionGeneric, componentsGeneric, defineSchema, makeFunctionReference } from "convex/server";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
@@ -8,7 +8,13 @@ import { convexTest } from "convex-test";
 import { z } from "zod";
 
 import { ConvexEmail } from "./client/index.js";
-import { convexWorkflowEmail, convexWorkflowScheduler, convexWorkflowStore, toConvexSendArgs } from "./client/workflows.js";
+import {
+  convexWorkflowEmail,
+  convexWorkflowScheduler,
+  convexWorkflowStore,
+  parseWorkflowRun,
+  toConvexSendArgs,
+} from "./client/workflows.js";
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
 import { modules, registerConvexEmail } from "./testing.js";
@@ -41,6 +47,15 @@ const onboarding = defineWorkflow({
   },
 });
 
+/** Waits on an event that never comes; only an unsubscribe ends it. Cheap to start in bulk. */
+const parked = defineWorkflow({
+  name: "parked",
+  cancelOn: ["unsubscribed"],
+  run: async (ctx) => {
+    await ctx.waitForEvent("never");
+  },
+});
+
 /** The app's clock. Tests move it instead of waiting, and the engine reads it through `clock`. */
 const clock = { at: Date.parse("2026-01-01T00:00:00Z") };
 
@@ -52,7 +67,7 @@ function engineFor(ctx: GenericActionCtx<GenericDataModel>) {
     store: convexWorkflowStore(component(), ctx),
     scheduler: convexWorkflowScheduler(ctx, resumeRef),
     clock: { now: () => clock.at },
-    workflows: [onboarding],
+    workflows: [onboarding, parked],
   });
 }
 
@@ -73,6 +88,19 @@ const appWorkflows = {
     args: { runId: v.string() },
     returns: vRunView,
     handler: async (ctx, args) => view(await engineFor(ctx).resume(args.runId)),
+  }),
+  startParked: actionGeneric({
+    args: { count: v.number(), subject: v.string() },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+      const engine = engineFor(ctx);
+
+      for (let index = 0; index < args.count; index += 1) {
+        await engine.start(parked, null, { id: `parked-${index}`, subject: args.subject });
+      }
+
+      return null;
+    },
   }),
   sendEvent: actionGeneric({
     args: { name: v.string(), subject: v.string() },
@@ -107,6 +135,7 @@ const app = {
   ),
   resume: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>("workflows:resume"),
   sendEvent: makeFunctionReference<"action", { name: string; subject: string }, string[]>("workflows:sendEvent"),
+  startParked: makeFunctionReference<"action", { count: number; subject: string }, null>("workflows:startParked"),
   get: makeFunctionReference<"action", { runId: string }, string | null>("workflows:get"),
   emailStatus: makeFunctionReference<
     "action",
@@ -199,9 +228,38 @@ describe("convex workflow store functions", () => {
     expect(await t.query(api.workflows.listDueRuns, { now: 100, limit: 10 })).toEqual(["run-1"]);
     expect((await t.query(api.workflows.listDueRuns, { now: 1_000, limit: 10 })).sort()).toEqual(["later", "run-1"]);
 
-    const active = await t.query(api.workflows.listActiveRunsBySubject, { subject: "ada@example.test" });
+    const active = await t.query(api.workflows.listActiveRunsBySubject, {
+      subject: "ada@example.test",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
 
-    expect(active.map((run) => run.runId).sort()).toEqual(["event-wait", "later", "run-1"]);
+    expect(active.isDone).toBe(true);
+    expect(active.page.map((run) => run.runId).sort()).toEqual(["event-wait", "later", "run-1"]);
+  });
+
+  test("listActiveRunsBySubject pages through every active run", async () => {
+    const t = convexTest(schema, modules);
+
+    for (let index = 0; index < 5; index += 1) {
+      await t.mutation(api.workflows.createRun, { run: { ...record, runId: `run-${index}` } });
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let pages = 1; pages <= 5; pages += 1) {
+      const result: { page: { runId: string }[]; isDone: boolean; continueCursor: string } = await t.query(
+        api.workflows.listActiveRunsBySubject,
+        { subject: "ada@example.test", paginationOpts: { numItems: 2, cursor } },
+      );
+
+      seen.push(...result.page.map((run) => run.runId));
+
+      if (result.isDone) break;
+      cursor = result.continueCursor;
+    }
+
+    expect(seen.sort()).toEqual(["run-0", "run-1", "run-2", "run-3", "run-4"]);
   });
 });
 
@@ -238,8 +296,8 @@ describe("convex workflow engine end to end", () => {
     expect(run.status).toBe("completed");
 
     expect((await queuedEmails(t, run)).map((queued) => [queued?.subject, queued?.idempotencyKey])).toEqual([
-      ["Welcome", "wf:run-1:welcome"],
-      ["Thanks for activating", "wf:run-1:follow-up"],
+      ["Welcome", await workflowIdempotencyKey("run-1", "welcome")],
+      ["Thanks for activating", await workflowIdempotencyKey("run-1", "follow-up")],
     ]);
   });
 });
@@ -262,6 +320,42 @@ describe("convex workflow cancellation", () => {
     expect(await t.action(app.resume, { runId: "run-2" })).toMatchObject({ status: "canceled", revision: run.revision });
     expect((await queuedEmails(t, run)).map((queued) => queued?.subject)).toEqual(["Welcome"]);
     expect(await t.action(app.sendEvent, { name: "activated", subject: "grace@example.test" })).toEqual([]);
+  });
+});
+
+describe("convex workflow subject events", () => {
+  test("an unsubscribe reaches every active run for the subject, past one page", async () => {
+    const t = createApp();
+
+    await t.action(app.startParked, { count: 101, subject: "bulk@example.test" });
+    expect(await t.action(app.sendEvent, { name: "unsubscribed", subject: "bulk@example.test" })).toHaveLength(101);
+
+    const statuses = new Set<string>();
+
+    for (let index = 0; index < 101; index += 1) statuses.add((await readRun(t, `parked-${index}`)).status);
+
+    expect([...statuses]).toEqual(["canceled"]);
+  }, 60_000);
+});
+
+describe("parseWorkflowRun", () => {
+  test("keeps the execution lease, which guards runs against concurrent workers", () => {
+    const run: WorkflowRun = {
+      id: "run-1",
+      workflow: "onboarding",
+      version: 1,
+      status: "running",
+      input: null,
+      journal: { lookup: { status: "completed", kind: "step", result: null, completedAt: 1 } },
+      inbox: [],
+      lease: { owner: "worker-a", until: 500 },
+      revision: 3,
+      dueAt: 500,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    expect(parseWorkflowRun(JSON.stringify(run))).toEqual(run);
   });
 });
 

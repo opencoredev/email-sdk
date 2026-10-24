@@ -12,7 +12,7 @@ import {
   vMaybeWorkflowRunRecord,
   vSaveWorkflowRunArgs,
   vWorkflowRunIds,
-  vWorkflowRunRecords,
+  vWorkflowRunPage,
 } from "../shared/workflowValidators.js";
 import type { vWorkflowRunRecord } from "../shared/workflowValidators.js";
 
@@ -82,16 +82,20 @@ export const saveRun = mutation({
   },
 });
 
+/**
+ * One page of a subject's active runs. A subject can have more runs than one query should read,
+ * so the app-side store follows `continueCursor` across queries until `isDone`.
+ */
 export const listActiveRunsBySubject = query({
   args: vListActiveWorkflowRunsArgs,
-  returns: vWorkflowRunRecords,
+  returns: vWorkflowRunPage,
   handler: async (ctx, args) => {
-    const docs = await ctx.db
+    const result = await ctx.db
       .query("workflowRuns")
       .withIndex("by_subject_and_active", (q) => q.eq("subject", args.subject).eq("active", true))
-      .take(maxDueLimit);
+      .paginate({ ...args.paginationOpts, numItems: Math.min(Math.max(args.paginationOpts.numItems, 1), maxDueLimit) });
 
-    return docs.map(toRecord);
+    return { page: result.page.map(toRecord), isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
 
