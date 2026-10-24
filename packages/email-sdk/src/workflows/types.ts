@@ -118,9 +118,15 @@ export type WorkflowStore = {
   save(run: WorkflowRun, expectedRevision: number): Promise<boolean>;
   /** Non-terminal runs for a subject, used to route events and unsubscribes. */
   listActiveBySubject(subject: string): Promise<WorkflowRun[]>;
-  /** Ids of runs whose `dueAt` is at or before `now`. */
-  listDue(now: number, limit: number): Promise<string[]>;
+  /**
+   * One page of at most `limit` ids of runs whose `dueAt` is at or before `now`, oldest due first.
+   * Pass the returned `cursor` to read the next page; it is undefined on the last page.
+   */
+  listDue(now: number, limit: number, cursor?: string): Promise<WorkflowDuePage>;
 };
+
+/** A page of due run ids from `WorkflowStore.listDue`. `cursor` is set when more may follow. */
+export type WorkflowDuePage = { ids: string[]; cursor?: string };
 
 /** A wake for one run. `revision` is the run revision whose wait asked for it. */
 export type WorkflowTimer = { runId: string; at: number; revision: number };
@@ -285,8 +291,9 @@ export type WorkflowEventInput = {
 /** The engine `createWorkflowEngine` returns. */
 export type WorkflowEngine = {
   /**
-   * Creates a run and executes it until its first wait or the end. With an `id` that already exists,
-   * returns the stored run without running anything.
+   * Creates a run of exactly this definition and version, and executes it until its first wait or
+   * the end. With an `id` that already exists, returns the stored run without validating `input` or
+   * running anything.
    */
   start<TInput extends WorkflowJsonValue, TOutput extends WorkflowJsonValue | void>(
     workflow: WorkflowDefinition<TInput, TOutput>,
@@ -297,10 +304,16 @@ export type WorkflowEngine = {
   resume(runId: string): Promise<WorkflowRun | undefined>;
   /**
    * Resumes every due run the store reports, for cron-driven hosts without a push scheduler.
-   * Checks at most `limit` runs per call (default 25). Returns how many runs it executed.
+   * Checks at most `limit` runs per call (default 25; 0 checks none). Runs whose version this engine
+   * doesn't register are skipped without counting toward `limit`, and reported, with any other
+   * failures, in an AggregateError after the rest ran. Returns how many runs it executed.
    */
   resumeDue(limit?: number): Promise<number>;
-  /** Delivers an event. Returns the ids of the runs it reached. */
+  /**
+   * Delivers an event, stamped with one receipt time, to every target, then resumes the runs it
+   * satisfies concurrently. Returns the ids of the runs it reached. When a target fails, the rest
+   * still get the event, and an AggregateError reports the failures.
+   */
   sendEvent(event: WorkflowEventInput): Promise<string[]>;
   /**
    * Cancels a run without waiting for a running step. A step or send already in flight may still

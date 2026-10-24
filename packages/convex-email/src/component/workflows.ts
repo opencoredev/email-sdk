@@ -11,7 +11,7 @@ import {
   vListDueWorkflowRunsArgs,
   vMaybeWorkflowRunRecord,
   vSaveWorkflowRunArgs,
-  vWorkflowRunIds,
+  vWorkflowRunIdPage,
   vWorkflowRunPage,
 } from "../shared/workflowValidators.js";
 import type { vWorkflowRunRecord } from "../shared/workflowValidators.js";
@@ -99,15 +99,23 @@ export const listActiveRunsBySubject = query({
   },
 });
 
+/**
+ * One page of due run ids, oldest due first. The engine follows `continueCursor` past runs it can't
+ * resume, so they never hide later due runs. A page size below 1 returns an empty page.
+ */
 export const listDueRuns = query({
   args: vListDueWorkflowRunsArgs,
-  returns: vWorkflowRunIds,
+  returns: vWorkflowRunIdPage,
   handler: async (ctx, args) => {
-    const docs = await ctx.db
+    if (args.paginationOpts.numItems < 1) {
+      return { page: [], isDone: true, continueCursor: args.paginationOpts.cursor ?? "" };
+    }
+
+    const result = await ctx.db
       .query("workflowRuns")
       .withIndex("by_active_and_dueAt", (q) => q.eq("active", true).gte("dueAt", 0).lte("dueAt", args.now))
-      .take(Math.min(Math.max(args.limit, 1), maxDueLimit));
+      .paginate({ ...args.paginationOpts, numItems: Math.min(args.paginationOpts.numItems, maxDueLimit) });
 
-    return docs.map((doc) => doc.runId);
+    return { page: result.page.map((doc) => doc.runId), isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });

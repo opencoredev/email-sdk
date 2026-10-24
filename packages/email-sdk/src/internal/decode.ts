@@ -131,9 +131,11 @@ export async function readJson(response: Response): Promise<JsonValue | undefine
 
 type ThrownFields = {
   code?: unknown;
+  failures?: unknown;
   message?: unknown;
   name?: unknown;
   responseCode?: unknown;
+  retryable?: unknown;
   status?: unknown;
 };
 
@@ -176,4 +178,28 @@ export function causeNumber(cause: unknown, key: "responseCode" | "status"): num
   const field = fields[key];
 
   return isNumber(field) ? field : undefined;
+}
+
+/** Read a boolean property, such as `retryable`, from a thrown value. */
+export function causeBoolean(cause: unknown, key: "retryable"): boolean | undefined {
+  if (!isObjectLike(cause)) {
+    return undefined;
+  }
+
+  const fields: ThrownFields = cause;
+  const field = fields[key];
+
+  return isBoolean(field) ? field : undefined;
+}
+
+/** Read an array property, such as a route error's `failures`, from a thrown value. */
+export function causeArray(cause: unknown, key: "failures"): readonly unknown[] {
+  if (!isObjectLike(cause)) {
+    return [];
+  }
+
+  const fields: ThrownFields = cause;
+  const field = fields[key];
+
+  return Array.isArray(field) ? field : [];
 }

@@ -30,7 +30,7 @@ import {
   vListDueWorkflowRunsArgs,
   vMaybeWorkflowRunRecord,
   vSaveWorkflowRunArgs,
-  vWorkflowRunIds,
+  vWorkflowRunIdPage,
   vWorkflowRunPage,
 } from "./workflowValidators.js";
 
@@ -91,7 +91,7 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
       typeof vWorkflowRunPage,
       TName
     >;
-    listDueRuns: ComponentRef<"query", typeof vListDueWorkflowRunsArgs, typeof vWorkflowRunIds, TName>;
+    listDueRuns: ComponentRef<"query", typeof vListDueWorkflowRunsArgs, typeof vWorkflowRunIdPage, TName>;
   };
   worker: {
     handleWebhook: ComponentRef<
