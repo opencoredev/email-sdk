@@ -11,6 +11,7 @@ import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
 import { plunk } from "./plunk.js";
 import { scaleway } from "./scaleway.js";
+import { sequenzy } from "./sequenzy.js";
 import { sendgrid } from "./sendgrid.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import { unosend } from "./unosend.js";
@@ -132,6 +133,18 @@ describe("provider payloads", () => {
 
     await expect(allRejected).rejects.toMatchObject({ adapter: "mailchimp", delivery: "not_sent", retryable: false, rejectedCount: 1 });
     await expect(allRejected).rejects.toThrow("hard-bounce");
+  });
+
+  test("Plunk and Sequenzy send the text body when html is an empty string", async () => {
+    const plunkCapture = jsonCapture({ success: true, data: { emails: [{ contact: { id: "c" }, email: "e_1" }] } });
+    const sequenzyCapture = jsonCapture({ success: true, jobId: "job_1" });
+    const textOnly = { ...messageWithoutProviderSpecificFields, html: "", text: "Code 123456", cc: undefined, bcc: undefined, replyTo: undefined };
+
+    await plunk({ apiKey: "key", fetch: plunkCapture.fetch }).send(textOnly, context);
+    await sequenzy({ apiKey: "key", fetch: sequenzyCapture.fetch }).send(textOnly, context);
+
+    expect(plunkCapture.calls[0]?.json.body).toBe("Code 123456");
+    expect(sequenzyCapture.calls[0]?.json.body).toBe("Code 123456");
   });
 
   test("Mailtrap maps the current transactional API schema", async () => {
