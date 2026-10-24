@@ -105,6 +105,18 @@ describe("provider-native options reach each adapter", () => {
     expect(json).not.toHaveProperty("TemplateId");
   });
 
+  test("Postmark reports no accepted recipients when native body replaces them", async () => {
+    const capture = jsonCapture({ MessageID: "pm_1" });
+    const adapter = postmark({ serverToken: "t", fetch: capture.fetch });
+
+    const overridden = await adapter.send(simple, withNative({ body: { To: "other@example.com" } }));
+    const plain = await adapter.send(simple, withNative({ body: { Metadata: { a: "1" } } }));
+
+    expect(capture.calls[0]?.json.To).toBe("other@example.com");
+    expect(overridden.accepted).toBeUndefined();
+    expect(plain.accepted).toEqual(["ada@example.com"]);
+  });
+
   test("Postmark without a template keeps the normal endpoint and body", async () => {
     const capture = jsonCapture({ MessageID: "pm_1" });
 
