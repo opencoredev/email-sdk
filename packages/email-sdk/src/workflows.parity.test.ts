@@ -36,11 +36,14 @@ type ParityCase = {
   retry?: WorkflowRetryPolicy;
   /** Delivered to the run with `sendEvent` once it waits; the inspector gets them as samples. */
   events?: Record<string, WorkflowJsonValue>;
-  /** What both must report, checked on top of agreeing with each other. */
-  expected: { status: WorkflowRunStatus; error?: string; sends: string[] };
+  /**
+   * What both must report, checked on top of agreeing with each other. With `steps`, both must also
+   * record exactly these steps: the engine's journal and current wait, and the inspector's nodes.
+   */
+  expected: { status: WorkflowRunStatus; error?: string; sends: string[]; steps?: string[] };
 };
 
-type Observed = { status: WorkflowRunStatus | "truncated" | "rejected"; error?: string; sends: string[] };
+type Observed = { status: WorkflowRunStatus | "truncated" | "rejected"; error?: string; sends: string[]; steps?: string[] };
 
 type Cyclic = { self?: WorkflowJsonValue };
 
@@ -268,6 +271,46 @@ const cases = {
     },
     expected: { status: "failed", error: 'Step "same" ran twice in workflow parity@1.', sends: [] },
   },
+  "duplicate sends as Promise.all siblings": {
+    run: async (ctx) => {
+      await Promise.all([ctx.send("mail", mail("One")), ctx.send("mail", mail("Two"))]);
+    },
+    expected: { status: "failed", error: 'Step "mail" ran twice in workflow parity@1.', sends: [], steps: [] },
+  },
+  "duplicate sleeps as Promise.all siblings": {
+    run: async (ctx) => {
+      await Promise.all([ctx.sleep("pause", "1d"), ctx.sleep("pause", "2d")]);
+    },
+    expected: { status: "failed", error: 'Step "pause" ran twice in workflow parity@1.', sends: [], steps: [] },
+  },
+  "duplicate steps as Promise.all siblings": {
+    run: async (ctx) => {
+      await Promise.all([ctx.step("load", () => 1), ctx.step("load", () => 2)]);
+    },
+    steps: { load: 1 },
+    expected: { status: "failed", error: '"load" was called while step "load" was still running.', sends: [], steps: [] },
+  },
+  "duplicate event waits as Promise.all siblings": {
+    events: { go: { plan: "pro" } },
+    run: async (ctx) => {
+      await Promise.all([ctx.waitForEvent("go"), ctx.waitForEvent("go")]);
+    },
+    expected: { status: "failed", error: 'Step "go" ran twice in workflow parity@1.', sends: [], steps: [] },
+  },
+  "a send, then a duplicate send among Promise.all siblings": {
+    run: async (ctx) => {
+      await ctx.send("first", mail("First"));
+      await Promise.all([ctx.send("mail", mail("One")), ctx.sleep("pause", "1d"), ctx.send("mail", mail("Two"))]);
+    },
+    expected: { status: "failed", error: 'Step "mail" ran twice in workflow parity@1.', sends: ["first"], steps: ["first"] },
+  },
+  "distinct sends as Promise.all siblings": {
+    run: async (ctx) => {
+      await Promise.all([ctx.send("one", mail("One")), ctx.send("two", mail("Two"))]);
+      await ctx.sleep("pause", "1d");
+    },
+    expected: { status: "completed", sends: ["one", "two"], steps: ["one", "two", "pause"] },
+  },
   "a sleep, then sends": {
     run: async (ctx) => {
       await ctx.send("first", mail("First"));
@@ -345,8 +388,20 @@ async function throughEngine(definition: AnyWorkflowDefinition, entry: ParityCas
   }
 
   const run = await engine.get("run-1");
+  const observed: Observed = run?.error ? { status: run.status, error: run.error.message, sends } : { status: run?.status ?? "rejected", sends };
 
-  return run?.error ? { status: run.status, error: run.error.message, sends } : { status: run?.status ?? "rejected", sends };
+  if (entry.expected.steps !== undefined) {
+    const journaled = Object.entries(run?.journal ?? {})
+      .filter(([, record]) => record.status === "completed")
+      .toSorted(([, a], [, b]) => (a.sequence ?? 0) - (b.sequence ?? 0))
+      .map(([name]) => name);
+
+    const waiting = run?.wait && !journaled.includes(run.wait.step) ? [run.wait.step] : [];
+
+    observed.steps = [...journaled, ...waiting];
+  }
+
+  return observed;
 }
 
 async function throughInspector(definition: AnyWorkflowDefinition, entry: ParityCase): Promise<Observed> {
@@ -366,17 +421,21 @@ async function throughInspector(definition: AnyWorkflowDefinition, entry: Parity
 
   expect(others).toEqual([]);
 
-  const sends = (path?.nodes ?? []).flatMap((id) => {
+  const recorded = (path?.nodes ?? []).flatMap((id) => {
     const node = graph.nodes.find((item) => item.id === id);
 
-    return node?.kind === "send" ? [node.step] : [];
+    return node === undefined || node.kind === "trigger" || node.kind === "end" ? [] : [node];
   });
 
+  const sends = recorded.flatMap((node) => (node.kind === "send" ? [node.step] : []));
   const outcome = path?.outcome;
 
-  if (outcome?.status === "failed") return { status: "failed", error: outcome.error, sends };
+  const observed: Observed =
+    outcome?.status === "failed" ? { status: "failed", error: outcome.error, sends } : { status: outcome?.status ?? "rejected", sends };
 
-  return { status: outcome?.status ?? "rejected", sends };
+  if (entry.expected.steps !== undefined) observed.steps = recorded.map((node) => node.step);
+
+  return observed;
 }
 
 describe("workflows: engine and inspector agree", () => {

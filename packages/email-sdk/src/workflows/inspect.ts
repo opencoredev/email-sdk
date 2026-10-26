@@ -5,8 +5,8 @@ import {
   assertEventPayload,
   assertStepResult,
   createWorkflowCallGuard,
+  createWorkflowCallQueue,
   eventTimeoutMs,
-  isDefinitionError,
   parseWorkflowInput,
   resolveRetry,
   savedForm,
@@ -301,10 +301,20 @@ async function tracePath(
   }
 
   const guard = createWorkflowCallGuard((fatal) => end(failed(fatal.error)));
-  const workflowKey = `${definition.name}@${definition.version}`;
 
-  /** Admits a `ctx` call as the engine would, then records it with `body`. */
-  function call<T>(name: string, body: (base: { id: string; offsetMs: number }) => T, isStep = false): Promise<Awaited<T>> {
+  // The engine's own call queue: every sibling call is admitted before any body records a node, and
+  // a doomed path runs no queued body, so a node appears only where the engine would act. A body
+  // error that isn't a definition error reaches the definition, as the call's rejection.
+  const queue = createWorkflowCallQueue({
+    guard,
+    workflow: `${definition.name}@${definition.version}`,
+    halted: () => ended !== undefined,
+    parked: neverSettles,
+    onFailure: (cause) => Promise.reject(cause),
+  });
+
+  /** Admits a `ctx` call as the engine would, then records it with `body` in its turn. */
+  function call<T>(name: string, body: (base: { id: string; offsetMs: number }) => MaybePromise<T>, isStep = false): Promise<T> {
     if (ended) return neverSettles;
 
     // Every attempt counts, not only recorded nodes, so a loop that catches rejected calls is cut off too.
@@ -316,29 +326,11 @@ async function tracePath(
 
     calls += 1;
 
-    let result: Promise<Awaited<T>>;
-
-    try {
-      if (guard.admit(name, workflowKey) === "halt") return neverSettles;
-
-      try {
-        result = Promise.resolve(body({ id: `${prefix}${encodeURIComponent(name)}`, offsetMs: elapsed }));
-      } catch (cause) {
-        // As in the engine, a definition error raised by the call itself ends the run and the
-        // call never settles, so catching it changes nothing.
-        if (!isDefinitionError(cause)) throw cause;
-
-        guard.latch(cause, name);
-
-        return neverSettles;
-      }
-    } catch (rejection) {
-      return Promise.reject(rejection);
-    }
-
-    if (isStep) guard.stepStarted(name, result);
-
-    return result;
+    return queue.enqueue(
+      name,
+      async () => await body({ id: `${prefix}${encodeURIComponent(name)}`, offsetMs: elapsed }),
+      { step: isStep },
+    );
   }
 
   function received(event: string) {
@@ -457,6 +449,9 @@ async function tracePath(
     .catch(failed);
 
   const raced = await Promise.race([finished, endedEarly]);
+
+  // As in the engine, a call the definition forgot to await still runs before the path completes.
+  if (raced.status === "completed") await Promise.race([queue.idle, endedEarly]);
 
   // The first definition error fails the path even when `run` caught it and went on to finish.
   const outcome = ended ?? raced;

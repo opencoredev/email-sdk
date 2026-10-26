@@ -255,3 +255,74 @@ export function createWorkflowCallGuard(onFatal: (fatal: WorkflowFatalError) => 
     },
   };
 }
+
+/** Runs the `ctx` calls of one execution in call order, each admitted by the guard as it is made. */
+export type WorkflowCallQueue = {
+  /**
+   * Admits the call `name` at once, then queues `body` behind the calls before it. The guard sees
+   * every sibling call, as in `Promise.all`, before any body starts, so a broken sibling dooms
+   * the run before an earlier sibling's effect. A doomed or halted run never runs a queued body:
+   * the call parks instead. A step stays the running step until its promise settles.
+   */
+  enqueue<T>(name: string, body: () => Promise<T>, options?: { step?: boolean }): Promise<T>;
+  /** Settles once every call queued so far has settled or parked. */
+  readonly idle: Promise<void>;
+};
+
+export type WorkflowCallQueueOptions = {
+  guard: WorkflowCallGuard;
+  /** The `name@version` key the guard names in its errors. */
+  workflow: string;
+  /** True once the execution stopped for a reason of its own, such as a wait it saved. */
+  halted: () => boolean;
+  /** What a parked call awaits. It never settles. */
+  parked: Promise<never>;
+  /** Handles a body failure that isn't a definition error. Definition errors latch and park. */
+  onFailure: (cause: unknown) => Promise<never>;
+};
+
+export function createWorkflowCallQueue(options: WorkflowCallQueueOptions): WorkflowCallQueue {
+  const { guard, workflow, halted, parked, onFailure } = options;
+  let tail: Promise<void> = Promise.resolve();
+
+  return {
+    get idle() {
+      return tail;
+    },
+    enqueue(name, body, callOptions) {
+      if (halted()) return parked;
+
+      try {
+        if (guard.admit(name, workflow) === "halt") return parked;
+      } catch (rejection) {
+        return Promise.reject(rejection);
+      }
+
+      const result = tail.then(() =>
+        // A definition error since this call was queued already doomed the run.
+        halted() || guard.fatal
+          ? parked
+          : Promise.resolve()
+              .then(body)
+              .catch((cause: unknown) => {
+                if (isDefinitionError(cause)) {
+                  guard.latch(cause, name);
+
+                  return parked;
+                }
+
+                return onFailure(cause);
+              }),
+      );
+
+      tail = result.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      if (callOptions?.step === true) guard.stepStarted(name, result);
+
+      return result;
+    },
+  };
+}

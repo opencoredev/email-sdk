@@ -10,6 +10,7 @@ import {
   assertEventPayload,
   assertStepResult,
   createWorkflowCallGuard,
+  createWorkflowCallQueue,
   eventTimeoutMs,
   isDefinitionError,
   jsonResult,
@@ -448,7 +449,6 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     // What suspended `ctx` calls await. It belongs to this execution, so once the execution is
     // over nothing references the abandoned workflow call and the garbage collector can free it.
     const neverSettles = new Promise<never>(() => {});
-    let queue: Promise<void> = Promise.resolve();
     // This execution's saves, one at a time, so each starts from the run the last one saved. A
     // failure saved while a sibling call is still saving its wait then sees that wait.
     let saving: Promise<unknown> = Promise.resolve();
@@ -536,51 +536,21 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       }
     }
 
-    /**
-     * Admits a `ctx` call under the guard's rules and queues `body` behind the calls before it. A
-     * step stays the running step until its promise settles.
-     */
-    function operation<T>(name: string, body: () => Promise<T>, isStep = false): Promise<T> {
-      if (stopped) return neverSettles;
+    // Step failures are handled inside each call's body. A definition error, such as a negative
+    // duration, fails the run: replaying it would only throw again. Anything else that escapes is a
+    // store, scheduler, or suppression-check failure: the run's state is unknown, so the execution
+    // stops and the error reaches the engine's caller instead of the definition.
+    const calls = createWorkflowCallQueue({
+      guard,
+      workflow: definitionKey(loaded.workflow, loaded.version),
+      halted: () => stopped,
+      parked: neverSettles,
+      onFailure: (cause) => {
+        infrastructureError = toError(cause);
 
-      try {
-        if (guard.admit(name, definitionKey(current.workflow, current.version)) === "halt") return neverSettles;
-      } catch (rejection) {
-        return Promise.reject(rejection);
-      }
-
-      // Step failures are handled inside `body`. A definition error, such as a negative duration,
-      // fails the run: replaying it would only throw again. Anything else that escapes is a store,
-      // scheduler, or suppression-check failure: the run's state is unknown, so the execution stops
-      // and the error reaches the engine's caller instead of the definition.
-      const result = queue.then(() =>
-        // A definition error since this call was queued already doomed the run.
-        stopped || guard.fatal
-          ? neverSettles
-          : Promise.resolve()
-              .then(body)
-              .catch((cause: unknown) => {
-                if (isDefinitionError(cause)) {
-                  guard.latch(cause, name);
-
-                  return neverSettles;
-                }
-
-                infrastructureError = toError(cause);
-
-                return suspend();
-              }),
-      );
-
-      queue = result.then(
-        () => undefined,
-        () => undefined,
-      );
-
-      if (isStep) guard.stepStarted(name, result);
-
-      return result;
-    }
+        return suspend();
+      },
+    });
 
     function completedRecord(name: string) {
       const record = current.journal[name];
@@ -716,7 +686,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       subject: loaded.subject,
       startedAt: loaded.createdAt,
       send(name, message, sendOptions) {
-        return operation(name, async () => {
+        return calls.enqueue(name, async () => {
           const record = completedRecord(name);
 
           if (record) {
@@ -751,7 +721,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         });
       },
       step(name, fn, stepOptions) {
-        return operation(
+        return calls.enqueue(
           name,
           async () => {
           const record = completedRecord(name);
@@ -777,25 +747,25 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           // TResult is constrained to JSON values, so the round trip preserves its type.
           return savedForm(result as Awaited<ReturnType<typeof fn>>);
           },
-          true,
+          { step: true },
         );
       },
       sleep(name, duration: WorkflowDuration) {
-        return operation(name, async () => {
+        return calls.enqueue(name, async () => {
           if (completedRecord(name)) return;
 
           await sleepUntil(name, now() + sleepMs(duration));
         });
       },
       sleepUntil(name, at) {
-        return operation(name, async () => {
+        return calls.enqueue(name, async () => {
           if (completedRecord(name)) return;
 
           await sleepUntil(name, sleepUntilMs(name, at));
         });
       },
       waitForEvent(name, waitOptions) {
-        return operation(name, async () => {
+        return calls.enqueue(name, async () => {
           const record = completedRecord(name);
 
           if (record) {
@@ -876,7 +846,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
       // A failed run doesn't wait: the queue may hold a step whose callback never settles, and
       // whatever it still has in flight can't save once the failure has.
-      if (outcome.kind === "completed") await Promise.race([queue, suspended, doomed]);
+      if (outcome.kind === "completed") await Promise.race([calls.idle, suspended, doomed]);
 
       if (infrastructureError) throw infrastructureError;
 
