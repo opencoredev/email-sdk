@@ -677,12 +677,14 @@ function angleAddress(entry: string): AngleAddress | undefined {
 
 /**
  * Index of the `>` that closes an angle address. A `>` in a quoted local part (`"a>b"@x`), a
- * comment (`a(note > x)@x`), or a domain literal (`a@[x>y]`) does not close it.
+ * comment (`a(note > x)@x`), or a domain literal (`a@[x>y]`, `a@ [x>y]`) does not close it.
  */
 function closingAngle(entry: string, from: number): number {
   let quoted = false;
   let comment = 0;
   let literal = false;
+  // Only CFWS has followed an `@` so far, so a `[` here opens a domain literal.
+  let afterAt = false;
 
   for (let index = from; index < entry.length; index += 1) {
     const char = entry[index]!;
@@ -692,8 +694,10 @@ function closingAngle(entry: string, from: number): number {
     else if (char === "\"" && !comment) quoted = !quoted;
     else if (!quoted && char === "(") comment += 1;
     else if (!quoted && char === ")" && comment) comment -= 1;
-    else if (!quoted && !comment && char === "[" && entry[index - 1] === "@") literal = true;
+    else if (!quoted && !comment && char === "[" && afterAt) literal = true;
     else if (!quoted && !comment && char === ">") return index;
+
+    if (!quoted && !comment && !literal && char !== "(" && char !== ")" && char !== " " && char !== "\t") afterAt = char === "@";
   }
 
   return -1;
@@ -708,6 +712,8 @@ function splitAddressList(value: string): string[] {
   let comment = 0;
   // Inside a domain literal such as `[IPv6:2001:db8::1]`, colons are part of the address.
   let literal = false;
+  // Only CFWS has followed an `@` so far, so a `[` here opens a domain literal.
+  let afterAt = false;
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
@@ -723,9 +729,11 @@ function splitAddressList(value: string): string[] {
     } else if (char === "\"" && !comment) quoted = !quoted;
     else if (!quoted && char === "(") comment += 1;
     else if (!quoted && char === ")" && comment) comment -= 1;
-    else if (!quoted && !comment && char === "[" && value[index - 1] === "@") literal = true;
+    else if (!quoted && !comment && char === "[" && afterAt) literal = true;
     else if (!quoted && !comment && char === "<") angle += 1;
     else if (!quoted && !comment && char === ">" && angle) angle -= 1;
+
+    if (!quoted && !comment && !literal && char !== "(" && char !== ")" && char !== " " && char !== "\t") afterAt = char === "@";
 
     if (!quoted && !comment && !angle && !literal && (char === "," || char === ";")) {
       entries.push(current);
@@ -754,9 +762,9 @@ interface CommentedText {
 
 /**
  * Drop comments and collapse whitespace outside quoted strings, keeping the first comment's text.
- * Quoted strings pass through verbatim, so `"a(b)"@x` and `"a  b"@x` keep their local parts.
- * Each run of comments and whitespace becomes `separator`: a space in display names, nothing
- * in an addr-spec, where CFWS around `@` and `.` carries no meaning.
+ * Quoted strings and domain literals pass through verbatim, so `"a(b)"@x`, `"a  b"@x`, and
+ * `a@[x(y)]` keep their text. Each run of comments and whitespace becomes `separator`: a space in
+ * display names, nothing in an addr-spec, where CFWS around `@` and `.` carries no meaning.
  */
 function stripComments(value: string, separator = " "): CommentedText {
   let text = "";
@@ -764,6 +772,9 @@ function stripComments(value: string, separator = " "): CommentedText {
   let commentText = "";
   let depth = 0;
   let quoted = false;
+  let literal = false;
+  // Only CFWS has followed an `@` so far, so a `[` here opens a domain literal.
+  let afterAt = false;
   // Whitespace outside quotes is buffered so a run of it (or a comment) becomes one space.
   let pendingSpace = false;
 
@@ -778,7 +789,7 @@ function stripComments(value: string, separator = " "): CommentedText {
     const char = value[index]!;
     const escaped = char === "\\" ? char + (value[index + 1] ?? "") : undefined;
 
-    if (escaped !== undefined && (quoted || depth > 0)) index += 1;
+    if (escaped !== undefined && (quoted || literal || depth > 0)) index += 1;
 
     if (depth > 0) {
       if (escaped !== undefined) commentText += escaped.slice(1);
@@ -793,6 +804,10 @@ function stripComments(value: string, separator = " "): CommentedText {
       text += escaped ?? char;
 
       if (char === "\"") quoted = false;
+    } else if (literal) {
+      text += escaped ?? char;
+
+      if (char === "]") literal = false;
     } else if (char === "(") {
       depth = 1;
       commentText = "";
@@ -802,10 +817,48 @@ function stripComments(value: string, separator = " "): CommentedText {
       append(char);
 
       if (char === "\"") quoted = true;
+      else if (char === "[" && afterAt) literal = true;
+
+      afterAt = char === "@";
     }
   }
 
   return { text, comment };
+}
+
+/** Unquote each quoted-string word of a display-name phrase on its own: `"John" "Doe"` is `John Doe`. */
+function unquotePhrase(phrase: string): string {
+  let result = "";
+  let quoted = false;
+
+  for (let index = 0; index < phrase.length; index += 1) {
+    const char = phrase[index]!;
+
+    if (char === "\\" && quoted) {
+      result += phrase[index + 1] ?? "";
+      index += 1;
+    } else if (char === "\"") {
+      quoted = !quoted;
+    } else {
+      result += char;
+    }
+  }
+
+  return result.trim();
+}
+
+/** Drop an obsolete source route (`@a.example,@b.example:user@x`, RFC 5322 4.4) from an addr-spec. */
+function withoutRoute(address: string): string {
+  if (!address.startsWith("@")) return address;
+
+  const colon = address.indexOf(":");
+  const quote = address.indexOf("\"");
+  const bracket = address.indexOf("[");
+
+  // A route is domains only, so its colon comes before any quoted local part or literal.
+  if (colon === -1 || (quote !== -1 && quote < colon) || (bracket !== -1 && bracket < colon)) return address;
+
+  return address.slice(colon + 1);
 }
 
 /** Parse `"Ada, L." <ada@example.com>, bob@example.com` into addresses. */
@@ -818,8 +871,8 @@ export function parseAddressList(value: string | undefined): InboundAddress[] {
     const angle = angleAddress(entry);
 
     if (angle) {
-      const address = stripComments(angle.address, "").text.replace(/^mailto:/i, "");
-      const name = decodeEncodedWords(unquote(stripComments(entry.slice(0, angle.start)).text));
+      const address = withoutRoute(stripComments(angle.address, "").text).replace(/^mailto:/i, "");
+      const name = decodeEncodedWords(unquotePhrase(stripComments(entry.slice(0, angle.start)).text));
 
       if (address.includes("@")) addresses.push(name ? { address, name } : { address });
 
