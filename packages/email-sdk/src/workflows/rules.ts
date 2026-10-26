@@ -267,6 +267,12 @@ export type WorkflowCallQueue = {
   enqueue<T>(name: string, body: () => Promise<T>, options?: { step?: boolean }): Promise<T>;
   /** Settles once every call queued so far has settled or parked. */
   readonly idle: Promise<void>;
+  /**
+   * False once the execution halted or a definition error doomed it. A body checks it after each
+   * of its own awaits, since a sibling's rejection can end the run during any of them, and starts
+   * no effect once it is false. The queue checks it in the same turn that starts each body.
+   */
+  readonly open: boolean;
 };
 
 export type WorkflowCallQueueOptions = {
@@ -284,12 +290,16 @@ export type WorkflowCallQueueOptions = {
 export function createWorkflowCallQueue(options: WorkflowCallQueueOptions): WorkflowCallQueue {
   const { guard, workflow, halted, parked, onFailure } = options;
   let tail: Promise<void> = Promise.resolve();
+  const isOpen = () => !halted() && guard.fatal === undefined;
 
   return {
     get idle() {
       return tail;
     },
-    enqueue(name, body, callOptions) {
+    get open() {
+      return isOpen();
+    },
+    enqueue<T>(name: string, body: () => Promise<T>, callOptions?: { step?: boolean }): Promise<T> {
       if (halted()) return parked;
 
       try {
@@ -298,22 +308,24 @@ export function createWorkflowCallQueue(options: WorkflowCallQueueOptions): Work
         return Promise.reject(rejection);
       }
 
-      const result = tail.then(() =>
+      const result = tail.then(() => {
         // A definition error since this call was queued already doomed the run.
-        halted() || guard.fatal
-          ? parked
-          : Promise.resolve()
-              .then(body)
-              .catch((cause: unknown) => {
-                if (isDefinitionError(cause)) {
-                  guard.latch(cause, name);
+        if (!isOpen()) return parked;
 
-                  return parked;
-                }
+        // The body starts in this same turn, so nothing can end the run between the check and it.
+        // A synchronous throw from `body` still becomes the call's rejection.
+        return new Promise<T>((resolve) => {
+          resolve(body());
+        }).catch((cause: unknown) => {
+          if (isDefinitionError(cause)) {
+            guard.latch(cause, name);
 
-                return onFailure(cause);
-              }),
-      );
+            return parked;
+          }
+
+          return onFailure(cause);
+        });
+      });
 
       tail = result.then(
         () => undefined,

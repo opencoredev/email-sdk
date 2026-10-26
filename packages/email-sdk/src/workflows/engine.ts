@@ -552,6 +552,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       },
     });
 
+    /**
+     * True while this execution may still start work for a call. A sibling's rejection can fail the
+     * run during any await of a call's body, so the body checks this after each one and parks once
+     * it is false: no effect, hook, or wake starts for a run this execution is failing or lost.
+     */
+    function live() {
+      return calls.open && !ended && !lost && !isTerminalRun(current);
+    }
+
+    /** Awaits `pending` for a call's body, then parks the call unless the execution is still live. */
+    async function whileLive<T>(pending: MaybePromise<T>): Promise<T> {
+      const value = await pending;
+
+      return live() ? value : await suspend();
+    }
+
     function completedRecord(name: string) {
       const record = current.journal[name];
 
@@ -591,7 +607,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       retry: WorkflowRetryPolicy | undefined,
       effect: () => Promise<WorkflowJsonValue | void>,
     ): Promise<WorkflowJsonValue | undefined> {
-      if (!(await renew())) return suspend();
+      if (!(await whileLive(renew()))) return suspend();
 
       const previous = current.journal[name];
       const attempt = (previous?.status === "retrying" ? previous.attempts : 0) + 1;
@@ -599,13 +615,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const startedAt = now();
 
       if (hooks.onStepStart) {
-        await invokeHook("onStepStart", { run: current, step: name, kind, attempt });
+        await whileLive(invokeHook("onStepStart", { run: current, step: name, kind, attempt }));
 
         // The hook may have taken any amount of time, and the run may have been canceled
         // meanwhile. Ownership must be proven after the last await before the effect starts.
-        if (!(await renew())) return suspend();
+        if (!(await whileLive(renew()))) return suspend();
       }
 
+      // No await from here to the effect's first line: `withHeartbeat` calls it synchronously.
       let result: WorkflowJsonValue | void;
 
       try {
@@ -614,8 +631,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         const error = toError(cause);
         const willRetry = !isPermanentFailure(cause) && attempt < policy.maxAttempts;
 
-        // A run this execution already failed, as when `run` rejected beside this step, stays failed.
-        if (lost || isTerminalRun(current)) return suspend();
+        // A run this execution is failing or already failed, as when `run` rejected beside this
+        // step, stays failed.
+        if (!live()) return suspend();
 
         await invokeHook("onStepError", { run: current, step: name, kind, attempt, error, willRetry });
 
@@ -672,8 +690,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return;
       }
 
+      // A failure saved behind this wait cancels the run's timer, so a stopped execution sets none.
       if (await save((run) => ({ ...run, status: "waiting", wait: { kind: "sleep", step: name, until: target } }))) {
-        await scheduleWake(current);
+        if (live()) await scheduleWake(current);
       }
 
       return suspend();
@@ -697,7 +716,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           if (options.isSuppressed) {
             for (const address of recipientsOf(message)) {
-              if (await options.isSuppressed(address)) {
+              if (await whileLive(options.isSuppressed(address))) {
                 if (await save(canceledBy("suppressed"))) await afterCancellation(current, "suppressed");
 
                 return suspend();
@@ -705,7 +724,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             }
           }
 
-          const idempotencyKey = await workflowIdempotencyKey(loaded.id, name);
+          const idempotencyKey = await whileLive(workflowIdempotencyKey(loaded.id, name));
 
           const sent = await sideEffect(name, "send", undefined, async () => {
             const response = await email.send(message, { ...sendOptions, idempotencyKey }, { runId: loaded.id, step: name });
@@ -729,11 +748,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                const value = await Promise.resolve()
-                  .then(fn)
-                  .catch((cause: unknown) => {
-                    throw guard.fatal?.error ?? cause;
-                  });
+                // `fn` starts synchronously, in the turn that proved the execution live.
+                const value = await new Promise<WorkflowJsonValue | void>((resolve) => {
+                  resolve(fn());
+                }).catch((cause: unknown) => {
+                  throw guard.fatal?.error ?? cause;
+                });
 
                 // A callback that caught its own rejected `ctx` call still fails the run.
                 if (guard.fatal) throw guard.fatal.error;
@@ -818,7 +838,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             return savedForm(outcome as WorkflowEventResult<never>);
           }
 
-          await scheduleWake(current);
+          if (live()) await scheduleWake(current);
 
           return suspend();
         });

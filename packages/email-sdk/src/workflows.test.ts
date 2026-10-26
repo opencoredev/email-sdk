@@ -2815,3 +2815,123 @@ describe("workflows: heartbeats end with the execution", () => {
     expect(recovered?.lease).toBeUndefined();
   });
 });
+
+describe("workflows: review regressions, round 7", () => {
+  /** Lets every queued microtask and the current timer turn run, so a sibling's rejection reaches the engine. */
+  async function flush() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  type Effect = "step" | "send";
+
+  /** One effect beside a sibling that rejects once `held` is reached, so it rejects mid-await. */
+  function besideRejection(effect: Effect, held: ReturnType<typeof gate>, ran: { count: number }) {
+    return defineWorkflow({
+      name: `beside-${effect}`,
+      run: async (ctx, input: Input) => {
+        const call =
+          effect === "step"
+            ? ctx.step("work", () => {
+                ran.count += 1;
+
+                return 1;
+              })
+            : ctx.send("welcome", mail(input.email, "Welcome"));
+
+        await Promise.all([
+          call,
+          held.reached.then(() => {
+            throw new Error("sibling broke");
+          }),
+        ]);
+      },
+    });
+  }
+
+  const awaits = [
+    ["step", "renewal"],
+    ["send", "renewal"],
+    ["step", "onStepStart"],
+    ["send", "onStepStart"],
+    ["send", "isSuppressed"],
+  ] as const;
+
+  test.each(awaits)("a %s whose %s is pending when a sibling rejects never starts", async (effect, pending) => {
+    const held = gate();
+    const ran = { count: 0 };
+    const started: string[] = [];
+    const definition = besideRejection(effect, held, ran);
+    const memory = createMemoryWorkflowStore();
+    // The execution's first save is the renewal before the effect.
+    const store = pending === "renewal" ? interceptingStore(memory, () => true, () => held.pass()) : memory;
+
+    // Each hook is installed only for its own case: without `onStepStart`, renewal is the last await.
+    const hooks: WorkflowHooks = {
+      onStepStart: async ({ step }) => {
+        started.push(step);
+        await held.pass();
+      },
+    };
+
+    const isSuppressed = async () => {
+      await held.pass();
+
+      return false;
+    };
+
+    const overrides: Partial<Omit<WorkflowEngineOptions, "workflows">> = { store };
+
+    if (pending === "onStepStart") overrides.hooks = hooks;
+
+    if (pending === "isSuppressed") overrides.isSuppressed = isSuppressed;
+
+    const { sender, scheduler, engine } = setup([definition], overrides);
+
+    const run = engine.start(definition, ada, { id: "run-1" });
+
+    await held.reached;
+    await flush();
+    held.open();
+
+    expect(await run).toMatchObject({ status: "failed", error: { message: "sibling broke" } });
+    expect(ran.count).toBe(0);
+    expect(sender.calls).toHaveLength(0);
+    expect(started).toEqual(pending === "onStepStart" ? [effect === "step" ? "work" : "welcome"] : []);
+    expect(scheduler.pending()).toEqual([]);
+    expect((await memory.get("run-1"))?.journal).toEqual({});
+  });
+
+  test.each(["sleep", "waitForEvent"] as const)(
+    "a %s whose wait save is pending when a sibling rejects leaves a failed run with no wake",
+    async (kind) => {
+      const held = gate();
+
+      const definition = defineWorkflow({
+        name: `beside-${kind}`,
+        run: async (ctx) => {
+          const wait = kind === "sleep" ? ctx.sleep("nap", "1d") : ctx.waitForEvent("activated", { timeout: "1d" });
+
+          await Promise.all([
+            wait,
+            held.reached.then(() => {
+              throw new Error("sibling broke");
+            }),
+          ]);
+        },
+      });
+
+      const memory = createMemoryWorkflowStore();
+      const store = interceptingStore(memory, (run) => run.status === "waiting", () => held.pass());
+      const { scheduler, engine } = setup([definition], { store });
+      const run = engine.start(definition, ada, { id: "run-1" });
+
+      await held.reached;
+      await flush();
+      held.open();
+
+      expect(await run).toMatchObject({ status: "failed", error: { message: "sibling broke" } });
+      expect(scheduler.pending()).toEqual([]);
+      expect((await memory.get("run-1"))?.wait).toBeUndefined();
+    },
+  );
+});
