@@ -301,6 +301,15 @@ export type WorkflowEngineOptions = {
    * every step and, while a step runs, every third of this duration. Defaults to `"5m"`.
    */
   leaseDuration?: WorkflowDuration;
+  /**
+   * How long before its lease runs out an execution stops trusting it. An execution counts its
+   * lease from the clock reading taken just before each claim or renewal is sent, so a reply that
+   * arrives within this margin of `sentAt + leaseDuration`, or later, counts as a lost lease and
+   * starts no step or send. Covers clock skew between workers and the time between the check and
+   * the effect's start. Must be less than `leaseDuration`. Defaults to a tenth of the lease, at
+   * most `"30s"`.
+   */
+  leaseSafetyMargin?: WorkflowDuration;
 };
 
 /** Options for `engine.start`. */

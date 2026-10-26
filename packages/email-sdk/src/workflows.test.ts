@@ -2935,3 +2935,280 @@ describe("workflows: review regressions, round 7", () => {
     },
   );
 });
+
+describe("workflows: review regressions, round 8", () => {
+  const leaseMs = 5 * 60_000;
+  const effects = ["step", "send"] as const;
+
+  const admissions = [
+    ["step", false],
+    ["step", true],
+    ["send", false],
+    ["send", true],
+  ] as const;
+
+  /** The renewals before an effect: a save of the running run with nothing journaled yet. */
+  function isRenewal(run: WorkflowRun) {
+    return run.status === "running" && Object.keys(run.journal).length === 0;
+  }
+
+  /**
+   * Wraps a store so the `nth` renewal waits for `held.pass()`, either before it reaches the store or
+   * after the store committed it, as a remote store whose response is slow.
+   */
+  function holdingRenewal(inner: WorkflowStore, nth: number, held: ReturnType<typeof gate>, when: "before" | "after") {
+    let renewals = 0;
+
+    const store: WorkflowStore = {
+      ...inner,
+      async save(run, expectedRevision) {
+        const hold = isRenewal(run) && ++renewals === nth;
+
+        if (hold && when === "before") await held.pass();
+
+        const saved = await inner.save(run, expectedRevision);
+
+        if (hold && when === "after") await held.pass();
+
+        return saved;
+      },
+    };
+
+    return store;
+  }
+
+  /** One step or send named "work", counting the step callback's starts. */
+  function oneEffect(effect: (typeof effects)[number], ran: { count: number }, name = `one-${effect}`) {
+    return defineWorkflow({
+      name,
+      run: async (ctx, input: Input) => {
+        if (effect === "send") {
+          await ctx.send("work", mail(input.email, "Work"));
+
+          return;
+        }
+
+        await ctx.step("work", () => {
+          ran.count += 1;
+
+          return 1;
+        });
+      },
+    });
+  }
+
+  test.each(admissions)(
+    "a %s (onStepStart: %p) never starts after a definition error latched once its last renewal returned",
+    async (effect, withHook) => {
+      // The duplicate call lands a varying number of microtasks after the final renewal returns, so
+      // each offset where the old gate let the effect through is covered on every pass.
+      for (let pass = 0; pass < 50; pass += 1) {
+        const held = gate();
+        const events: string[] = [];
+        let duplicate: () => void = () => {};
+
+        const definition = defineWorkflow({
+          name: `fatal-gap-${effect}`,
+          run: async (ctx, input: Input) => {
+            duplicate = () => {
+              void ctx.send("work", mail(input.email, "Again")).catch(() => {});
+              events.push("duplicate");
+            };
+
+            await (effect === "step"
+              ? ctx.step("work", () => {
+                  events.push("effect");
+
+                  return 1;
+                })
+              : ctx.send("work", mail(input.email, "Work")));
+          },
+        });
+
+        const email = {
+          send: async () => {
+            events.push("effect");
+
+            return { adapter: "test" };
+          },
+        };
+
+        const hooks: WorkflowHooks | undefined = withHook ? { onStepStart: () => {} } : undefined;
+        const store = holdingRenewal(createMemoryWorkflowStore(), withHook ? 2 : 1, held, "before");
+        const { engine } = setup([definition], { store, email, hooks });
+        const run = engine.start(definition, ada, { id: "run-1" });
+
+        await held.reached;
+        held.open();
+
+        let offset = Promise.resolve();
+
+        for (let turn = 0; turn < pass % 12; turn += 1) offset = offset.then(() => {});
+
+        void offset.then(() => duplicate());
+
+        expect(await run).toMatchObject({ status: "failed" });
+        // An effect may only have started before the duplicate call failed the run.
+        expect(events.indexOf("effect") === -1 || events.indexOf("effect") < events.indexOf("duplicate")).toBe(true);
+      }
+    },
+  );
+
+  test.each(admissions)(
+    "a %s (onStepStart: %p) whose last renewal returns after its lease ran out starts nothing, and the new owner runs it",
+    async (effect, withHook) => {
+      const held = gate();
+      const ran = { count: 0 };
+      const definition = oneEffect(effect, ran);
+      const memory = createMemoryWorkflowStore();
+      const clock = createManualClock(start);
+      const sender = recordingSender();
+      const hooks: WorkflowHooks | undefined = withHook ? { onStepStart: () => {} } : undefined;
+      const common = { email: sender, clock, workflows: [definition], hooks };
+      const slow = createWorkflowEngine({ ...common, store: holdingRenewal(memory, withHook ? 2 : 1, held, "after") });
+      const other = createWorkflowEngine({ ...common, store: memory });
+
+      const first = slow.start(definition, ada, { id: "run-1" });
+
+      await held.reached;
+      clock.advance(leaseMs);
+
+      // The lease has expired, so the other engine takes the run over and runs the effect itself.
+      expect(await other.resume("run-1")).toMatchObject({ status: "completed" });
+      expect(ran.count + sender.calls.length).toBe(1);
+
+      held.open();
+
+      expect(await first).toMatchObject({ status: "completed" });
+      expect(ran.count + sender.calls.length).toBe(1);
+    },
+  );
+
+  test.each(effects)("a %s whose renewal returns inside the safety margin starts nothing", async (effect) => {
+    const held = gate();
+    const ran = { count: 0 };
+    const definition = oneEffect(effect, ran);
+    const memory = createMemoryWorkflowStore();
+    const { clock, sender, engine } = setup([definition], { store: holdingRenewal(memory, 1, held, "after") });
+
+    const run = engine.start(definition, ada, { id: "run-1" });
+
+    await held.reached;
+    // The default margin for a 5m lease is 30s: the lease counts as lost 30s before it expires.
+    clock.advance(leaseMs - 30_000);
+    held.open();
+
+    expect(await run).toMatchObject({ status: "running" });
+    expect(ran.count + sender.calls.length).toBe(0);
+    expect((await memory.get("run-1"))?.journal).toEqual({});
+  });
+
+  test.each(effects)("a %s whose renewal returns just before the safety margin still runs", async (effect) => {
+    const held = gate();
+    const ran = { count: 0 };
+    const definition = oneEffect(effect, ran);
+
+    const { clock, sender, engine } = setup([definition], {
+      store: holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"),
+    });
+
+    const run = engine.start(definition, ada, { id: "run-1" });
+
+    await held.reached;
+    clock.advance(leaseMs - 30_001);
+    held.open();
+
+    expect(await run).toMatchObject({ status: "completed" });
+    expect(ran.count + sender.calls.length).toBe(1);
+  });
+
+  test("leaseSafetyMargin sets how long before expiry a lease counts as lost", async () => {
+    const held = gate();
+    const ran = { count: 0 };
+    const definition = oneEffect("step", ran);
+
+    const { clock, engine } = setup([definition], {
+      leaseSafetyMargin: "1m",
+      store: holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"),
+    });
+
+    const run = engine.start(definition, ada, { id: "run-1" });
+
+    await held.reached;
+    clock.advance(leaseMs - 60_000);
+    held.open();
+
+    expect(await run).toMatchObject({ status: "running" });
+    expect(ran.count).toBe(0);
+  });
+
+  test.each([[-1], ["5m"], ["10m"]] as const)("rejects leaseSafetyMargin %p for a 5m lease", (margin) => {
+    expect(() => setup([linear], { leaseSafetyMargin: margin })).toThrow(WorkflowError);
+  });
+
+  test("a claim whose lease already counts as lost starts nothing", async () => {
+    const ran = { count: 0 };
+    const definition = oneEffect("step", ran);
+    const memory = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+
+    // The store's create takes so long that the lease `start` wrote is already inside its margin.
+    const store: WorkflowStore = {
+      ...memory,
+      async create(run) {
+        const created = await memory.create(run);
+
+        clock.advance(leaseMs);
+
+        return created;
+      },
+    };
+
+    const { sender, engine } = setup([definition], { store, clock });
+
+    expect(await engine.start(definition, ada, { id: "run-1" })).toMatchObject({ status: "running" });
+    expect(ran.count + sender.calls.length).toBe(0);
+  });
+
+  test.each(effects)("a %s whose renewal reaches the store after a cancel committed starts nothing", async (effect) => {
+    const held = gate();
+    const ran = { count: 0 };
+    const definition = oneEffect(effect, ran);
+    const memory = createMemoryWorkflowStore();
+    const { sender, engine } = setup([definition], { store: holdingRenewal(memory, 1, held, "before") });
+    const canceller = createWorkflowEngine({ email: sender, store: memory, workflows: [definition] });
+
+    const run = engine.start(definition, ada, { id: "run-1" });
+
+    await held.reached;
+    expect(await canceller.cancel("run-1")).toBe(true);
+    held.open();
+
+    expect(await run).toMatchObject({ status: "canceled" });
+    expect(ran.count + sender.calls.length).toBe(0);
+  });
+
+  test.each(effects)(
+    "a %s whose renewal committed before a cancel may still start once, and its result is discarded",
+    async (effect) => {
+      const held = gate();
+      const ran = { count: 0 };
+      const definition = oneEffect(effect, ran);
+      const memory = createMemoryWorkflowStore();
+      const { sender, engine } = setup([definition], { store: holdingRenewal(memory, 1, held, "after") });
+      const canceller = createWorkflowEngine({ email: sender, store: memory, workflows: [definition] });
+
+      const run = engine.start(definition, ada, { id: "run-1" });
+
+      await held.reached;
+      expect(await canceller.cancel("run-1")).toBe(true);
+      held.open();
+
+      // The renewal was the worker's final admission check, and it passed before the cancel
+      // committed, so the documented contract lets this one effect start.
+      expect(await run).toMatchObject({ status: "canceled" });
+      expect(ran.count + sender.calls.length).toBe(1);
+      expect((await memory.get("run-1"))?.journal).toEqual({});
+    },
+  );
+});

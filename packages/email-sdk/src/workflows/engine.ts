@@ -44,6 +44,10 @@ import type {
 
 const defaultLease: WorkflowDuration = "5m";
 
+// The default safety margin is a tenth of the lease, capped here so a long lease isn't distrusted
+// for longer than clock skew between workers plausibly needs.
+const maxDefaultLeaseMarginMs = 30_000;
+
 const inboxLimit = 50;
 
 const defaultResumeDueLimit = 25;
@@ -252,6 +256,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   const leaseMs = durationToMs(options.leaseDuration ?? defaultLease);
 
   if (leaseMs <= 0) throw new WorkflowError("invalid_definition", "leaseDuration must be positive.");
+
+  const leaseMarginMs =
+    options.leaseSafetyMargin === undefined
+      ? Math.min(maxDefaultLeaseMarginMs, Math.floor(leaseMs / 10))
+      : durationToMs(options.leaseSafetyMargin);
+
+  if (leaseMarginMs >= leaseMs) {
+    throw new WorkflowError("invalid_definition", "leaseSafetyMargin must be less than leaseDuration.");
+  }
 
   for (const definition of options.workflows) {
     const key = definitionKey(definition.name, definition.version);
@@ -484,6 +497,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         for (const stop of heartbeats) stop();
       }
 
+      // A save of a running run renewed the lease from a clock reading taken before it was sent. A
+      // reply that comes back once that lease may have lapsed proves nothing: another worker may
+      // already hold the run, so this execution stops as if it had lost it.
+      if (next.status === "running" && !leaseHeld()) {
+        lost = true;
+
+        return false;
+      }
+
       return true;
     }
 
@@ -496,6 +518,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       saving = saved.catch(() => undefined);
 
       return saved;
+    }
+
+    /**
+     * True while the lease this execution last wrote is safely its own: `commit` set its expiry from
+     * the clock reading taken just before the write was sent, and the safety margin comes off that.
+     * Neither the store's view nor the reply's arrival time can extend it.
+     */
+    function leaseHeld() {
+      return current.lease?.owner === owner && now() < current.lease.until - leaseMarginMs;
     }
 
     /** Proves this execution still owns an active run, and extends the lease, before an effect. */
@@ -607,7 +638,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       retry: WorkflowRetryPolicy | undefined,
       effect: () => Promise<WorkflowJsonValue | void>,
     ): Promise<WorkflowJsonValue | undefined> {
-      if (!(await whileLive(renew()))) return suspend();
+      if (!(await renew()) || !live()) return suspend();
 
       const previous = current.journal[name];
       const attempt = (previous?.status === "retrying" ? previous.attempts : 0) + 1;
@@ -619,10 +650,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
         // The hook may have taken any amount of time, and the run may have been canceled
         // meanwhile. Ownership must be proven after the last await before the effect starts.
-        if (!(await whileLive(renew()))) return suspend();
+        if (!(await renew())) return suspend();
       }
 
-      // No await from here to the effect's first line: `withHeartbeat` calls it synchronously.
+      // The admission check, in the same synchronous turn that starts the effect: a sibling that
+      // fails the run, or a lease that lapsed while the renewal's reply was on its way, stops it
+      // here. Nothing may await between this line and the effect's first line, and `withHeartbeat`
+      // calls the effect synchronously.
+      if (!live() || !leaseHeld()) return suspend();
+
       let result: WorkflowJsonValue | void;
 
       try {
@@ -918,6 +954,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     // Every exit, including a final save that throws, stops the heartbeats of steps still running.
     // A run left unsaved then keeps its last lease, which expires so lease-expiry recovery can retry it.
     try {
+      // A claim whose reply came back after its lease may have lapsed holds nothing, like a late renewal.
+      if (!leaseHeld()) {
+        lost = true;
+
+        return await store.get(loaded.id);
+      }
+
       return await conclude();
     } finally {
       ended = true;
