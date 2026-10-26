@@ -292,3 +292,59 @@ describe("inline images on every parsed-payload path", () => {
     ]);
   });
 });
+
+interface MandrillImage {
+  name?: string;
+  type: string;
+  content: string;
+  base64?: boolean;
+}
+
+describe("Mandrill images keyed by filename", () => {
+  async function mandrillImages(msg: { html?: string; raw_msg?: string; images: Readonly<Partial<Record<string, MandrillImage>>> }) {
+    const [email] = await parseMandrillInbound({
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ mandrill_events: JSON.stringify([{ event: "inbound", msg: { email: "support@acme.test", ...msg } }]) }).toString(),
+    });
+
+    return email!.attachments.map(({ filename, contentType, contentId, disposition }) => ({ filename, contentType, contentId, disposition }));
+  }
+
+  test("a filename key that differs from the HTML cid gets no invented Content-ID", async () => {
+    expect(await mandrillImages({
+      html: `<img src="cid:${cid}">`,
+      images: { "logo.png": { name: "logo.png", type: "image/png", content: png64, base64: true } },
+    })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: undefined, disposition: "inline" }]);
+  });
+
+  test("a key the HTML names as cid: becomes the Content-ID", async () => {
+    expect(await mandrillImages({
+      html: `<p><img src='cid:${cid}' alt=""></p>`,
+      images: { [cid]: { name: "logo.png", type: "image/png", content: png64, base64: true } },
+    })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: cid, disposition: "inline" }]);
+  });
+
+  test("an entry name the HTML names as cid: becomes the Content-ID", async () => {
+    expect(await mandrillImages({
+      html: `<img src="cid:logo.png">`,
+      images: { "image-1": { name: "logo.png", type: "image/png", content: png64 } },
+    })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: "logo.png", disposition: "inline" }]);
+  });
+
+  test("without a name the key is the filename", async () => {
+    expect(await mandrillImages({
+      images: { "logo.png": { type: "image/png", content: png64 } },
+    })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: undefined, disposition: "inline" }]);
+  });
+
+  test("raw_msg stays authoritative over the parsed images", async () => {
+    expect(await mandrillImages({
+      raw_msg: mime,
+      html: `<img src="cid:${cid}">`,
+      images: { "logo.png": { name: "logo.png", type: "image/png", content: png64, base64: true } },
+    })).toEqual([
+      { filename: "logo.png", contentType: "image/png", contentId: cid, disposition: "inline" },
+      { filename: "report.pdf", contentType: "application/pdf", contentId: undefined, disposition: "attachment" },
+    ]);
+  });
+});

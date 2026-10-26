@@ -96,8 +96,8 @@ function headerObject(value: JsonValue | undefined): InboundHeaders {
   }));
 }
 
-/** One `attachments` or `images` entry. Images carry no `base64` flag; their content is always base64. */
-function mandrillAttachment(entry: JsonValue, contentId?: string): InboundAttachment[] {
+/** One `attachments` entry: `name`, `type`, `content`, and a `base64` flag. */
+function mandrillAttachment(entry: JsonValue): InboundAttachment[] {
   const item = jsonObject(entry);
   const content = jsonContent(item?.content);
 
@@ -106,8 +106,33 @@ function mandrillAttachment(entry: JsonValue, contentId?: string): InboundAttach
   return [inlineAttachment({
     filename: jsonText(item.name),
     contentType: jsonText(item.type) ?? "application/octet-stream",
-    contentId: contentId || undefined,
-    disposition: contentId ? "inline" : "attachment",
+    disposition: "attachment",
+    content: item.base64 === false ? utf8Bytes(content) : decodeBase64(content),
+  })];
+}
+
+/** Every `cid:` reference in an HTML body, without angle brackets. */
+function htmlContentIds(html: string | undefined): ReadonlySet<string> {
+  return new Set([...(html ?? "").matchAll(/cid:([^"'\s>)]+)/gi)].map(match => match[1]!.replace(/^<|>$/g, "")));
+}
+
+/**
+ * One `images` entry. Mandrill keys `images` by filename and sends no Content-ID, so the key or
+ * `name` counts as one only when the HTML body links it as `cid:`.
+ */
+function mandrillImage(key: string, entry: JsonValue, contentIds: ReadonlySet<string>): InboundAttachment[] {
+  const item = jsonObject(entry);
+  const content = jsonContent(item?.content);
+
+  if (!item || content === undefined) return [];
+
+  const filename = jsonText(item.name) ?? key;
+
+  return [inlineAttachment({
+    filename,
+    contentType: jsonText(item.type) ?? "application/octet-stream",
+    contentId: [key, filename].map(value => value.replace(/^<|>$/g, "")).find(value => contentIds.has(value)),
+    disposition: "inline",
     content: item.base64 === false ? utf8Bytes(content) : decodeBase64(content),
   })];
 }
@@ -133,6 +158,8 @@ function emailFromEvent(event: JsonObject): InboundEmail {
   const name = jsonText(message.from_name);
   const address = jsonText(message.from_email);
   const fields = headerFields(headers);
+  const html = jsonText(message.html);
+  const contentIds = htmlContentIds(html);
 
   // Header fields fill in what the parsed payload omits, like Message-ID and References.
   return {
@@ -148,12 +175,11 @@ function emailFromEvent(event: JsonObject): InboundEmail {
     }),
     subject: jsonText(message.subject) ?? fields.subject,
     text: jsonText(message.text),
-    html: jsonText(message.html),
+    html,
     headers,
     attachments: [
       ...Object.values(jsonObject(message.attachments) ?? {}).flatMap(entry => mandrillAttachment(entry)),
-      // Mandrill keys `images` by Content-ID, the value an HTML `cid:` link names.
-      ...Object.entries(jsonObject(message.images) ?? {}).flatMap(([key, entry]) => mandrillAttachment(entry, key.replace(/^<|>$/g, ""))),
+      ...Object.entries(jsonObject(message.images) ?? {}).flatMap(([key, entry]) => mandrillImage(key, entry, contentIds)),
     ],
     security: mandrillSecurity(message),
     envelope,
