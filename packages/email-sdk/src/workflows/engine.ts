@@ -480,26 +480,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const neverSettles = new Promise<never>(() => {});
     const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
-    // Names the step whose callback is running synchronously right now. `ctx` calls queue behind
-    // that step, so a call from inside its callback would wait for the callback that awaits it.
-    // While the callback's synchronous part runs, no other code can, so a `ctx` call in that
-    // window comes from the callback and fails. Once the callback first awaits, `run` may make
-    // sibling calls, which queue as usual; telling those apart from a call the callback makes
-    // after an `await` needs async context tracking, which isn't portable across runtimes. The
-    // flag belongs to this execution, so a callback may still start or resume other runs.
-    let callingStep: string | undefined;
-
-    function callStep<T>(name: string, fn: () => T): T {
-      const previous = callingStep;
-
-      callingStep = name;
-
-      try {
-        return fn();
-      } finally {
-        callingStep = previous;
-      }
-    }
+    // Names the step from the `ctx.step` call until its promise settles. Every other `ctx` call
+    // made meanwhile fails: from inside the callback it would queue behind the step that awaits
+    // it, and telling a call from inside the callback apart from a sibling `run` made needs async
+    // context tracking, which isn't portable across runtimes. Siblings never ran in parallel, so
+    // they lose nothing. Overlapping calls that involve no step, such as two sends, can't deadlock
+    // and still queue. The flag belongs to this execution, so a callback may still start or resume
+    // other runs.
+    let activeStep: string | undefined;
+    // The first overlapping call. It fails the run even when the definition catches the rejection.
+    let violation: WorkflowError | undefined;
 
     function suspend(): Promise<never> {
       stopped = true;
@@ -560,15 +550,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
       if (stopped) return neverSettles;
 
-      const enclosing = callingStep;
+      if (violation) return Promise.reject(violation);
 
-      if (enclosing !== undefined) {
-        return Promise.reject(
-          new WorkflowError(
-            "invalid_definition",
-            `"${name}" was called inside step "${enclosing}". A step callback can't call ctx; return from the step and make the call after it.`,
-          ),
+      if (activeStep !== undefined) {
+        violation = new WorkflowError(
+          "invalid_definition",
+          `"${name}" was called while step "${activeStep}" was still running. Await ctx.step before calling ctx again, and never call ctx from inside a step callback.`,
         );
+
+        return Promise.reject(violation);
       }
 
       if (name === reservedStepName) {
@@ -598,23 +588,30 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const result = queue.then(() =>
         stopped
           ? neverSettles
-          : body().catch(async (cause: unknown) => {
-              let escaped = cause;
+          : Promise.resolve()
+              .then(() => {
+                // A call that overlapped this queued operation already doomed the run.
+                if (violation) throw violation;
 
-              if (isDefinitionError(cause)) {
-                try {
-                  await failRun(cause, name);
+                return body();
+              })
+              .catch(async (cause: unknown) => {
+                let escaped = cause;
 
-                  return suspend();
-                } catch (failure) {
-                  escaped = failure;
+                if (isDefinitionError(cause)) {
+                  try {
+                    await failRun(cause, name);
+
+                    return suspend();
+                  } catch (failure) {
+                    escaped = failure;
+                  }
                 }
-              }
 
-              infrastructureError = toError(escaped);
+                infrastructureError = toError(escaped);
 
-              return suspend();
-            }),
+                return suspend();
+              }),
       );
 
       queue = result.then(
@@ -651,7 +648,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         adopts,
       );
 
-      if (failed) await invokeHook("onRunFailed", { run: current, error });
+      if (!failed) return;
+
+      // A failed run never wakes again, so its lease-expiry wake would only fire into nothing.
+      await scheduler?.cancel(current.id);
+      await invokeHook("onRunFailed", { run: current, error });
     }
 
     async function sideEffect(
@@ -792,13 +793,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         });
       },
       step(name, fn, stepOptions) {
-        return operation(name, async () => {
+        const pending = operation(name, async () => {
           const record = completedRecord(name);
 
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                const value = await callStep(name, fn);
+                if (violation) throw violation;
+
+                const value = await Promise.resolve()
+                  .then(fn)
+                  .catch((cause: unknown) => {
+                    throw violation ?? cause;
+                  });
+
+                // A callback that caught its own rejected `ctx` call still fails the run.
+                if (violation) throw violation;
 
                 assertJson(value, `The result of step "${name}"`);
 
@@ -809,6 +819,20 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           // TResult is constrained to JSON values, so the round trip preserves its type.
           return savedForm(result as Awaited<ReturnType<typeof fn>>);
         });
+
+        // A rejected or suspended call leaves no step running: it never settles once stopped, and
+        // every later call then returns before reaching this check.
+        if (stopped || violation) return pending;
+
+        activeStep = name;
+
+        const release = () => {
+          if (activeStep === name) activeStep = undefined;
+        };
+
+        pending.then(release, release);
+
+        return pending;
       },
       sleep(name, duration: WorkflowDuration) {
         return operation(name, async () => {
@@ -914,6 +938,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (outcome.kind !== "suspended") await Promise.race([queue, suspended]);
 
     if (infrastructureError) throw infrastructureError;
+
+    // A `ctx` call that overlapped a running step fails the run even if the definition caught it
+    // and went on to finish or park on a wait.
+    if (violation) outcome = { kind: "failed", error: violation };
 
     // A sibling `ctx` call may have saved a wait after `run` rejected, as with a rejected promise in
     // `Promise.all` beside `ctx.waitForEvent`. The rejection still fails the run. A stop that ended

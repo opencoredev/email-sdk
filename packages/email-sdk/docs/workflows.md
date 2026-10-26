@@ -71,18 +71,32 @@ Cons: code between steps re-runs on every wake, so it must be deterministic. Sid
 `ctx.step` or `ctx.send`. Step names must be unique within a run (the engine throws on a duplicate),
 and `__proto__` is reserved, because a store that parses the journal as a record (the Convex store,
 through zod) drops that key and the step would run again on every wake.
-A step callback can't call `ctx`: the call would queue behind the step that awaits it, so it could
-never run. A call `run` makes while an earlier step is still pending is fine and queues behind that
-step. The engine tells the two apart only while the callback's synchronous part runs, before its
-first `await`: no other code can run then, so a `ctx` call in that window fails the run with
-`invalid_definition`. After the callback's first `await`, a call from the callback and a sibling
-call from `run` look the same without async context tracking (`AsyncLocalStorage`), which needs
-`node:async_hooks`. The workflows entry imports no Node built-ins, so it runs in Convex's default
-runtime, browsers, and Workers without `nodejs_compat`. A test fails if one appears in its import
-graph. The cost: a `ctx` call the callback makes after an `await` queues behind its own step, so
-the run stays `running` and the execution never returns. Canceling the run stops its lease
-heartbeat, but the stuck execution is left to the host's own timeout. A callback may still start or
-resume other runs, since each execution queues separately.
+While a `ctx.step` callback is in flight, from the `ctx.step` call until its promise settles, every
+other `ctx` call on that execution fails at once with `invalid_definition` and fails the run, even
+if the definition catches the rejection. That covers a call from inside the callback at any point,
+before or after an `await`, and a sibling launched beside a pending step, as in
+`Promise.all([ctx.step(...), ctx.send(...)])`. The engine can't tell those two apart without async
+context tracking (`AsyncLocalStorage`), which needs `node:async_hooks`, and the workflows entry
+imports no Node built-ins so it runs in Convex's default runtime, browsers, and Workers without
+`nodejs_compat` (a test fails if one appears in its import graph). Rejecting both means a nested
+call can never queue behind the step that awaits it and hang the run. Siblings lose nothing: the
+engine runs `ctx` calls one at a time, so a sibling never ran in parallel with the step anyway.
+Overlapping calls that don't involve a step, such as two sends in `Promise.all` or a send beside a
+`waitForEvent`, still queue in call order. They can't deadlock, because none of them runs user code
+that could call `ctx`, and forbidding them would break existing definitions for no safety gain. A
+step callback may still start or resume other runs, since each execution tracks its own steps.
+
+```ts
+// Do: await each step, then make the next call.
+const user = await ctx.step("load", () => loadUser(id));
+await ctx.send("welcome", welcomeEmail(user));
+
+// Don't: call ctx inside a step callback, or beside a pending step.
+await ctx.step("notify", async () => {
+  await ctx.send("mail", message); // fails the run with invalid_definition
+});
+await Promise.all([ctx.step("load", () => loadUser(id)), ctx.send("mail", message)]); // same
+```
 
 We pick B. The builder's main advantage, a drawable static graph, does not outweigh how poorly it
 handles real sequences, and the replay contract is small enough to state in one paragraph of docs.
@@ -300,7 +314,7 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
    changes what the code sees. `run` starts inside a
    promise callback, so a synchronous throw fails the run like a rejection.
 6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
-   invalid `Date`, `maxAttempts` below 1, a `ctx` call inside a step callback, a step named
+   invalid `Date`, `maxAttempts` below 1, a `ctx` call while a step callback is in flight, a step named
    `__proto__`, or a step result
    or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run.
    Replaying it would throw again on every wake.

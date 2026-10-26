@@ -1750,33 +1750,6 @@ describe("workflows: review regressions, round 2", () => {
     expect(sender.deliveries.map((d) => d.message.to)).toEqual([ada.email, ada.email]);
   });
 
-  test("a ctx call inside a step callback fails the run instead of deadlocking it", async () => {
-    const nested = defineWorkflow({
-      name: "nested",
-      run: async (ctx, input: Input) => {
-        await ctx.step("notify", async () => {
-          await ctx.send("mail", mail(input.email, "Hi"));
-        });
-      },
-    });
-
-    const { engine, sender } = setup([nested], { leaseDuration: "30ms" });
-
-    const settled = await Promise.race([
-      engine.start(nested, ada, { id: "run-1" }),
-      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 500)),
-    ]);
-
-    expect(settled).not.toBe("hung");
-
-    const run = await engine.get("run-1");
-
-    expect(run?.status).toBe("failed");
-    expect(run?.error?.message).toContain("inside step \"notify\"");
-    expect(run?.lease).toBeUndefined();
-    expect(sender.calls).toHaveLength(0);
-  });
-
   test("an event sent before the deadline wins even when the subject lookup ends after it", async () => {
     const base = createMemoryWorkflowStore();
     const clock = createManualClock(start);
@@ -1954,37 +1927,6 @@ describe("workflows: review regressions, round 3", () => {
 
     expect(views).toEqual([saved, saved]);
     expect((await engine.get("run-1"))?.status).toBe("completed");
-  });
-
-  test("a ctx call from run while an earlier step's callback is pending queues behind it", async () => {
-    const slow = gate();
-
-    const sibling = defineWorkflow({
-      name: "sibling",
-      run: async (ctx, input: Input) => {
-        const counted = ctx.step("count", async () => {
-          await slow.pass();
-
-          return 1;
-        });
-
-        await slow.reached;
-
-        const sent = ctx.send("mail", mail(input.email, "Hi"));
-
-        slow.open();
-
-        return { count: await counted, adapter: (await sent).adapter };
-      },
-    });
-
-    const { engine, sender } = setup([sibling]);
-    const run = await engine.start(sibling, ada, { id: "run-1" });
-
-    expect(run.status).toBe("completed");
-    expect(run.output).toEqual({ count: 1, adapter: "recording" });
-    expect(Object.keys(run.journal)).toEqual(["count", "mail"]);
-    expect(sender.deliveries).toHaveLength(1);
   });
 
   test.each([
@@ -2319,3 +2261,174 @@ describe("workflows: review regressions, round 6", () => {
     expect(engines.failures).toEqual([]);
   });
 });
+
+describe("workflows: ctx calls while a step runs", () => {
+  type Overlap = (ctx: WorkflowContext, input: Input) => Promise<WorkflowJsonValue | void>;
+
+  const overlapping: [label: string, run: Overlap][] = [
+    [
+      "inside the callback before its first await",
+      async (ctx, input) => {
+        await ctx.step("notify", async () => {
+          await ctx.send("mail", mail(input.email, "Hi"));
+        });
+      },
+    ],
+    [
+      "inside the callback after an await",
+      async (ctx, input) => {
+        await ctx.step("notify", async () => {
+          await Promise.resolve();
+          await ctx.send("mail", mail(input.email, "Hi"));
+        });
+      },
+    ],
+    [
+      "inside the callback after a nested await chain",
+      async (ctx, input) => {
+        const deeper = async () => {
+          await Promise.resolve();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          return await ctx.send("mail", mail(input.email, "Hi"));
+        };
+
+        const outer = async () => {
+          await Promise.resolve();
+
+          return await deeper();
+        };
+
+        await ctx.step("notify", async () => {
+          await outer();
+        });
+      },
+    ],
+    [
+      "in a setTimeout callback within the step, with the rejection caught",
+      async (ctx, input) => {
+        await ctx.step(
+          "notify",
+          async () =>
+            await new Promise<number>((resolve) => {
+              setTimeout(() => {
+                ctx.send("mail", mail(input.email, "Hi")).catch(() => {});
+                resolve(1);
+              }, 1);
+            }),
+        );
+      },
+    ],
+    [
+      "as a Promise.all sibling of a step",
+      async (ctx, input) => {
+        await Promise.all([ctx.step("notify", () => 1), ctx.send("mail", mail(input.email, "Hi"))]);
+      },
+    ],
+    [
+      "as a sibling the definition catches before going on",
+      async (ctx, input) => {
+        const results = await Promise.allSettled([ctx.step("notify", () => 1), ctx.sleep("pause", "1d")]);
+
+        await ctx.send("mail", mail(input.email, String(results.length)));
+      },
+    ],
+  ];
+
+  test.each(overlapping)("a ctx call %s fails the run with invalid_definition", async (_label, run) => {
+    const overlap = defineWorkflow({ name: "overlap", run });
+    const failures: string[] = [];
+    const intervals = spyOn(globalThis, "setInterval");
+    const cleared = spyOn(globalThis, "clearInterval");
+
+    try {
+      const { engine, scheduler, sender } = setup([overlap], {
+        leaseDuration: "30ms",
+        hooks: { onRunFailed: ({ error }) => void failures.push(error.message) },
+      });
+
+      const settled = await Promise.race([
+        engine.start(overlap, ada, { id: "run-1" }),
+        new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+      ]);
+
+      expect(settled).not.toBe("hung");
+
+      const saved = await engine.get("run-1");
+
+      expect(saved?.status).toBe("failed");
+      expect(saved?.error?.message).toContain("was still running. Await ctx.step before calling ctx again");
+      expect(saved?.lease).toBeUndefined();
+      expect(saved?.wait).toBeUndefined();
+      expect(failures).toHaveLength(1);
+      expect(sender.calls).toHaveLength(0);
+      expect(scheduler.pending()).toEqual([]);
+
+      const heartbeats = intervals.mock.results.map((result) => result.value);
+      const stopped = new Set(cleared.mock.calls.map(([id]) => id));
+
+      expect(heartbeats.every((id) => stopped.has(id))).toBe(true);
+    } finally {
+      intervals.mockRestore();
+      cleared.mockRestore();
+    }
+  });
+
+  test("the error is a WorkflowError with code invalid_definition", async () => {
+    let seen: unknown;
+
+    const overlap = defineWorkflow({
+      name: "overlap",
+      run: async (ctx, input: Input) => {
+        await ctx.step("notify", async () => {
+          try {
+            await ctx.send("mail", mail(input.email, "Hi"));
+          } catch (error) {
+            seen = error;
+          }
+        });
+      },
+    });
+
+    const { engine } = setup([overlap]);
+
+    expect((await engine.start(overlap, ada, { id: "run-1" })).status).toBe("failed");
+    expect(seen).toBeInstanceOf(WorkflowError);
+    expect(seen instanceof WorkflowError && seen.code).toBe("invalid_definition");
+  });
+
+  test("sequential calls around steps, and overlapping calls without a step, still work", async () => {
+    const sequential = defineWorkflow({
+      name: "sequential",
+      run: async (ctx, input: Input) => {
+        const count = await ctx.step("count", async () => {
+          await Promise.resolve();
+
+          return 1;
+        });
+
+        await Promise.all([ctx.send("a", mail(input.email, "A")), ctx.send("b", mail(input.email, "B"))]);
+
+        const doubled = await ctx.step("double", () => count * 2);
+
+        await ctx.sleep("pause", "1d");
+
+        return { count, doubled };
+      },
+    });
+
+    const { engine, clock, scheduler, sender } = setup([sequential]);
+
+    expect((await engine.start(sequential, ada, { id: "run-1" })).status).toBe("waiting");
+
+    clock.advance(day);
+    await scheduler.runDue(engine);
+
+    const run = await engine.get("run-1");
+
+    expect(run?.status).toBe("completed");
+    expect(run?.output).toEqual({ count: 1, doubled: 2 });
+    expect(sender.deliveries.map((d) => d.message.subject)).toEqual(["A", "B"]);
+  });
+});
+
