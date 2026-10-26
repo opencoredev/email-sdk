@@ -25,7 +25,10 @@ import type {
   WorkflowRun,
   WorkflowSendContext,
   ManualClock,
+  WorkflowEngine,
+  WorkflowScheduler,
   WorkflowStore,
+  WorkflowTimer,
 } from "./workflows.js";
 
 const start = Date.parse("2026-01-01T00:00:00.000Z");
@@ -1221,7 +1224,9 @@ describe("workflows: timers", () => {
       const dead = createWorkflowEngine(options).start(workflow, ada, { id: "run-1" });
 
       await hung.reached;
-      expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + hour, revision: 0 }]);
+      expect(scheduler.pending()).toEqual([
+        { runId: "run-1", at: start + hour, revision: 0, owner: (await store.get("run-1"))?.lease?.owner },
+      ]);
 
       // The first engine is gone. Only the scheduler fires timers, into a second engine.
       expect(await scheduler.advance("2h", createWorkflowEngine(options))).toBe(1);
@@ -1261,7 +1266,9 @@ describe("workflows: timers", () => {
       expect(await scheduler.runDue(second)).toBe(1);
       expect(calls()).toBe(1);
       expect(await store.get("run-1")).toMatchObject({ status: "running", lease: held?.lease });
-      expect(scheduler.pending()).toEqual([{ runId: "run-1", at: start + 100 * 60_000, revision: held?.revision }]);
+      expect(scheduler.pending()).toEqual([
+        { runId: "run-1", at: start + 100 * 60_000, revision: held?.revision, owner: held?.lease?.owner },
+      ]);
 
       clock.set(start + 100 * 60_000);
       expect(await scheduler.runDue(second)).toBe(1);
@@ -1270,6 +1277,69 @@ describe("workflows: timers", () => {
 
       hung.open();
       await dead;
+    });
+
+    test("lease-expiry wakes left by earlier claims don't keep re-arming during a long step", async () => {
+      const clock = createManualClock(start);
+      const minute = 60_000;
+
+      const { hung, workflow, calls } = stalling(async (ctx) => {
+        await ctx.sleep("a", "1m");
+        await ctx.sleep("b", "1m");
+        await ctx.sleep("c", "1m");
+      });
+
+      const { store, sender } = workers(workflow, clock);
+      // Keeps every job, as Convex's scheduler does, and drops none by revision.
+      const jobs: WorkflowTimer[] = [];
+      const scheduler: WorkflowScheduler = { schedule: (timer) => void jobs.push({ ...timer }), cancel: () => {} };
+      const options: WorkflowEngineOptions = { email: sender, store, scheduler, clock, workflows: [workflow], leaseDuration: "1h" };
+      const engine = createWorkflowEngine(options);
+
+      /** Fires, in time order, every job due at the clock's time, as the host's timer would. */
+      async function fireDue(into: WorkflowEngine) {
+        jobs.sort((x, y) => x.at - y.at);
+
+        for (let job = jobs[0]; job && job.at <= clock.now(); job = jobs[0]) {
+          jobs.shift();
+          await into.resume(job.runId, job.owner === undefined ? undefined : { owner: job.owner });
+        }
+      }
+
+      expect((await engine.start(workflow, ada, { id: "run-1" })).status).toBe("waiting");
+
+      for (const step of [1, 2]) {
+        clock.set(start + step * minute);
+        await fireDue(engine);
+      }
+
+      clock.set(start + 3 * minute);
+
+      // This wake claims the run and hangs in step "charge", as if its worker had died.
+      const stuck = fireDue(engine);
+
+      await hung.reached;
+
+      // Four claims (the start and three wakes) each left a lease-expiry wake. The last claim holds
+      // the lease until start + 3m + 1h, so the three older wakes fire while it is still held.
+      expect((await store.get("run-1"))?.lease?.until).toBe(start + 3 * minute + hour);
+      expect(jobs.map((job) => job.at)).toEqual([0, 1, 2, 3].map((n) => start + n * minute + hour));
+
+      clock.set(start + 2 * minute + hour);
+      await fireDue(createWorkflowEngine(options));
+
+      expect(calls()).toBe(1);
+      expect(jobs.map((job) => job.at)).toEqual([start + 3 * minute + hour]);
+
+      // The holder's own wake still recovers the run once its lease runs out.
+      clock.set(start + 3 * minute + hour);
+      await fireDue(createWorkflowEngine(options));
+
+      expect((await store.get("run-1"))?.status).toBe("completed");
+      expect(calls()).toBe(2);
+
+      hung.open();
+      await stuck;
     });
 
     test("a wait saved after the claim replaces the lease-expiry wake", async () => {
@@ -2391,6 +2461,60 @@ describe("workflows: ctx calls while a step runs", () => {
       intervals.mockRestore();
       cleared.mockRestore();
     }
+  });
+
+  test("a caught overlap fails the run and stops the heartbeat while the step callback still hangs", async () => {
+    const hung = gate();
+    const failures: string[] = [];
+
+    const overlap = defineWorkflow({
+      name: "overlap",
+      run: async (ctx, input: Input) => {
+        const pending = ctx.step("hang", async () => {
+          await hung.pass();
+
+          return null;
+        });
+
+        await hung.reached;
+        await ctx.send("bad", mail(input.email, "Hi")).catch(() => {});
+        await pending;
+      },
+    });
+
+    const { engine, store, scheduler, sender } = setup([overlap], {
+      leaseDuration: "30ms",
+      hooks: { onRunFailed: ({ error }) => void failures.push(error.message) },
+    });
+
+    const settled = await Promise.race([
+      engine.start(overlap, ada, { id: "run-1" }),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+    ]);
+
+    try {
+      expect(settled).not.toBe("hung");
+
+      const failed = await store.get("run-1");
+
+      expect(failed).toMatchObject({ status: "failed", error: { message: expect.stringContaining('"bad" was called while step "hang"') } });
+      expect(failed?.lease).toBeUndefined();
+
+      // Three lease periods: a heartbeat still running would have renewed (and rewritten) the run.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect((await store.get("run-1"))?.revision).toBe(failed?.revision);
+      expect(failures).toHaveLength(1);
+      expect(sender.calls).toHaveLength(0);
+      expect(scheduler.pending()).toEqual([]);
+    } finally {
+      hung.open();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(await store.get("run-1")).toMatchObject({ status: "failed" });
+    expect(failures).toHaveLength(1);
   });
 
   test("the error is a WorkflowError with code invalid_definition", async () => {

@@ -128,8 +128,15 @@ export type WorkflowStore = {
 /** A page of due run ids from `WorkflowStore.listDue`. `cursor` is set when more may follow. */
 export type WorkflowDuePage = { ids: string[]; cursor?: string };
 
-/** A wake for one run. `revision` is the run revision whose wait asked for it. */
-export type WorkflowTimer = { runId: string; at: number; revision: number };
+/**
+ * A wake for one run. `revision` is the run revision whose wait asked for it. `owner` is set on a
+ * lease-expiry wake: the claim whose lease it watches. Pass it back to `engine.resume` as
+ * `{ owner }`, so a wake left by an earlier claim stops instead of re-arming.
+ */
+export type WorkflowTimer = { runId: string; at: number; revision: number; owner?: string };
+
+/** What a timer tells `engine.resume`: the `owner` from its `WorkflowTimer`, when it has one. */
+export type WorkflowWake = { owner?: string };
 
 /**
  * Arranges for `engine.resume(runId)` to be called at or after `at`. The engine schedules a timer
@@ -326,8 +333,12 @@ export type WorkflowEngine = {
     input: NoInfer<TStartInput>,
     options?: WorkflowStartOptions,
   ): Promise<WorkflowRun>;
-  /** Continues a run whose timer fired. Safe to call at any time; it no-ops when nothing is due. */
-  resume(runId: string): Promise<WorkflowRun | undefined>;
+  /**
+   * Continues a run whose timer fired. Safe to call at any time; it no-ops when nothing is due.
+   * Pass the timer's `owner` as `wake.owner`: a lease-expiry wake that finds another claim holding
+   * the run then stops, and only the holder's own wake re-arms for the renewed expiry.
+   */
+  resume(runId: string, wake?: WorkflowWake): Promise<WorkflowRun | undefined>;
   /**
    * Resumes every due run the store reports, for cron-driven hosts without a push scheduler.
    * Checks at most `limit` runs per call and runs up to `concurrency` of them at once, so a run

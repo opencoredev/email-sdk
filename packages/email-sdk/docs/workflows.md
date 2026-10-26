@@ -128,7 +128,7 @@ const run = await engine.start(onboarding, input, { id: `onboarding:${userId}`, 
 await engine.sendEvent({ name: "activated", subject: userEmail, payload: { plan: "pro" } });
 await engine.sendEvent({ name: "unsubscribed", subject: userEmail });
 await engine.cancel(run.id, "user deleted");
-await engine.resume(runId);     // what a scheduler timer calls
+await engine.resume(runId, { owner });  // what a scheduler timer calls, with the timer's owner
 await engine.resumeDue();       // polling fallback for crons; { limit, concurrency } optional
 ```
 
@@ -244,19 +244,22 @@ type WorkflowScheduler = {
 };
 ```
 
-When a timer fires, the host calls `engine.resume(runId)`. The engine asks for two kinds of timer:
+When a timer fires, the host calls `engine.resume(runId, { owner })`, passing the timer's `owner`
+when it has one. The engine asks for two kinds of timer:
 
 - **Wait wakes.** After saving a sleep, a retry backoff, or an event wait with a timeout, the
   execution schedules a timer for the wait's `until`.
 - **Lease-expiry wakes.** Right after a claim (and after `start` creates a run), the engine
-  schedules a timer for `lease.until`. If the worker dies mid-step, that timer resumes the run once
-  the lease expires, so crash recovery needs no `resumeDue` poll when a scheduler is configured.
+  schedules a timer for `lease.until`, with the claim's lease `owner`. If the worker dies mid-step,
+  that timer resumes the run once the lease expires, so crash recovery needs no `resumeDue` poll
+  when a scheduler is configured.
 
 Timers are hints: `resume` re-reads the run and does nothing if it is terminal, waiting on an event
 that has not arrived, or waiting on a deadline that has not passed. The save that parked a waiting
 run scheduled its wake, so an early wake for it schedules nothing. A wake that finds the run still
 held by a live lease, because the owner renewed it after the wake was scheduled, schedules a new
-timer for the renewed `lease.until`. That makes duplicate, late, early, and spurious timer
+timer for the renewed `lease.until`, unless its `owner` names an earlier claim: the current
+holder's own wake already watches the lease. That makes duplicate, late, early, and spurious timer
 deliveries harmless, and lets `cancel` be best-effort.
 
 Both kinds carry the revision of the save that asked for them. A wait's save releases the run before
@@ -267,8 +270,9 @@ run's newest save, so its lease-expiry wake never displaces a newer timer, and t
 execution saves next replaces it. A scheduler that keeps every timer as its own job (like Convex)
 needs nothing extra: a stale job fires, finds nothing to do, and ends.
 
-The extra cost is bounded. Each claim schedules one lease-expiry wake, and that wake schedules one
-more for each lease period the execution is still renewing when it fires, so a step that runs for
+The extra cost is bounded. Each claim schedules one lease-expiry wake, and only the newest claim's
+wake schedules one more for each lease period the execution is still renewing when it fires. Wakes
+left by earlier claims, such as one per short sleep before a long step, end when they fire, so a step that runs for
 an hour under the default five-minute lease adds 12 to 18 wakes (the heartbeat renews every third
 of the lease, so each re-armed wake lands between 3 and 5 minutes after the last). With a scheduler that keeps
 every timer as its own job, each of these is one scheduled function call.
@@ -452,8 +456,8 @@ stay on email-sdk 3.0.x without a peer warning, and apps that do need 3.1 for `c
 A test fails if anything reachable from that entry loads the SDK's workflows entry at runtime.
 
 The engine runs in a Convex action (the user's `run` function is app code the component cannot
-call). A typical app defines one internal action, `resumeWorkflow({ runId })`, that builds the
-engine and calls `engine.resume`, and passes its reference to the scheduler.
+call). A typical app defines one internal action, `resumeWorkflow({ runId, owner })`, that builds
+the engine and calls `engine.resume(runId, { owner })`, and passes its reference to the scheduler.
 
 ## Not in scope (yet)
 

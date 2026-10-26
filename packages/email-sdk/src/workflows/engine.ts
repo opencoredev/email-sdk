@@ -13,6 +13,7 @@ import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
 import { workflowIdempotencyKey } from "./idempotency.js";
 import { isTerminalRun } from "./memory.js";
+import { stepNameError } from "./step-name.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -30,6 +31,7 @@ import type {
   WorkflowSendRecord,
   WorkflowStepRecord,
   WorkflowWait,
+  WorkflowWake,
 } from "./types.js";
 
 const defaultRetry = { maxAttempts: 3, backoffMs: 60_000 };
@@ -41,10 +43,6 @@ const inboxLimit = 50;
 const defaultResumeDueLimit = 25;
 
 const defaultResumeDueConcurrency = 10;
-
-// Journal keys are step names. Schema parsers drop an own `__proto__` key from a record, so a step
-// with this name would lose its completed entry on the next read and run again.
-const reservedStepName = "__proto__";
 
 // Every conflict means another writer saved, so a write among N concurrent writers succeeds within
 // N attempts. Past this bound the store is either overloaded or broken, and the caller gets an error.
@@ -422,10 +420,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * Schedules a wake for when the lease of the execution that just claimed the run expires, so a
    * run whose worker dies mid-step resumes without a `resumeDue` poll. The claim is the run's newest
    * revision, so this wake never displaces a newer one, and the wake of a wait the execution saves
-   * later displaces it. A wake that finds the lease renewed re-arms in `resumeRun`.
+   * later displaces it. The wake names the claim's owner: one that finds that claim's lease renewed
+   * re-arms in `resumeRun`, and one that finds a later claim holding the run stops there.
    */
   async function scheduleRecovery(run: WorkflowRun) {
-    if (run.lease) await scheduler?.schedule({ runId: run.id, at: run.lease.until, revision: run.revision });
+    if (run.lease) {
+      await scheduler?.schedule({ runId: run.id, at: run.lease.until, revision: run.revision, owner: run.lease.owner });
+    }
   }
 
   /** Saves the cancellation. Returns undefined when the run had already ended or changed owner. */
@@ -470,9 +471,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     let lost = false;
     let infrastructureError: Error | undefined;
     let signalSuspended: () => void = () => {};
+    let signalViolation: (error: WorkflowError) => void = () => {};
 
     const suspended = new Promise<ExecutionOutcome>((resolve) => {
       signalSuspended = () => resolve({ kind: "suspended" });
+    });
+
+    // Settles with the first overlapping call, so the run fails without waiting for the step that
+    // was running: its callback may never settle, and its heartbeat would hold the run meanwhile.
+    const violated = new Promise<ExecutionOutcome>((resolve) => {
+      signalViolation = (error) => resolve({ kind: "failed", error });
     });
 
     // What suspended `ctx` calls await. It belongs to this execution, so once the execution is
@@ -502,7 +510,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       transform: (run: WorkflowRun) => WorkflowRun,
       adopts?: (fresh: WorkflowRun) => boolean,
     ): Promise<boolean> {
-      if (lost) return false;
+      // Once this execution has ended the run, nothing it still has in flight, such as a step
+      // callback that outlived an overlap failure or its heartbeat, may write again.
+      if (lost || isTerminalRun(current)) return false;
 
       const next = await commit(current, transform, owner, adopts);
 
@@ -557,18 +567,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           "invalid_definition",
           `"${name}" was called while step "${activeStep}" was still running. Await ctx.step before calling ctx again, and never call ctx from inside a step callback.`,
         );
+        signalViolation(violation);
 
         return Promise.reject(violation);
       }
 
-      if (name === reservedStepName) {
-        return Promise.reject(
-          new WorkflowError(
-            "invalid_definition",
-            `"${reservedStepName}" can't name a step: stores that parse the journal as a record, such as the Convex store, drop that key, so the step would run again on every wake.`,
-          ),
-        );
-      }
+      const invalidName = stepNameError(name);
+
+      if (invalidName) return Promise.reject(invalidName);
 
       if (seen.has(name)) {
         return Promise.reject(
@@ -926,7 +932,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
     );
 
-    let outcome = await Promise.race([finished, suspended]);
+    let outcome = await Promise.race([finished, suspended, violated]);
 
     // Every queued microtask runs before a timer does, so one timer turn lets a rejection already
     // on its way, such as a rejected sibling in `Promise.all` beside `ctx.waitForEvent`, settle
@@ -935,7 +941,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (outcome.kind === "suspended") outcome = await settledWithinTurn(finished, outcome);
 
     // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
-    if (outcome.kind !== "suspended") await Promise.race([queue, suspended]);
+    // After an overlap the queue holds the step that was running, which may never settle.
+    if (outcome.kind !== "suspended" && !violation) await Promise.race([queue, suspended]);
 
     if (infrastructureError) throw infrastructureError;
 
@@ -975,15 +982,20 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   }
 
   /** Claims and executes the run when it is runnable. `executed` is false when it was left alone. */
-  async function resumeRun(runId: string): Promise<{ run: WorkflowRun | undefined; executed: boolean }> {
+  async function resumeRun(runId: string, wake?: WorkflowWake): Promise<{ run: WorkflowRun | undefined; executed: boolean }> {
     const run = await store.get(runId);
 
     if (!run || !isRunnable(run, now())) {
       // A wake that finds an execution still holding the run, because it renewed the lease after
-      // the wake was scheduled, re-arms for the renewed expiry. A waiting run already has the wake
-      // its parking save scheduled, so re-arming it would only leave a duplicate job behind.
-      if (run?.lease !== undefined && run.lease.until > now()) {
-        await scheduler?.schedule({ runId: run.id, at: run.lease.until, revision: run.revision });
+      // the wake was scheduled, re-arms for the renewed expiry. A lease-expiry wake left by an
+      // earlier claim doesn't: the holder's own wake already watches the lease, and a scheduler
+      // that keeps every job, as Convex does, would otherwise run one chain per earlier claim. A
+      // waiting run already has the wake its parking save scheduled, so it is never re-armed.
+      const lease = run?.lease;
+      const watches = wake?.owner === undefined || wake.owner === lease?.owner;
+
+      if (run && lease !== undefined && lease.until > now() && watches) {
+        await scheduler?.schedule({ runId: run.id, at: lease.until, revision: run.revision, owner: lease.owner });
       }
 
       return { run, executed: false };
@@ -1237,7 +1249,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       return (await execute(run, owner)) ?? run;
     },
-    resume: async (runId) => (await resumeRun(runId)).run,
+    resume: async (runId, wake) => (await resumeRun(runId, wake)).run,
     resumeDue: async (resumeOptions) =>
       await resumeDue(resumeOptions?.limit ?? defaultResumeDueLimit, resumeOptions?.concurrency ?? defaultResumeDueConcurrency),
     sendEvent,

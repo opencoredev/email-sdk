@@ -137,7 +137,7 @@ export function createMemoryWorkflowScheduler(clock: ManualClock): MemoryWorkflo
     for (let next = sorted()[0]; next && next.at <= now; next = sorted()[0]) {
       timers.delete(next.runId);
       fired += 1;
-      await engine.resume(next.runId);
+      await engine.resume(next.runId, next.owner === undefined ? undefined : { owner: next.owner });
     }
 
     return fired;

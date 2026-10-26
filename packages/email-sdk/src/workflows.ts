@@ -82,4 +82,5 @@ export type {
   WorkflowTimer,
   WorkflowWait,
   WorkflowWaitForEventOptions,
+  WorkflowWake,
 } from "./workflows/types.js";
