@@ -675,3 +675,71 @@ describe("inspectWorkflow: definitions that catch ctx errors", () => {
     expect(calls).toBe(parked);
   });
 });
+
+describe("inspectWorkflow: never hangs", () => {
+  // Each body makes one `ctx` call per iteration and catches whatever it rejects with. The loop is
+  // bounded only so a regression fails the test instead of freezing the run: a body that gets this
+  // far was never parked.
+  const spinLimit = 10_000;
+
+  type Spin = (ctx: WorkflowContext, index: number) => Promise<void>;
+
+  const hi = message("ada@example.com", "Hi", "Hi");
+
+  const spins = {
+    "send, same name": async (ctx) => void (await ctx.send("same", hi)),
+    "send, new names": async (ctx, index) => void (await ctx.send(`mail-${index}`, hi)),
+    "send, reserved name": async (ctx) => void (await ctx.send("__proto__", hi)),
+    "step, same name": async (ctx) => void (await ctx.step("same", () => 1)),
+    "step, new names": async (ctx, index) => void (await ctx.step(`load-${index}`, () => 1)),
+    "step, no attempts allowed": async (ctx, index) => void (await ctx.step(`load-${index}`, () => 1, { retry: { maxAttempts: 0 } })),
+    "step, result that isn't JSON": async (ctx, index) => void (await ctx.step(`nan-${index}`, () => Number.NaN)),
+    "step, overlapping call": async (ctx, index) => {
+      void ctx.step(`slow-${index}`, () => 1);
+
+      await ctx.sleep(`pause-${index}`, 0);
+    },
+    "sleep, same name": async (ctx) => await ctx.sleep("same", 0),
+    "sleep, new names": async (ctx, index) => await ctx.sleep(`pause-${index}`, 0),
+    "sleep, negative duration": async (ctx, index) => await ctx.sleep(`pause-${index}`, -1),
+    "sleepUntil, same name": async (ctx) => await ctx.sleepUntil("same", 0),
+    "sleepUntil, invalid date": async (ctx, index) => await ctx.sleepUntil(`until-${index}`, Number.NaN),
+    "waitForEvent, same name": async (ctx) => void (await ctx.waitForEvent("same")),
+    "waitForEvent, same name with a timeout": async (ctx) => void (await ctx.waitForEvent("same", { timeout: "1s" })),
+    "waitForEvent, new names with a timeout": async (ctx, index) => void (await ctx.waitForEvent(`go-${index}`, { timeout: "1s" })),
+    "waitForEvent, negative timeout": async (ctx, index) => void (await ctx.waitForEvent(`go-${index}`, { timeout: -1 })),
+  } satisfies Record<string, Spin>;
+
+  const steps = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`nan-${index}`, Number.NaN]));
+
+  test.each(Object.entries(spins))("a loop that catches %s", async (_label, spin) => {
+    const maxDepth = 3;
+    const maxPaths = 4;
+    let calls = 0;
+
+    const workflow = defineWorkflow({
+      name: "spins",
+      run: async (ctx) => {
+        for (let index = 0; index < spinLimit; index += 1) {
+          calls += 1;
+
+          await spin(ctx, index).catch(() => {});
+        }
+      },
+    });
+
+    const graph = await inspectWorkflow(workflow, { input: null, steps, maxDepth, maxPaths });
+
+    // Each path makes at most `maxDepth` calls plus the one that is cut off or parks.
+    expect(calls).toBeLessThanOrEqual(graph.paths.length * (maxDepth + 1));
+    expect(graph.paths.length).toBeLessThanOrEqual(maxPaths);
+
+    for (const path of graph.paths) expect(["failed", "truncated"]).toContain(path.outcome.status);
+
+    const parked = calls;
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toBe(parked);
+  });
+});

@@ -7,13 +7,14 @@ import { workflowIdempotencyKey } from "./idempotency.js";
 import { compareLegacyRunOrder } from "./journal-order.js";
 import { isTerminalRun } from "./memory.js";
 import {
-  assertJson,
+  assertEventPayload,
   assertStepResult,
   createWorkflowCallGuard,
   eventTimeoutMs,
   isDefinitionError,
   jsonResult,
   parseWorkflowInput,
+  resolveRetry,
   savedForm,
   sleepMs,
   sleepUntilMs,
@@ -39,8 +40,6 @@ import type {
   WorkflowWait,
   WorkflowWake,
 } from "./types.js";
-
-const defaultRetry = { maxAttempts: 3, backoffMs: 60_000 };
 
 const defaultLease: WorkflowDuration = "5m";
 
@@ -68,8 +67,6 @@ const emailErrorCodes = new Set([
 
 const workflowErrorNames = new Set(["WorkflowError", "WorkflowNonRetryableError"]);
 
-type ResolvedRetry = { maxAttempts: number; backoffMs: number };
-
 type ExecutionOutcome =
   | { kind: "completed"; output: WorkflowJsonValue | void }
   | { kind: "failed"; error: Error }
@@ -79,23 +76,6 @@ type RunTransform = (run: WorkflowRun) => WorkflowRun;
 
 function toError(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error(String(cause));
-}
-
-function resolveRetry(...policies: (WorkflowRetryPolicy | undefined)[]): ResolvedRetry {
-  let maxAttempts = defaultRetry.maxAttempts;
-  let backoffMs = defaultRetry.backoffMs;
-
-  for (const policy of policies) {
-    if (policy?.maxAttempts !== undefined) maxAttempts = policy.maxAttempts;
-
-    if (policy?.backoff !== undefined) backoffMs = durationToMs(policy.backoff);
-  }
-
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-    throw new WorkflowError("invalid_definition", "Retry maxAttempts must be a positive integer.");
-  }
-
-  return { maxAttempts, backoffMs };
 }
 
 /**
@@ -1011,7 +991,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * concurrently, so one run's slow step or hook can't delay or expire another's wait or cancel.
    */
   async function sendEvent(input: WorkflowEventInput): Promise<string[]> {
-    assertJson(input.payload, `The payload of event "${input.name}"`);
+    assertEventPayload(input.name, input.payload);
 
     // Receipt is the call, so a slow subject lookup can't push an on-time event past its deadline.
     const receivedAt = now();

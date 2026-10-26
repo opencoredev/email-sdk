@@ -1,12 +1,14 @@
 import { isObjectLike, isString, isStringMember } from "../internal/decode.js";
-import type { EmailAddress, EmailMessage, OneOrMany } from "../types.js";
+import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../types.js";
 import { compareLegacyRunOrder } from "./journal-order.js";
 import {
+  assertEventPayload,
   assertStepResult,
   createWorkflowCallGuard,
   eventTimeoutMs,
   isDefinitionError,
   parseWorkflowInput,
+  resolveRetry,
   savedForm,
   sleepMs,
   sleepUntilMs,
@@ -21,6 +23,7 @@ import type {
   WorkflowRunStatus,
   WorkflowSendRecord,
   WorkflowStepKind,
+  WorkflowStepOptions,
   WorkflowStepRecord,
 } from "./types.js";
 
@@ -30,7 +33,10 @@ export type WorkflowInspectOptions = {
   input: WorkflowJsonValue;
   /** Results for `ctx.step` calls, by step name. A step without one is recorded as `unknown`. */
   steps?: Readonly<Record<string, WorkflowJsonValue>>;
-  /** Sample payloads for `ctx.waitForEvent`, by event name, used on the `received` branch. */
+  /**
+   * Sample payloads for `ctx.waitForEvent`, by event name, used on the `received` branch. Each must
+   * be JSON, as `sendEvent` requires; `inspectWorkflow` rejects with `invalid_value` otherwise.
+   */
   events?: Readonly<Record<string, WorkflowJsonValue>>;
   /** Passed to the workflow as `ctx.subject`. */
   subject?: string;
@@ -38,7 +44,7 @@ export type WorkflowInspectOptions = {
   startedAt?: number;
   /** Most paths to explore. Each timed `waitForEvent` can double the count. Defaults to 32. */
   maxPaths?: number;
-  /** Most `ctx` calls in one path before it is cut off. Defaults to 100. */
+  /** Most `ctx` calls in one path before it is cut off, rejected calls included. Defaults to 100. */
   maxDepth?: number;
 };
 
@@ -269,6 +275,7 @@ async function tracePath(
   const unsampled: string[] = [];
   const truncatedOutcome: WorkflowInspectOutcome = { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` };
   let elapsed = 0;
+  let calls = 0;
   let prefix = "";
   let ended: WorkflowInspectOutcome | undefined;
   let signalEnd: (outcome: WorkflowInspectOutcome) => void = () => {};
@@ -300,11 +307,14 @@ async function tracePath(
   function call<T>(name: string, body: (base: { id: string; offsetMs: number }) => T, isStep = false): Promise<Awaited<T>> {
     if (ended) return neverSettles;
 
-    if (entries.length >= maxDepth) {
+    // Every attempt counts, not only recorded nodes, so a loop that catches rejected calls is cut off too.
+    if (calls >= maxDepth) {
       end(truncatedOutcome);
 
       return neverSettles;
     }
+
+    calls += 1;
 
     let result: Promise<Awaited<T>>;
 
@@ -347,6 +357,8 @@ async function tracePath(
     startedAt,
     send(name, message): Promise<WorkflowSendRecord> {
       return call(name, (base) => {
+        resolveRetry(definition.retry);
+
         const email = renderEmail(message);
 
         entries.push({ ...base, kind: "send", step: name, email, label: `${email.subject} → ${email.to.join(", ")}` });
@@ -356,10 +368,13 @@ async function tracePath(
     },
     // SAFETY: the callback never runs during inspection, so the only value returned is the caller's
     // mock, which states the step's result contract the same way the engine's journal does.
-    step: ((name: string) =>
+    step: ((name: string, _fn: () => MaybePromise<WorkflowJsonValue | void>, stepOptions?: WorkflowStepOptions) =>
       call(
         name,
         (base) => {
+          // The engine resolves the policy before each attempt, so a bad one fails the run.
+          resolveRetry(definition.retry, stepOptions?.retry);
+
           const mocked = options.steps !== undefined && Object.hasOwn(options.steps, name);
           const raw = mocked ? options.steps?.[name] : undefined;
 
@@ -466,6 +481,8 @@ export async function inspectWorkflow(
   const maxPaths = Math.max(1, Math.floor(options.maxPaths ?? defaultMaxPaths));
   const maxDepth = Math.max(1, Math.floor(options.maxDepth ?? defaultMaxDepth));
   const input = await parseWorkflowInput(definition, options.input);
+
+  for (const [event, payload] of Object.entries(options.events ?? {})) assertEventPayload(event, payload);
 
   const trigger: WorkflowInspectNode = {
     id: triggerId,

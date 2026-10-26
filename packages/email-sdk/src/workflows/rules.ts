@@ -2,7 +2,7 @@ import { isBoolean, isNumber, isObjectLike, isString } from "../internal/decode.
 import { durationToMs } from "./duration.js";
 import { WorkflowError } from "./errors.js";
 import { stepNameError, stepOverlapError } from "./step-name.js";
-import type { AnyWorkflowDefinition, WorkflowDuration, WorkflowJsonValue } from "./types.js";
+import type { AnyWorkflowDefinition, WorkflowDuration, WorkflowJsonValue, WorkflowRetryPolicy } from "./types.js";
 
 /*
  * What a definition may do, shared by the engine and `inspectWorkflow` so the two can't disagree:
@@ -118,6 +118,37 @@ export function assertStepResult(name: string, value: WorkflowJsonValue | void) 
   assertJson(value, `The result of step "${name}"`);
 }
 
+/** A payload `sendEvent` delivers, or an event sample `inspectWorkflow` uses. Throws `invalid_value`. */
+export function assertEventPayload(event: string, payload: WorkflowJsonValue | undefined) {
+  assertJson(payload, `The payload of event "${event}"`);
+}
+
+const defaultRetry = { maxAttempts: 3, backoffMs: 60_000 };
+
+export type ResolvedRetry = { maxAttempts: number; backoffMs: number };
+
+/**
+ * The retry policy a `ctx.send` or `ctx.step` runs under: each policy overrides the fields the one
+ * before it sets, from the engine's default to the call's own. Throws `invalid_definition` for an
+ * attempt count that isn't a positive integer and `invalid_duration` for a bad backoff.
+ */
+export function resolveRetry(...policies: (WorkflowRetryPolicy | undefined)[]): ResolvedRetry {
+  let maxAttempts = defaultRetry.maxAttempts;
+  let backoffMs = defaultRetry.backoffMs;
+
+  for (const policy of policies) {
+    if (policy?.maxAttempts !== undefined) maxAttempts = policy.maxAttempts;
+
+    if (policy?.backoff !== undefined) backoffMs = durationToMs(policy.backoff);
+  }
+
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new WorkflowError("invalid_definition", "Retry maxAttempts must be a positive integer.");
+  }
+
+  return { maxAttempts, backoffMs };
+}
+
 /** How long `ctx.sleep` waits, in milliseconds. Throws `invalid_duration`. */
 export function sleepMs(duration: WorkflowDuration): number {
   return durationToMs(duration);
@@ -147,8 +178,10 @@ export type WorkflowFatalError = { error: WorkflowError; step?: string };
 
 /**
  * The `ctx` call rules for one execution: unique, usable step names, and no `ctx` call while a
- * `ctx.step` is running. The first definition error is fatal, even when the definition catches it:
- * it is latched, `onFatal` hears about it once, and every later call is told to halt.
+ * `ctx.step` is running. The first definition error, a reused step name included, is fatal even
+ * when the definition catches it: it is latched, `onFatal` hears about it once, and every later
+ * call is told to halt. A definition that catches errors in a loop therefore parks instead of
+ * spinning on.
  */
 export type WorkflowCallGuard = {
   /**
@@ -197,10 +230,14 @@ export function createWorkflowCallGuard(onFatal: (fatal: WorkflowFatalError) => 
       }
 
       if (seen.has(name)) {
-        throw new WorkflowError(
+        const duplicate = new WorkflowError(
           "duplicate_step",
           `Step "${name}" ran twice in workflow ${workflow}. Step names must be unique per run; include a loop index in the name.`,
         );
+
+        latch(duplicate);
+
+        throw duplicate;
       }
 
       seen.add(name);

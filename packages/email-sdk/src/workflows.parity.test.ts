@@ -10,7 +10,13 @@ import {
   defineWorkflow,
   inspectWorkflow,
 } from "./workflows.js";
-import type { AnyWorkflowDefinition, WorkflowContext, WorkflowJsonValue, WorkflowRunStatus } from "./workflows.js";
+import type {
+  AnyWorkflowDefinition,
+  WorkflowContext,
+  WorkflowJsonValue,
+  WorkflowRetryPolicy,
+  WorkflowRunStatus,
+} from "./workflows.js";
 
 const start = Date.parse("2026-01-01T00:00:00.000Z");
 
@@ -26,6 +32,10 @@ type ParityCase = {
   /** The engine runs each step callback; the inspector returns this mock for the step instead. */
   steps?: Record<string, WorkflowJsonValue>;
   schema?: AnyWorkflowDefinition["input"];
+  /** The definition's default retry policy. */
+  retry?: WorkflowRetryPolicy;
+  /** Delivered to the run with `sendEvent` once it waits; the inspector gets them as samples. */
+  events?: Record<string, WorkflowJsonValue>;
   /** What both must report, checked on top of agreeing with each other. */
   expected: { status: WorkflowRunStatus; error?: string; sends: string[] };
 };
@@ -171,6 +181,93 @@ const cases = {
     steps: { hang: null },
     expected: { status: "failed", error: "sibling broke", sends: [] },
   },
+  "a step whose retry allows no attempts": {
+    run: async (ctx) => {
+      await ctx.step("load", () => 1, { retry: { maxAttempts: 0 } });
+      await ctx.send("after", mail("After"));
+    },
+    steps: { load: 1 },
+    expected: { status: "failed", error: "Retry maxAttempts must be a positive integer.", sends: [] },
+  },
+  "a caught step retry with a fractional maxAttempts": {
+    run: async (ctx) => {
+      await ctx.step("load", () => 1, { retry: { maxAttempts: 1.5 } }).catch(() => {});
+      await ctx.send("after", mail("After"));
+    },
+    steps: { load: 1 },
+    expected: { status: "failed", error: "Retry maxAttempts must be a positive integer.", sends: [] },
+  },
+  "a step retry with a malformed backoff": {
+    run: async (ctx) => {
+      // SAFETY: untyped callers can pass any string; this checks the runtime rejection.
+      await ctx.step("load", () => 1, { retry: { backoff: "soon" as "1m" } });
+    },
+    steps: { load: 1 },
+    expected: { status: "failed", error: 'Invalid duration "soon"', sends: [] },
+  },
+  "a definition retry that allows no attempts, on a send": {
+    retry: { maxAttempts: 0 },
+    run: async (ctx) => {
+      await ctx.send("hello", mail("Hello"));
+    },
+    expected: { status: "failed", error: "Retry maxAttempts must be a positive integer.", sends: [] },
+  },
+  "a definition retry with a negative backoff, on a step": {
+    retry: { backoff: -1 },
+    run: async (ctx) => {
+      await ctx.step("load", () => 1);
+    },
+    steps: { load: 1 },
+    expected: { status: "failed", error: "Duration -1 must not be negative.", sends: [] },
+  },
+  "a step retry that repairs the definition's": {
+    retry: { maxAttempts: 0 },
+    run: async (ctx) => {
+      await ctx.step("load", () => 1, { retry: { maxAttempts: 2 } });
+    },
+    steps: { load: 1 },
+    expected: { status: "completed", sends: [] },
+  },
+  "an event payload that isn't JSON": {
+    events: { go: Number.NaN },
+    run: async (ctx) => {
+      await ctx.waitForEvent("go");
+      await ctx.send("after", mail("After"));
+    },
+    expected: { status: "rejected", error: 'The payload of event "go" must be JSON', sends: [] },
+  },
+  "a JSON event payload": {
+    events: { go: { plan: "pro" } },
+    run: async (ctx) => {
+      const event = await ctx.waitForEvent<{ plan: string }>("go");
+
+      if (event.status === "received") await ctx.send(event.payload.plan, mail("After"));
+    },
+    expected: { status: "completed", sends: ["pro"] },
+  },
+  "input the schema rejects": {
+    input: 1,
+    schema: { "~standard": { validate: () => ({ issues: [{ message: "nope" }] }) } },
+    run: async (ctx) => {
+      await ctx.send("hello", mail("Hello"));
+    },
+    expected: { status: "rejected", error: "Invalid input for workflow parity: nope", sends: [] },
+  },
+  "input the schema turns into a non-JSON value": {
+    schema: { "~standard": { validate: () => ({ value: Number.NaN }) } },
+    run: async (ctx) => {
+      await ctx.send("hello", mail("Hello"));
+    },
+    expected: { status: "rejected", error: "The input of workflow parity must be JSON", sends: [] },
+  },
+  "a duplicate step name the definition catches": {
+    run: async (ctx) => {
+      // Bounded, so a regression fails the row instead of spinning forever.
+      for (let index = 0; index < 50; index += 1) await ctx.sleep("same", 0).catch(() => {});
+      await ctx.send("after", mail("After"));
+    },
+    expected: { status: "failed", error: 'Step "same" ran twice in workflow parity@1.', sends: [] },
+  },
   "a sleep, then sends": {
     run: async (ctx) => {
       await ctx.send("first", mail("First"));
@@ -183,7 +280,7 @@ const cases = {
 
 function definitionFor(entry: ParityCase): AnyWorkflowDefinition {
   // SAFETY: the table's `run` functions take any JSON input, which is what an untyped definition gets.
-  return defineWorkflow({ name: "parity", input: entry.schema, run: entry.run as (ctx: WorkflowContext, input: WorkflowJsonValue) => Promise<WorkflowJsonValue | void> });
+  return defineWorkflow({ name: "parity", input: entry.schema, retry: entry.retry, run: entry.run as (ctx: WorkflowContext, input: WorkflowJsonValue) => Promise<WorkflowJsonValue | void> });
 }
 
 /** Settles with "hung" when `promise` hasn't settled within `ms`. */
@@ -201,7 +298,7 @@ async function within<T>(promise: Promise<T>, ms: number): Promise<T | "hung"> {
   }
 }
 
-async function throughEngine(definition: AnyWorkflowDefinition, input: WorkflowJsonValue): Promise<Observed> {
+async function throughEngine(definition: AnyWorkflowDefinition, entry: ParityCase): Promise<Observed> {
   const clock = createManualClock(start);
   const scheduler = createMemoryWorkflowScheduler(clock);
   const sends: string[] = [];
@@ -221,7 +318,7 @@ async function throughEngine(definition: AnyWorkflowDefinition, input: WorkflowJ
     },
   });
 
-  const started = await within(engine.start(definition, input, { id: "run-1" }).then(
+  const started = await within(engine.start(definition, entry.input ?? null, { id: "run-1" }).then(
     (run) => run,
     (cause: unknown) => (cause instanceof Error ? cause : new Error(String(cause))),
   ), 1_000);
@@ -229,6 +326,15 @@ async function throughEngine(definition: AnyWorkflowDefinition, input: WorkflowJ
   if (started === "hung") return { status: "truncated", error: "engine.start hung", sends };
 
   if (started instanceof Error) return { status: "rejected", error: started.message, sends };
+
+  for (const [name, payload] of Object.entries(entry.events ?? {})) {
+    const delivered = await engine.sendEvent({ runId: "run-1", name, payload }).then(
+      () => undefined,
+      (cause: unknown) => (cause instanceof Error ? cause : new Error(String(cause))),
+    );
+
+    if (delivered) return { status: "rejected", error: delivered.message, sends };
+  }
 
   for (let wake = 0; wake < 10; wake += 1) {
     const run = await engine.get("run-1");
@@ -245,7 +351,7 @@ async function throughEngine(definition: AnyWorkflowDefinition, input: WorkflowJ
 
 async function throughInspector(definition: AnyWorkflowDefinition, entry: ParityCase): Promise<Observed> {
   const graph = await within(
-    inspectWorkflow(definition, { input: entry.input ?? null, steps: entry.steps }).then(
+    inspectWorkflow(definition, { input: entry.input ?? null, steps: entry.steps, events: entry.events }).then(
       (value) => value,
       (cause: unknown) => (cause instanceof Error ? cause : new Error(String(cause))),
     ),
@@ -276,7 +382,7 @@ async function throughInspector(definition: AnyWorkflowDefinition, entry: Parity
 describe("workflows: engine and inspector agree", () => {
   test.each(Object.entries(cases))("%s", async (_label, entry: ParityCase) => {
     const definition = definitionFor(entry);
-    const engine = await throughEngine(definition, entry.input ?? null);
+    const engine = await throughEngine(definition, entry);
     const inspected = await throughInspector(definition, entry);
 
     expect(inspected).toEqual(engine);
