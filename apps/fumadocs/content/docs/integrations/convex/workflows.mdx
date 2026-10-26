@@ -4,7 +4,7 @@ description: Run Email SDK workflows on Convex with the component's store, sched
 ---
 
 <Callout type="warn" title="Experimental">
-`@opencoredev/convex-email/workflows` builds on the experimental [email workflows](/docs/guides/email-workflows) API and may change in a minor release. It needs `@opencoredev/email-sdk` 3.1 or later.
+`@opencoredev/convex-email/workflows` builds on the experimental [email workflows](/docs/guides/email-workflows) API and may change in a minor release. Using it needs `@opencoredev/email-sdk` 3.1 or later, which provides `createWorkflowEngine`. The component itself still accepts email-sdk 3.0.1 and later, so an app that doesn't use workflows can stay on 3.0.x without a peer warning.
 </Callout>
 
 The component provides everything a workflow engine needs on Convex:

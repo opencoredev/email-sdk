@@ -335,7 +335,7 @@ await email.setConfig(ctx, {
 
 ## Workflows (Experimental)
 
-`@opencoredev/convex-email/workflows` runs [Email SDK workflows](https://email-sdk.dev/docs/integrations/convex/workflows) on Convex. It needs `@opencoredev/email-sdk` 3.1 or later. Runs are stored in the component's `workflowRuns` table, waits use `ctx.scheduler.runAt`, and every `ctx.send` goes through this component's queue with the step's idempotency key, so retries, fallback, and webhook status apply to drip emails too. Each workflow send is recorded in the `workflowSends` table, so a replayed step never queues its email twice, even after `cleanupAfterDays` deleted it. Records are kept while the run is active and for `workflowSendRetentionDays` (default 30) after it finishes.
+`@opencoredev/convex-email/workflows` runs [Email SDK workflows](https://email-sdk.dev/docs/integrations/convex/workflows) on Convex. Using it needs `@opencoredev/email-sdk` 3.1 or later, which provides `createWorkflowEngine`; the component's peer range still accepts 3.0.1, so apps that skip workflows can stay on 3.0.x. Runs are stored in the component's `workflowRuns` table, waits use `ctx.scheduler.runAt`, and every `ctx.send` goes through this component's queue with the step's idempotency key, so retries, fallback, and webhook status apply to drip emails too. Each workflow send is recorded in the `workflowSends` table, so a replayed step never queues its email twice, even after `cleanupAfterDays` deleted it. Records are kept while the run is active and for `workflowSendRetentionDays` (default 30) after it finishes.
 
 ```ts title="convex/onboarding.ts"
 import { ConvexEmail } from "@opencoredev/convex-email";

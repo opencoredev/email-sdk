@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { createWorkflowEngine, defineWorkflow, workflowIdempotencyKey } from "@opencoredev/email-sdk/workflows";
+import {
+  createMemoryWorkflowStore,
+  createWorkflowEngine,
+  defineWorkflow,
+  workflowIdempotencyKey,
+} from "@opencoredev/email-sdk/workflows";
 import type { WorkflowEmailSender, WorkflowRun } from "@opencoredev/email-sdk/workflows";
 import { actionGeneric, componentsGeneric, defineSchema, makeFunctionReference } from "convex/server";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
@@ -755,6 +760,39 @@ describe("convexWorkflowEmail send options", () => {
         },
       },
     ]);
+  });
+
+  test("a send the queue can't carry fails the run on the first attempt, with no retry", async () => {
+    const queued: ConvexWorkflowSendArgs[] = [];
+
+    const queue: ConvexWorkflowEmailQueue = {
+      async sendWorkflowStep(_ctx, args) {
+        queued.push(args);
+
+        return "email-1";
+      },
+    };
+
+    const scheduled = defineWorkflow({
+      name: "scheduled",
+      run: async (ctx) => {
+        await ctx.send("later", { ...message, sendAt: new Date(0) });
+      },
+    });
+
+    const engine = createWorkflowEngine({
+      email: convexWorkflowEmail(queue, { runMutation: async () => null }),
+      store: createMemoryWorkflowStore(),
+      clock: { now: () => 0 },
+      workflows: [scheduled],
+    });
+
+    const run = await engine.start(scheduled, null, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: expect.stringContaining("sendAt"), step: "later" });
+    expect(run.wait).toBeUndefined();
+    expect(queued).toEqual([]);
   });
 
   test("refuses a send without the engine's run context", async () => {

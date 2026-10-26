@@ -1,13 +1,15 @@
 /**
  * Experimental: a Convex-backed store, scheduler, and email sender for
- * `@opencoredev/email-sdk/workflows` (requires @opencoredev/email-sdk 3.1 or later).
+ * `@opencoredev/email-sdk/workflows`. Building an engine needs `createWorkflowEngine` from
+ * @opencoredev/email-sdk 3.1 or later.
  *
  * Run the workflow engine inside a Convex action. Runs live in the component's `workflowRuns`
  * table, waits use `ctx.scheduler.runAt`, and each `ctx.send` enqueues through the component's
  * durable queue with the step's idempotency key, so a step is queued at most once.
  */
+// Only types come from `@opencoredev/email-sdk/workflows`, so the package's runtime code loads with
+// email-sdk 3.0.x as well; only apps that build an engine need 3.1. A test enforces this.
 import type { EmailAddress, EmailAttachment, EmailMessage, EmailSendOptions, OneOrMany } from "@opencoredev/email-sdk";
-import { WorkflowNonRetryableError } from "@opencoredev/email-sdk/workflows";
 import type {
   WorkflowEmailSender,
   WorkflowRun,
@@ -90,6 +92,17 @@ const runSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
 });
+
+/**
+ * Fails the step without a retry. The engine recognizes a non-retryable error by its name, the
+ * same way it recognizes one from another bundle, so this needs no runtime import from email-sdk.
+ */
+class WorkflowNonRetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkflowNonRetryableError";
+  }
+}
 
 const stringContent = z.string();
 

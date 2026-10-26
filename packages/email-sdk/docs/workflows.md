@@ -445,6 +445,12 @@ as finished stamps `releasedAt`, and the component's sweep deletes them `workflo
 no records. The engine passes `{ runId, step }` as a third argument to `WorkflowEmailSender.send`
 so a durable sender can do this; an `EmailClient` ignores it.
 
+`@opencoredev/convex-email/workflows` imports only types from `@opencoredev/email-sdk/workflows`.
+Its non-retryable error is a local class that the engine recognizes by name, as it recognizes errors
+from another bundle. So the component keeps its `^3.0.1` peer range: apps that never use workflows
+stay on email-sdk 3.0.x without a peer warning, and apps that do need 3.1 for `createWorkflowEngine`.
+A test fails if anything reachable from that entry loads the SDK's workflows entry at runtime.
+
 The engine runs in a Convex action (the user's `run` function is app code the component cannot
 call). A typical app defines one internal action, `resumeWorkflow({ runId })`, that builds the
 engine and calls `engine.resume`, and passes its reference to the scheduler.
