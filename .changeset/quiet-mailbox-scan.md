@@ -7,11 +7,12 @@ String addresses now resolve to the right mailbox when the display name or a com
 Changed results:
 
 - `"Ada <team>" <ada@example.test>` and `"Ada \"<x>\" L" <ada@example.test>` resolve to `ada@example.test` instead of `team` or `x`.
-- `Ada (<team>) <ada@example.test>` and nested or escaped comments before the angle-addr resolve to `ada@example.test` instead of `team`.
+- `Ada (<team>) <ada@example.test>` resolves to `ada@example.test` instead of `team`.
 - `Ada <ada@example.test (work)>` and `<(work)ada@example.test>` drop the comment inside the angle-addr.
 - `ada@example.test (work)` and `(work) ada@example.test` resolve to `ada@example.test`, so the SMTP adapter accepts them instead of rejecting the whole string.
 - A comment between two tokens counts as a space, so `ada( work )bob@example.test` resolves to `ada bob@example.test` and SMTP validation rejects it.
 - A `,`, `;`, or `:` outside quotes and comments marks an address list or group, which is returned as-is. `Ada <ada@example.test>, evil@example.test` used to resolve to `ada@example.test` while the SMTP adapter delivered to both mailboxes; SMTP validation now rejects it, along with group syntax such as `Team: Ada <ada@example.test>;`.
+- Nested comments and comments with a backslash, such as `Ada (a (<team>) b) <ada@example.test>`, are returned as-is and rejected by SMTP validation, because Nodemailer would read a different mailbox out of them.
 - Input with an unclosed quote or comment, such as `"Ada <ada@example.test>` or `Ada <ada@example.test> (work`, is returned as-is, so validation rejects it instead of picking an address out of it.
 - SMTP envelope validation also rejects `(`, `)`, `,`, `:`, `;`, `"`, and `\` in the resolved address, so bare lists like `ada@example.test,bob@example.test` and quoted local parts like `"ada"@example.test` fail before connecting.
 

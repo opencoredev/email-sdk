@@ -13,22 +13,23 @@ type ScannedMailbox = {
  * each RFC 5322 comment replaced by a space so it still separates the tokens around it. Quoted
  * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, so the scan steps over them instead
  * of matching brackets inside them. Returns undefined when a quote, comment, or angle-addr is
- * never closed, or when a `,`, `;`, or `:` outside them makes the string an address list or group.
+ * never closed, when a comment is nested or holds a backslash (Nodemailer parses those differently),
+ * or when a `,`, `;`, or `:` outside them makes the string an address list or group.
  */
 function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   let outside = "";
   let angle: string | undefined;
   let inAngle = false;
   let quoted = false;
-  let commentDepth = 0;
+  let inComment = false;
 
   for (let index = 0; index < mailbox.length; index += 1) {
     const character = mailbox.charAt(index);
 
-    if (commentDepth > 0) {
-      if (character === "\\") index += 1;
-      else if (character === "(") commentDepth += 1;
-      else if (character === ")") commentDepth -= 1;
+    if (inComment) {
+      if (character === "\\" || character === "(") return undefined;
+
+      if (character === ")") inComment = false;
 
       continue;
     }
@@ -43,7 +44,7 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
         quoted = false;
       }
     } else if (character === "(") {
-      commentDepth = 1;
+      inComment = true;
       kept = " ";
     } else if (character === "," || character === ";" || character === ":") {
       return undefined;
@@ -62,7 +63,7 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
     else outside += kept;
   }
 
-  if (quoted || inAngle || commentDepth > 0) return undefined;
+  if (quoted || inAngle || inComment) return undefined;
 
   return { outside, angle };
 }

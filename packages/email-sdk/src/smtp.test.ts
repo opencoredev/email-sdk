@@ -225,6 +225,8 @@ describe("smtp injection guards", () => {
     "ada@example.com,evil@example.com",
     "ada@example.com;evil@example.com",
     "ada@example.com(work",
+    "ada@example.com (a(b),evil@example.com )",
+    "(a\\)b)ada@example.com (work)",
     '"ada"@example.com',
   ])("rejects envelope address %s before connecting", async (to) => {
     await expect(send({ ...baseMessage, to })).rejects.toBeInstanceOf(EmailValidationError);
@@ -314,7 +316,7 @@ describe("smtp injection guards", () => {
       ...baseMessage,
       from: '"Sender <team>" <sender@example.com>',
       to: ["Ada <ada@example.com> (work)", "bob@example.com (work)"],
-      cc: "(a(b)c)cy@example.com (work)",
+      cc: "(team)cy@example.com (work)",
       bcc: '"Dee <ops>" <dee@example.com>',
     });
 
