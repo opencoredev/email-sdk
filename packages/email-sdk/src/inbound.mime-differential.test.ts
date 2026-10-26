@@ -65,6 +65,8 @@ const corpus: [name: string, raw: Uint8Array][] = [
   ["review: parentheses in a domain literal", bytes("From: user@[a(b)c]\r\nTo: user@[a(b)c], next@example.com\r\n\r\nhi")],
   ["review: two quoted display-name words", bytes("From: \"John\" \"Doe\" <john@example.com>\r\n\r\nhi")],
   ["review: obsolete source route", bytes("From: <@route1.example,@route2.example:user@example.com>\r\n\r\nhi")],
+  ["review: byte order mark in each encoded word", bytes("Subject: =?UTF-16LE?B?//5BAA==?= =?UTF-16LE?B?//5CAA==?= =?UTF-16BE?B?/v8AQw==?= =?UTF-8?B?77u/RA==?=\r\n\r\nhi")],
+  ["review: byte order picks unmarked UTF-16", bytes("Subject: =?UTF-16?B?/v8AQQ==?= =?UTF-16?B?//5CAA==?=\r\n\r\nhi")],
   ["review: format=flowed delsp=yes", bytes("Content-Type: text/plain; format=flowed; delsp=yes\r\n\r\nhello \r\nworld\r\n >quote\r\n")],
 
   // Real client shapes.

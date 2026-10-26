@@ -606,3 +606,31 @@ describe("review round 2 regressions", () => {
     expect(emailFromMime({ provider: "cloudflare", raw: "Content-Type: text/plain; format=flowed\n\nhello \nworld\n" }).text).toBe("hello world\n");
   });
 });
+
+describe("review round 3 regressions", () => {
+  test("a leading byte-order mark is dropped from each encoded word", () => {
+    expect(decodeEncodedWords("=?UTF-16LE?B?//5BAA==?= =?UTF-16LE?B?//5CAA==?=")).toBe("AB");
+    expect(decodeEncodedWords("=?UTF-16BE?B?/v8AQQ==?= =?UTF-16BE?B?/v8AQg==?=")).toBe("AB");
+    expect(decodeEncodedWords("=?UTF-8?B?77u/QQ==?= =?UTF-8?B?77u/Qg==?=")).toBe("AB");
+    expect(decodeEncodedWords("=?UTF-32LE?B?//4AAEEAAAA=?= =?UTF-32LE?B?//4AAEIAAAA=?=")).toBe("AB");
+    expect(decodeEncodedWords("=?UTF-32BE?B?AAD+/wAAAEE=?= =?UTF-32BE?B?AAD+/wAAAEI=?=")).toBe("AB");
+    // The BOM picks the byte order of an unmarked UTF-16 or UTF-32 word.
+    expect(decodeEncodedWords("=?UTF-16?B?/v8AQQ==?= =?UTF-16?B?//5CAA==?=")).toBe("AB");
+    expect(decodeEncodedWords("=?UTF-32?B?AAD+/wAAAEE=?=")).toBe("A");
+    // A character split across words still joins.
+    expect(decodeEncodedWords("=?UTF-16LE?B?//49?= =?UTF-16LE?B?2ADe?=")).toBe("😀");
+    expect(decodeEncodedWords("=?UTF-8?B?8J+Y?= =?UTF-8?B?gA==?=")).toBe("😀");
+    // Only one mark is removed: a second U+FEFF is text.
+    expect(decodeEncodedWords("=?UTF-8?B?77u/77u/QQ==?=")).toBe("\uFEFFA");
+    expect(decodeEncodedWords("=?ISO-8859-1?Q?=E9?= =?ISO-8859-15?Q?=A4?=")).toBe("é€");
+  });
+
+  test("a body in unmarked UTF-16 or UTF-32 takes its byte order from the mark", () => {
+    const body = (charset: string, base64: string) => parseMimeMessage(`Content-Type: text/plain; charset=${charset}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}`).text;
+
+    expect(body("utf-16", "/v8AaABp")).toBe("hi");
+    expect(body("utf-16", "//5oAGkA")).toBe("hi");
+    expect(body("utf-32", "AAD+/wAAAGgAAABp")).toBe("hi");
+    expect(body("utf-32le", "aAAAAGkAAAA=")).toBe("hi");
+  });
+});

@@ -72,14 +72,78 @@ function binaryBytes(value: string): Uint8Array {
   return bytes;
 }
 
-/** Decode bytes in a charset, falling back to UTF-8 and then Latin-1 for unknown labels. */
-export function decodeCharset(bytes: Uint8Array, charset: string | undefined): string {
+/** Byte order marks per Unicode encoding form, each with the byte order it announces. */
+const byteOrderMarks: Record<"8" | "16" | "32", [label: string, mark: number[]][]> = {
+  "8": [["utf-8", [0xef, 0xbb, 0xbf]]],
+  "16": [["utf-16be", [0xfe, 0xff]], ["utf-16le", [0xff, 0xfe]]],
+  "32": [["utf-32be", [0x00, 0x00, 0xfe, 0xff]], ["utf-32le", [0xff, 0xfe, 0x00, 0x00]]],
+};
+
+interface MarkedBytes {
+  label: string;
+  bytes: Uint8Array;
+  /** A byte order mark was found and removed. */
+  marked: boolean;
+}
+
+/**
+ * Remove a leading byte order mark that matches a UTF charset label. An unmarked `utf-16` or
+ * `utf-32` label takes its byte order from the mark; other labels pass through unchanged.
+ */
+function withoutByteOrderMark(label: string, bytes: Uint8Array): MarkedBytes {
+  const match = /^utf-?(?:(8)|(16|32)(le|be)?)$/.exec(label);
+
+  if (!match) return { label, bytes, marked: false };
+
+  const form = match[1] === "8" ? "8" : match[2] === "16" ? "16" : "32";
+  const normalized = form === "8" ? "utf-8" : `utf-${form}${match[3] ?? ""}`;
+
+  for (const [ordered, mark] of byteOrderMarks[form]) {
+    if ((normalized === ordered || !match[3]) && mark.every((byte, index) => bytes[index] === byte)) {
+      return { label: ordered, bytes: bytes.subarray(mark.length), marked: true };
+    }
+  }
+
+  return { label: normalized, bytes, marked: false };
+}
+
+/** `TextDecoder` has no UTF-32, so read code points directly; bad or partial units become U+FFFD. */
+function decodeUtf32(bytes: Uint8Array, bigEndian: boolean): string {
+  let result = "";
+  let index = 0;
+
+  for (; index + 4 <= bytes.length; index += 4) {
+    const unit = bytes.subarray(index, index + 4);
+    const [high = 0, upper = 0, lower = 0, low = 0] = bigEndian ? unit : [unit[3], unit[2], unit[1], unit[0]];
+    const code = ((high << 24) | (upper << 16) | (lower << 8) | low) >>> 0;
+
+    result += code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? "\uFFFD" : String.fromCodePoint(code);
+  }
+
+  return index < bytes.length ? `${result}\uFFFD` : result;
+}
+
+function charsetLabel(charset: string | undefined): string {
   const label = (charset ?? "utf-8").trim().toLowerCase().replace(/^"|"$/g, "");
 
-  if (label === "us-ascii" || label === "ascii") return decodeCharset(bytes, "utf-8");
+  return label === "us-ascii" || label === "ascii" ? "utf-8" : label;
+}
+
+/** Decode bytes in a charset, falling back to UTF-8 and then Latin-1 for unknown labels. */
+export function decodeCharset(bytes: Uint8Array, charset: string | undefined): string {
+  const unmarked = withoutByteOrderMark(charsetLabel(charset), bytes);
+
+  return decodeUnmarked(unmarked.bytes, unmarked.label);
+}
+
+/** Decode bytes whose byte order mark, if any, is already removed. */
+function decodeUnmarked(bytes: Uint8Array, label: string): string {
+  // Unicode's default byte order for an unmarked UTF-32 stream is big-endian.
+  if (label.startsWith("utf-32")) return decodeUtf32(bytes, label !== "utf-32le");
 
   try {
-    return new TextDecoder(label).decode(bytes);
+    // The mark is already gone, so a leading U+FEFF is text and must stay.
+    return new TextDecoder(label, { ignoreBOM: true }).decode(bytes);
   } catch {
     try {
       return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -155,14 +219,13 @@ export function decodeEncodedWords(value: string): string {
       let bytes: number[] = [];
 
       const flush = () => {
-        if (charset !== undefined) decoded += decodeCharset(Uint8Array.from(bytes), charset);
+        if (charset !== undefined) decoded += decodeUnmarked(Uint8Array.from(bytes), charset);
 
         charset = undefined;
         bytes = [];
       };
 
       for (const [whole, label = "", encoding = "", text = ""] of words.matchAll(word)) {
-        const wordCharset = label.split("*")[0]!.toLowerCase();
         const wordBytes = encodedWordBytes(encoding, text);
 
         if (wordBytes === undefined) {
@@ -171,11 +234,17 @@ export function decodeEncodedWords(value: string): string {
           continue;
         }
 
+        // Each word may carry its own byte order mark; joined, a later one would land mid-text.
+        const unmarked = withoutByteOrderMark(charsetLabel(label.split("*")[0]), wordBytes);
+        // An unmarked `utf-16` word continues the byte order an earlier marked word set.
+        const inherits = !unmarked.marked && (unmarked.label === "utf-16" || unmarked.label === "utf-32") && charset?.startsWith(unmarked.label);
+        const wordCharset = inherits ? charset : unmarked.label;
+
         if (wordCharset !== charset) flush();
 
         charset = wordCharset;
 
-        for (const byte of wordBytes) bytes.push(byte);
+        for (const byte of unmarked.bytes) bytes.push(byte);
       }
 
       flush();
