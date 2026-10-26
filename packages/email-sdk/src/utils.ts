@@ -6,6 +6,7 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "./errors.js";
+import { mailboxAddress } from "./internal/address.js";
 import {
   causeString,
   isJsonObject,
@@ -77,13 +78,7 @@ export function formatAddresses(addresses: OneOrMany<EmailAddress> | undefined):
 }
 
 export function emailAddressOf(address: EmailAddress): string {
-  if (!isStringMember(address)) {
-    return address.email;
-  }
-
-  const match = address.match(/<([^>]+)>/);
-
-  return (match?.[1] ?? address).trim();
+  return mailboxAddress(address);
 }
 
 /**
