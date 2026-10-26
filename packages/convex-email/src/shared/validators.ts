@@ -158,6 +158,7 @@ export const vEmailConfig = v.object({
   maxAttempts: v.optional(v.number()),
   retryBaseMs: v.optional(v.number()),
   cleanupAfterDays: v.optional(v.number()),
+  workflowSendRetentionDays: v.optional(v.number()),
 });
 
 export const vDeliveryStatusValue = v.union(

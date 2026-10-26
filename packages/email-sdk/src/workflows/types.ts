@@ -147,9 +147,12 @@ export type WorkflowScheduler = {
 /** Source of the current time in epoch milliseconds. Defaults to `Date.now`. */
 export type WorkflowClock = { now(): number };
 
-/** The part of an EmailClient a workflow needs. */
+/** Which run and step a `ctx.send` belongs to. A durable sender can record its sends per run. */
+export type WorkflowSendContext = { runId: string; step: string };
+
+/** The part of an EmailClient a workflow needs. An `EmailClient` ignores the third argument. */
 export type WorkflowEmailSender = {
-  send(message: EmailMessage, options?: EmailSendOptions): Promise<EmailSendResult>;
+  send(message: EmailMessage, options?: EmailSendOptions, context?: WorkflowSendContext): Promise<EmailSendResult>;
 };
 
 /** Per-send options for `ctx.send`. The engine supplies the idempotency key, so it can't be set here. */

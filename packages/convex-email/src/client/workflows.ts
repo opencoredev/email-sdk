@@ -24,7 +24,7 @@ import type { Infer } from "convex/values";
 import { z } from "zod";
 
 import type { ConvexEmailComponentApi } from "../shared/componentApi.js";
-import type { ConvexEmailAttachment, ConvexEmailSendArgs } from "../shared/types.js";
+import type { ConvexEmailAttachment, ConvexEmailSendArgs, ConvexWorkflowSendArgs } from "../shared/types.js";
 import type { vWorkflowRunRecord } from "../shared/workflowValidators.js";
 
 type WorkflowActionCtx = Pick<GenericActionCtx<GenericDataModel>, "runQuery" | "runMutation">;
@@ -40,9 +40,9 @@ export type ConvexWorkflowResumeRef = FunctionReference<
   { runId: string }
 >;
 
-/** Anything that can enqueue through the component, such as a `ConvexEmail` instance. */
+/** Anything that can queue a workflow step's email through the component, such as a `ConvexEmail` instance. */
 export type ConvexWorkflowEmailQueue = {
-  send(ctx: Pick<GenericActionCtx<GenericDataModel>, "runMutation">, args: ConvexEmailSendArgs): Promise<string>;
+  sendWorkflowStep(ctx: Pick<GenericActionCtx<GenericDataModel>, "runMutation">, args: ConvexWorkflowSendArgs): Promise<string>;
 };
 
 const jsonValue = z.json();
@@ -297,9 +297,10 @@ export function toConvexSendArgs(message: EmailMessage, options: EmailSendOption
 }
 
 /**
- * A `WorkflowEmailSender` that enqueues through the component. The step's idempotency key makes a
- * replayed step return the already-queued email instead of queueing a second one. The result id
- * is the component email id; delivery happens asynchronously in the component's worker.
+ * A `WorkflowEmailSender` that enqueues through the component. The component records each send by
+ * the step's idempotency key in the same transaction, so a replayed step returns the email it
+ * already queued instead of queueing a second one, even after email cleanup deleted that email.
+ * The result id is the component email id; delivery happens asynchronously in the component's worker.
  * `ctx.send` options `adapter`, `fallback.adapters`, `retry.maxAttempts`, and flat `metadata`
  * reach the queue; `signal`, `retry.delay`, `retry.shouldRetry`, and
  * `fallback.onUnknownDelivery: "continue"` fail the step because the queue can't honor them.
@@ -309,8 +310,17 @@ export function convexWorkflowEmail(
   ctx: Pick<GenericActionCtx<GenericDataModel>, "runMutation">,
 ): WorkflowEmailSender {
   return {
-    async send(message, options) {
-      const emailId = await queue.send(ctx, toConvexSendArgs(message, options));
+    async send(message, options, context) {
+      const args = toConvexSendArgs(message, options);
+      const idempotencyKey = args.idempotencyKey;
+
+      if (context === undefined || idempotencyKey === undefined) {
+        throw new WorkflowNonRetryableError(
+          "convexWorkflowEmail sends only workflow steps: it needs the engine's run context and idempotency key.",
+        );
+      }
+
+      const emailId = await queue.sendWorkflowStep(ctx, { runId: context.runId, email: { ...args, idempotencyKey } });
 
       return { adapter: "convex-email", id: emailId };
     },

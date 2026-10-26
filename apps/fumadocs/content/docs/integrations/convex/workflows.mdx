@@ -11,7 +11,7 @@ The component provides everything a workflow engine needs on Convex:
 
 - `convexWorkflowStore` keeps runs in the component's `workflowRuns` table. Saves check the run's revision inside one mutation, so two actions racing on a run can't overwrite each other, and only the action holding the run's lease executes its steps. Subject lookups page through the table 100 runs per query, so an `unsubscribed` event reaches every run for that subject.
 - `convexWorkflowScheduler` schedules each wait, and each claim's lease expiry, with `ctx.scheduler.runAt`. An early or stale job finds nothing to do and ends, except that a lease-expiry job that finds the step still running schedules one job for the renewed expiry.
-- `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one, as long as the component still has that email (see [Cleanup and send dedup](#cleanup-and-send-dedup)).
+- `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one, even after email cleanup (see [Cleanup and send dedup](#cleanup-and-send-dedup)).
 
 ## Define the engine and its actions
 
@@ -96,9 +96,9 @@ Each timer wake is its own scheduled action, so a run stuck in a step never dela
 
 ### Cleanup and send dedup
 
-The queue finds an email it already queued by the step's idempotency key, and only while the component still has that email. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email that many days after it was sent, failed, or canceled, and the key goes with it.
+Each workflow send is recorded in the component's `workflowSends` table, keyed by the step's idempotency key, in the same mutation that queues the email. A replayed step finds that record and gets the email it already queued. If an action dies after queueing but before saving the finished step, the lease-expiry job or the cron recovers the run, and the replayed send queues nothing new, even if `cleanupAfterDays` has deleted the email by then.
 
-That leaves one window. If an action dies after queueing an email but before saving the finished step, the lease-expiry job normally recovers the run one lease later, a few minutes, and the cron within one more interval if that job is missing. A recovery that comes more than `cleanupAfterDays` after the email finished, for example because the run's workflow version was unregistered all that time, queues the email again. Keep `cleanupAfterDays` far above the longest recovery delay you expect, and keep old workflow versions registered until their runs finish.
+A record lives as long as its run is active, then for `workflowSendRetentionDays` (default 30) after the run completes, fails, or is canceled. The component's five-minute sweep deletes it after that. Set the option with `setConfig`; it doesn't depend on `cleanupAfterDays`. Ordinary `email.send` calls write no records.
 
 ## What the queue can't carry
 

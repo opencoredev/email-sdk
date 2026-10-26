@@ -84,6 +84,12 @@ export type ConvexEmailSendArgs = Omit<ConvexEmailMessage, "from"> & {
   sendMetadata?: Record<string, string | number | boolean | null>;
 };
 
+/** A workflow step's send: queue args with a required idempotency key, and the run that sends it. */
+export type ConvexWorkflowSendArgs = {
+  runId: string;
+  email: ConvexEmailSendArgs & { idempotencyKey: string };
+};
+
 export type ConvexEmailConfig = {
   testMode?: boolean;
   sandboxTo?: string[];
@@ -91,6 +97,8 @@ export type ConvexEmailConfig = {
   maxAttempts?: number;
   retryBaseMs?: number;
   cleanupAfterDays?: number;
+  /** Days to keep a finished workflow run's send records, which dedupe replayed sends. Default 30. */
+  workflowSendRetentionDays?: number;
 };
 
 export type ConvexEmailStatus = "queued" | "processing" | "sent" | "failed" | "canceled";

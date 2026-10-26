@@ -91,6 +91,20 @@ export default defineSchema({
     .index("by_subject_and_active", ["subject", "active"])
     .index("by_active_and_dueAt", ["active", "dueAt"]),
 
+  // One row per workflow send, keyed by the step's idempotency key. A replayed step finds its email
+  // here even after email cleanup deleted the email row. `releasedAt` is set once the run finishes;
+  // the row is deleted `workflowSendRetentionDays` later.
+  workflowSends: defineTable({
+    idempotencyKey: v.string(),
+    runId: v.string(),
+    emailId: v.id("emails"),
+    createdAt: v.number(),
+    releasedAt: v.optional(v.number()),
+  })
+    .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_runId", ["runId"])
+    .index("by_releasedAt", ["releasedAt"]),
+
   config: defineTable({
     key: v.string(),
     testMode: v.optional(v.boolean()),
@@ -99,6 +113,7 @@ export default defineSchema({
     maxAttempts: v.optional(v.number()),
     retryBaseMs: v.optional(v.number()),
     cleanupAfterDays: v.optional(v.number()),
+    workflowSendRetentionDays: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 });

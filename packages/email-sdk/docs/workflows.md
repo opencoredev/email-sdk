@@ -428,20 +428,22 @@ component never depends on the engine's types, and the CAS check in `save` is tr
 On the app side, `convexWorkflowStore(component, ctx)` adapts those functions to `WorkflowStore`
 and parses each stored run with zod at the boundary. `convexWorkflowScheduler(ctx, resumeRef)`
 implements timers with `ctx.scheduler.runAt`; `cancel` is a no-op because `resume` already ignores
-stale timers. `convexWorkflowEmail(component, ctx)` sends through the component's durable
-queue (`enqueue` with the step's idempotency key), so a workflow send gets the component's retries,
+stale timers. `convexWorkflowEmail(email, ctx)` sends through the component's durable
+queue (`workflows:enqueueSend` with the run id and the step's idempotency key), so a workflow send gets the component's retries,
 fallback, and webhook status tracking. It forwards the `ctx.send` options the queue can store
 (`adapter`, `fallback.adapters`, `retry.maxAttempts`, flat `metadata`) and fails the step on the
 ones it can't (`signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknownDelivery:
 "continue"`, nested metadata) instead of dropping them.
 
-The queue dedupes a workflow send by its idempotency key only while the component still has the
-email row. With `cleanupAfterDays` set (it is off by default), cleanup deletes a finished email
-that many days after it reached a terminal status, and its key goes with it. A step whose action
-died after queueing but before the journal save is normally recovered by its lease-expiry wake,
-one lease (minutes) later, or within one more `resumeDue` cron interval if that wake was lost. Only a recovery delayed past `cleanupAfterDays`, for example
-because the run's version was unregistered for that long, can queue the email a second time. Keep
-`cleanupAfterDays` well above the longest delay you expect, and keep old versions registered.
+`enqueueSend` records each workflow send in a `workflowSends` table, keyed by the idempotency key
+and holding the run id and email id, in the same transaction that queues the email, and checks it
+first. A step whose action died after queueing but before the journal save is recovered by its
+lease-expiry wake or the `resumeDue` cron, and the replay gets the original email id even if
+`cleanupAfterDays` already deleted the email row. Records last for the run's lifetime: saving a run
+as finished stamps `releasedAt`, and the component's sweep deletes them `workflowSendRetentionDays`
+(default 30, set with `setConfig`) later, independent of email cleanup. Plain `enqueue` calls write
+no records. The engine passes `{ runId, step }` as a third argument to `WorkflowEmailSender.send`
+so a durable sender can do this; an `EmailClient` ignores it.
 
 The engine runs in a Convex action (the user's `run` function is app code the component cannot
 call). A typical app defines one internal action, `resumeWorkflow({ runId })`, that builds the

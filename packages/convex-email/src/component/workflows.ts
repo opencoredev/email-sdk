@@ -3,9 +3,11 @@ import { v } from "convex/values";
 
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
-import type { QueryCtx } from "./_generated/server.js";
+import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import { enqueueEmail, readConfig } from "./lib.js";
 import {
   vCreateWorkflowRunArgs,
+  vEnqueueWorkflowSendArgs,
   vGetWorkflowRunArgs,
   vListActiveWorkflowRunsArgs,
   vListDueWorkflowRunsArgs,
@@ -17,6 +19,10 @@ import {
 import type { vWorkflowRunRecord } from "../shared/workflowValidators.js";
 
 const maxDueLimit = 100;
+
+const dayMs = 86_400_000;
+
+const defaultSendRetentionDays = 30;
 
 type WorkflowRunRecord = Infer<typeof vWorkflowRunRecord>;
 
@@ -76,7 +82,11 @@ export const saveRun = mutation({
 
     if (!doc || doc.revision !== args.expectedRevision) return false;
 
-    await ctx.db.replace(doc._id, { ...args.run, updatedAt: Date.now() });
+    const now = Date.now();
+
+    await ctx.db.replace(doc._id, { ...args.run, updatedAt: now });
+
+    if (doc.active && !args.run.active) await releaseSends(ctx, args.run.runId, now);
 
     return true;
   },
@@ -119,3 +129,50 @@ export const listDueRuns = query({
     return { page: result.page.map((doc) => doc.runId), isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
+
+/**
+ * Queues a workflow step's email once. The send record shares this transaction with the enqueue, so
+ * a replayed step gets the email it already queued, even after email cleanup deleted that email.
+ */
+export const enqueueSend = mutation({
+  args: vEnqueueWorkflowSendArgs,
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const idempotencyKey = args.email.idempotencyKey;
+
+    const recorded = await ctx.db
+      .query("workflowSends")
+      .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
+      .unique();
+
+    if (recorded) return recorded.emailId;
+
+    const emailId = await enqueueEmail(ctx, args.email);
+
+    await ctx.db.insert("workflowSends", { idempotencyKey, runId: args.runId, emailId, createdAt: Date.now() });
+
+    return emailId;
+  },
+});
+
+/** Starts the retention clock on a finished run's send records. A finished run sends nothing more. */
+async function releaseSends(ctx: MutationCtx, runId: string, now: number) {
+  for await (const send of ctx.db.query("workflowSends").withIndex("by_runId", (q) => q.eq("runId", runId))) {
+    if (send.releasedAt === undefined) await ctx.db.patch(send._id, { releasedAt: now });
+  }
+}
+
+/** Deletes up to `limit` send records released more than `workflowSendRetentionDays` ago. */
+export async function cleanupReleasedWorkflowSends(ctx: MutationCtx, now: number, limit: number) {
+  const config = await readConfig(ctx);
+  const cutoff = now - (config.workflowSendRetentionDays ?? defaultSendRetentionDays) * dayMs;
+
+  const expired = await ctx.db
+    .query("workflowSends")
+    .withIndex("by_releasedAt", (q) => q.gt("releasedAt", 0).lt("releasedAt", cutoff))
+    .take(limit);
+
+  for (const send of expired) await ctx.db.delete(send._id);
+
+  return expired.length;
+}

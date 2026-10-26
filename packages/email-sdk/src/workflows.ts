@@ -47,6 +47,7 @@ export type {
   WorkflowRun,
   WorkflowRunStatus,
   WorkflowScheduler,
+  WorkflowSendContext,
   WorkflowSendOptions,
   WorkflowSendRecord,
   WorkflowStartOptions,

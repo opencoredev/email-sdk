@@ -23,6 +23,7 @@ import type {
   WorkflowHooks,
   WorkflowJsonValue,
   WorkflowRun,
+  WorkflowSendContext,
   ManualClock,
   WorkflowStore,
 } from "./workflows.js";
@@ -431,6 +432,24 @@ describe("workflows: idempotency and crash recovery", () => {
     expect(second.input).toEqual(ada);
     expect(sender.deliveries).toHaveLength(1);
     expect(store.runs()).toHaveLength(1);
+  });
+
+  test("passes each send's run id and step name to the sender", async () => {
+    const contexts: (WorkflowSendContext | undefined)[] = [];
+
+    const { engine } = setup([linear], {
+      email: {
+        async send(_message, _options, context) {
+          contexts.push(context);
+
+          return { adapter: "recording" };
+        },
+      },
+    });
+
+    await engine.start(linear, ada, { id: "run-1" });
+
+    expect(contexts).toEqual([{ runId: "run-1", step: "welcome" }]);
   });
 
   test("passes the step idempotency key through a real client to the adapter", async () => {

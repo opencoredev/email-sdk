@@ -1,6 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
+import { vSendEmailArgs } from "./validators.js";
+
 /** One workflow run as the component stores it. The app-side store parses `state`. */
 export const vWorkflowRunRecord = v.object({
   runId: v.string(),
@@ -16,6 +18,12 @@ export const vWorkflowRunRecord = v.object({
 export const vCreateWorkflowRunArgs = { run: vWorkflowRunRecord };
 
 export const vSaveWorkflowRunArgs = { run: vWorkflowRunRecord, expectedRevision: v.number() };
+
+/** A workflow step's send. The idempotency key is required: it is what dedupes a replayed step. */
+export const vEnqueueWorkflowSendArgs = {
+  runId: v.string(),
+  email: v.object({ ...vSendEmailArgs, idempotencyKey: v.string() }),
+};
 
 export const vGetWorkflowRunArgs = { runId: v.string() };
 

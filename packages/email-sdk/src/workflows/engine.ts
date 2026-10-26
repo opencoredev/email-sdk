@@ -780,7 +780,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const idempotencyKey = await workflowIdempotencyKey(loaded.id, name);
 
           const sent = await sideEffect(name, "send", undefined, async () => {
-            const response = await email.send(message, { ...sendOptions, idempotencyKey });
+            const response = await email.send(message, { ...sendOptions, idempotencyKey }, { runId: loaded.id, step: name });
             const sendRecord: WorkflowSendRecord = { adapter: response.adapter };
 
             if (response.id !== undefined) sendRecord.id = response.id;

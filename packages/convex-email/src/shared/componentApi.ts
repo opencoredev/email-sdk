@@ -25,6 +25,7 @@ import {
 } from "./validators.js";
 import {
   vCreateWorkflowRunArgs,
+  vEnqueueWorkflowSendArgs,
   vGetWorkflowRunArgs,
   vListActiveWorkflowRunsArgs,
   vListDueWorkflowRunsArgs,
@@ -92,6 +93,7 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
       TName
     >;
     listDueRuns: ComponentRef<"query", typeof vListDueWorkflowRunsArgs, typeof vWorkflowRunIdPage, TName>;
+    enqueueSend: ComponentRef<"mutation", typeof vEnqueueWorkflowSendArgs, typeof vEmailId, TName>;
   };
   worker: {
     handleWebhook: ComponentRef<

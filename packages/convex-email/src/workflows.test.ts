@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createWorkflowEngine, defineWorkflow, workflowIdempotencyKey } from "@opencoredev/email-sdk/workflows";
-import type { WorkflowRun } from "@opencoredev/email-sdk/workflows";
+import type { WorkflowEmailSender, WorkflowRun } from "@opencoredev/email-sdk/workflows";
 import { actionGeneric, componentsGeneric, defineSchema, makeFunctionReference } from "convex/server";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 import { v } from "convex/values";
@@ -16,9 +16,9 @@ import {
   parseWorkflowRun,
   toConvexSendArgs,
 } from "./client/workflows.js";
-import { api } from "./component/_generated/api.js";
+import { api, internal } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import type { ConvexEmailSendArgs } from "./shared/types.js";
+import type { ConvexWorkflowSendArgs } from "./shared/types.js";
 import { modules, registerConvexEmail } from "./testing.js";
 
 function component() {
@@ -91,6 +91,40 @@ const stalledStep = defineWorkflow({
   },
 });
 
+/** Sends one email. The first execution's action "dies" right after the component queued it. */
+const crashEmailIds: string[] = [];
+
+const crash = { sends: 0, emailIds: crashEmailIds, release: () => {} };
+
+const sendOnce = defineWorkflow({
+  name: "send-once",
+  run: async (ctx) => {
+    await ctx.send("welcome", { from: "hello@acme.test", to: "ada@example.test", subject: "Welcome", text: "Hi" });
+  },
+});
+
+function crashingSender(ctx: GenericActionCtx<GenericDataModel>): WorkflowEmailSender {
+  const sender = convexWorkflowEmail(email, ctx);
+
+  return {
+    async send(message, options, context) {
+      const result = await sender.send(message, options, context);
+
+      crash.sends += 1;
+
+      if (result.id !== undefined) crash.emailIds.push(result.id);
+
+      if (crash.sends === 1) {
+        await new Promise<void>((resolve) => {
+          crash.release = resolve;
+        });
+      }
+
+      return result;
+    },
+  };
+}
+
 /** The app's clock. Tests move it instead of waiting, and the engine reads it through `clock`. */
 const clock = { at: Date.parse("2026-01-01T00:00:00Z") };
 
@@ -103,6 +137,16 @@ function engineFor(ctx: GenericActionCtx<GenericDataModel>) {
     scheduler: convexWorkflowScheduler(ctx, resumeRef),
     clock: { now: () => clock.at },
     workflows: [onboarding, parked, protoStep, stalledStep],
+  });
+}
+
+function crashingEngineFor(ctx: GenericActionCtx<GenericDataModel>) {
+  return createWorkflowEngine({
+    email: crashingSender(ctx),
+    store: convexWorkflowStore(component(), ctx),
+    scheduler: convexWorkflowScheduler(ctx, resumeRef),
+    clock: { now: () => clock.at },
+    workflows: [sendOnce],
   });
 }
 
@@ -147,6 +191,30 @@ const appWorkflows = {
     returns: vRunView,
     handler: async (ctx, args) => view(await engineFor(ctx).start(stalledStep, null, { id: args.runId })),
   }),
+  startSendOnce: actionGeneric({
+    args: { runId: v.string() },
+    returns: vRunView,
+    handler: async (ctx, args) => view(await crashingEngineFor(ctx).start(sendOnce, null, { id: args.runId })),
+  }),
+  resumeSendOnce: actionGeneric({
+    args: { runId: v.string() },
+    returns: vRunView,
+    handler: async (ctx, args) => view(await crashingEngineFor(ctx).resume(args.runId)),
+  }),
+  finishAndCleanEmail: actionGeneric({
+    args: { emailId: v.string() },
+    returns: v.number(),
+    handler: async (ctx, args) => {
+      // Cancel finishes the email now. A cleanup window of about a millisecond makes it expire at
+      // once, standing in for a recovery that comes after `cleanupAfterDays`.
+      await ctx.runMutation(component().lib.cancel, args);
+      await ctx.runMutation(component().lib.setConfig, { config: { cleanupAfterDays: 1e-8 } });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      // convex-test lets the app call the component's internal cleanup, which the cron runs in production.
+      return await ctx.runMutation(component().lib.cleanupExpiredEmails, { limit: 50 });
+    },
+  }),
   resumeDue: actionGeneric({
     args: { limit: v.number() },
     returns: v.number(),
@@ -180,6 +248,13 @@ const appWorkflows = {
 };
 
 const app = {
+  startSendOnce: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>(
+    "workflows:startSendOnce",
+  ),
+  resumeSendOnce: makeFunctionReference<"action", { runId: string }, { status: string; revision: number }>(
+    "workflows:resumeSendOnce",
+  ),
+  finishAndCleanEmail: makeFunctionReference<"action", { emailId: string }, number>("workflows:finishAndCleanEmail"),
   start: makeFunctionReference<"action", { runId: string; email: string }, { status: string; revision: number }>(
     "workflows:start",
   ),
@@ -451,6 +526,34 @@ describe("convex workflow engine end to end", () => {
     expect(await dead).toMatchObject({ status: "completed" });
     expect(stalled.calls).toBe(2);
   });
+
+  test("recovery after email cleanup reuses the queued email instead of queueing a second", async () => {
+    clock.at = Date.now() + 86_400_000;
+    crash.sends = 0;
+    crash.emailIds = [];
+
+    const t = createApp();
+    const dead = t.action(app.startSendOnce, { runId: "run-6" });
+
+    for (let tries = 0; tries < 200 && crash.sends === 0; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const [first] = crash.emailIds;
+
+    if (first === undefined) throw new Error("The first execution queued no email.");
+
+    expect(await t.action(app.finishAndCleanEmail, { emailId: first })).toBe(1);
+    expect(await t.action(app.emailStatus, { emailId: first })).toBeNull();
+
+    clock.at += leaseMs;
+    expect(await t.action(app.resumeSendOnce, { runId: "run-6" })).toMatchObject({ status: "completed" });
+    expect(crash.emailIds).toEqual([first, first]);
+    expect((await readRun(t, "run-6")).journal.welcome).toMatchObject({ result: { id: first } });
+
+    crash.release();
+    await dead;
+  });
 });
 
 /** The engine's default lease. */
@@ -615,10 +718,10 @@ describe("convexWorkflowEmail send options", () => {
   const message = { from: "a@acme.test", to: "b@acme.test", subject: "Hi", text: "Hi" };
 
   test("forwards routing, attempts, and metadata to the queue", async () => {
-    const queued: ConvexEmailSendArgs[] = [];
+    const queued: ConvexWorkflowSendArgs[] = [];
 
     const queue: ConvexWorkflowEmailQueue = {
-      async send(_ctx, args) {
+      async sendWorkflowStep(_ctx, args) {
         queued.push(args);
 
         return "email-1";
@@ -627,24 +730,38 @@ describe("convexWorkflowEmail send options", () => {
 
     const sender = convexWorkflowEmail(queue, { runMutation: async () => null });
 
-    await sender.send(message, {
-      adapter: "backup",
-      fallback: { adapters: ["third"] },
-      retry: { maxAttempts: 2 },
-      metadata: { userId: "u1", attempt: 1, skipped: undefined },
-      idempotencyKey: "wf_1",
-    });
+    await sender.send(
+      message,
+      {
+        adapter: "backup",
+        fallback: { adapters: ["third"] },
+        retry: { maxAttempts: 2 },
+        metadata: { userId: "u1", attempt: 1, skipped: undefined },
+        idempotencyKey: "wf_1",
+      },
+      { runId: "run-1", step: "welcome" },
+    );
 
     expect(queued).toEqual([
       {
-        ...message,
-        adapter: "backup",
-        fallbackAdapters: ["third"],
-        maxAttempts: 2,
-        sendMetadata: { userId: "u1", attempt: 1 },
-        idempotencyKey: "wf_1",
+        runId: "run-1",
+        email: {
+          ...message,
+          adapter: "backup",
+          fallbackAdapters: ["third"],
+          maxAttempts: 2,
+          sendMetadata: { userId: "u1", attempt: 1 },
+          idempotencyKey: "wf_1",
+        },
       },
     ]);
+  });
+
+  test("refuses a send without the engine's run context", async () => {
+    const queue: ConvexWorkflowEmailQueue = { sendWorkflowStep: async () => "email-1" };
+    const sender = convexWorkflowEmail(queue, { runMutation: async () => null });
+
+    expect(sender.send(message, { idempotencyKey: "wf_1" })).rejects.toThrow("run context");
   });
 
   test("rejects options the queue cannot honor instead of dropping them", () => {
@@ -656,3 +773,90 @@ describe("convexWorkflowEmail send options", () => {
     expect(() => toConvexSendArgs(message, { metadata: { nested: { a: 1 } } })).toThrow("flat metadata");
   });
 });
+
+const day = 86_400_000;
+
+const workflowSend = {
+  runId: "run-1",
+  email: { from: "hello@acme.test", to: "ada@example.test", subject: "Welcome", text: "Hi", idempotencyKey: "wf_welcome" },
+};
+
+async function countRows(t: ReturnType<typeof convexTest>, table: "emails" | "workflowSends") {
+  return await t.run(async (ctx) => (await ctx.db.query(table).collect()).length);
+}
+
+/** Moves an email to `sent`, finished `daysAgo` days ago, so cleanup sees it as expired. */
+async function finishEmail(t: ReturnType<typeof convexTest>, emailId: string, daysAgo: number) {
+  await t.run(async (ctx) => {
+    const id = ctx.db.normalizeId("emails", emailId);
+
+    if (!id) throw new Error(`No email ${emailId}.`);
+
+    await ctx.db.patch(id, { status: "sent", terminalAt: Date.now() - daysAgo * day });
+  });
+}
+
+describe("convex workflow send records", () => {
+  test("a replayed send after email cleanup returns the original email and queues nothing", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.lib.setConfig, { config: { cleanupAfterDays: 1 } });
+
+    const emailId = await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    await finishEmail(t, emailId, 2);
+    expect(await t.mutation(internal.lib.cleanupExpiredEmails, { limit: 50 })).toBe(1);
+    expect(await countRows(t, "emails")).toBe(0);
+
+    expect(await t.mutation(api.workflows.enqueueSend, workflowSend)).toBe(emailId);
+    expect(await countRows(t, "emails")).toBe(0);
+    expect(await countRows(t, "workflowSends")).toBe(1);
+  });
+
+  test("ordinary sends write no workflow send records", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.lib.enqueue, { ...workflowSend.email, idempotencyKey: "plain" });
+    await t.mutation(api.lib.enqueue, { from: "hello@acme.test", to: "ada@example.test", subject: "No key", text: "Hi" });
+
+    expect(await countRows(t, "emails")).toBe(2);
+    expect(await countRows(t, "workflowSends")).toBe(0);
+  });
+
+  test("records outlive email cleanup while the run is active and expire a retention window after it ends", async () => {
+    const t = convexTest(schema, modules);
+    const run = { runId: "run-1", workflow: "onboarding", status: "waiting", active: true, revision: 0, state: "{}" };
+
+    await t.mutation(api.lib.setConfig, { config: { cleanupAfterDays: 1, workflowSendRetentionDays: 3 } });
+    await t.mutation(api.workflows.createRun, { run });
+
+    const emailId = await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    await finishEmail(t, emailId, 400);
+    await t.mutation(internal.lib.processDueEmails, { limit: 25 });
+    expect(await countRows(t, "emails")).toBe(0);
+    expect(await countRows(t, "workflowSends")).toBe(1);
+
+    await t.mutation(api.workflows.saveRun, {
+      run: { ...run, status: "completed", active: false, revision: 1 },
+      expectedRevision: 0,
+    });
+
+    const released = await t.run(async (ctx) => (await ctx.db.query("workflowSends").first())?.releasedAt);
+
+    expect(released).toBeNumber();
+
+    // Inside the retention window the record stays; past it the sweep deletes it.
+    await t.mutation(internal.lib.processDueEmails, { limit: 25 });
+    expect(await countRows(t, "workflowSends")).toBe(1);
+
+    await t.run(async (ctx) => {
+      const send = await ctx.db.query("workflowSends").first();
+
+      if (send) await ctx.db.patch(send._id, { releasedAt: Date.now() - 4 * day });
+    });
+    await t.mutation(internal.lib.processDueEmails, { limit: 25 });
+    expect(await countRows(t, "workflowSends")).toBe(0);
+  });
+});
+
