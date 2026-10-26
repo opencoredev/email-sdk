@@ -12,6 +12,7 @@ import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../typ
 import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
 import { workflowIdempotencyKey } from "./idempotency.js";
+import { compareLegacyRunOrder } from "./journal-order.js";
 import { isTerminalRun } from "./memory.js";
 import { stepNameError, stepOverlapError } from "./step-name.js";
 import type {
@@ -223,11 +224,35 @@ function withoutIndex(inbox: readonly WorkflowInboxEvent[], index: number): Work
   return [...inbox.slice(0, index), ...inbox.slice(index + 1)];
 }
 
+function highestSequence(journal: WorkflowRun["journal"]) {
+  return Math.max(0, ...Object.values(journal).map((record) => record.sequence ?? 0));
+}
+
+/**
+ * The journal with every entry numbered. A journal saved before `sequence` existed numbers its
+ * entries in run order, after any already numbered, so no two entries share a number.
+ */
+function numberedJournal(journal: WorkflowRun["journal"]): WorkflowRun["journal"] {
+  const unnumbered = Object.entries(journal)
+    .filter(([, record]) => record.sequence === undefined)
+    .toSorted(([, a], [, b]) => compareLegacyRunOrder(a, b));
+
+  if (unnumbered.length === 0) return journal;
+
+  const base = highestSequence(journal);
+
+  return {
+    ...journal,
+    ...Object.fromEntries(unnumbered.map(([name, record], index) => [name, { ...record, sequence: base + index + 1 }])),
+  };
+}
+
 /** The journal with `record` saved as step `name`, numbered in the order steps first appeared. */
 function journalWith(journal: WorkflowRun["journal"], name: string, record: WorkflowStepRecord): WorkflowRun["journal"] {
-  const sequence = journal[name]?.sequence ?? Object.keys(journal).length + 1;
+  const numbered = numberedJournal(journal);
+  const sequence = numbered[name]?.sequence ?? highestSequence(numbered) + 1;
 
-  return { ...journal, [name]: { ...record, sequence } };
+  return { ...numbered, [name]: { ...record, sequence } };
 }
 
 function definitionKey(name: string, version: number) {

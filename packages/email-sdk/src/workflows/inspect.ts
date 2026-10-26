@@ -2,6 +2,7 @@ import { isObjectLike, isString, isStringMember } from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError } from "./errors.js";
+import { compareLegacyRunOrder } from "./journal-order.js";
 import { stepNameError, stepOverlapError } from "./step-name.js";
 import type {
   AnyWorkflowDefinition,
@@ -775,13 +776,7 @@ function journalInRunOrder(journal: WorkflowRun["journal"]): [string, WorkflowSt
     return entries.toSorted(([, a], [, b]) => (a.sequence ?? 0) - (b.sequence ?? 0));
   }
 
-  const position = (record: WorkflowStepRecord) => (record.status === "completed" ? record.completedAt : Number.POSITIVE_INFINITY);
-
-  return entries.toSorted(([, a], [, b]) => {
-    const difference = position(a) - position(b);
-
-    return Number.isNaN(difference) ? 0 : difference;
-  });
+  return entries.toSorted(([, a], [, b]) => compareLegacyRunOrder(a, b));
 }
 
 /**

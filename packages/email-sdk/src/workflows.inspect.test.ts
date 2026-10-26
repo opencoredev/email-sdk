@@ -505,6 +505,94 @@ describe("describeRun", () => {
     expect(timeline.entries.map((entry) => entry.step)).toEqual(["10", "2", "b", "1"]);
   });
 
+  test("numbers a legacy journal's retrying step before adding the next step, keeping run order", async () => {
+    const clock = createManualClock(2_000);
+    const store = createMemoryWorkflowStore();
+
+    const numbers = defineWorkflow({
+      name: "legacy-retry",
+      run: async (ctx) => {
+        await ctx.step("10", () => {
+          clock.advance("1s");
+
+          return 10;
+        });
+        await ctx.step("2", () => {
+          clock.advance("1s");
+
+          return 2;
+        });
+      },
+    });
+
+    // A run saved before journal entries carried a sequence, waiting to retry its first step.
+    await store.create({
+      id: "legacy",
+      workflow: "legacy-retry",
+      version: 1,
+      status: "waiting",
+      input: null,
+      journal: { "10": { status: "retrying", kind: "step", attempts: 1, lastError: "503" } },
+      wait: { kind: "retry", step: "10", until: 2_000 },
+      inbox: [],
+      revision: 1,
+      createdAt: 0,
+      updatedAt: 1_000,
+      dueAt: 2_000,
+    });
+
+    const engine = createWorkflowEngine({ clock, store, email: { send: async () => ({ adapter: "test" }) }, workflows: [numbers] });
+
+    await engine.resume("legacy");
+
+    const run = await engine.get("legacy");
+
+    expect(run?.status).toBe("completed");
+    expect(run?.journal["10"]?.sequence).toBe(1);
+    expect(run?.journal["2"]?.sequence).toBe(2);
+    expect(run && describeRun(run).entries.map((entry) => entry.step)).toEqual(["10", "2"]);
+  });
+
+  test("numbers a legacy journal's completed steps in completion order before adding the next step", async () => {
+    const clock = createManualClock(3_000);
+    const store = createMemoryWorkflowStore();
+
+    const numbers = defineWorkflow({
+      name: "legacy-completed",
+      run: async (ctx) => {
+        await ctx.step("10", () => 10);
+        await ctx.step("2", () => 2);
+        await ctx.step("1", () => 1);
+      },
+    });
+
+    await store.create({
+      id: "legacy",
+      workflow: "legacy-completed",
+      version: 1,
+      status: "running",
+      input: null,
+      journal: {
+        "2": { status: "completed", kind: "step", result: 2, completedAt: 2_000 },
+        "10": { status: "completed", kind: "step", result: 10, completedAt: 1_000 },
+      },
+      inbox: [],
+      revision: 2,
+      createdAt: 0,
+      updatedAt: 2_000,
+      dueAt: 3_000,
+    });
+
+    const engine = createWorkflowEngine({ clock, store, email: { send: async () => ({ adapter: "test" }) }, workflows: [numbers] });
+
+    await engine.resume("legacy");
+
+    const run = await engine.get("legacy");
+
+    expect(run?.status).toBe("completed");
+    expect([run?.journal["10"]?.sequence, run?.journal["2"]?.sequence, run?.journal["1"]?.sequence]).toEqual([1, 2, 3]);
+  });
+
   test("orders a journal without sequence numbers by completion time, retrying steps last", () => {
     const timeline = describeRun({
       id: "r1",
