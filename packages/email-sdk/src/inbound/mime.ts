@@ -401,7 +401,8 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
     pieces.sort((left, right) => left.index - right.index);
     let charset = "utf-8";
     let decoded = "";
-    // Consecutive encoded pieces decode together, since a multi-byte character may span them.
+    // RFC 2231 joins the sections into one value in one charset, so ASCII sections, encoded or
+    // not, decode together: a Shift_JIS character or an ISO-2022-JP shift state may span them.
     let bytes: number[] = [];
 
     const flush = () => {
@@ -414,9 +415,14 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
       let text = piece.value;
 
       if (!piece.encoded) {
-        // An unencoded piece is already text; it must not pass through a byte conversion.
-        flush();
-        decoded += text;
+        if (/^[\x00-\x7f]*$/.test(text)) {
+          for (let index = 0; index < text.length; index += 1) bytes.push(text.charCodeAt(index));
+        } else {
+          // Raw Unicode some mailers send is already text; it must not pass through a byte conversion.
+          flush();
+          decoded += text;
+        }
+
         continue;
       }
 
