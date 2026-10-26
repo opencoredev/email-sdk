@@ -242,8 +242,8 @@ function WorkflowNodeCard({
         selected
           ? "border-[color:var(--accent)] shadow-[0_0_0_1px_var(--accent)]"
           : "border-[color:color-mix(in_oklab,var(--border)_16%,transparent)] hover:border-[color:color-mix(in_oklab,var(--border)_32%,transparent)]",
-        run && state === "off-path" && "opacity-35",
-        run && state === "pending" && "opacity-70",
+        // Off-path and pending nodes dim by border and fill, not opacity, so their text keeps AA contrast.
+        run && state === "off-path" && "border-dashed bg-transparent",
       )}
       data-node-id={node.id}
       onClick={onSelect}
@@ -252,14 +252,21 @@ function WorkflowNodeCard({
       tabIndex={focusable ? 0 : -1}
       type="button"
     >
-      <span className="flex items-center gap-1.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_60%,transparent)]">
+      <span className="flex items-center gap-1.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
         <span aria-hidden="true" className="flex size-3.5 items-center justify-center text-[color:var(--accent)] [&_svg]:size-3.5">
           {kind.icon}
         </span>
         {kind.label}
-        {name ? <span className="ml-auto truncate font-mono text-[10.5px] text-[color:color-mix(in_oklab,var(--foreground)_52%,transparent)]">{name}</span> : null}
+        {name ? <span className="ml-auto truncate font-mono text-[10.5px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">{name}</span> : null}
       </span>
-      <span className="truncate text-[13px] font-medium text-[color:var(--foreground)]">{titleOf(node)}</span>
+      <span
+        className={cn(
+          "truncate text-[13px] font-medium",
+          run && (state === "pending" || state === "off-path") ? "text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]" : "text-[color:var(--foreground)]",
+        )}
+      >
+        {titleOf(node)}
+      </span>
       {run && state === "completed" ? (
         <span className="absolute -top-2 -right-2 flex size-5 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--accent-foreground)]">
           <Check aria-hidden="true" className="size-3" strokeWidth={3} />
@@ -475,7 +482,7 @@ function NodeDetails({
   return (
     <div className="flex flex-col gap-4 p-3">
       <div>
-        <p className="m-0 flex items-center gap-1.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_60%,transparent)]">
+        <p className="m-0 flex items-center gap-1.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
           <span aria-hidden="true" className="text-[color:var(--accent)] [&_svg]:size-3.5">
             {kind.icon}
           </span>
@@ -533,7 +540,7 @@ function NodeDetails({
                   onClick={() => onSelect(child)}
                   type="button"
                 >
-                  <span className="font-mono text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_60%,transparent)]">{branch}</span>
+                  <span className="font-mono text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">{branch}</span>
                   <span className="truncate">{titleOf(target.node)}</span>
                 </button>
               ) : null;
@@ -580,7 +587,7 @@ function RunEntries({ frame }: { frame: WorkflowViewerFrame }) {
                 {entry.status}
               </span>
             </span>
-            <span className="text-[color:color-mix(in_oklab,var(--foreground)_64%,transparent)]">
+            <span className="text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
               {entry.status === "completed"
                 ? `${entry.summary} · ${formatTimestamp(entry.completedAt)}`
                 : entry.status === "waiting"
@@ -593,7 +600,7 @@ function RunEntries({ frame }: { frame: WorkflowViewerFrame }) {
       <table className="hidden w-full border-collapse text-left text-xs sm:table">
         <caption className="sr-only">describeRun entries at this keyframe</caption>
         <thead>
-          <tr className="text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]">
+          <tr className="text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
             <th className="py-1 pr-3 font-medium" scope="col">Step</th>
             <th className="py-1 pr-3 font-medium" scope="col">Kind</th>
             <th className="py-1 pr-3 font-medium" scope="col">Status</th>
@@ -622,7 +629,7 @@ function RunEntries({ frame }: { frame: WorkflowViewerFrame }) {
           ))}
         </tbody>
       </table>
-      <p className="m-0 mt-2 text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]">
+      <p className="m-0 mt-2 text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
         Run <code className="font-mono">{frame.timeline.runId}</code> is <span className="font-medium text-[color:var(--foreground)]">{frame.timeline.status}</span>
         {frame.timeline.output !== undefined ? ` with output ${JSON.stringify(frame.timeline.output)}` : ""}.
       </p>
@@ -676,16 +683,16 @@ export function WorkflowViewer({ data = onboardingViewerData }: { data?: Workflo
         <span className="flex min-w-0 items-center gap-1.5 px-1 text-xs font-semibold">
           <Workflow aria-hidden="true" className="size-3.5 text-[color:var(--accent)]" />
           <span className="font-mono">{data.graph.workflow}</span>
-          <span className="font-normal text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]">v{data.graph.version}</span>
+          <span className="font-normal text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">v{data.graph.version}</span>
         </span>
         <ToolbarDivider />
-        <span className="text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_60%,transparent)]">
+        <span className="text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
           {data.graph.paths.length} paths · {data.graph.nodes.filter((node) => node.kind === "send").length} emails
         </span>
         {data.graph.cancelOn.length > 0 ? (
           <>
             <ToolbarDivider />
-            <span className="flex items-center gap-1.5 text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_60%,transparent)]">
+            <span className="flex items-center gap-1.5 text-[11px] text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
               <Ban aria-hidden="true" className="size-3 text-[color:var(--destructive)]" />
               Cancels on <code className="font-mono text-[color:var(--foreground)]">{data.graph.cancelOn.join(", ")}</code>
             </span>

@@ -223,7 +223,7 @@ export function Canvas({ label, width, height, children, revealRect, overlay, cl
         <IconButton label="Zoom out" onClick={() => zoomAt(1 / 1.2)}>
           <ZoomOut />
         </IconButton>
-        <span aria-live="polite" className="w-10 text-center font-mono text-[11px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_64%,transparent)]">
+        <span aria-live="polite" className="w-10 text-center font-mono text-[11px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">
           {Math.round(view.zoom * 100)}%
         </span>
         <IconButton label="Zoom in" onClick={() => zoomAt(1.2)}>

@@ -26,7 +26,7 @@ export function Panel({ title, actions, children, className, bodyClassName }: Pa
 /** A section heading inside a panel, in Toolcraft's small muted style. */
 export function ControlSectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="m-0 mb-2 text-[11px] font-medium tracking-wide text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)] uppercase">
+    <h3 className="m-0 mb-2 text-[11px] font-medium tracking-wide text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)] uppercase">
       {children}
     </h3>
   );
@@ -36,7 +36,7 @@ export function ControlSectionTitle({ children }: { children: ReactNode }) {
 export function ControlRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[72px_minmax(0,1fr)] items-baseline gap-3 py-1 text-xs">
-      <dt className="text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]">{label}</dt>
+      <dt className="text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">{label}</dt>
       <dd className="m-0 min-w-0 break-words text-[color:var(--foreground)]">{children}</dd>
     </div>
   );

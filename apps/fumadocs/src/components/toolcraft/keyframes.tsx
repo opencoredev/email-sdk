@@ -80,7 +80,7 @@ export function Keyframes({ label, keyframes, durationMs, currentIndex, onCurren
           <SkipForward />
         </IconButton>
         <p aria-live="polite" className="m-0 ml-2 min-w-0 text-xs text-[color:var(--foreground)] sm:truncate">
-          <span className="mr-2 font-mono tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]">{current ? formatTime(current.atMs) : ""}</span>
+          <span className="mr-2 font-mono tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">{current ? formatTime(current.atMs) : ""}</span>
           {current?.label}
         </p>
       </div>
@@ -89,7 +89,7 @@ export function Keyframes({ label, keyframes, durationMs, currentIndex, onCurren
         {ticks.map((tick) => (
           <span
             aria-hidden="true"
-            className="absolute top-6 -translate-x-1/2 font-mono text-[10px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_48%,transparent)]"
+            className="absolute top-6 -translate-x-1/2 font-mono text-[10px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]"
             key={tick.atMs}
             style={{ left: position(tick.atMs, durationMs) }}
           >

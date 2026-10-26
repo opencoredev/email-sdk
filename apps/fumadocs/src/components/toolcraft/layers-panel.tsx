@@ -68,7 +68,7 @@ export function LayersPanel({ label, groups, selectedId, onSelect }: LayersPanel
           {group.label ? (
             <div
               aria-hidden="true"
-              className="flex h-7 items-center gap-1.5 pr-2.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_56%,transparent)]"
+              className="flex h-7 items-center gap-1.5 pr-2.5 text-[11px] font-medium text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]"
               style={{ paddingLeft: `${8 + group.depth * indentPx}px` }}
             >
               <svg className="size-3 shrink-0 opacity-60" fill="none" viewBox="0 0 256 256">
@@ -97,18 +97,19 @@ export function LayersPanel({ label, groups, selectedId, onSelect }: LayersPanel
                 style={{ paddingLeft: `${7 + item.depth * indentPx}px` }}
                 tabIndex={selected ? 0 : -1}
               >
-                <span className={cn("flex min-w-0 items-center gap-2", item.muted && "opacity-40")}>
-                  <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center text-[color:color-mix(in_oklab,var(--foreground)_64%,transparent)] [&_svg]:size-3.5">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" className={cn("flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5", item.muted ? "text-[color:color-mix(in_oklab,var(--foreground)_48%,transparent)]" : "text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]")}>
                     {item.icon}
                   </span>
-                  <span className="truncate font-mono text-xs text-[color:var(--foreground)]" title={item.name}>
+                  {/* Muted rows dim by color, not opacity, so their text keeps AA contrast. */}
+                  <span className={cn("truncate font-mono text-xs", item.muted ? "text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]" : "text-[color:var(--foreground)]")} title={item.name}>
                     {item.name}
                   </span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   {item.status}
                   {item.meta ? (
-                    <span className="font-mono text-[11px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_50%,transparent)]">{item.meta}</span>
+                    <span className="font-mono text-[11px] tabular-nums text-[color:color-mix(in_oklab,var(--foreground)_72%,transparent)]">{item.meta}</span>
                   ) : null}
                 </span>
               </div>
