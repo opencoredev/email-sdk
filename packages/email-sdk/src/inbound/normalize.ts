@@ -92,8 +92,18 @@ function resultClauses(value: string): string[] {
  */
 function authservId(clause: string): string | undefined {
   const match = /^(?:"((?:[^"\\]|\\.)*)"|([^\s"]+))(?:\s+\d+)?$/s.exec(clause);
+  const id = match?.[2] ?? match?.[1]?.replace(/\\(.)/gs, "$1");
 
-  return match?.[2] ?? match?.[1]?.replace(/\\(.)/gs, "$1");
+  // An authserv-id is ASCII (RFC 8601). Anything else is malformed and never trusted.
+  return id !== undefined && /^[\x20-\x7e]+$/.test(id) ? id : undefined;
+}
+
+/**
+ * Lowercase ASCII letters only. `toLowerCase` folds some non-ASCII letters to ASCII, such as the
+ * Kelvin sign U+212A to `k`, which would let a lookalike authserv-id match a trusted one.
+ */
+function asciiLowerCase(value: string): string {
+  return value.replace(/[A-Z]/g, letter => String.fromCharCode(letter.charCodeAt(0) + 32));
 }
 
 /**
@@ -103,12 +113,12 @@ function authservId(clause: string): string | undefined {
  */
 export function authenticationResults(headers: InboundHeaders, trusted: readonly string[]): InboundSecurity {
   const security: InboundSecurity = {};
-  const allowed = new Set(trusted.map(id => id.toLowerCase()));
+  const allowed = new Set(trusted.map(asciiLowerCase));
 
   if (!allowed.size) return security;
 
   for (const header of headers.getAll("authentication-results")) {
-    const [first = "", ...clauses] = resultClauses(header.toLowerCase());
+    const [first = "", ...clauses] = resultClauses(asciiLowerCase(header));
     const authserv = authservId(first);
 
     if (authserv === undefined || !allowed.has(authserv)) continue;

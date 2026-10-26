@@ -697,6 +697,18 @@ describe("review round 4 regressions", () => {
     expect(security("\" mx.trusted.test\"")).toEqual({});
   });
 
+  test("a non-ASCII authserv-id is never trusted, even when Unicode case folding maps it to ASCII", () => {
+    // U+212A KELVIN SIGN lowercases to ASCII "k", so "mx.trusted.teKt" would fold to "mx.trusted.tekt".
+    const kelvin = (header: string) => emailFromMime({ provider: "cloudflare", raw: `Authentication-Results: ${header}; spf=pass; dkim=pass\r\n\r\nhi`, trustedAuthServIds: ["mx.trusted.tekt"] }).security;
+
+    expect(kelvin("\"mx.trusted.te\\Kt\"")).toEqual({});
+    expect(kelvin("\"mx.trusted.teKt\"")).toEqual({});
+    expect(kelvin("mx.trusted.teKt")).toEqual({});
+    expect(kelvin("mx.trusted.teKt 1")).toEqual({});
+    expect(kelvin("MX.TRUSTED.TEKT")).toEqual(trusted);
+    expect(kelvin("\"mx.trusted.te\\kt\"")).toEqual(trusted);
+  });
+
   test("an authserv-id matches case-insensitively, quoted or not, with or without a version", () => {
     expect(security("MX.Trusted.TEST")).toEqual(trusted);
     expect(security("\"MX.Trusted.TEST\"")).toEqual(trusted);
