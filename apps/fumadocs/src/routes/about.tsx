@@ -4,18 +4,54 @@ import type { ReactNode } from "react";
 
 import { DocsVersionLink } from "@/components/docs-version-link";
 import { baseOptions } from "@/lib/layout.shared";
-import { buildPageMeta } from "@/lib/metadata";
 import { appName, siteUrl } from "@/lib/shared";
+
+const pageTitle = `About - ${appName}`;
+
+const pageDescription =
+  "About Email SDK, an open-source TypeScript SDK for transactional email across 27 adapters, maintained by OpenCore.";
+
+const canonicalUrl = `${siteUrl}/about`;
 
 export const Route = createFileRoute("/about")({
   head: () => ({
-    meta: buildPageMeta({
-      title: `About - ${appName}`,
-      description:
-        "About Email SDK, an open-source TypeScript SDK for transactional email across 27 adapters, maintained by OpenCore.",
-      url: `${siteUrl}/about`,
-    }),
-    links: [{ rel: "canonical", href: `${siteUrl}/about` }],
+    meta: [
+      { title: pageTitle },
+      { name: "description", content: pageDescription },
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: pageTitle },
+      { property: "og:description", content: pageDescription },
+      { property: "og:url", content: canonicalUrl },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: pageTitle },
+      { name: "twitter:description", content: pageDescription },
+      {
+        "script:ld+json": {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "AboutPage",
+              "@id": `${canonicalUrl}#webpage`,
+              url: canonicalUrl,
+              name: pageTitle,
+              description: pageDescription,
+              inLanguage: "en",
+              isPartOf: { "@id": `${siteUrl}/#website` },
+              about: { "@id": `${siteUrl}/#software` },
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${canonicalUrl}#breadcrumb`,
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: appName, item: siteUrl },
+                { "@type": "ListItem", position: 2, name: "About", item: canonicalUrl },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    links: [{ rel: "canonical", href: canonicalUrl }],
   }),
   component: About,
 });

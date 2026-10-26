@@ -58,6 +58,15 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
       { label: "GitHub", href: githubUrl },
       { label: "Sponsor", href: sponsorHref },
       { label: "Blog", href: "/blog", internal: true },
+      { label: "About", href: "/about", internal: true },
+      { label: "Contact", href: "/contact", internal: true },
+    ],
+  },
+  {
+    label: "Legal",
+    links: [
+      { label: "Privacy", href: "/privacy", internal: true },
+      { label: "Terms", href: "/terms", internal: true },
     ],
   },
 ];
