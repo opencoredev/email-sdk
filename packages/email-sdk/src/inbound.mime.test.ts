@@ -671,6 +671,39 @@ describe("review round 3 regressions", () => {
 });
 
 describe("review round 4 regressions", () => {
+  const security = (header: string) => emailFromMime({ provider: "cloudflare", raw: `Authentication-Results: ${header}; spf=pass; dkim=pass\r\n\r\nhi`, trustedAuthServIds: ["mx.trusted.test"] }).security;
+  const trusted = { spf: "pass", dkim: "pass" };
+
+  test("the whole quoted authserv-id must be trusted, not its first word", () => {
+    expect(security("\"mx.trusted.test attacker\"")).toEqual({});
+    expect(security("\"mx.trusted.test\tattacker\"")).toEqual({});
+    expect(security("\"mx.trusted.test\" attacker")).toEqual({});
+    expect(security("mx.trusted.test attacker")).toEqual({});
+    expect(security("\"mx.trusted.test\\\" attacker\"")).toEqual({});
+  });
+
+  test("comments cannot pad or split a trusted authserv-id", () => {
+    expect(security("mx.trusted.test (comment) attacker")).toEqual({});
+    expect(security("\"mx.trusted.test\" (comment) attacker")).toEqual({});
+    expect(security("mx.trusted(comment).test")).toEqual({});
+    expect(security("(comment) mx.trusted.test (comment) 1")).toEqual(trusted);
+    expect(security("\"mx.trusted.test\"(comment)")).toEqual(trusted);
+  });
+
+  test("a lookalike authserv-id is not trusted", () => {
+    expect(security("mx.trusted.test.")).toEqual({});
+    expect(security("\"mx.trusted.test.\"")).toEqual({});
+    expect(security("mx.trusted.test.attacker")).toEqual({});
+    expect(security("\" mx.trusted.test\"")).toEqual({});
+  });
+
+  test("an authserv-id matches case-insensitively, quoted or not, with or without a version", () => {
+    expect(security("MX.Trusted.TEST")).toEqual(trusted);
+    expect(security("\"MX.Trusted.TEST\"")).toEqual(trusted);
+    expect(security("\"mx.trusted\\.test\"")).toEqual(trusted);
+    expect(security("mx.trusted.test 1")).toEqual(trusted);
+  });
+
   test("a byte order mark is dropped from an encoded word in a UTF alias", () => {
     expect(decodeEncodedWords("=?unicode-1-1-utf-8?B?77u/QQ==?=")).toBe("A");
     expect(decodeEncodedWords("=?utf8?B?77u/QQ==?= =?utf8?B?77u/Qg==?=")).toBe("AB");
