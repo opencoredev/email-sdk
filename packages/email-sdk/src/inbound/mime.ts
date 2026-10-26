@@ -277,13 +277,17 @@ function commentRun(value: string, start: number): CommentRun {
 
 /**
  * Split a structured header value on `;`, respecting quoted strings and dropping RFC 822
- * comments such as `boundary=b (generated)`. A parenthesis followed by more token text, as in
- * the unquoted `filename=scan (1).pdf` some mailers send, is kept as literal text.
+ * comments such as `boundary=b (generated)` or `text(note)/plain`. A comment between two pieces
+ * of a parameter value, as in the unquoted `filename=scan (1).pdf` some mailers send, is kept as
+ * literal text; in the media type and parameter names it is always CFWS.
  */
 function splitParams(value: string): string[] {
   const parts: string[] = [];
   let current = "";
   let quoted = false;
+  // Tracked while scanning, so a comment never rescans the segment built so far.
+  let inValue = false;
+  let valueHasText = false;
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
@@ -292,26 +296,38 @@ function splitParams(value: string): string[] {
       // Consume the whole run at once so a long chain of comments is scanned only once.
       const run = commentRun(value, index);
 
-      if (current.trim() !== "" && !run.trailing) current += value.slice(index, run.end);
+      if (inValue && valueHasText && !run.trailing) current += value.slice(index, run.end);
 
       index = run.end - 1;
-    } else if (char === "\\" && quoted) {
-      current += char + (value[index + 1] ?? "");
-      index += 1;
-    } else if (char === "\"") {
-      quoted = !quoted;
-      current += char;
-    } else if (char === ";" && !quoted) {
+      continue;
+    }
+
+    if (char === ";" && !quoted) {
       parts.push(current);
       current = "";
+      inValue = false;
+      valueHasText = false;
+      continue;
+    }
+
+    if (char === "\\" && quoted) {
+      current += char + (value[index + 1] ?? "");
+      index += 1;
     } else {
+      if (char === "\"") quoted = !quoted;
+
       current += char;
     }
+
+    if (inValue && char !== " " && char !== "\t") valueHasText = true;
+
+    if (char === "=" && !quoted && parts.length > 0) inValue = true;
   }
 
   parts.push(current);
 
-  return parts.flatMap(part => part.trim() || []);
+  // The media type is tokens only, so whitespace left by a dropped comment is CFWS there.
+  return parts.flatMap((part, position) => (position === 0 ? part.replace(/[ \t]+/g, "") : part.trim()) || []);
 }
 
 function unquote(value: string): string {
