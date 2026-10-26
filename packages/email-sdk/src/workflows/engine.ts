@@ -48,6 +48,11 @@ const defaultLease: WorkflowDuration = "5m";
 // for longer than clock skew between workers plausibly needs.
 const maxDefaultLeaseMarginMs = 30_000;
 
+// Before an effect, the renewals an execution sends after one whose reply came back too late to
+// trust. Past this bound the store is too slow to prove the lease: the execution parks without
+// starting the effect, and lease-expiry recovery picks the run up.
+const staleLeaseRenewals = 2;
+
 const inboxLimit = 50;
 
 const defaultResumeDueLimit = 25;
@@ -497,15 +502,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         for (const stop of heartbeats) stop();
       }
 
-      // A save of a running run renewed the lease from a clock reading taken before it was sent. A
-      // reply that comes back once that lease may have lapsed proves nothing: another worker may
-      // already hold the run, so this execution stops as if it had lost it.
-      if (next.status === "running" && !leaseHeld()) {
-        lost = true;
-
-        return false;
-      }
-
+      // The store accepted the write against this owner's revision, so it is persisted even when
+      // the reply came back too late for `leaseHeld`. A late reply only stops new effects from
+      // starting until a renewal comes back in time; it never discards a result.
       return true;
     }
 
@@ -523,7 +522,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     /**
      * True while the lease this execution last wrote is safely its own: `commit` set its expiry from
      * the clock reading taken just before the write was sent, and the safety margin comes off that.
-     * Neither the store's view nor the reply's arrival time can extend it.
+     * Neither the store's view nor the reply's arrival time can extend it. Only effect admission
+     * depends on it: saves are fenced by the store's revision check instead.
      */
     function leaseHeld() {
       return current.lease?.owner === owner && now() < current.lease.until - leaseMarginMs;
@@ -653,11 +653,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         if (!(await renew())) return suspend();
       }
 
-      // The admission check, in the same synchronous turn that starts the effect: a sibling that
-      // fails the run, or a lease that lapsed while the renewal's reply was on its way, stops it
-      // here. Nothing may await between this line and the effect's first line, and `withHeartbeat`
-      // calls the effect synchronously.
-      if (!live() || !leaseHeld()) return suspend();
+      // A renewal whose reply came back inside the safety margin leaves the lease unproven, not
+      // lost: renew again, a bounded number of times. A renewal that finds another owner or a
+      // terminal run loses it for good.
+      for (let renewals = 0; !leaseHeld(); renewals += 1) {
+        if (!live() || renewals === staleLeaseRenewals || !(await renew())) return suspend();
+      }
+
+      // The admission check, in the same synchronous turn that starts the effect and the
+      // `leaseHeld` check above: a sibling that fails the run stops it here. Nothing may await
+      // between this line and the effect's first line, and `withHeartbeat` calls the effect
+      // synchronously.
+      if (!live()) return suspend();
 
       let result: WorkflowJsonValue | void;
 
@@ -954,13 +961,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     // Every exit, including a final save that throws, stops the heartbeats of steps still running.
     // A run left unsaved then keeps its last lease, which expires so lease-expiry recovery can retry it.
     try {
-      // A claim whose reply came back after its lease may have lapsed holds nothing, like a late renewal.
-      if (!leaseHeld()) {
-        lost = true;
-
-        return await store.get(loaded.id);
-      }
-
+      // A claim whose reply came back too late is handled like a late renewal: the first effect
+      // renews before it starts, and every save is revision-checked.
       return await conclude();
     } finally {
       ended = true;

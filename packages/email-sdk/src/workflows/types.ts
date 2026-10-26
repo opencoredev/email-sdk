@@ -302,12 +302,13 @@ export type WorkflowEngineOptions = {
    */
   leaseDuration?: WorkflowDuration;
   /**
-   * How long before its lease runs out an execution stops trusting it. An execution counts its
-   * lease from the clock reading taken just before each claim or renewal is sent, so a reply that
-   * arrives within this margin of `sentAt + leaseDuration`, or later, counts as a lost lease and
-   * starts no step or send. Covers clock skew between workers and the time between the check and
-   * the effect's start. Must be less than `leaseDuration`. Defaults to a tenth of the lease, at
-   * most `"30s"`.
+   * How long before its lease runs out an execution stops trusting it to start effects. An
+   * execution counts its lease from the clock reading taken just before each claim or renewal is
+   * sent. A reply that arrives within this margin of `sentAt + leaseDuration`, or later, starts no
+   * step or send until a fresh renewal comes back in time; saves still go through the store's
+   * revision check, so a result the store accepts is kept. Covers clock skew between workers and
+   * the time between the check and the effect's start. Must be less than `leaseDuration`. Defaults
+   * to a tenth of the lease, at most `"30s"`.
    */
   leaseSafetyMargin?: WorkflowDuration;
 };

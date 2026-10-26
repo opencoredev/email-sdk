@@ -3084,33 +3084,49 @@ describe("workflows: review regressions, round 8", () => {
     },
   );
 
-  test.each(effects)("a %s whose renewal returns inside the safety margin starts nothing", async (effect) => {
+  /** Counts the renewals `inner` receives: saves of the running run with nothing journaled yet. */
+  function countingRenewals(inner: WorkflowStore) {
+    const counted = { renewals: 0 };
+
+    const store: WorkflowStore = {
+      ...inner,
+      async save(run, expectedRevision) {
+        if (isRenewal(run)) counted.renewals += 1;
+
+        return await inner.save(run, expectedRevision);
+      },
+    };
+
+    return { store, counted };
+  }
+
+  test.each(effects)("a %s whose renewal returns inside the safety margin renews again before it starts", async (effect) => {
     const held = gate();
     const ran = { count: 0 };
     const definition = oneEffect(effect, ran);
     const memory = createMemoryWorkflowStore();
-    const { clock, sender, engine } = setup([definition], { store: holdingRenewal(memory, 1, held, "after") });
+    const { store, counted } = countingRenewals(holdingRenewal(memory, 1, held, "after"));
+    const { clock, sender, engine } = setup([definition], { store });
 
     const run = engine.start(definition, ada, { id: "run-1" });
 
     await held.reached;
-    // The default margin for a 5m lease is 30s: the lease counts as lost 30s before it expires.
+    // The default margin for a 5m lease is 30s: the reply leaves the lease unproven, so the
+    // execution sends a fresh renewal, which comes back in time and admits the effect.
     clock.advance(leaseMs - 30_000);
     held.open();
 
-    expect(await run).toMatchObject({ status: "running" });
-    expect(ran.count + sender.calls.length).toBe(0);
-    expect((await memory.get("run-1"))?.journal).toEqual({});
+    expect(await run).toMatchObject({ status: "completed" });
+    expect(ran.count + sender.calls.length).toBe(1);
+    expect(counted.renewals).toBe(2);
   });
 
-  test.each(effects)("a %s whose renewal returns just before the safety margin still runs", async (effect) => {
+  test.each(effects)("a %s whose renewal returns just before the safety margin starts without another", async (effect) => {
     const held = gate();
     const ran = { count: 0 };
     const definition = oneEffect(effect, ran);
-
-    const { clock, sender, engine } = setup([definition], {
-      store: holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"),
-    });
+    const { store, counted } = countingRenewals(holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"));
+    const { clock, sender, engine } = setup([definition], { store });
 
     const run = engine.start(definition, ada, { id: "run-1" });
 
@@ -3120,45 +3136,50 @@ describe("workflows: review regressions, round 8", () => {
 
     expect(await run).toMatchObject({ status: "completed" });
     expect(ran.count + sender.calls.length).toBe(1);
+    expect(counted.renewals).toBe(1);
   });
 
-  test("leaseSafetyMargin sets how long before expiry a lease counts as lost", async () => {
+  test.each([
+    [60_000, 2],
+    [60_001, 1],
+  ] as const)("leaseSafetyMargin 1m: a reply %pms before expiry takes %p renewals", async (beforeExpiry, renewals) => {
     const held = gate();
     const ran = { count: 0 };
     const definition = oneEffect("step", ran);
-
-    const { clock, engine } = setup([definition], {
-      leaseSafetyMargin: "1m",
-      store: holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"),
-    });
+    const { store, counted } = countingRenewals(holdingRenewal(createMemoryWorkflowStore(), 1, held, "after"));
+    const { clock, engine } = setup([definition], { leaseSafetyMargin: "1m", store });
 
     const run = engine.start(definition, ada, { id: "run-1" });
 
     await held.reached;
-    clock.advance(leaseMs - 60_000);
+    clock.advance(leaseMs - beforeExpiry);
     held.open();
 
-    expect(await run).toMatchObject({ status: "running" });
-    expect(ran.count).toBe(0);
+    expect(await run).toMatchObject({ status: "completed" });
+    expect(ran.count).toBe(1);
+    expect(counted.renewals).toBe(renewals);
   });
 
   test.each([[-1], ["5m"], ["10m"]] as const)("rejects leaseSafetyMargin %p for a 5m lease", (margin) => {
     expect(() => setup([linear], { leaseSafetyMargin: margin })).toThrow(WorkflowError);
   });
 
-  test("a claim whose lease already counts as lost starts nothing", async () => {
+  test("a claim whose reply came back too late starts nothing once another worker took the run", async () => {
     const ran = { count: 0 };
     const definition = oneEffect("step", ran);
     const memory = createMemoryWorkflowStore();
     const clock = createManualClock(start);
+    const other = createWorkflowEngine({ email: recordingSender(), store: memory, clock, workflows: [definition] });
 
-    // The store's create takes so long that the lease `start` wrote is already inside its margin.
+    // The store's create takes so long that the lease `start` wrote has expired, and another
+    // worker takes the run over before the reply arrives.
     const store: WorkflowStore = {
       ...memory,
       async create(run) {
         const created = await memory.create(run);
 
         clock.advance(leaseMs);
+        expect(await other.resume(run.id)).toMatchObject({ status: "completed" });
 
         return created;
       },
@@ -3166,8 +3187,31 @@ describe("workflows: review regressions, round 8", () => {
 
     const { sender, engine } = setup([definition], { store, clock });
 
-    expect(await engine.start(definition, ada, { id: "run-1" })).toMatchObject({ status: "running" });
-    expect(ran.count + sender.calls.length).toBe(0);
+    expect(await engine.start(definition, ada, { id: "run-1" })).toMatchObject({ status: "completed" });
+    expect(ran.count + sender.calls.length).toBe(1);
+  });
+
+  test("a claim whose reply came back too late renews before its first effect, and runs it once", async () => {
+    const ran = { count: 0 };
+    const definition = oneEffect("step", ran);
+    const memory = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+
+    const store: WorkflowStore = {
+      ...memory,
+      async create(run) {
+        const created = await memory.create(run);
+
+        clock.advance(leaseMs - 1);
+
+        return created;
+      },
+    };
+
+    const { engine } = setup([definition], { store, clock });
+
+    expect(await engine.start(definition, ada, { id: "run-1" })).toMatchObject({ status: "completed" });
+    expect(ran.count).toBe(1);
   });
 
   test.each(effects)("a %s whose renewal reaches the store after a cancel committed starts nothing", async (effect) => {
@@ -3211,4 +3255,221 @@ describe("workflows: review regressions, round 8", () => {
       expect((await memory.get("run-1"))?.journal).toEqual({});
     },
   );
+});
+
+describe("workflows: review regressions, round 9", () => {
+  // A short lease, so the real heartbeat timer beats every 100ms while the manual clock stands in
+  // for the store's latency.
+  const leaseMs = 300;
+  const marginMs = 30;
+
+  /** What `slowHeartbeats` exposes: whether a step runs, the heartbeats seen, and the next to hold. */
+  type HeartbeatState = { stepRunning: boolean; heartbeats: number; held?: ReturnType<typeof gate> };
+
+  /**
+   * Wraps a store so each heartbeat (a renewal saved while a step runs) commits, then replies
+   * `latency` after the clock reading `commit` took before sending it. The heartbeat at `held`
+   * also waits for `held.pass()` after committing, so the test can act while the reply is pending.
+   */
+  function slowHeartbeats(inner: WorkflowStore, clock: ReturnType<typeof createManualClock>, latency: number) {
+    const state: HeartbeatState = { stepRunning: false, heartbeats: 0 };
+
+    const store: WorkflowStore = {
+      ...inner,
+      async save(run, expectedRevision) {
+        const saved = await inner.save(run, expectedRevision);
+        const lease = run.lease;
+
+        if (saved && state.stepRunning && run.status === "running" && lease) {
+          state.heartbeats += 1;
+
+          const held = state.held;
+
+          state.held = undefined;
+          await held?.pass();
+          clock.set(Math.max(clock.now(), lease.until - leaseMs + latency));
+        }
+
+        return saved;
+      },
+    };
+
+    return { store, state };
+  }
+
+  test("a step whose heartbeat replies inside the safety margin checkpoints once, and the run goes on", async () => {
+    const memory = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+    // 271ms of a 300ms lease: still valid, but inside the default 30ms margin.
+    const { store, state } = slowHeartbeats(memory, clock, leaseMs - marginMs + 1);
+    const finish = gate();
+    const ran = { first: 0, second: 0 };
+
+    const definition = defineWorkflow({
+      name: "slow-heartbeat",
+      run: async (ctx) => {
+        const first = await ctx.step("first", async () => {
+          ran.first += 1;
+          state.stepRunning = true;
+          await finish.pass();
+          state.stepRunning = false;
+
+          return "ok";
+        });
+
+        await ctx.step("second", () => {
+          ran.second += 1;
+        });
+
+        return first;
+      },
+    });
+
+    state.held = gate();
+
+    const { engine } = setup([definition], {
+      store,
+      clock,
+      leaseDuration: leaseMs,
+      retry: { maxAttempts: 1, backoff: "10s" },
+    });
+
+    const held = state.held;
+    const run = engine.start(definition, null, { id: "run-1" });
+
+    await held.reached;
+    held.open();
+    await finish.reached;
+
+    // Let the stale reply land before the step returns.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    finish.open();
+
+    expect(await run).toMatchObject({ status: "completed", output: "ok" });
+    expect(ran).toEqual({ first: 1, second: 1 });
+    expect(state.heartbeats).toBeGreaterThanOrEqual(1);
+    expect((await memory.get("run-1"))?.journal.first).toMatchObject({ status: "completed", result: "ok" });
+  });
+
+  test("a heartbeat that replies after another worker took the run over starts nothing, and its checkpoint is rejected", async () => {
+    const memory = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+    const { store, state } = slowHeartbeats(memory, clock, 0);
+    const finish = gate();
+    const ran = { first: 0, second: 0 };
+
+    const definition = defineWorkflow({
+      name: "late-heartbeat-takeover",
+      run: async (ctx) => {
+        const first = await ctx.step("first", async () => {
+          ran.first += 1;
+
+          const attempt = ran.first;
+
+          if (attempt === 1) {
+            state.stepRunning = true;
+            await finish.pass();
+          }
+
+          return attempt;
+        });
+
+        await ctx.step("second", () => {
+          ran.second += 1;
+        });
+
+        return first;
+      },
+    });
+
+    const common = { clock, workflows: [definition], leaseDuration: leaseMs, email: recordingSender() };
+    const old = createWorkflowEngine({ ...common, store });
+    const other = createWorkflowEngine({ ...common, store: memory });
+    const held = gate();
+
+    state.held = held;
+
+    const first = old.start(definition, null, { id: "run-1" });
+
+    // The heartbeat committed; while its reply is on the way the lease runs out and another worker
+    // takes the run over and finishes it.
+    await held.reached;
+    clock.advance(10 * leaseMs);
+    expect(await other.resume("run-1")).toMatchObject({ status: "completed", output: 2 });
+
+    state.stepRunning = false;
+    held.open();
+    await finish.reached;
+    finish.open();
+
+    // The old worker's checkpoint loses the revision check: it saves nothing and starts no step.
+    expect(await first).toMatchObject({ status: "completed", output: 2 });
+    expect(ran).toEqual({ first: 2, second: 1 });
+    expect((await memory.get("run-1"))?.journal.first).toMatchObject({ status: "completed", result: 2 });
+  });
+
+  test("a store whose every reply is too late runs each step at most once and stops renewing", async () => {
+    const memory = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+    const tracker = { slow: false, saves: 0 };
+    const ran = { first: 0, second: 0 };
+
+    // Once `slow` is set, every save of a running run replies right at the edge of its margin.
+    const store: WorkflowStore = {
+      ...memory,
+      async save(run, expectedRevision) {
+        const saved = await memory.save(run, expectedRevision);
+        const lease = run.lease;
+
+        if (tracker.slow) tracker.saves += 1;
+
+        if (saved && tracker.slow && run.status === "running" && lease) {
+          clock.set(Math.max(clock.now(), lease.until - marginMs));
+        }
+
+        return saved;
+      },
+    };
+
+    const definition = defineWorkflow({
+      name: "slow-store",
+      run: async (ctx) => {
+        await ctx.step("first", () => {
+          ran.first += 1;
+          tracker.slow = true;
+        });
+
+        await ctx.step("second", () => {
+          ran.second += 1;
+        });
+      },
+    });
+
+    const { engine } = setup([definition], { store, clock, leaseDuration: leaseMs });
+
+    // The first step's checkpoint comes back late but is persisted. The second step's admission
+    // renews a bounded number of times, never proves the lease, and parks.
+    expect(await engine.start(definition, null, { id: "run-1" })).toMatchObject({ status: "running" });
+    expect(ran).toEqual({ first: 1, second: 0 });
+    expect((await memory.get("run-1"))?.journal.first).toMatchObject({ status: "completed" });
+
+    // Checkpoint, then at most the first renewal and two more.
+    expect(tracker.saves).toBeLessThanOrEqual(4);
+
+    // Each lease-expiry recovery claims the run, renews a bounded number of times, and parks again.
+    for (let recovery = 0; recovery < 5; recovery += 1) {
+      tracker.saves = 0;
+      clock.advance(leaseMs);
+      expect(await engine.resume("run-1")).toMatchObject({ status: "running" });
+      expect(tracker.saves).toBeLessThanOrEqual(4);
+    }
+
+    expect(ran).toEqual({ first: 1, second: 0 });
+
+    // Once the store answers in time, the second step runs exactly once.
+    tracker.slow = false;
+    clock.advance(leaseMs);
+    expect(await engine.resume("run-1")).toMatchObject({ status: "completed" });
+    expect(ran).toEqual({ first: 1, second: 1 });
+  });
 });
