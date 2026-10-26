@@ -14,6 +14,7 @@ import { EmailExample, EmailExampleGallery } from "./email-examples";
 import { PackageInstallTabs } from "./package-install-tabs";
 import { ProviderBadge, ProviderGrid } from "./provider-catalog";
 import { SponsorSpotlight } from "./sponsors";
+import { WorkflowViewer } from "./workflow-viewer";
 
 type MdxComponentOptions = {
   docsBasePath?: string;
@@ -65,6 +66,7 @@ export function getMDXComponents(components?: MDXComponents, options: MdxCompone
     Tab,
     Tabs,
     TypeTable,
+    WorkflowViewer,
     ...components,
   } satisfies MDXComponents;
 }

@@ -1,0 +1,117 @@
+---
+title: Workflows (experimental)
+description: Run Email SDK workflows on Convex with the component's store, scheduler, and durable send queue.
+---
+
+<Callout type="warn" title="Experimental">
+`@opencoredev/convex-email/workflows` builds on the experimental [email workflows](/docs/guides/email-workflows) API and may change in a minor release. Using it needs `@opencoredev/email-sdk` 3.1 or later, which provides `createWorkflowEngine`. The component itself still accepts email-sdk 3.0.1 and later, so an app that doesn't use workflows can stay on 3.0.x without a peer warning.
+</Callout>
+
+The component provides everything a workflow engine needs on Convex:
+
+- `convexWorkflowStore` keeps runs in the component's `workflowRuns` table. Saves check the run's revision inside one mutation, so two actions racing on a run can't overwrite each other, and only the action holding the run's lease executes its steps. Subject lookups page through the table 100 runs per query, so an `unsubscribed` event reaches every run for that subject.
+- `convexWorkflowScheduler` schedules each wait, and each claim's lease expiry, with `ctx.scheduler.runAt`. An early or stale job finds nothing to do and ends, except that a lease-expiry job that finds the step still running schedules one job for the renewed expiry.
+- `convexWorkflowEmail` sends each `ctx.send` through the component queue with the step's idempotency key. Workflow emails get the same retries, fallback, webhook status, and test mode as any other email, and a replayed step finds the email it already queued instead of adding a second one, even after email cleanup (see [Cleanup and send dedup](#cleanup-and-send-dedup)).
+
+## Define the engine and its actions
+
+The engine runs inside actions, because your workflow code lives in your app. Define the workflow anywhere in `convex/`, then wire one action per entry point:
+
+```ts title="convex/onboarding.ts"
+import { ConvexEmail } from "@opencoredev/convex-email";
+import {
+  convexWorkflowEmail,
+  convexWorkflowScheduler,
+  convexWorkflowStore,
+} from "@opencoredev/convex-email/workflows";
+import { createWorkflowEngine } from "@opencoredev/email-sdk/workflows";
+import { v } from "convex/values";
+import { components, internal } from "./_generated/api";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import { onboarding } from "./workflows/onboarding";
+
+const email = new ConvexEmail(components.convexEmail, {
+  adapters: [{ kind: "resend" }],
+  defaultAdapter: "resend",
+});
+
+function engine(ctx: ActionCtx) {
+  return createWorkflowEngine({
+    email: convexWorkflowEmail(email, ctx),
+    store: convexWorkflowStore(components.convexEmail, ctx),
+    scheduler: convexWorkflowScheduler(ctx, internal.onboarding.resume),
+    workflows: [onboarding],
+  });
+}
+
+export const start = internalAction({
+  args: { userId: v.string(), email: v.string(), name: v.string() },
+  handler: async (ctx, args) => {
+    await engine(ctx).start(onboarding, args, { id: `onboarding:${args.userId}`, subject: args.email });
+  },
+});
+
+export const resume = internalAction({
+  args: { runId: v.string(), owner: v.optional(v.string()) },
+  handler: async (ctx, { runId, owner }) => {
+    await engine(ctx).resume(runId, { owner });
+  },
+});
+
+export const sendEvent = internalAction({
+  args: { name: v.string(), subject: v.string() },
+  handler: async (ctx, args) => {
+    await engine(ctx).sendEvent(args);
+  },
+});
+
+export const resumeDue = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    await engine(ctx).resumeDue();
+  },
+});
+```
+
+Start a run from a mutation with `ctx.scheduler.runAfter(0, internal.onboarding.start, { ... })`, and send `activated` or `unsubscribed` events the same way.
+
+## Recover crashed runs
+
+A Convex action that fails mid-step is not retried. The job the engine scheduled for the lease expiry picks the run up again about five minutes later, with no cron. Each claim adds that one job, plus one more for every lease period a long step keeps running.
+
+Add a cron for `resumeDue` anyway, as a backstop for a run whose job was never scheduled, such as when an action dies between saving the run and scheduling the job:
+
+```ts title="convex/crons.ts"
+import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api";
+
+const crons = cronJobs();
+
+crons.interval("resume email workflows", { minutes: 5 }, internal.onboarding.resumeDue, {});
+
+export default crons;
+```
+
+Each timer wake is its own scheduled action, so a run stuck in a step never delays another run's wake. The cron's `resumeDue` runs up to 10 due runs at once in one action; pass `{ concurrency }` to change that.
+
+### Cleanup and send dedup
+
+Each workflow send is recorded in the component's `workflowSends` table, keyed by the step's idempotency key, in the same mutation that queues the email. A replayed step finds that record and gets the email it already queued. If an action dies after queueing but before saving the finished step, the lease-expiry job or the cron recovers the run, and the replayed send queues nothing new, even if `cleanupAfterDays` has deleted the email by then.
+
+A record lives as long as its run is active, then for `workflowSendRetentionDays` (default 30) after the run completes, fails, or is canceled. The component's five-minute sweep deletes it after that. Set the option with `setConfig`; it doesn't depend on `cleanupAfterDays`. Ordinary `email.send` calls write no records.
+
+## What the queue can't carry
+
+The component stores messages as JSON, so two message features are rejected before anything is queued, and the run fails without retrying:
+
+- `sendAt`. Use `ctx.sleepUntil` before the send instead.
+- Binary attachment content (`Uint8Array`, `ArrayBuffer`, `Blob`) and `path` attachments. Pass base64 strings with `contentEncoding: "base64"`.
+
+These `ctx.send` options reach the queue: `adapter`, `fallback.adapters`, `retry.maxAttempts`, and `metadata` with string, number, boolean, or null values. The queue can't honor `signal`, `retry.delay`, `retry.shouldRetry`, `fallback.onUnknownDelivery: "continue"`, or nested metadata, so those fail the run the same way.
+
+`ctx.send` returns `{ adapter: "convex-email", id }`, where `id` is the component email id. Delivery happens later in the component's worker, so read its status with `email.status` as usual.
+
+<Cards>
+  <Card title="Email workflows" href="/docs/guides/email-workflows" description="Steps, replay rules, retries, and versioning." />
+  <Card title="Send and read status" href="/docs/integrations/convex/sending-and-status" description="How the component queue retries and reports delivery." />
+</Cards>

@@ -333,6 +333,58 @@ await email.setConfig(ctx, {
 });
 ```
 
+## Workflows (Experimental)
+
+`@opencoredev/convex-email/workflows` runs [Email SDK workflows](https://email-sdk.dev/docs/integrations/convex/workflows) on Convex. Using it needs `@opencoredev/email-sdk` 3.1 or later, which provides `createWorkflowEngine`; the component's peer range still accepts 3.0.1, so apps that skip workflows can stay on 3.0.x. Runs are stored in the component's `workflowRuns` table, waits use `ctx.scheduler.runAt`, and every `ctx.send` goes through this component's queue with the step's idempotency key, so retries, fallback, and webhook status apply to drip emails too. Each workflow send is recorded in the `workflowSends` table, so a replayed step never queues its email twice, even after `cleanupAfterDays` deleted it. Records are kept while the run is active and for `workflowSendRetentionDays` (default 30) after it finishes.
+
+```ts title="convex/onboarding.ts"
+import { ConvexEmail } from "@opencoredev/convex-email";
+import {
+  convexWorkflowEmail,
+  convexWorkflowScheduler,
+  convexWorkflowStore,
+} from "@opencoredev/convex-email/workflows";
+import { createWorkflowEngine } from "@opencoredev/email-sdk/workflows";
+import { v } from "convex/values";
+import { components, internal } from "./_generated/api";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import { onboarding } from "./workflows/onboarding";
+
+const email = new ConvexEmail(components.convexEmail);
+
+function engine(ctx: ActionCtx) {
+  return createWorkflowEngine({
+    email: convexWorkflowEmail(email, ctx),
+    store: convexWorkflowStore(components.convexEmail, ctx),
+    scheduler: convexWorkflowScheduler(ctx, internal.onboarding.resume),
+    workflows: [onboarding],
+  });
+}
+
+export const start = internalAction({
+  args: { userId: v.string(), email: v.string() },
+  handler: async (ctx, args) => {
+    await engine(ctx).start(onboarding, args, { id: `onboarding:${args.userId}`, subject: args.email });
+  },
+});
+
+export const resume = internalAction({
+  args: { runId: v.string(), owner: v.optional(v.string()) },
+  handler: async (ctx, { runId, owner }) => {
+    await engine(ctx).resume(runId, { owner });
+  },
+});
+
+export const resumeDue = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    await engine(ctx).resumeDue();
+  },
+});
+```
+
+Add a cron that calls `internal.onboarding.resumeDue` every few minutes. It picks up runs whose action crashed mid-step. Messages with `sendAt` or binary attachment content are rejected, because the queue stores JSON: use `ctx.sleepUntil` and base64 strings instead.
+
 ## Scope
 
 Convex Email Ops is not a campaign builder, contact database, template editor, hosted analytics product, or inbound email processor. It keeps the operational pieces apps usually rebuild: queueing, retries, fallback routing, idempotency, webhook records, attempted-adapter history, and queryable status.

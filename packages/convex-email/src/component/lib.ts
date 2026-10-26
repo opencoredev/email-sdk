@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import { cleanupReleasedWorkflowSends } from "./workflows.js";
 import {
   internalFunctions,
   markFailedOrRetryArgs,
@@ -229,6 +230,7 @@ export const getConfig = query({
       maxAttempts: config.maxAttempts,
       retryBaseMs: config.retryBaseMs,
       cleanupAfterDays: config.cleanupAfterDays,
+      workflowSendRetentionDays: config.workflowSendRetentionDays,
     };
   },
 });
@@ -374,6 +376,7 @@ export const processDueEmails = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     await cleanupExpiredEmailRecords(ctx, now, cleanupBatchSize);
+    await cleanupReleasedWorkflowSends(ctx, now, cleanupBatchSize);
 
     const due = await ctx.db
       .query("emails")
@@ -471,15 +474,18 @@ export const recordWebhook = internalMutation({
   },
 });
 
-async function enqueueEmail(
+export async function enqueueEmail(
   ctx: MutationCtx,
   args: ConvexEmailSendArgs,
   preloadedConfig?: ConvexEmailConfig,
   ownerId?: string,
+  workflowRunId?: string,
 ) {
   const idempotencyKey = args.idempotencyKey;
 
-  if (idempotencyKey) {
+  // A workflow step's email is deduped by its `workflowSends` record in the caller's transaction,
+  // so it never adopts a caller's email that happens to carry the same key.
+  if (idempotencyKey && workflowRunId === undefined) {
     const existing = ownerId
       ? await ctx.db
           .query("emails")
@@ -489,7 +495,9 @@ async function enqueueEmail(
           .first()
       : await ctx.db
           .query("emails")
-          .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
+          .withIndex("by_idempotencyKey_and_workflowRunId", (q) =>
+            q.eq("idempotencyKey", idempotencyKey).eq("workflowRunId", undefined),
+          )
           .first();
 
     if (existing) {
@@ -505,6 +513,7 @@ async function enqueueEmail(
     status: "queued",
     message,
     ownerId,
+    workflowRunId,
     adapter: args.adapter,
     attemptedAdapters: [],
     fallbackAdapters: args.fallbackAdapters ?? [],
@@ -538,7 +547,7 @@ async function enqueueEmail(
   return emailId;
 }
 
-async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
+export async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
   const config = await getConfigDoc(ctx);
 
   return config ?? {};

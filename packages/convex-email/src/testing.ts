@@ -12,6 +12,7 @@ const modules = {
   "./component/lib.ts": () => import("./component/lib.js"),
   "./component/providers.ts": () => import("./component/providers.js"),
   "./component/worker.ts": () => import("./component/worker.js"),
+  "./component/workflows.ts": () => import("./component/workflows.js"),
 };
 
 export function memoryAdapter(name = "memory"): ConvexEmailAdapterConfig {

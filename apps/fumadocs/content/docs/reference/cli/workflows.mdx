@@ -1,0 +1,32 @@
+---
+title: email-sdk workflows inspect
+description: Print every path an email workflow can take, with rendered emails, delays, and event branches, without sending anything.
+---
+
+```bash
+email-sdk workflows inspect ./src/workflows/onboarding.ts \
+  --export onboarding \
+  --input '{"userId":"u_1","email":"ada@example.com","name":"Ada"}' \
+  --events '{"activated":{"plan":"pro"}}' \
+  --format text
+```
+
+The command imports the module, runs the workflow against a tracing `ctx`, and prints the graph that [`inspectWorkflow`](/docs/guides/view-email-workflows) returns. It sends no email, writes no store, and schedules nothing. Code between `ctx` calls still runs, so it must be free of side effects, which replay already requires.
+
+| Option | Meaning |
+| --- | --- |
+| `<module>` | File that exports the workflow. `.js` and `.mjs` work everywhere; `.ts` needs Bun or a Node version that strips types (22.18+), and its imports must resolve as written. |
+| `--export <name>` | Export to inspect. Defaults to the `default` export, or the only exported workflow definition. |
+| `--input <json\|@file>` | Start input, parsed by the workflow's input schema as `start` would. Defaults to `null`. |
+| `--events <json\|@file>` | Sample payloads keyed by event name, used on each `received` branch. Each must be JSON that `sendEvent` would accept. |
+| `--steps <json\|@file>` | `ctx.step` results keyed by step name. Steps without one return `undefined` and show as `unknown`; their callbacks never run. |
+| `--subject <subject>` | Value for `ctx.subject`. |
+| `--format <json\|mermaid\|text>` | `json` (default) is the full graph, `mermaid` is a flowchart, `text` is one block per path. |
+| `--max-paths <n>` | Stop after `n` paths. Defaults to 32. Each `waitForEvent` with a timeout can double the count. |
+| `--max-depth <n>` | Cut a path off after `n` ctx calls. Defaults to 100. |
+
+The output reports `truncated: true` when a cap stopped exploration. A path whose code throws ends in a `failed` node with the error message, so a missing `--events` sample shows up as a failure on the `received` branch.
+
+Usage errors, an unloadable module, a missing export, and input the schema rejects print one message to stderr and exit with status 1.
+
+<Card title="View email workflows" href="/docs/guides/view-email-workflows" description="See the same graph in the interactive viewer, and the JSON and Mermaid formats." />

@@ -33,6 +33,18 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.json.attachments[0].content).toBe(base64("hello"));
   });
 
+  test("Resend sends a mailbox that ends in a comment", async () => {
+    const capture = jsonCapture({ id: "res_123" });
+
+    const response = await resend({ apiKey: "key", fetch: capture.fetch }).send(
+      { ...messageWithoutMetadata, to: "Ada <ada@example.test> (work)" },
+      context,
+    );
+
+    expect(response.id).toBe("res_123");
+    expect(capture.calls[0]?.json).toMatchObject({ to: ["Ada <ada@example.test> (work)"] });
+  });
+
   test("Resend gives a per-send idempotency key precedence over static headers", async () => {
     const capture = jsonCapture({ id: "res_123" });
 

@@ -158,6 +158,7 @@ export const vEmailConfig = v.object({
   maxAttempts: v.optional(v.number()),
   retryBaseMs: v.optional(v.number()),
   cleanupAfterDays: v.optional(v.number()),
+  workflowSendRetentionDays: v.optional(v.number()),
 });
 
 export const vDeliveryStatusValue = v.union(
@@ -218,6 +219,7 @@ const emailRecordFields = {
   status: vEmailStatusValue,
   message: v.object(vEmailMessage),
   ownerId: v.optional(v.string()),
+  workflowRunId: v.optional(v.string()),
   adapter: v.optional(v.string()),
   attemptedAdapters: v.array(v.string()),
   fallbackAdapters: v.array(v.string()),

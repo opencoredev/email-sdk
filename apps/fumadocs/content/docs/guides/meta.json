@@ -5,6 +5,8 @@
     "schedule-email",
     "receive-email",
     "production-send-pipeline",
+    "email-workflows",
+    "view-email-workflows",
     "test-email-behavior",
     "troubleshoot-failed-sends",
     "migrate",

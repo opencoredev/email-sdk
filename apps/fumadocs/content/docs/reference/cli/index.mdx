@@ -13,6 +13,7 @@ The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node
 | `adapters` | List bundled adapter names, required environment, and notes; `--json` returns JSON. |
 | `doctor` | Check whether required values are present for one adapter. `--live` authenticates without sending; `--json` returns structured checks. |
 | `send` | Build, validate, and optionally send one message. |
+| `workflows inspect` | Print every path a workflow can take as JSON, Mermaid, or text, without sending. |
 
 `providers` aliases `adapters`. `--provider` aliases `--adapter` in CLI input, but new examples use adapter vocabulary.
 
@@ -31,3 +32,4 @@ CLI runs use the same default telemetry and opt-outs as the SDK. `email-sdk tele
 <Card title="List adapters" href="/docs/reference/cli/adapters" description="Inspect the bundled registry and credential names." />
 <Card title="Check setup" href="/docs/reference/cli/doctor" description="Verify required values are present." />
 <Card title="Validate or send" href="/docs/reference/cli/send" description="See every message and adapter flag." />
+<Card title="Inspect a workflow" href="/docs/reference/cli/workflows" description="Map an email workflow's paths from the terminal." />

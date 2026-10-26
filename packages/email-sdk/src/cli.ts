@@ -3,10 +3,13 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { brevo } from "./brevo.js";
+import { runWorkflowInspect, WorkflowCliError, workflowInspectFormats } from "./cli-workflows.js";
+import type { WorkflowInspectFormat } from "./cli-workflows.js";
 import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
 import { EmailSdkError } from "./errors.js";
-import { isStringMember, jsonString, parseJsonStrict } from "./internal/decode.js";
+import { isJsonObject, isStringMember, jsonString, parseJsonStrict } from "./internal/decode.js";
+import type { JsonObject, JsonValue } from "./internal/decode.js";
 import { runDoctor } from "./doctor.js";
 import { graph } from "./graph.js";
 import { iterable } from "./iterable.js";
@@ -47,6 +50,7 @@ import {
 } from "./telemetry.js";
 import { SUPPORTED_MESSAGE_FIELDS } from "./utils.js";
 import { unosend } from "./unosend.js";
+import { WorkflowError } from "./workflows/errors.js";
 import { zeptomail } from "./zeptomail.js";
 
 type CliFlags = Record<string, string | string[] | true>;
@@ -323,6 +327,12 @@ async function main(command: string | undefined, flags: CliFlags, args: string[]
     return;
   }
 
+  if (command === "workflows") {
+    await workflowsCommand(args, flags);
+
+    return;
+  }
+
   if (command !== "send") {
     fail(`Unknown command "${command}".`);
   }
@@ -355,6 +365,107 @@ async function main(command: string | undefined, flags: CliFlags, args: string[]
   const response = await client.send(message);
 
   console.log(JSON.stringify(response, null, 2));
+}
+
+async function workflowsCommand(args: string[], flags: CliFlags) {
+  const [action, modulePath] = positionalArgs(args);
+
+  if (action !== "inspect") {
+    fail(`Unknown workflows action "${action ?? ""}". Use: email-sdk workflows inspect <module> --input <json>`);
+  }
+
+  if (!modulePath) fail("Pass the module that exports the workflow: email-sdk workflows inspect <module>.");
+
+  const format = stringFlag(flags, "format") ?? "json";
+
+  if (!isWorkflowInspectFormat(format)) {
+    fail(`Unknown --format "${format}". Use ${workflowInspectFormats.join(", ")}.`);
+  }
+
+  const input = flags.input === undefined ? null : await jsonFlag(flags, "input");
+
+  try {
+    const output = await runWorkflowInspect({
+      modulePath,
+      exportName: stringFlag(flags, "export"),
+      input,
+      events: await jsonObjectFlag(flags, "events"),
+      steps: await jsonObjectFlag(flags, "steps"),
+      subject: stringFlag(flags, "subject"),
+      maxPaths: integerFlag(flags, "max-paths"),
+      maxDepth: integerFlag(flags, "max-depth"),
+      format,
+    });
+
+    console.log(output);
+  } catch (error) {
+    if (error instanceof WorkflowCliError) fail(error.message);
+
+    if (error instanceof WorkflowError) fail(error.message);
+
+    throw error;
+  }
+}
+
+function isWorkflowInspectFormat(value: string): value is WorkflowInspectFormat {
+  return workflowInspectFormats.some((format) => format === value);
+}
+
+/** Arguments that are not flags or flag values, matching how parseFlags consumes values. */
+function positionalArgs(args: string[]) {
+  const positionals: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const current = args[index] ?? "";
+
+    if (!current.startsWith("--")) {
+      positionals.push(current);
+      continue;
+    }
+
+    const next = args[index + 1];
+
+    if (!current.includes("=") && next !== undefined && !next.startsWith("--")) index += 1;
+  }
+
+  return positionals;
+}
+
+/** Reads a JSON flag given inline or as `@path` to a file. */
+async function jsonFlag(flags: CliFlags, name: string): Promise<JsonValue> {
+  const raw = stringFlag(flags, name);
+
+  if (raw === undefined) fail(`--${name} needs a JSON value or @file.`);
+
+  const text = raw.startsWith("@") ? await readFile(raw.slice(1), "utf8").catch(() => fail(`Could not read ${raw.slice(1)} for --${name}.`)) : raw;
+
+  try {
+    return parseJsonStrict(text);
+  } catch {
+    fail(`--${name} is not valid JSON.`);
+  }
+}
+
+async function jsonObjectFlag(flags: CliFlags, name: string): Promise<JsonObject | undefined> {
+  if (flags[name] === undefined) return undefined;
+
+  const value = await jsonFlag(flags, name);
+
+  if (!isJsonObject(value)) fail(`--${name} must be a JSON object keyed by ${name === "events" ? "event" : "step"} name.`);
+
+  return value;
+}
+
+function integerFlag(flags: CliFlags, name: string) {
+  const raw = stringFlag(flags, name);
+
+  if (raw === undefined) return undefined;
+
+  const value = Number(raw);
+
+  if (!Number.isInteger(value) || value < 1) fail(`--${name} must be a positive integer.`);
+
+  return value;
 }
 
 function createProvider(name: string, flags: CliFlags): EmailAdapter {
@@ -779,6 +890,7 @@ Usage:
   RESEND_API_KEY="re_..." email-sdk doctor --adapter resend
   email-sdk send --adapter resend --from you@example.com --to them@example.com --subject "Hello" --text "It works"
   email-sdk telemetry [status|disable|enable]
+  email-sdk workflows inspect ./src/onboarding.ts --export onboarding --input '{"email":"ada@example.com"}'
 
 Doctor options:
   --live                       Explicitly check authentication without sending email.
@@ -812,6 +924,17 @@ Send options:
   --send-at <rfc3339>          Schedule the message on capable adapters.
   --dry-run                    Validate input and print the send plan without sending.
   --base-url <url>             Overrides supported adapter base URL variables.
+
+Workflows inspect options (sends nothing; prints every path the workflow can take):
+  <module>                     File that exports the workflow (.js, or .ts under Bun or Node 22.18+).
+  --export <name>              Export to inspect. Defaults to the default or only workflow export.
+  --input <json|@file>         Start input, checked by the workflow's input schema. Defaults to null.
+  --events <json|@file>        Sample payloads by event name, used on "received" branches.
+  --steps <json|@file>         ctx.step results by step name. Missing steps are "unknown".
+  --subject <subject>          Value for ctx.subject.
+  --format <json|mermaid|text> Output format. Defaults to json.
+  --max-paths <n>              Stop after n paths (default 32).
+  --max-depth <n>              Cut a path off after n ctx calls (default 100).
 
 Cloudflare options:
   --api-token <token>          Overrides CLOUDFLARE_API_TOKEN.
@@ -891,7 +1014,7 @@ function normalizeCliCommand(command: string | undefined) {
     return "adapters";
   }
 
-  if (command === "doctor" || command === "send") {
+  if (command === "doctor" || command === "send" || command === "workflows") {
     return command;
   }
 
