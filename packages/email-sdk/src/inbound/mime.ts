@@ -1,7 +1,8 @@
 /**
  * A compact RFC 5322 / MIME reader for inbound mail: multipart trees, base64 and
  * quoted-printable bodies, RFC 2047 encoded words, RFC 2231 parameters, and charset
- * decoding through `TextDecoder`. It uses only web-standard APIs so it runs on Node,
+ * decoding through `TextDecoder`, with built-in tables for the single-byte charsets some
+ * runtimes leave out. It uses only web-standard APIs so it runs on Node,
  * Bun, Workers, and Convex without a dependency.
  */
 import {
@@ -11,6 +12,7 @@ import {
   InboundHeaders,
 } from "./types.js";
 import { decodeBase64, inlineAttachment, toBytes } from "./shared.js";
+import { charsetLabels, singleByteUpperHalves } from "./single-byte-charsets.js";
 
 /** Limits that stop hostile messages from exhausting memory or the stack. */
 const MAX_DEPTH = 32;
@@ -123,10 +125,29 @@ function decodeUtf32(bytes: Uint8Array, bigEndian: boolean): string {
   return index < bytes.length ? `${result}\uFFFD` : result;
 }
 
+/** WHATWG label to encoding name, so `latin2` finds its table and `utf8` its byte order mark. */
+const charsetNames = new Map([...charsetLabels].flatMap(([name, labels]) => labels.split(" ").map(label => [label, name] as const)));
+
 function charsetLabel(charset: string | undefined): string {
   const label = (charset ?? "utf-8").trim().toLowerCase().replace(/^"|"$/g, "");
 
-  return label === "us-ascii" || label === "ascii" ? "utf-8" : label;
+  return label === "us-ascii" || label === "ascii" ? "utf-8" : (charsetNames.get(label) ?? label);
+}
+
+/**
+ * Decode a WHATWG single-byte encoding from the built-in tables, or `undefined` when the encoding
+ * has none. Used only when the runtime's `TextDecoder` lacks the encoding, as Bun 1.3 does.
+ */
+export function decodeSingleByte(bytes: Uint8Array, encoding: string): string | undefined {
+  const upperHalf = singleByteUpperHalves.get(encoding);
+
+  if (upperHalf === undefined) return undefined;
+
+  let result = "";
+
+  for (const byte of bytes) result += byte < 0x80 ? String.fromCharCode(byte) : upperHalf.charAt(byte - 0x80);
+
+  return result;
 }
 
 /** Decode bytes in a charset, falling back to UTF-8 and then Latin-1 for unknown labels. */
@@ -145,6 +166,10 @@ function decodeUnmarked(bytes: Uint8Array, label: string): string {
     // The mark is already gone, so a leading U+FEFF is text and must stay.
     return new TextDecoder(label, { ignoreBOM: true }).decode(bytes);
   } catch {
+    const table = decodeSingleByte(bytes, label);
+
+    if (table !== undefined) return table;
+
     try {
       return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch {

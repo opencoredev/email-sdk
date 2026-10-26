@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { decodeEncodedWords, parseAddressList, parseMimeMessage, parseMultipartFormData } from "./inbound/mime.js";
+import { decodeCharset, decodeEncodedWords, parseAddressList, parseMimeMessage, parseMultipartFormData } from "./inbound/mime.js";
 import { emailFromMime } from "./inbound/normalize.js";
 import { messageIds } from "./inbound/shared.js";
 
@@ -667,5 +667,15 @@ describe("review round 3 regressions", () => {
     const raw = "Authentication-Results: mx.trusted.test; spf=fail smtp.mailfrom=a@[x(y]; dkim=fail\r\n\r\nhi";
 
     expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["mx.trusted.test"] }).security).toEqual({ spf: "fail", dkim: "fail" });
+  });
+});
+
+describe("review round 4 regressions", () => {
+  test("a byte order mark is dropped from an encoded word in a UTF alias", () => {
+    expect(decodeEncodedWords("=?unicode-1-1-utf-8?B?77u/QQ==?=")).toBe("A");
+    expect(decodeEncodedWords("=?utf8?B?77u/QQ==?= =?utf8?B?77u/Qg==?=")).toBe("AB");
+    expect(decodeEncodedWords("=?ucs-2?B?//5BAA==?=")).toBe("A");
+    expect(decodeEncodedWords("=?unicodefffe?B?/v8AQQ==?=")).toBe("A");
+    expect(decodeCharset(Uint8Array.of(0xef, 0xbb, 0xbf, 0x41), "x-unicode20utf8")).toBe("A");
   });
 });
