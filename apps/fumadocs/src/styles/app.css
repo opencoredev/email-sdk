@@ -329,6 +329,27 @@ html > body[data-scroll-locked] {
   --docs-gold-ink: #1a1403;
 }
 
+/* Toolcraft theme variables (src/components/toolcraft), mapped onto the docs palette so the
+   vendored components follow light and dark mode. Scoped to the viewer root. */
+.toolcraft {
+  --background: var(--color-fd-background);
+  --foreground: var(--color-fd-foreground);
+  --panel: var(--color-fd-card);
+  --node: var(--color-fd-card);
+  --accent: var(--docs-gold);
+  --accent-foreground: var(--docs-gold-ink);
+  --link: var(--docs-gold);
+  --border: var(--color-fd-foreground);
+  --input: var(--color-fd-foreground);
+  --ring: var(--color-fd-ring);
+  --destructive: #b4412f;
+}
+
+.dark .toolcraft {
+  --node: #15140f;
+  --destructive: #e0735f;
+}
+
 /* Landing typography carried into every non-landing page. */
 body {
   font-family: var(--docs-font-sans);
