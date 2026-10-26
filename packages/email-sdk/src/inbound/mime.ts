@@ -767,23 +767,33 @@ interface AngleAddress {
   address: string;
 }
 
-/** Find the `<addr-spec>` outside quoted strings and comments, so a quoted name cannot supply it. */
+/**
+ * Find the `<addr-spec>` outside quoted strings, comments, and domain literals, so neither a
+ * quoted name nor a bare `user@[a<x@y>]` can supply it.
+ */
 function angleAddress(entry: string): AngleAddress | undefined {
   let quoted = false;
   let comment = 0;
+  let literal = false;
+  // Only CFWS has followed an `@` so far, so a `[` here opens a domain literal.
+  let afterAt = false;
 
   for (let index = 0; index < entry.length; index += 1) {
     const char = entry[index]!;
 
-    if (char === "\\" && (quoted || comment)) index += 1;
+    if (char === "\\" && (quoted || comment || literal)) index += 1;
+    else if (literal) literal = char !== "]";
     else if (char === "\"" && !comment) quoted = !quoted;
     else if (!quoted && char === "(") comment += 1;
     else if (!quoted && char === ")" && comment) comment -= 1;
+    else if (!quoted && !comment && char === "[" && afterAt) literal = true;
     else if (!quoted && !comment && char === "<") {
       const end = closingAngle(entry, index + 1);
 
       return end === -1 ? undefined : { start: index, address: entry.slice(index + 1, end) };
     }
+
+    if (!quoted && !comment && !literal && char !== "(" && char !== ")" && char !== " " && char !== "\t") afterAt = char === "@";
   }
 
   return undefined;

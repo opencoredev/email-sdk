@@ -618,6 +618,12 @@ describe("review round 3 regressions", () => {
     expect(parseAddressList("<\"@a:b\"@example.com>")).toEqual([{ address: "\"@a:b\"@example.com" }]);
   });
 
+  test("a < inside the domain literal of a bare address does not open an angle address", () => {
+    expect(parseAddressList("user@[a<x@y>c], next@example.com")).toEqual([{ address: "user@[a<x@y>c]" }, { address: "next@example.com" }]);
+    expect(parseAddressList("user@ [a<b>c]")).toEqual([{ address: "user@[a<b>c]" }]);
+    expect(parseAddressList("Ops <ops@[a<b]>")).toEqual([{ address: "ops@[a<b]", name: "Ops" }]);
+  });
+
   test("parentheses in the domain literal of a bare message ID are data", () => {
     expect(messageIds("thread@[a(b)c]")).toEqual(["thread@[a(b)c]"]);
     expect(messageIds("thread@[a(b)c] (note) next@example.com")).toEqual(["thread@[a(b)c]", "next@example.com"]);
