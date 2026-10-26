@@ -12,7 +12,7 @@ import {
   inspectWorkflow,
   toMermaid,
 } from "./workflows.js";
-import type { WorkflowInspectGraph, WorkflowInspectNode } from "./workflows.js";
+import type { WorkflowContext, WorkflowInspectGraph, WorkflowInspectNode } from "./workflows.js";
 
 type OnboardingInput = { userId: string; email: string; name: string };
 
@@ -339,6 +339,38 @@ describe("inspectWorkflow", () => {
     expect(text).toContain("[wait\\nhere received]");
     expect(text).toContain("Failed: bad\\nthing");
     expect(toMermaid(graph).split("\n").every((line) => line.startsWith("  ") || line === "flowchart TD")).toBe(true);
+  });
+
+  test.each([
+    [
+      "as a Promise.all sibling of a step",
+      async (ctx: WorkflowContext) => {
+        await Promise.all([ctx.step("notify", () => 1), ctx.send("mail", message("ada@example.com", "Hi", "Hi"))]);
+      },
+    ],
+    [
+      "as a sibling the definition catches before going on",
+      async (ctx: WorkflowContext) => {
+        const results = await Promise.allSettled([ctx.step("notify", () => 1), ctx.sleep("pause", "1d")]);
+
+        await ctx.send("mail", message("ada@example.com", String(results.length), "Hi"));
+      },
+    ],
+  ])("a ctx call %s fails the path with the engine's error", async (_label, run) => {
+    const workflow = defineWorkflow({ name: "overlap", run });
+
+    const engine = createWorkflowEngine({
+      store: createMemoryWorkflowStore(),
+      email: { send: async () => ({ adapter: "test" }) },
+      workflows: [workflow],
+    });
+
+    const failed = await engine.start(workflow, null);
+    const graph = await inspectWorkflow(workflow, { input: null });
+
+    expect(failed.status).toBe("failed");
+    expect(graph.paths[0]?.outcome).toEqual({ status: "failed", error: failed.error?.message ?? "" });
+    expect(graph.nodes.some((node) => node.kind === "send")).toBe(false);
   });
 
   test("validates input with the definition's schema", async () => {

@@ -2,7 +2,7 @@ import { isObjectLike, isString, isStringMember } from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError } from "./errors.js";
-import { stepNameError } from "./step-name.js";
+import { stepNameError, stepOverlapError } from "./step-name.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -283,8 +283,20 @@ async function tracePath(
   let elapsed = 0;
   let prefix = "";
   let stopped = false;
+  // The engine's step-overlap rule: from a `ctx.step` call until its promise settles, every other
+  // `ctx` call fails, and the first one fails the path even when the definition catches it.
+  let activeStep: string | undefined;
+  let violation: WorkflowError | undefined;
 
   function enter(name: string) {
+    if (violation) throw violation;
+
+    if (activeStep !== undefined) {
+      violation = stepOverlapError(name, activeStep);
+
+      throw violation;
+    }
+
     if (stopped || entries.length >= maxDepth) {
       stopped = true;
 
@@ -328,17 +340,32 @@ async function tracePath(
     },
     // SAFETY: the callback never runs during inspection, so the only value returned is the caller's
     // mock, which states the step's result contract the same way the engine's journal does.
-    step: (async (name: string) => {
-      const base = enter(name);
-      const mocked = options.steps !== undefined && Object.hasOwn(options.steps, name);
-      const value = mocked ? savedForm(options.steps?.[name]) : undefined;
+    step: ((name: string) => {
+      const pending = (async () => {
+        const base = enter(name);
+        const mocked = options.steps !== undefined && Object.hasOwn(options.steps, name);
+        const value = mocked ? savedForm(options.steps?.[name]) : undefined;
 
-      const result: WorkflowInspectStepResult =
-        mocked && value !== undefined ? { status: "mocked", value } : { status: "unknown" };
+        const result: WorkflowInspectStepResult =
+          mocked && value !== undefined ? { status: "mocked", value } : { status: "unknown" };
 
-      entries.push({ ...base, kind: "step", step: name, result, label: stepLabel(result) });
+        entries.push({ ...base, kind: "step", step: name, result, label: stepLabel(result) });
 
-      return value;
+        return value;
+      })();
+
+      // As in the engine, a rejected call leaves no step running.
+      if (stopped || violation) return pending;
+
+      activeStep = name;
+
+      const release = () => {
+        if (activeStep === name) activeStep = undefined;
+      };
+
+      pending.then(release, release);
+
+      return pending;
     }) as WorkflowContext["step"],
     async sleep(name, duration: WorkflowDuration) {
       const base = enter(name);
@@ -400,6 +427,8 @@ async function tracePath(
 
   try {
     const output = await definition.run(ctx, input);
+
+    if (violation) throw violation;
 
     outcome = stopped
       ? { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` }

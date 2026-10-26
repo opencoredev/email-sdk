@@ -13,7 +13,7 @@ import { durationToMs } from "./duration.js";
 import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
 import { workflowIdempotencyKey } from "./idempotency.js";
 import { isTerminalRun } from "./memory.js";
-import { stepNameError } from "./step-name.js";
+import { stepNameError, stepOverlapError } from "./step-name.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -571,10 +571,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (violation) return Promise.reject(violation);
 
       if (activeStep !== undefined) {
-        violation = new WorkflowError(
-          "invalid_definition",
-          `"${name}" was called while step "${activeStep}" was still running. Await ctx.step before calling ctx again, and never call ctx from inside a step callback.`,
-        );
+        violation = stepOverlapError(name, activeStep);
         signalViolation(violation);
 
         return Promise.reject(violation);
