@@ -140,7 +140,7 @@ function attachments(
       filename: jsonText(item.filename),
       contentType: jsonText(item.content_type) ?? "application/octet-stream",
       size: jsonNumber(item.size),
-      contentId: jsonText(item.content_id),
+      contentId: jsonText(item.content_id)?.replace(/^<|>$/g, ""),
       disposition: disposition === "inline" ? "inline" : "attachment",
       url,
     }, async () => {

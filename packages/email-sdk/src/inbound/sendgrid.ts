@@ -178,11 +178,20 @@ export function parseSendGridInbound(payload: InboundRequestPayload): InboundEma
     });
   }
 
+  // `content-ids` maps each inline image's Content-ID to its form field (`{"ii_x":"attachment1"}`).
+  const contentIds = new Map<string, string>();
+
+  for (const [cid, field] of Object.entries(jsonObject(parseJson(fields.get("content-ids") ?? "") ?? null) ?? {})) {
+    const name = jsonText(field);
+
+    if (name) contentIds.set(name, cid);
+  }
+
   for (const part of parts) {
     if (part.filename === undefined) continue;
 
     const details = info.get(part.name);
-    const contentId = details?.contentId?.replace(/^<|>$/g, "");
+    const contentId = (details?.contentId ?? contentIds.get(part.name))?.replace(/^<|>$/g, "") || undefined;
 
     files.push(inlineAttachment({
       filename: details?.filename ?? (part.filename || undefined),

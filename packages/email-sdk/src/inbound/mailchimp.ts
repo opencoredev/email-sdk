@@ -17,6 +17,7 @@ import {
   verifyHmac,
 } from "./shared.js";
 import {
+  type InboundAttachment,
   type InboundEmail,
   InboundHeaders,
   type InboundRequestPayload,
@@ -95,6 +96,22 @@ function headerObject(value: JsonValue | undefined): InboundHeaders {
   }));
 }
 
+/** One `attachments` or `images` entry. Images carry no `base64` flag; their content is always base64. */
+function mandrillAttachment(entry: JsonValue, contentId?: string): InboundAttachment[] {
+  const item = jsonObject(entry);
+  const content = jsonContent(item?.content);
+
+  if (!item || content === undefined) return [];
+
+  return [inlineAttachment({
+    filename: jsonText(item.name),
+    contentType: jsonText(item.type) ?? "application/octet-stream",
+    contentId: contentId || undefined,
+    disposition: contentId ? "inline" : "attachment",
+    content: item.base64 === false ? utf8Bytes(content) : decodeBase64(content),
+  })];
+}
+
 function emailFromEvent(event: JsonObject): InboundEmail {
   const message = jsonObject(event.msg);
 
@@ -115,8 +132,6 @@ function emailFromEvent(event: JsonObject): InboundEmail {
   const headers = headerObject(message.headers);
   const name = jsonText(message.from_name);
   const address = jsonText(message.from_email);
-  const attachments = [...Object.values(jsonObject(message.attachments) ?? {}), ...Object.values(jsonObject(message.images) ?? {})];
-
   const fields = headerFields(headers);
 
   // Header fields fill in what the parsed payload omits, like Message-ID and References.
@@ -135,19 +150,11 @@ function emailFromEvent(event: JsonObject): InboundEmail {
     text: jsonText(message.text),
     html: jsonText(message.html),
     headers,
-    attachments: attachments.flatMap(entry => {
-      const item = jsonObject(entry);
-      const content = jsonContent(item?.content);
-
-      if (!item || content === undefined) return [];
-
-      return [inlineAttachment({
-        filename: jsonText(item.name),
-        contentType: jsonText(item.type) ?? "application/octet-stream",
-        disposition: "attachment",
-        content: item.base64 === false ? utf8Bytes(content) : decodeBase64(content),
-      })];
-    }),
+    attachments: [
+      ...Object.values(jsonObject(message.attachments) ?? {}).flatMap(entry => mandrillAttachment(entry)),
+      // Mandrill keys `images` by Content-ID, the value an HTML `cid:` link names.
+      ...Object.entries(jsonObject(message.images) ?? {}).flatMap(([key, entry]) => mandrillAttachment(entry, key.replace(/^<|>$/g, ""))),
+    ],
     security: mandrillSecurity(message),
     envelope,
     raw: payload,

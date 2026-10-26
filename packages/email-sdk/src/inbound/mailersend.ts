@@ -2,7 +2,11 @@ import type { JsonObject, JsonValue } from "../internal/decode.js";
 import { parseAddressList } from "./mime.js";
 import { emailFromMime, mergeSecurity, headerFields } from "./normalize.js";
 import {
+  decodeBase64,
+  inlineAttachment,
+  jsonContent,
   jsonList,
+  jsonNumber,
   jsonObject,
   jsonText,
   parseJsonObjectBody,
@@ -14,6 +18,7 @@ import {
 } from "./shared.js";
 import {
   type InboundAddress,
+  type InboundAttachment,
   type InboundEmail,
   InboundHeaders,
   type InboundRequestPayload,
@@ -93,6 +98,31 @@ function addresses(value: JsonValue | undefined): InboundAddress[] {
   });
 }
 
+/**
+ * Attachments of a route with `include_attachments`, inline (CID) parts included:
+ * `{ file_name, content_type, content_disposition, content_id, size, content }`, content in base64.
+ */
+function attachments(value: JsonValue | undefined): InboundAttachment[] {
+  return jsonList(value).flatMap(entry => {
+    const item = jsonObject(entry);
+    const content = jsonContent(item?.content);
+
+    if (!item || content === undefined) return [];
+
+    const contentId = jsonText(item.content_id)?.replace(/^<|>$/g, "");
+    const disposition = jsonText(item.content_disposition);
+
+    return [inlineAttachment({
+      filename: jsonText(item.file_name),
+      contentType: jsonText(item.content_type) ?? "application/octet-stream",
+      size: jsonNumber(item.size),
+      contentId,
+      disposition: disposition === "inline" || (disposition === undefined && contentId) ? "inline" : "attachment",
+      content: decodeBase64(content),
+    })];
+  });
+}
+
 /** Parse a MailerSend inbound route webhook (`type: "inbound.message"`). */
 export function parseMailerSendInbound(payload: InboundRequestPayload): InboundEmail {
   const root = parseJsonObjectBody(provider, payload.body);
@@ -139,7 +169,7 @@ export function parseMailerSendInbound(payload: InboundRequestPayload): InboundE
     text: jsonText(data.text),
     html: jsonText(data.html),
     headers,
-    attachments: [],
+    attachments: attachments(data.attachments),
     security: security(data),
     envelope,
     raw: value,
