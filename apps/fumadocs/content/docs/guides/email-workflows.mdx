@@ -118,7 +118,7 @@ await workflows.sendEvent({ name: "unsubscribed", subject: user.email });
 await workflows.cancel(`onboarding:${user.userId}`, "account deleted");
 ```
 
-`cancel` and cancel events take effect right away, even while another worker is in the middle of a step. A send or step that is already in flight may still finish, but its result is discarded and nothing after it runs.
+`cancel` and cancel events save the canceled run right away, even while another worker is in the middle of a step. From then on, a worker starts no new send or step once it sees the cancellation, which happens on its last store read, renewal, or save before the effect. A send or step whose final check passed before the cancel was saved may still start, and one already in flight may still finish. Either way its result is discarded and nothing after it runs.
 
 `start` runs the workflow until its first wait and returns the saved run. A second `start` with the same `id` returns the existing run without checking or saving the new input. `subject` is the key `sendEvent` uses to find runs, usually the recipient's address or user id.
 
@@ -205,7 +205,7 @@ type WorkflowScheduler = {
 };
 ```
 
-`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step and again after `onStepStart`, and every third of `leaseDuration` (default `"5m"`) while a step runs. It stops as soon as a save shows the lease moved or the run was canceled, and so does the heartbeat, even when the step never returns. Another worker only takes the run over once the lease expires, so a step can run twice only if its worker stops renewing, for example because it crashed or hung.
+`save` must compare and write in one atomic operation, such as `UPDATE ... WHERE id = $1 AND revision = $2` in SQL. That check is what keeps two workers from stepping on the same run. Before running a step, a worker claims the run with a lease saved through that check. It renews the lease before every step and again after `onStepStart`, and every third of `leaseDuration` (default `"5m"`) while a step runs. It stops as soon as a save shows the lease moved or the run was canceled, and so does the heartbeat, even when the step never returns. Another worker only takes the run over once the lease expires. A worker counts its lease from the moment it sent the renewal, minus `leaseSafetyMargin` (default: a tenth of the lease, at most `"30s"`), and starts nothing if the reply arrives after that. So a step can run twice only if its worker stops renewing in time, for example because it crashed, hung, or its store replied too slowly.
 
 `listActiveBySubject` must return every active run for the subject, not a first page, or `sendEvent({ subject })` skips the rest.
 

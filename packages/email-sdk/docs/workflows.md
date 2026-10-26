@@ -120,6 +120,7 @@ const engine = createWorkflowEngine({
   isSuppressed,             // optional (address) => boolean | Promise<boolean>
   retry: { maxAttempts: 3, backoff: "1m" },
   leaseDuration: "5m",      // optional; how long an execution holds a run
+  leaseSafetyMargin: "30s", // optional; how long before expiry an execution stops trusting its lease
   hooks: { onStepStart, onStepComplete, onStepError, onRunComplete, onRunCanceled, onRunFailed },
 });
 
@@ -219,17 +220,28 @@ not happen twice is built on it:
   effect, again after `onStepStart` when that hook is set (so no await separates the last ownership
   check from the effect), and on a heartbeat (every third of `leaseDuration`) while the effect runs.
   The heartbeat stops at the first renewal that finds the run canceled, finished, or taken over,
-  even if the effect never settles. Every save by
+  even if the effect never settles. The last check before an effect runs in the same synchronous
+  turn that starts it, so nothing that settles in between, such as a sibling call failing the run,
+  can slip past it. Every save by
   the owner reloads on conflict and gives up if the fresh run has another owner or is terminal, so a
   stale worker cannot advance or commit the run. The lease is released when the run waits or ends.
+- **Fencing.** No effect can join the store's transaction, so a renewal's success alone doesn't
+  prove the lease is still held when its reply arrives. The engine reads its clock just before
+  each claim or renewal is sent and trusts the lease only until `sentAt + leaseDuration -
+  leaseSafetyMargin`. A reply that arrives at or after that bound counts as a lost lease: the
+  execution starts no effect and saves nothing more, and lease-expiry recovery picks the run up.
+  Another worker can claim the run only once `sentAt + leaseDuration` has passed on its own clock,
+  so the margin covers clock skew between workers. It defaults to a tenth of `leaseDuration`, at
+  most 30 seconds, and must be less than `leaseDuration`.
 - **Other writers.** Event delivery and cancellation never take the lease. They are plain
   revision-checked writes, so they conflict with the owner's next save, which reloads and sees them.
 - **Conflicts.** Every conflict means another writer saved, so a save retries on the fresh run up to
   25 times. Past that it throws `WorkflowError` with code `write_conflict`; `sendEvent` and `cancel`
   never report a busy run as missing.
 
-A step can run twice only when its worker stops renewing for a whole lease (crash, hang, or a
-blocked event loop) and another worker takes over. For sends the idempotency key covers that case.
+A step can run twice only when its worker stops renewing for a whole lease (crash, hang, a
+blocked event loop, or renewals whose replies arrive too late to trust) and another worker takes
+over. For sends the idempotency key covers that case.
 
 The in-memory store also round-trips every run through `JSON.stringify` so tests catch values a real
 store would mangle.
@@ -397,9 +409,15 @@ window. The docs say so.
   copy. Retry only when a repeated event is harmless for the workflow; otherwise inspect the runs
   with `engine.get`. A run that saved the event but failed to resume is picked up by `resumeDue`.
 - `engine.cancel(runId, reason)` cancels by id. Cancellation (by id, `cancelOn`, or suppression) is a
-  revision-checked write of the terminal state and does not wait for a running step. The owner's next
-  save sees the canceled run and stops, so no later step or send runs. An effect already in flight,
-  such as a provider request, may still complete; its result is discarded.
+  revision-checked write of the terminal state and does not wait for a running step. The contract:
+  once a worker observes the cancellation, it starts no new step or send. A worker observes it on
+  the last store read, renewal, or save before the effect: a cancel that commits before that
+  renewal's revision check makes the renewal conflict, reload the canceled run, and stop. A cancel
+  that commits after the worker's final admission check, for example while the renewal's reply is
+  still on its way, cannot stop that one effect, which may still start; its result is discarded and
+  nothing after it runs. An effect already in flight, such as a provider request, may also
+  complete, with its result discarded. Likewise, a wait whose save committed before the cancel may
+  still schedule its timer; that wake finds the run canceled and does nothing.
 - `isSuppressed(address)` runs before every send with each recipient's bare address, lowercased.
   The address is the last `<...>` of a mailbox string, so `"Ada <team>" <ada@example.test>` checks
   `ada@example.test`. A suppressed recipient cancels the run with reason `suppressed` and no send
