@@ -125,6 +125,10 @@ passthrough is still keyed by adapter and can't leak.
   (`body` shallow-merged into the JSON request, `headers` added to the API request). Mailgun
   uses multipart forms, so its passthrough is `fields`. `withNativeRequestHeaders` rejects a
   native header that names one the adapter or transport sets, case-insensitively.
+  An adapter that maps `idempotencyKey` to a header reserves it on every send (Resend's
+  `Idempotency-Key`), so a native copy can't pin one key across personalized recipients.
+- A `body` or `fields` passthrough may replace the recipients, so attempt telemetry treats such
+  a send's recipients as unknown instead of inferring a submission from success.
 - Every `jsonProvider` adapter gets the passthrough at runtime, and its return type declares
   `EmailNativePassthrough`, so types match behavior.
 - Core reads `options.native?.[adapter.name]` when it builds the adapter context.
