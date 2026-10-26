@@ -768,6 +768,79 @@ describe("email-sdk CLI", () => {
   });
 });
 
+describe("workflows inspect", () => {
+  const fixture = "test-support/onboarding-workflow.ts";
+
+  test("prints the workflow graph as JSON without sending", async () => {
+    const { stdout, stderr, exitCode } = await runCli([
+      "workflows",
+      "inspect",
+      fixture,
+      "--export",
+      "onboarding",
+      "--input",
+      '{"email":"ada@example.com","name":"Ada"}',
+      "--events",
+      '{"activated":{"plan":"pro"}}',
+    ]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+
+    const graph = JSON.parse(stdout);
+
+    expect(graph.workflow).toBe("onboarding");
+    expect(graph.cancelOn).toEqual(["unsubscribed"]);
+    expect(graph.paths.map((path: { outcome: unknown }) => path.outcome)).toEqual([
+      { status: "completed", output: { outcome: "activated" } },
+      { status: "completed", output: { outcome: "nudged" } },
+    ]);
+    expect(graph.nodes.find((node: { id: string }) => node.id === "welcome").email.subject).toBe("Welcome, Ada");
+  });
+
+  test("prints mermaid and text, reading input from a file and picking the only workflow export", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "email-sdk-workflows-"));
+    const inputPath = join(dir, "input.json");
+
+    await Bun.write(inputPath, '{"email":"ada@example.com"}');
+
+    const mermaid = await runCli(["workflows", "inspect", fixture, "--input", `@${inputPath}`, "--format", "mermaid"]);
+
+    expect(mermaid.exitCode).toBe(0);
+    expect(mermaid.stdout).toStartWith("flowchart TD\n");
+    expect(mermaid.stdout).toContain("n4 -->|timeout| n6");
+    expect(mermaid.stdout).toContain("Welcome, there");
+    // Without --events the received branch has no payload, and the failure says how to fix it.
+    expect(mermaid.stdout).toContain('#quot;activated#quot; had no sample payload; pass one in events');
+
+    const text = await runCli(["workflows", "inspect", fixture, "--input=@" + inputPath, "--format", "text"]);
+
+    expect(text.exitCode).toBe(0);
+    expect(text.stdout).toContain("path-2 [activated timeout]: completed after 5d");
+  });
+
+  test("reports usage errors on stderr with exit code 1", async () => {
+    const cases: [string[], string][] = [
+      [["workflows", "list"], 'Unknown workflows action "list"'],
+      [["workflows", "inspect"], "Pass the module"],
+      [["workflows", "inspect", fixture, "--format", "svg"], 'Unknown --format "svg"'],
+      [["workflows", "inspect", fixture, "--input", "{nope"], "--input is not valid JSON"],
+      [["workflows", "inspect", fixture, "--events", "[]"], "--events must be a JSON object"],
+      [["workflows", "inspect", fixture, "--export", "notAWorkflow"], 'has no workflow export "notAWorkflow"'],
+      [["workflows", "inspect", fixture, "--input", "{}"], "Invalid input for workflow onboarding"],
+      [["workflows", "inspect", "missing-module.ts"], "Could not import missing-module.ts"],
+      [["workflows", "inspect", fixture, "--max-paths", "0"], "--max-paths must be a positive integer"],
+    ];
+
+    for (const [args, message] of cases) {
+      const { stderr, exitCode } = await runCli(args);
+
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain(message);
+    }
+  });
+});
+
 describe("telemetry command", () => {
   test("managing telemetry never reports events, while other commands do", async () => {
     const configHome = mkdtempSync(join(tmpdir(), "email-sdk-cli-telemetry-"));

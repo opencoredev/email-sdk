@@ -224,6 +224,12 @@ function outcomeLabel(outcome: WorkflowInspectOutcome) {
   }
 }
 
+function unsampledHint(events: readonly string[]) {
+  if (events.length === 0) return "";
+
+  return ` (note: ${events.map((event) => `"${event}"`).join(", ")} had no sample payload; pass one in events)`;
+}
+
 function errorMessage(cause: unknown) {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -258,6 +264,7 @@ async function tracePath(
   const choices: Choice[] = [];
   const forks: number[] = [];
   const seen = new Set<string>();
+  const unsampled: string[] = [];
   let elapsed = 0;
   let prefix = "";
   let stopped = false;
@@ -276,6 +283,14 @@ async function tracePath(
     seen.add(name);
 
     return { id: `${prefix}${name}`, offsetMs: elapsed };
+  }
+
+  function received(event: string) {
+    const sampled = options.events !== undefined && Object.hasOwn(options.events, event);
+
+    if (!sampled) unsampled.push(event);
+
+    return { status: "received", payload: sampled ? savedForm(options.events?.[event]) : undefined, receivedAt: startedAt + elapsed } as const;
   }
 
   const ctx: WorkflowContext = {
@@ -341,7 +356,7 @@ async function tracePath(
       entries.push(node);
 
       if (timeoutMs === undefined) {
-        return { status: "received", payload: savedForm(options.events?.[event]), receivedAt: startedAt + elapsed };
+        return received(event);
       }
 
       const index = choices.length;
@@ -358,7 +373,7 @@ async function tracePath(
         return { status: "timed_out" };
       }
 
-      return { status: "received", payload: savedForm(options.events?.[event]), receivedAt: startedAt + elapsed };
+      return received(event);
     }) as WorkflowContext["waitForEvent"],
   };
 
@@ -376,7 +391,7 @@ async function tracePath(
     outcome =
       stopped || cause instanceof DepthLimit
         ? { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` }
-        : { status: "failed", error: errorMessage(cause) };
+        : { status: "failed", error: `${errorMessage(cause)}${unsampledHint(unsampled)}` };
   }
 
   return { entries, choices, forks, outcome, durationMs: elapsed };

@@ -238,7 +238,7 @@ describe("inspectWorkflow", () => {
 
     expect(graph.paths).toHaveLength(1);
     expect(nodeById(graph, "later")).toMatchObject({ delay: { kind: "until", at: "1970-01-01T01:00:00.000Z", ms: 3_600_000 } });
-    expect(graph.paths[0]?.outcome).toEqual({ status: "failed", error: "boom" });
+    expect(graph.paths[0]?.outcome).toEqual({ status: "failed", error: 'boom (note: "confirmed" had no sample payload; pass one in events)' });
   });
 
   test("reports a duplicate step name as a failed path", async () => {
