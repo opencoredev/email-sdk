@@ -228,11 +228,20 @@ not happen twice is built on it:
 - **Fencing.** No effect can join the store's transaction, so a renewal's success alone doesn't
   prove the lease is still held when its reply arrives. The engine reads its clock just before
   each claim or renewal is sent and trusts the lease only until `sentAt + leaseDuration -
-  leaseSafetyMargin`. A reply that arrives at or after that bound counts as a lost lease: the
-  execution starts no effect and saves nothing more, and lease-expiry recovery picks the run up.
-  Another worker can claim the run only once `sentAt + leaseDuration` has passed on its own clock,
-  so the margin covers clock skew between workers. It defaults to a tenth of `leaseDuration`, at
-  most 30 seconds, and must be less than `leaseDuration`.
+  leaseSafetyMargin`. Another worker can claim the run only once `sentAt + leaseDuration` has
+  passed on its own clock, so the margin covers clock skew between workers. It defaults to a tenth
+  of `leaseDuration`, at most 30 seconds, and must be less than `leaseDuration`. Two rules follow:
+  - *Starting an effect needs a fresh lease.* A step or send starts only while the newest claim or
+    renewal is inside that bound. A reply at or after the bound leaves the lease unproven, not
+    lost: the worker renews again, up to two more times, and starts the effect once a renewal
+    comes back in time. A renewal that finds another owner or a terminal run stops the execution.
+    If none comes back in time, the worker parks without starting the effect, and lease-expiry
+    recovery picks the run up after `leaseDuration`.
+  - *Saving a result needs only the revision check.* A completed step's result, a wait, or the
+    run's outcome is saved whenever the store accepts the revision-checked write, which happens
+    only while no other worker has claimed the run and it isn't canceled or finished. A late reply
+    never discards a result the store accepted. A result the store rejects is discarded, and the
+    new owner or the terminal state stands.
 - **Other writers.** Event delivery and cancellation never take the lease. They are plain
   revision-checked writes, so they conflict with the owner's next save, which reloads and sees them.
 - **Conflicts.** Every conflict means another writer saved, so a save retries on the fresh run up to
@@ -240,8 +249,9 @@ not happen twice is built on it:
   never report a busy run as missing.
 
 A step can run twice only when its worker stops renewing for a whole lease (crash, hang, a
-blocked event loop, or renewals whose replies arrive too late to trust) and another worker takes
-over. For sends the idempotency key covers that case.
+blocked event loop, or a store too slow to accept a write before the lease expires) and another
+worker takes over. A completed step whose checkpoint the store accepted never runs again, however
+late the reply. For sends the idempotency key covers the duplicate case.
 
 The in-memory store also round-trips every run through `JSON.stringify` so tests catch values a real
 store would mangle.
