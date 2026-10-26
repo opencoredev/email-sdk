@@ -2631,3 +2631,187 @@ describe("workflows: a run that rejects beside a pending step", () => {
     expect(failures).toEqual(["sibling broke"]);
   });
 });
+
+describe("workflows: heartbeats end with the execution", () => {
+  /** Rejects beside a step that hangs until `hung.open()`, so the execution ends while the step runs. */
+  function rejectingBesideHang() {
+    const hung = gate();
+
+    const workflow = defineWorkflow({
+      name: "rejected",
+      run: async (ctx) => {
+        await Promise.all([
+          ctx.step("hang", async () => {
+            await hung.pass();
+
+            return "late";
+          }),
+          hung.reached.then(() => Promise.reject(new Error("sibling broke"))),
+        ]);
+      },
+    });
+
+    return { hung, workflow };
+  }
+
+  /** Wraps a store so `beforeFailure` runs before every save that fails the run. */
+  function failureHookStore(inner: WorkflowStore, beforeFailure: () => Promise<void>) {
+    const store: WorkflowStore = {
+      ...inner,
+      async save(run, expectedRevision) {
+        if (run.status === "failed") await beforeFailure();
+
+        return await inner.save(run, expectedRevision);
+      },
+    };
+
+    return store;
+  }
+
+  type Exit = {
+    label: string;
+    beforeFailure: (context: { inner: WorkflowStore; other: () => WorkflowEngine }) => Promise<void>;
+    hooks?: WorkflowHooks;
+    rejects: boolean;
+  };
+
+  const exits: Exit[] = [
+    {
+      label: "the failure save throws",
+      beforeFailure: async () => {
+        throw new Error("store unavailable");
+      },
+      rejects: true,
+    },
+    {
+      label: "another engine cancels before the failure saves",
+      beforeFailure: async ({ other }) => {
+        await other().cancel("run-1");
+      },
+      rejects: false,
+    },
+    {
+      label: "another worker takes the run before the failure saves",
+      beforeFailure: async ({ inner }) => {
+        const run = await inner.get("run-1");
+
+        if (run?.status === "running") {
+          await inner.save({ ...run, lease: { owner: "other-worker", until: start + day }, revision: run.revision + 1 }, run.revision);
+        }
+      },
+      rejects: false,
+    },
+    {
+      label: "the onRunFailed hook throws",
+      beforeFailure: async () => {},
+      hooks: {
+        onRunFailed: () => {
+          throw new Error("hook broke");
+        },
+      },
+      rejects: false,
+    },
+  ];
+
+  test.each(exits)("no heartbeat outlives the execution when $label", async ({ beforeFailure, hooks, rejects }) => {
+    const { hung, workflow } = rejectingBesideHang();
+    const intervals = spyOn(globalThis, "setInterval");
+    const cleared = spyOn(globalThis, "clearInterval");
+    const inner = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+    let other: WorkflowEngine | undefined;
+
+    const store = failureHookStore(inner, async () => {
+      await beforeFailure({
+        inner,
+        other: () => {
+          if (!other) throw new Error("no second engine");
+
+          return other;
+        },
+      });
+    });
+
+    const options: WorkflowEngineOptions = { email: recordingSender(), store, clock, workflows: [workflow], leaseDuration: "30ms", hooks };
+
+    other = createWorkflowEngine({ ...options, store: inner });
+
+    try {
+      const outcome = await Promise.race([
+        createWorkflowEngine(options)
+          .start(workflow, null, { id: "run-1" })
+          .then(
+            () => "resolved",
+            () => "rejected",
+          ),
+        new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+      ]);
+
+      expect(outcome).toBe(rejects ? "rejected" : "resolved");
+
+      // Checked as soon as the execution returns, before any later beat could notice and stop itself.
+      const heartbeats = intervals.mock.results.map((result) => result.value);
+      const stopped = new Set(cleared.mock.calls.map(([id]) => id));
+
+      expect(heartbeats.length).toBeGreaterThan(0);
+      expect(heartbeats.every((id) => stopped.has(id))).toBe(true);
+
+      const revision = (await inner.get("run-1"))?.revision;
+
+      // The step settling after the execution ended must not save either.
+      hung.open();
+
+      // Three lease periods: a heartbeat still running would have renewed (and rewritten) the run.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect((await inner.get("run-1"))?.revision).toBe(revision);
+    } finally {
+      hung.open();
+      intervals.mockRestore();
+      cleared.mockRestore();
+    }
+  });
+
+  test("a run whose failure save hit a store outage is reclaimed by another engine once the lease expires", async () => {
+    const { hung, workflow } = rejectingBesideHang();
+    const inner = createMemoryWorkflowStore();
+    const clock = createManualClock(start);
+    let outage = true;
+
+    const store: WorkflowStore = {
+      ...inner,
+      async save(run, expectedRevision) {
+        if (outage && run.status === "failed") throw new Error("store unavailable");
+
+        return await inner.save(run, expectedRevision);
+      },
+    };
+
+    const options: WorkflowEngineOptions = { email: recordingSender(), store, clock, workflows: [workflow], leaseDuration: "30ms" };
+
+    await expect(createWorkflowEngine(options).start(workflow, null, { id: "run-1" })).rejects.toThrow("store unavailable");
+
+    // The store recovers. A heartbeat left running would now renew the lease and hold the run.
+    outage = false;
+    hung.open();
+
+    const stranded = await inner.get("run-1");
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(await inner.get("run-1")).toEqual(stranded);
+    expect(stranded).toMatchObject({ status: "running", lease: { until: start + 30 } });
+
+    const other = createWorkflowEngine(options);
+
+    // Before the lease expires the run still belongs to the first execution.
+    expect((await other.resume("run-1"))?.status).toBe("running");
+
+    clock.advance(31);
+
+    const recovered = await other.resume("run-1");
+
+    expect(recovered).toMatchObject({ status: "failed", error: { message: "sibling broke" } });
+    expect(recovered?.lease).toBeUndefined();
+  });
+});

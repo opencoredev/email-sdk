@@ -422,6 +422,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     let current: WorkflowRun = loaded;
     let stopped = false;
     let lost = false;
+    // Set once `execute` returns or throws. Nothing the execution left in flight, such as a step
+    // callback that settles later or its heartbeat, may save after that.
+    let ended = false;
     let infrastructureError: Error | undefined;
     let signalSuspended: () => void = () => {};
 
@@ -464,7 +467,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     ): Promise<boolean> {
       // Once this execution has ended the run, nothing it still has in flight, such as a step
       // callback that outlived the failure or its heartbeat, may write again.
-      if (lost || isTerminalRun(current)) return false;
+      if (ended || lost || isTerminalRun(current)) return false;
 
       const base = current;
       const next = await commit(base, transform, owner, adopts && ((fresh) => adopts(fresh, base)));
@@ -852,72 +855,85 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       },
     };
 
-    // Starting inside `then` turns a synchronous throw from `run` into a failed outcome.
-    const finished = Promise.resolve()
-      .then(async () => await definition.run(ctx, savedForm(loaded.input)))
-      .then(
-      (output): ExecutionOutcome => ({ kind: "completed", output }),
-      (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
-    );
+    /** Runs the definition to an outcome and saves it. */
+    async function conclude(): Promise<WorkflowRun | undefined> {
+      // Starting inside `then` turns a synchronous throw from `run` into a failed outcome.
+      const finished = Promise.resolve()
+        .then(async () => await definition.run(ctx, savedForm(loaded.input)))
+        .then(
+        (output): ExecutionOutcome => ({ kind: "completed", output }),
+        (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
+      );
 
-    let outcome = await Promise.race([finished, suspended, doomed]);
+      let outcome = await Promise.race([finished, suspended, doomed]);
 
-    // Every queued microtask runs before a timer does, so one timer turn lets a rejection already
-    // on its way, such as a rejected sibling in `Promise.all` beside `ctx.waitForEvent`, settle
-    // `run` before the execution counts as suspended. A rejection behind real I/O or a timer
-    // arrives later and is replayed on the run's next wake.
-    if (outcome.kind === "suspended") outcome = await settledWithinTurn(finished, outcome);
+      // Every queued microtask runs before a timer does, so one timer turn lets a rejection already
+      // on its way, such as a rejected sibling in `Promise.all` beside `ctx.waitForEvent`, settle
+      // `run` before the execution counts as suspended. A rejection behind real I/O or a timer
+      // arrives later and is replayed on the run's next wake.
+      if (outcome.kind === "suspended") outcome = await settledWithinTurn(finished, outcome);
 
-    // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
-    // A failed run doesn't wait: the queue may hold a step whose callback never settles, and
-    // whatever it still has in flight can't save once the failure has.
-    if (outcome.kind === "completed") await Promise.race([queue, suspended, doomed]);
+      // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
+      // A failed run doesn't wait: the queue may hold a step whose callback never settles, and
+      // whatever it still has in flight can't save once the failure has.
+      if (outcome.kind === "completed") await Promise.race([queue, suspended, doomed]);
 
-    if (infrastructureError) throw infrastructureError;
+      if (infrastructureError) throw infrastructureError;
 
-    // The first definition error, such as a call that overlapped a running step, fails the run even
-    // if the definition caught it and went on to finish or park on a wait.
-    const fatal = guard.fatal;
+      // The first definition error, such as a call that overlapped a running step, fails the run even
+      // if the definition caught it and went on to finish or park on a wait.
+      const fatal = guard.fatal;
 
-    if (fatal) outcome = { kind: "failed", error: fatal.error };
+      if (fatal) outcome = { kind: "failed", error: fatal.error };
 
-    // A sibling `ctx` call may have saved a wait after `run` rejected, as with a rejected promise in
-    // `Promise.all` beside `ctx.waitForEvent`. The rejection still fails the run. A stop that ended
-    // the run itself (a cancel, a failed step, a lost lease) stands.
-    const failedBesideWait = outcome.kind === "failed" && !lost && !isTerminalRun(current);
+      // A sibling `ctx` call may have saved a wait after `run` rejected, as with a rejected promise in
+      // `Promise.all` beside `ctx.waitForEvent`. The rejection still fails the run. A stop that ended
+      // the run itself (a cancel, a failed step, a lost lease) stands.
+      const failedBesideWait = outcome.kind === "failed" && !lost && !isTerminalRun(current);
 
-    if (outcome.kind === "suspended" || (stopped && !failedBesideWait)) {
+      if (outcome.kind === "suspended" || (stopped && !failedBesideWait)) {
+        return lost ? await store.get(loaded.id) : current;
+      }
+
+      stopped = true;
+
+      if (outcome.kind === "failed") {
+        // A wait a sibling saved has released the run, so another engine's write, such as an event
+        // delivery, may land before the failure. The failure still wins while the run stands where
+        // this execution parked it; a run another execution claimed is left to that execution.
+        await failRun(outcome.error, fatal?.step, (fresh, base) => isParkedAt(fresh, base));
+      } else {
+        let output: WorkflowJsonValue | undefined;
+        let invalid: WorkflowError | undefined;
+
+        try {
+          output = workflowOutput(outcome.output);
+        } catch (cause) {
+          if (!isDefinitionError(cause)) throw cause;
+
+          invalid = cause;
+        }
+
+        if (invalid) await failRun(invalid);
+        else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
+          await invokeHook("onRunComplete", { run: current });
+        }
+      }
+
+      if (!lost) await scheduler?.cancel(loaded.id);
+
       return lost ? await store.get(loaded.id) : current;
     }
 
-    stopped = true;
+    // Every exit, including a final save that throws, stops the heartbeats of steps still running.
+    // A run left unsaved then keeps its last lease, which expires so lease-expiry recovery can retry it.
+    try {
+      return await conclude();
+    } finally {
+      ended = true;
 
-    if (outcome.kind === "failed") {
-      // A wait a sibling saved has released the run, so another engine's write, such as an event
-      // delivery, may land before the failure. The failure still wins while the run stands where
-      // this execution parked it; a run another execution claimed is left to that execution.
-      await failRun(outcome.error, fatal?.step, (fresh, base) => isParkedAt(fresh, base));
-    } else {
-      let output: WorkflowJsonValue | undefined;
-      let invalid: WorkflowError | undefined;
-
-      try {
-        output = workflowOutput(outcome.output);
-      } catch (cause) {
-        if (!isDefinitionError(cause)) throw cause;
-
-        invalid = cause;
-      }
-
-      if (invalid) await failRun(invalid);
-      else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
-        await invokeHook("onRunComplete", { run: current });
-      }
+      for (const stop of heartbeats) stop();
     }
-
-    if (!lost) await scheduler?.cancel(loaded.id);
-
-    return lost ? await store.get(loaded.id) : current;
   }
 
   /** Claims and executes the run when it is runnable. `executed` is false when it was left alone. */
