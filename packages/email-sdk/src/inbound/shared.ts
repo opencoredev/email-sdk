@@ -292,11 +292,11 @@ export function remoteAttachment(
   return { ...details, read };
 }
 
-/** Message-ID values without angle brackets. */
 /**
  * Message IDs from a `Message-ID`, `In-Reply-To`, or `References` value. Comments are CFWS
  * (RFC 5322 3.6.4), so a `<id>` inside one is skipped. A value with no `<id>` falls back to
- * whitespace- or comma-separated tokens, as some providers send bare IDs.
+ * whitespace- or comma-separated tokens, as some providers send bare IDs. A domain literal such
+ * as `[a(b)c]` or `[a>b]` is data in either form.
  */
 export function messageIds(value: string | undefined): string[] {
   if (!value) return [];
@@ -304,6 +304,8 @@ export function messageIds(value: string | undefined): string[] {
   const bracketed: string[] = [];
   let bare = "";
   let depth = 0;
+  let literal = false;
+  let afterAt = false;
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
@@ -316,30 +318,81 @@ export function messageIds(value: string | undefined): string[] {
       continue;
     }
 
+    if (literal) {
+      bare += char;
+
+      if (char === "\\") {
+        bare += value[index + 1] ?? "";
+        index += 1;
+      } else if (char === "]") literal = false;
+
+      continue;
+    }
+
     if (char === "(") {
       depth = 1;
       bare += " ";
     } else if (char === "<") {
-      const end = value.indexOf(">", index + 1);
+      const id = bracketedId(value, index + 1);
 
-      // No `>` follows, so no later `<` can close either.
-      if (end === -1) break;
+      // No `>` closes this one, and the scan reached the end, so no later `<` can close either.
+      if (id === undefined) break;
 
-      // Start from the last `<` before the `>`, so a run of `<` is scanned once.
-      const start = value.lastIndexOf("<", end);
-      const id = value.slice(start + 1, end);
+      const text = value.slice(id.start, id.end);
 
-      if (id && !/\s/.test(id)) bracketed.push(id);
+      if (text && !/\s/.test(text)) bracketed.push(text);
 
-      index = end;
+      index = id.end;
     } else {
+      // A bare ID has no CFWS inside it, so only `@[` opens its domain literal.
+      if (char === "[" && afterAt) literal = true;
+
       bare += char;
     }
+
+    afterAt = char === "@";
   }
 
   if (bracketed.length) return bracketed;
 
   return bare.split(/[\s,]+/).filter(Boolean);
+}
+
+interface BracketedId {
+  /** Index of the first character after the last unclosed `<`. */
+  start: number;
+  /** Index of the closing `>`. */
+  end: number;
+}
+
+/**
+ * Find the `>` that closes a msg-id, skipping a `>` inside a domain literal. A later `<` restarts
+ * the ID, so a run of `<` is scanned once.
+ */
+function bracketedId(value: string, from: number): BracketedId | undefined {
+  let start = from;
+  let literal = false;
+  let afterAt = false;
+
+  for (let index = from; index < value.length; index += 1) {
+    const char = value[index]!;
+
+    if (literal) {
+      if (char === "\\") index += 1;
+      else if (char === "]") literal = false;
+
+      continue;
+    }
+
+    if (char === ">") return { start, end: index };
+
+    if (char === "<") start = index + 1;
+    else if (char === "[" && afterAt) literal = true;
+
+    afterAt = char === "@";
+  }
+
+  return undefined;
 }
 
 export function firstMessageId(value: string | undefined): string | undefined {

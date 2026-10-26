@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { decodeEncodedWords, parseAddressList, parseMimeMessage, parseMultipartFormData } from "./inbound/mime.js";
 import { emailFromMime } from "./inbound/normalize.js";
+import { messageIds } from "./inbound/shared.js";
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`./__fixtures__/inbound/${name}`, import.meta.url)));
 
@@ -615,6 +616,19 @@ describe("review round 3 regressions", () => {
     expect(parseAddressList("<@[a\\]:b]:user@example.com>")).toEqual([{ address: "user@example.com" }]);
     expect(parseAddressList("<@a.example:\"x:y\"@example.com>")).toEqual([{ address: "\"x:y\"@example.com" }]);
     expect(parseAddressList("<\"@a:b\"@example.com>")).toEqual([{ address: "\"@a:b\"@example.com" }]);
+  });
+
+  test("parentheses in the domain literal of a bare message ID are data", () => {
+    expect(messageIds("thread@[a(b)c]")).toEqual(["thread@[a(b)c]"]);
+    expect(messageIds("thread@[a(b)c] (note) next@example.com")).toEqual(["thread@[a(b)c]", "next@example.com"]);
+    expect(messageIds("thread@[a\\](b)c], next@example.com")).toEqual(["thread@[a\\](b)c]", "next@example.com"]);
+  });
+
+  test("a > inside the domain literal of a bracketed message ID does not close it", () => {
+    expect(messageIds("<thread@[a>b]>")).toEqual(["thread@[a>b]"]);
+    expect(messageIds("<x@[a>b]> <y@example.com>")).toEqual(["x@[a>b]", "y@example.com"]);
+    expect(messageIds("<<a@b>")).toEqual(["a@b"]);
+    expect(emailFromMime({ provider: "cloudflare", raw: "Message-ID: <thread@[a>b]>\r\n\r\nhi" }).messageId).toBe("thread@[a>b]");
   });
 
   test("a leading byte-order mark is dropped from each encoded word", () => {
