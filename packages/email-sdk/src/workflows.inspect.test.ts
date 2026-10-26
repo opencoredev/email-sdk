@@ -638,3 +638,40 @@ describe("describeRun", () => {
     ]);
   });
 });
+
+describe("inspectWorkflow: definitions that catch ctx errors", () => {
+  test("a loop that catches every ctx error is cut off at maxDepth instead of hanging", async () => {
+    let calls = 0;
+
+    const workflow = defineWorkflow({
+      name: "spins",
+      run: async (ctx) => {
+        for (;;) {
+          calls += 1;
+
+          await ctx.send(`mail-${calls}`, message("ada@example.com", "Hi", "Hi")).catch(() => {});
+        }
+      },
+    });
+
+    const graph = await Promise.race([
+      inspectWorkflow(workflow, { input: null, maxDepth: 3 }),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+    ]);
+
+    expect(graph).not.toBe("hung");
+
+    if (graph === "hung") return;
+
+    expect(graph.truncated).toBe(true);
+    expect(graph.paths[0]?.outcome).toEqual({ status: "truncated", reason: "More than 3 ctx calls in one path." });
+    expect(graph.nodes.filter((node) => node.kind === "send")).toHaveLength(3);
+
+    // The call past the cap never settles, so the loop parks instead of spinning on.
+    const parked = calls;
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(calls).toBe(parked);
+  });
+});

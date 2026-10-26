@@ -1,12 +1,4 @@
-import {
-  causeArray,
-  causeBoolean,
-  causeString,
-  isBoolean,
-  isNumber,
-  isObjectLike,
-  isString,
-} from "../internal/decode.js";
+import { causeArray, causeBoolean, causeString } from "../internal/decode.js";
 import { mailboxAddress } from "../internal/address.js";
 import type { EmailAddress, EmailMessage, MaybePromise, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
@@ -14,7 +6,20 @@ import { WorkflowError, WorkflowNonRetryableError } from "./errors.js";
 import { workflowIdempotencyKey } from "./idempotency.js";
 import { compareLegacyRunOrder } from "./journal-order.js";
 import { isTerminalRun } from "./memory.js";
-import { stepNameError, stepOverlapError } from "./step-name.js";
+import {
+  assertJson,
+  assertStepResult,
+  createWorkflowCallGuard,
+  eventTimeoutMs,
+  isDefinitionError,
+  jsonResult,
+  parseWorkflowInput,
+  savedForm,
+  sleepMs,
+  sleepUntilMs,
+  workflowOutput,
+} from "./rules.js";
+import type { WorkflowFatalError } from "./rules.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -62,9 +67,6 @@ const emailErrorCodes = new Set([
 ]);
 
 const workflowErrorNames = new Set(["WorkflowError", "WorkflowNonRetryableError"]);
-
-// Mistakes in how a definition calls `ctx`, which fail the run instead of reaching the caller.
-const definitionErrorCodes = new Set(["invalid_definition", "invalid_duration", "invalid_value"]);
 
 type ResolvedRetry = { maxAttempts: number; backoffMs: number };
 
@@ -121,69 +123,9 @@ function isPermanentFailure(cause: unknown): boolean {
   return sdkRetryable(cause) === false;
 }
 
-/** A WorkflowError caused by the definition's own `ctx` call, such as a negative duration. */
-function isDefinitionError(cause: unknown): cause is WorkflowError {
-  return cause instanceof WorkflowError && definitionErrorCodes.has(cause.code);
-}
-
-type WorkflowJsonObject = { readonly [key: string]: WorkflowJsonValue | undefined };
-
-function isJsonArray(value: WorkflowJsonValue): value is readonly WorkflowJsonValue[] {
-  return Array.isArray(value);
-}
-
-/** Plain objects only: a Date, Map, class instance, or function has another prototype. */
-function isPlainObject(value: WorkflowJsonObject): boolean {
-  const prototype: object | null = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
-}
-
-/**
- * True when `value` survives a JSON round trip unchanged, apart from `undefined` object fields being
- * dropped. The static type already says JSON; this catches what it can't, such as NaN and Infinity
- * (saved as null), empty array slots (saved as null), a cycle (which JSON can't encode), or a Date
- * from untyped code. `ancestors` holds the containers above `value`; a shared, acyclic reference
- * is fine, since it saves as two equal copies.
- */
-function isJsonValue(value: WorkflowJsonValue, ancestors: readonly object[] = []): boolean {
-  if (value === null || isString(value) || isBoolean(value)) return true;
-
-  if (isNumber(value)) return Number.isFinite(value);
-
-  if (!isObjectLike(value) || ancestors.includes(value)) return false;
-
-  const path = [...ancestors, value];
-
-  // Spreading reads empty slots as undefined, which `every` would otherwise skip.
-  if (isJsonArray(value)) return [...value].every((item) => item !== undefined && isJsonValue(item, path));
-
-  if (!isPlainObject(value)) return false;
-
-  return Object.values(value).every((field) => field === undefined || isJsonValue(field, path));
-}
-
-/** Throws `invalid_value` unless `value` is undefined (a `void` result) or JSON. */
-function assertJson(value: WorkflowJsonValue | void, what: string) {
-  if (value !== undefined && !isJsonValue(value)) {
-    throw new WorkflowError("invalid_value", `${what} must be JSON: finite numbers, strings, booleans, null, arrays, and plain objects.`);
-  }
-}
-
 /** A copy of a run for a hook, so a hook that edits what it was given can't change the next save. */
 function detached(run: WorkflowRun): WorkflowRun {
   return structuredClone(run);
-}
-
-/**
- * The value as a store gives it back: a fresh JSON round trip, with no shared references and no
- * `undefined` object fields. Workflow code gets this form on the first execution as well as on
- * replay, so a wake can't change what it sees, and editing it can't change the journal.
- */
-function savedForm<T extends WorkflowJsonValue | void>(value: T): T {
-  // SAFETY: callers pass values that passed `isJsonValue` or came from the store, so the round trip
-  // yields the same JSON value; only `undefined` fields, which T allows to be absent, are dropped.
-  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
 function addressOf(address: EmailAddress): string {
@@ -257,11 +199,6 @@ function journalWith(journal: WorkflowRun["journal"], name: string, record: Work
 
 function definitionKey(name: string, version: number) {
   return `${name}@${version}`;
-}
-
-/** The stored step result, or the workflow output, with `undefined` (a `void` return) left out. */
-function jsonResult(value: WorkflowJsonValue | void): WorkflowJsonValue | undefined {
-  return value === undefined ? undefined : value;
 }
 
 function hasLiveLease(run: WorkflowRun, at: number) {
@@ -461,9 +398,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   }
 
-  /** Saves the cancellation. Returns undefined when the run had already ended or changed owner. */
-  async function saveCancellation(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
-    return await commit(run, (current) => ({ ...current, status: "canceled", cancelReason: reason, wait: undefined }), owner);
+  function canceledBy(reason: string): RunTransform {
+    return (run) => ({ ...run, status: "canceled", cancelReason: reason, wait: undefined });
+  }
+
+  /** Saves the cancellation. Returns undefined when the run had already ended. */
+  async function saveCancellation(run: WorkflowRun, reason: string): Promise<WorkflowRun | undefined> {
+    return await commit(run, canceledBy(reason));
   }
 
   /** What follows a saved cancellation: dropping the run's timer and telling `onRunCanceled`. */
@@ -472,8 +413,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     await invokeHook("onRunCanceled", { run: canceled, reason });
   }
 
-  async function cancelRun(run: WorkflowRun, reason: string, owner?: string): Promise<WorkflowRun | undefined> {
-    const canceled = await saveCancellation(run, reason, owner);
+  async function cancelRun(run: WorkflowRun, reason: string): Promise<WorkflowRun | undefined> {
+    const canceled = await saveCancellation(run, reason);
 
     if (canceled) await afterCancellation(canceled, reason);
 
@@ -504,33 +445,31 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     let infrastructureError: Error | undefined;
     let signalSuspended: () => void = () => {};
 
-    let signalViolation: (error: WorkflowError) => void = () => {};
+    let signalFatal: (fatal: WorkflowFatalError) => void = () => {};
 
     const suspended = new Promise<ExecutionOutcome>((resolve) => {
       signalSuspended = () => resolve({ kind: "suspended" });
     });
 
-    // Settles with the first overlapping call, so the run fails without waiting for the step that
-    // was running: its callback may never settle, and its heartbeat would hold the run meanwhile.
-    const violated = new Promise<ExecutionOutcome>((resolve) => {
-      signalViolation = (error) => resolve({ kind: "failed", error });
+    // Settles with the first definition error, such as an overlapping call, so the run fails
+    // without waiting for a step that was running: its callback may never settle, and its
+    // heartbeat would hold the run meanwhile.
+    const doomed = new Promise<ExecutionOutcome>((resolve) => {
+      signalFatal = (fatal) => resolve({ kind: "failed", error: fatal.error });
     });
+
+    // The rules for this execution's `ctx` calls. They belong to this execution, so a step
+    // callback may still start or resume other runs.
+    const guard = createWorkflowCallGuard((fatal) => signalFatal(fatal));
 
     // What suspended `ctx` calls await. It belongs to this execution, so once the execution is
     // over nothing references the abandoned workflow call and the garbage collector can free it.
     const neverSettles = new Promise<never>(() => {});
-    const seen = new Set<string>();
     let queue: Promise<void> = Promise.resolve();
-    // Names the step from the `ctx.step` call until its promise settles. Every other `ctx` call
-    // made meanwhile fails: from inside the callback it would queue behind the step that awaits
-    // it, and telling a call from inside the callback apart from a sibling `run` made needs async
-    // context tracking, which isn't portable across runtimes. Siblings never ran in parallel, so
-    // they lose nothing. Overlapping calls that involve no step, such as two sends, can't deadlock
-    // and still queue. The flag belongs to this execution, so a callback may still start or resume
-    // other runs.
-    let activeStep: string | undefined;
-    // The first overlapping call. It fails the run even when the definition catches the rejection.
-    let violation: WorkflowError | undefined;
+    // This execution's saves, one at a time, so each starts from the run the last one saved. A
+    // failure saved while a sibling call is still saving its wait then sees that wait.
+    let saving: Promise<unknown> = Promise.resolve();
+    const heartbeats = new Set<() => void>();
 
     function suspend(): Promise<never> {
       stopped = true;
@@ -539,15 +478,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return neverSettles;
     }
 
-    async function save(
+    async function saveNow(
       transform: (run: WorkflowRun) => WorkflowRun,
-      adopts?: (fresh: WorkflowRun) => boolean,
+      adopts?: (fresh: WorkflowRun, base: WorkflowRun) => boolean,
     ): Promise<boolean> {
       // Once this execution has ended the run, nothing it still has in flight, such as a step
-      // callback that outlived an overlap failure or its heartbeat, may write again.
+      // callback that outlived the failure or its heartbeat, may write again.
       if (lost || isTerminalRun(current)) return false;
 
-      const next = await commit(current, transform, owner, adopts);
+      const base = current;
+      const next = await commit(base, transform, owner, adopts && ((fresh) => adopts(fresh, base)));
 
       if (!next) {
         lost = true;
@@ -557,7 +497,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       current = next;
 
+      if (isTerminalRun(next)) {
+        for (const stop of heartbeats) stop();
+      }
+
       return true;
+    }
+
+    function save(
+      transform: (run: WorkflowRun) => WorkflowRun,
+      adopts?: (fresh: WorkflowRun, base: WorkflowRun) => boolean,
+    ): Promise<boolean> {
+      const saved = saving.then(async () => await saveNow(transform, adopts));
+
+      saving = saved.catch(() => undefined);
+
+      return saved;
     }
 
     /** Proves this execution still owns an active run, and extends the lease, before an effect. */
@@ -567,8 +522,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     /**
      * Runs `body` while renewing the lease every third of its duration. The timer stops as soon as
-     * a renewal shows the run was canceled, finished, or taken over, even if `body` never settles.
-     * A renewal that throws (a store outage) keeps the timer, since the lease may still be held.
+     * a renewal shows the run was canceled, finished, or taken over, or this execution ends the run,
+     * even if `body` never settles. A renewal that throws (a store outage) keeps the timer, since
+     * the lease may still be held.
      */
     async function withHeartbeat<T>(body: () => Promise<T>): Promise<T> {
       let beat: Promise<unknown> = Promise.resolve();
@@ -578,73 +534,56 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           .then(renew)
           .catch(() => true)
           .then((owned) => {
-            if (!owned) clearInterval(timer);
+            if (!owned) stop();
           });
       }, Math.max(1, Math.floor(leaseMs / 3)));
+
+      const stop = () => {
+        clearInterval(timer);
+        heartbeats.delete(stop);
+      };
+
+      heartbeats.add(stop);
 
       try {
         return await body();
       } finally {
-        clearInterval(timer);
+        stop();
         await beat;
       }
     }
 
-    function operation<T>(name: string, body: () => Promise<T>): Promise<T> {
+    /**
+     * Admits a `ctx` call under the guard's rules and queues `body` behind the calls before it. A
+     * step stays the running step until its promise settles.
+     */
+    function operation<T>(name: string, body: () => Promise<T>, isStep = false): Promise<T> {
       if (stopped) return neverSettles;
 
-      if (violation) return Promise.reject(violation);
-
-      if (activeStep !== undefined) {
-        violation = stepOverlapError(name, activeStep);
-        signalViolation(violation);
-
-        return Promise.reject(violation);
+      try {
+        if (guard.admit(name, definitionKey(current.workflow, current.version)) === "halt") return neverSettles;
+      } catch (rejection) {
+        return Promise.reject(rejection);
       }
-
-      const invalidName = stepNameError(name);
-
-      if (invalidName) return Promise.reject(invalidName);
-
-      if (seen.has(name)) {
-        return Promise.reject(
-          new WorkflowError(
-            "duplicate_step",
-            `Step "${name}" ran twice in workflow ${definitionKey(current.workflow, current.version)}. Step names must be unique per run; include a loop index in the name.`,
-          ),
-        );
-      }
-
-      seen.add(name);
 
       // Step failures are handled inside `body`. A definition error, such as a negative duration,
       // fails the run: replaying it would only throw again. Anything else that escapes is a store,
       // scheduler, or suppression-check failure: the run's state is unknown, so the execution stops
       // and the error reaches the engine's caller instead of the definition.
       const result = queue.then(() =>
-        stopped
+        // A definition error since this call was queued already doomed the run.
+        stopped || guard.fatal
           ? neverSettles
           : Promise.resolve()
-              .then(() => {
-                // A call that overlapped this queued operation already doomed the run.
-                if (violation) throw violation;
-
-                return body();
-              })
-              .catch(async (cause: unknown) => {
-                let escaped = cause;
-
+              .then(body)
+              .catch((cause: unknown) => {
                 if (isDefinitionError(cause)) {
-                  try {
-                    await failRun(cause, name);
+                  guard.latch(cause, name);
 
-                    return suspend();
-                  } catch (failure) {
-                    escaped = failure;
-                  }
+                  return neverSettles;
                 }
 
-                infrastructureError = toError(escaped);
+                infrastructureError = toError(cause);
 
                 return suspend();
               }),
@@ -654,6 +593,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         () => undefined,
         () => undefined,
       );
+
+      if (isStep) guard.stepStarted(name, result);
 
       return result;
     }
@@ -673,7 +614,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
     }
 
-    async function failRun(error: Error, step?: string, adopts?: (fresh: WorkflowRun) => boolean) {
+    async function failRun(error: Error, step?: string, adopts?: (fresh: WorkflowRun, base: WorkflowRun) => boolean) {
       const failed = await save(
         (run) => ({
           ...run,
@@ -720,7 +661,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         const error = toError(cause);
         const willRetry = !isPermanentFailure(cause) && attempt < policy.maxAttempts;
 
-        if (lost) return suspend();
+        // A run this execution already failed, as when `run` rejected beside this step, stays failed.
+        if (lost || isTerminalRun(current)) return suspend();
 
         await invokeHook("onStepError", { run: current, step: name, kind, attempt, error, willRetry });
 
@@ -803,10 +745,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           if (options.isSuppressed) {
             for (const address of recipientsOf(message)) {
               if (await options.isSuppressed(address)) {
-                const canceled = await cancelRun(current, "suppressed", owner);
-
-                if (canceled) current = canceled;
-                else lost = true;
+                if (await save(canceledBy("suppressed"))) await afterCancellation(current, "suppressed");
 
                 return suspend();
               }
@@ -829,24 +768,24 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         });
       },
       step(name, fn, stepOptions) {
-        const pending = operation(name, async () => {
+        return operation(
+          name,
+          async () => {
           const record = completedRecord(name);
 
           const result = record
             ? record.result
             : await sideEffect(name, "step", stepOptions?.retry, async () => {
-                if (violation) throw violation;
-
                 const value = await Promise.resolve()
                   .then(fn)
                   .catch((cause: unknown) => {
-                    throw violation ?? cause;
+                    throw guard.fatal?.error ?? cause;
                   });
 
                 // A callback that caught its own rejected `ctx` call still fails the run.
-                if (violation) throw violation;
+                if (guard.fatal) throw guard.fatal.error;
 
-                assertJson(value, `The result of step "${name}"`);
+                assertStepResult(name, value);
 
                 return value;
               });
@@ -854,40 +793,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           // SAFETY: the journaled value is what `fn` returned for this step name, persisted as JSON;
           // TResult is constrained to JSON values, so the round trip preserves its type.
           return savedForm(result as Awaited<ReturnType<typeof fn>>);
-        });
-
-        // A rejected or suspended call leaves no step running: it never settles once stopped, and
-        // every later call then returns before reaching this check.
-        if (stopped || violation) return pending;
-
-        activeStep = name;
-
-        const release = () => {
-          if (activeStep === name) activeStep = undefined;
-        };
-
-        pending.then(release, release);
-
-        return pending;
+          },
+          true,
+        );
       },
       sleep(name, duration: WorkflowDuration) {
         return operation(name, async () => {
           if (completedRecord(name)) return;
 
-          await sleepUntil(name, now() + durationToMs(duration));
+          await sleepUntil(name, now() + sleepMs(duration));
         });
       },
       sleepUntil(name, at) {
         return operation(name, async () => {
           if (completedRecord(name)) return;
 
-          const until = Number(at);
-
-          if (!Number.isFinite(until)) {
-            throw new WorkflowError("invalid_duration", `sleepUntil "${name}" needs a valid Date or epoch milliseconds.`);
-          }
-
-          await sleepUntil(name, until);
+          await sleepUntil(name, sleepUntilMs(name, at));
         });
       },
       waitForEvent(name, waitOptions) {
@@ -905,11 +826,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           // The deadline is fixed the first time the run reaches this step and persisted with the
           // wait, so every worker resolves event versus timeout against the same timestamps.
-          const until = persisted
-            ? persisted.until
-            : waitOptions?.timeout === undefined
-              ? undefined
-              : now() + durationToMs(waitOptions.timeout);
+          const timeoutMs = persisted ? undefined : eventTimeoutMs(waitOptions?.timeout);
+          const until = persisted ? persisted.until : timeoutMs === undefined ? undefined : now() + timeoutMs;
 
           const wait: WorkflowWait = until === undefined ? { kind: "event", step: name, event } : { kind: "event", step: name, event, until };
           let outcome: WorkflowEventResult<WorkflowJsonValue | undefined> | undefined;
@@ -962,7 +880,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       (cause: unknown): ExecutionOutcome => ({ kind: "failed", error: toError(cause) }),
     );
 
-    let outcome = await Promise.race([finished, suspended, violated]);
+    let outcome = await Promise.race([finished, suspended, doomed]);
 
     // Every queued microtask runs before a timer does, so one timer turn lets a rejection already
     // on its way, such as a rejected sibling in `Promise.all` beside `ctx.waitForEvent`, settle
@@ -971,14 +889,17 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (outcome.kind === "suspended") outcome = await settledWithinTurn(finished, outcome);
 
     // A `ctx` call the definition forgot to await may still be running; let it finish or suspend.
-    // After an overlap the queue holds the step that was running, which may never settle.
-    if (outcome.kind !== "suspended" && !violation) await Promise.race([queue, suspended]);
+    // A failed run doesn't wait: the queue may hold a step whose callback never settles, and
+    // whatever it still has in flight can't save once the failure has.
+    if (outcome.kind === "completed") await Promise.race([queue, suspended, doomed]);
 
     if (infrastructureError) throw infrastructureError;
 
-    // A `ctx` call that overlapped a running step fails the run even if the definition caught it
-    // and went on to finish or park on a wait.
-    if (violation) outcome = { kind: "failed", error: violation };
+    // The first definition error, such as a call that overlapped a running step, fails the run even
+    // if the definition caught it and went on to finish or park on a wait.
+    const fatal = guard.fatal;
+
+    if (fatal) outcome = { kind: "failed", error: fatal.error };
 
     // A sibling `ctx` call may have saved a wait after `run` rejected, as with a rejected promise in
     // `Promise.all` beside `ctx.waitForEvent`. The rejection still fails the run. A stop that ended
@@ -991,19 +912,27 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     stopped = true;
 
-    const output = outcome.kind === "completed" ? jsonResult(outcome.output) : undefined;
-
     if (outcome.kind === "failed") {
       // A wait a sibling saved has released the run, so another engine's write, such as an event
       // delivery, may land before the failure. The failure still wins while the run stands where
       // this execution parked it; a run another execution claimed is left to that execution.
-      const parked = current;
+      await failRun(outcome.error, fatal?.step, (fresh, base) => isParkedAt(fresh, base));
+    } else {
+      let output: WorkflowJsonValue | undefined;
+      let invalid: WorkflowError | undefined;
 
-      await failRun(outcome.error, undefined, (fresh) => isParkedAt(fresh, parked));
-    } else if (!isJsonValue(output ?? null)) {
-      await failRun(new WorkflowError("invalid_value", "The workflow output must be JSON."));
-    } else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output: savedForm(output) }))) {
-      await invokeHook("onRunComplete", { run: current });
+      try {
+        output = workflowOutput(outcome.output);
+      } catch (cause) {
+        if (!isDefinitionError(cause)) throw cause;
+
+        invalid = cause;
+      }
+
+      if (invalid) await failRun(invalid);
+      else if (await save((run) => ({ ...run, status: "completed", wait: undefined, output }))) {
+        await invokeHook("onRunComplete", { run: current });
+      }
     }
 
     if (!lost) await scheduler?.cancel(loaded.id);
@@ -1229,22 +1158,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
       if (existing) return existing;
 
-      let parsed: WorkflowJsonValue = input;
-
-      if (workflow.input) {
-        const validation = await workflow.input["~standard"].validate(input);
-
-        if (validation.issues) {
-          throw new WorkflowError(
-            "invalid_input",
-            `Invalid input for workflow ${workflow.name}: ${validation.issues.map((issue) => issue.message).join("; ")}`,
-          );
-        }
-
-        parsed = validation.value;
-      }
-
-      assertJson(parsed, `The input of workflow ${workflow.name}`);
+      const parsed = await parseWorkflowInput(workflow, input);
 
       const at = now();
       const owner = crypto.randomUUID();
@@ -1255,7 +1169,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         workflow: workflow.name,
         version: workflow.version,
         status: "running",
-        input: savedForm(parsed),
+        input: parsed,
         journal: {},
         inbox: [],
         lease,

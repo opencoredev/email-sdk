@@ -2575,3 +2575,59 @@ describe("workflows: ctx calls while a step runs", () => {
   });
 });
 
+
+describe("workflows: a run that rejects beside a pending step", () => {
+  test("fails at once, stops the heartbeat, and ignores the step when it settles later", async () => {
+    const hung = gate();
+    const failures: string[] = [];
+
+    const rejected = defineWorkflow({
+      name: "rejected",
+      run: async (ctx) => {
+        await Promise.all([
+          ctx.step("hang", async () => {
+            await hung.pass();
+
+            return "late";
+          }),
+          hung.reached.then(() => Promise.reject(new Error("sibling broke"))),
+        ]);
+      },
+    });
+
+    const { engine, store, scheduler } = setup([rejected], {
+      leaseDuration: "30ms",
+      hooks: { onRunFailed: ({ error }) => void failures.push(error.message) },
+    });
+
+    const settled = await Promise.race([
+      engine.start(rejected, null, { id: "run-1" }),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+    ]);
+
+    try {
+      expect(settled).not.toBe("hung");
+
+      const failed = await store.get("run-1");
+
+      expect(failed).toMatchObject({ status: "failed", error: { message: "sibling broke" } });
+      expect(failed?.lease).toBeUndefined();
+
+      // Three lease periods: a heartbeat still running would have renewed (and rewritten) the run.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect((await store.get("run-1"))?.revision).toBe(failed?.revision);
+      expect(failures).toEqual(["sibling broke"]);
+      expect(scheduler.pending()).toEqual([]);
+    } finally {
+      hung.open();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const after = await store.get("run-1");
+
+    expect(after).toMatchObject({ status: "failed", journal: {} });
+    expect(failures).toEqual(["sibling broke"]);
+  });
+});

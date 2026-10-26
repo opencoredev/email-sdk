@@ -1,9 +1,17 @@
 import { isObjectLike, isString, isStringMember } from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, OneOrMany } from "../types.js";
-import { durationToMs } from "./duration.js";
-import { WorkflowError } from "./errors.js";
 import { compareLegacyRunOrder } from "./journal-order.js";
-import { stepNameError, stepOverlapError } from "./step-name.js";
+import {
+  assertStepResult,
+  createWorkflowCallGuard,
+  eventTimeoutMs,
+  isDefinitionError,
+  parseWorkflowInput,
+  savedForm,
+  sleepMs,
+  sleepUntilMs,
+  workflowOutput,
+} from "./rules.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -143,15 +151,6 @@ function choicePrefix(choice: Choice) {
   return `${encodeURIComponent(choice.step)}:${choice.branch}/`;
 }
 
-class DepthLimit extends Error {}
-
-/** Round-trips a JSON value, as the engine does before `run` sees it. */
-function savedForm<T extends WorkflowJsonValue | undefined>(value: T): T {
-  // SAFETY: T is a JSON value, so the round trip yields the same value minus `undefined` fields,
-  // which the type already allows to be absent.
-  return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
-}
-
 function formatAddress(address: EmailAddress): string {
   if (isStringMember(address)) return address;
 
@@ -250,24 +249,12 @@ function errorMessage(cause: unknown) {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-async function parseInput(definition: AnyWorkflowDefinition, input: WorkflowJsonValue) {
-  const stored = savedForm(input);
-
-  if (!definition.input) return stored;
-
-  const validation = await definition.input["~standard"].validate(stored);
-
-  if (validation.issues) {
-    throw new WorkflowError(
-      "invalid_input",
-      `Invalid input for workflow ${definition.name}: ${validation.issues.map((issue) => issue.message).join("; ")}`,
-    );
-  }
-
-  return savedForm(validation.value);
-}
-
-/** Runs the definition once, taking `choices` at the first timed waits and `received` after them. */
+/**
+ * Runs the definition once, taking `choices` at the first timed waits and `received` after them.
+ * The `ctx` rules, value checks, and duration parsing come from the engine's own rules module, and
+ * the path ends the moment one of them dooms the run, as the engine's execution does, whatever
+ * the definition goes on to do.
+ */
 async function tracePath(
   definition: AnyWorkflowDefinition,
   input: WorkflowJsonValue,
@@ -279,42 +266,69 @@ async function tracePath(
   const entries: TraceEntry[] = [];
   const choices: Choice[] = [];
   const forks: number[] = [];
-  const seen = new Set<string>();
   const unsampled: string[] = [];
+  const truncatedOutcome: WorkflowInspectOutcome = { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` };
   let elapsed = 0;
   let prefix = "";
-  let stopped = false;
-  // The engine's step-overlap rule: from a `ctx.step` call until its promise settles, every other
-  // `ctx` call fails, and the first one fails the path even when the definition catches it.
-  let activeStep: string | undefined;
-  let violation: WorkflowError | undefined;
+  let ended: WorkflowInspectOutcome | undefined;
+  let signalEnd: (outcome: WorkflowInspectOutcome) => void = () => {};
 
-  function enter(name: string) {
-    if (violation) throw violation;
+  // Settles when the path ends before `run` does: a definition error, or the depth cap.
+  const endedEarly = new Promise<WorkflowInspectOutcome>((resolve) => {
+    signalEnd = resolve;
+  });
 
-    if (activeStep !== undefined) {
-      violation = stepOverlapError(name, activeStep);
+  // What every call after the end awaits, so a definition that catches errors in a loop parks
+  // instead of spinning on.
+  const neverSettles = new Promise<never>(() => {});
 
-      throw violation;
+  function failed(cause: unknown): WorkflowInspectOutcome {
+    return { status: "failed", error: `${errorMessage(cause)}${unsampledHint(unsampled)}` };
+  }
+
+  function end(outcome: WorkflowInspectOutcome) {
+    if (ended) return;
+
+    ended = outcome;
+    signalEnd(outcome);
+  }
+
+  const guard = createWorkflowCallGuard((fatal) => end(failed(fatal.error)));
+  const workflowKey = `${definition.name}@${definition.version}`;
+
+  /** Admits a `ctx` call as the engine would, then records it with `body`. */
+  function call<T>(name: string, body: (base: { id: string; offsetMs: number }) => T, isStep = false): Promise<Awaited<T>> {
+    if (ended) return neverSettles;
+
+    if (entries.length >= maxDepth) {
+      end(truncatedOutcome);
+
+      return neverSettles;
     }
 
-    if (stopped || entries.length >= maxDepth) {
-      stopped = true;
+    let result: Promise<Awaited<T>>;
 
-      throw new DepthLimit(`More than ${maxDepth} ctx calls in one path.`);
+    try {
+      if (guard.admit(name, workflowKey) === "halt") return neverSettles;
+
+      try {
+        result = Promise.resolve(body({ id: `${prefix}${encodeURIComponent(name)}`, offsetMs: elapsed }));
+      } catch (cause) {
+        // As in the engine, a definition error raised by the call itself ends the run and the
+        // call never settles, so catching it changes nothing.
+        if (!isDefinitionError(cause)) throw cause;
+
+        guard.latch(cause, name);
+
+        return neverSettles;
+      }
+    } catch (rejection) {
+      return Promise.reject(rejection);
     }
 
-    const invalidName = stepNameError(name);
+    if (isStep) guard.stepStarted(name, result);
 
-    if (invalidName) throw invalidName;
-
-    if (seen.has(name)) {
-      throw new WorkflowError("duplicate_step", `Step name "${name}" is used more than once in this run.`);
-    }
-
-    seen.add(name);
-
-    return { id: `${prefix}${encodeURIComponent(name)}`, offsetMs: elapsed };
+    return result;
   }
 
   function received(event: string) {
@@ -331,118 +345,106 @@ async function tracePath(
     version: definition.version,
     subject: options.subject,
     startedAt,
-    async send(name, message): Promise<WorkflowSendRecord> {
-      const base = enter(name);
-      const email = renderEmail(message);
+    send(name, message): Promise<WorkflowSendRecord> {
+      return call(name, (base) => {
+        const email = renderEmail(message);
 
-      entries.push({ ...base, kind: "send", step: name, email, label: `${email.subject} → ${email.to.join(", ")}` });
+        entries.push({ ...base, kind: "send", step: name, email, label: `${email.subject} → ${email.to.join(", ")}` });
 
-      return { adapter: "inspect", id: `inspect:${name}` };
+        return { adapter: "inspect", id: `inspect:${name}` };
+      });
     },
     // SAFETY: the callback never runs during inspection, so the only value returned is the caller's
     // mock, which states the step's result contract the same way the engine's journal does.
-    step: ((name: string) => {
-      const pending = (async () => {
-        const base = enter(name);
-        const mocked = options.steps !== undefined && Object.hasOwn(options.steps, name);
-        const value = mocked ? savedForm(options.steps?.[name]) : undefined;
+    step: ((name: string) =>
+      call(
+        name,
+        (base) => {
+          const mocked = options.steps !== undefined && Object.hasOwn(options.steps, name);
+          const raw = mocked ? options.steps?.[name] : undefined;
 
-        const result: WorkflowInspectStepResult =
-          mocked && value !== undefined ? { status: "mocked", value } : { status: "unknown" };
+          // The mock stands in for what the callback returns, so it gets the engine's result check.
+          assertStepResult(name, raw);
 
-        entries.push({ ...base, kind: "step", step: name, result, label: stepLabel(result) });
+          const value = savedForm(raw);
 
-        // The graph keeps its own copy, so a workflow that edits the result can't rewrite the node.
-        return savedForm(value);
-      })();
+          const result: WorkflowInspectStepResult =
+            mocked && value !== undefined ? { status: "mocked", value } : { status: "unknown" };
 
-      // As in the engine, a rejected call leaves no step running.
-      if (stopped || violation) return pending;
+          entries.push({ ...base, kind: "step", step: name, result, label: stepLabel(result) });
 
-      activeStep = name;
+          // The graph keeps its own copy, so a workflow that edits the result can't rewrite the node.
+          return savedForm(value);
+        },
+        true,
+      )) as WorkflowContext["step"],
+    sleep(name, duration: WorkflowDuration) {
+      return call(name, (base) => {
+        const ms = sleepMs(duration);
 
-      const release = () => {
-        if (activeStep === name) activeStep = undefined;
-      };
-
-      pending.then(release, release);
-
-      return pending;
-    }) as WorkflowContext["step"],
-    async sleep(name, duration: WorkflowDuration) {
-      const base = enter(name);
-      const ms = durationToMs(duration);
-
-      entries.push({ ...base, kind: "sleep", step: name, delay: { kind: "duration", ms }, label: `Wait ${formatWorkflowDuration(ms)}` });
-      elapsed += ms;
+        entries.push({ ...base, kind: "sleep", step: name, delay: { kind: "duration", ms }, label: `Wait ${formatWorkflowDuration(ms)}` });
+        elapsed += ms;
+      });
     },
-    async sleepUntil(name, at) {
-      const base = enter(name);
-      const until = Number(at);
+    sleepUntil(name, at) {
+      return call(name, (base) => {
+        const until = sleepUntilMs(name, at);
+        const ms = Math.max(0, until - (startedAt + elapsed));
+        const iso = new Date(until).toISOString();
 
-      if (!Number.isFinite(until)) {
-        throw new WorkflowError("invalid_duration", `sleepUntil "${name}" needs a valid Date or epoch milliseconds.`);
-      }
-
-      const ms = Math.max(0, until - (startedAt + elapsed));
-      const iso = new Date(until).toISOString();
-
-      entries.push({ ...base, kind: "sleep", step: name, delay: { kind: "until", at: iso, ms }, label: `Wait until ${iso}` });
-      elapsed += ms;
+        entries.push({ ...base, kind: "sleep", step: name, delay: { kind: "until", at: iso, ms }, label: `Wait until ${iso}` });
+        elapsed += ms;
+      });
     },
     // SAFETY: the sample payload from `options.events` stands in for a delivered event. Payloads are
     // never parsed, by the engine or here: the caller's type argument states the payload contract.
-    waitForEvent: (async (name: string, waitOptions?: { event?: string; timeout?: WorkflowDuration }) => {
-      const base = enter(name);
-      const event = waitOptions?.event ?? name;
-      const timeoutMs = waitOptions?.timeout === undefined ? undefined : durationToMs(waitOptions.timeout);
-      const timeoutText = timeoutMs === undefined ? "no timeout" : `timeout ${formatWorkflowDuration(timeoutMs)}`;
-      const node: TraceEntry = { ...base, kind: "waitForEvent", step: name, event, label: `Wait for "${event}" (${timeoutText})` };
+    waitForEvent: ((name: string, waitOptions?: { event?: string; timeout?: WorkflowDuration }) =>
+      call(name, (base) => {
+        const event = waitOptions?.event ?? name;
+        const timeoutMs = eventTimeoutMs(waitOptions?.timeout);
+        const timeoutText = timeoutMs === undefined ? "no timeout" : `timeout ${formatWorkflowDuration(timeoutMs)}`;
+        const node: TraceEntry = { ...base, kind: "waitForEvent", step: name, event, label: `Wait for "${event}" (${timeoutText})` };
 
-      if (timeoutMs !== undefined) node.timeoutMs = timeoutMs;
+        if (timeoutMs !== undefined) node.timeoutMs = timeoutMs;
 
-      entries.push(node);
+        entries.push(node);
 
-      if (timeoutMs === undefined) {
+        if (timeoutMs === undefined) return received(event);
+
+        const index = choices.length;
+        const branch = planned[index] ?? "received";
+
+        if (planned[index] === undefined) forks.push(index);
+
+        choices.push({ step: name, branch });
+        prefix = `${prefix}${choicePrefix({ step: name, branch })}`;
+
+        if (branch === "timeout") {
+          elapsed += timeoutMs;
+
+          return { status: "timed_out" } as const;
+        }
+
         return received(event);
-      }
-
-      const index = choices.length;
-      const branch = planned[index] ?? "received";
-
-      if (planned[index] === undefined) forks.push(index);
-
-      choices.push({ step: name, branch });
-      prefix = `${prefix}${choicePrefix({ step: name, branch })}`;
-
-      if (branch === "timeout") {
-        elapsed += timeoutMs;
-
-        return { status: "timed_out" };
-      }
-
-      return received(event);
-    }) as WorkflowContext["waitForEvent"],
+      })) as WorkflowContext["waitForEvent"],
   };
 
-  let outcome: WorkflowInspectOutcome;
+  // Starting inside `then` turns a synchronous throw from `run` into a failed path.
+  const finished = Promise.resolve()
+    .then(async () => await definition.run(ctx, input))
+    .then(
+      (output): WorkflowInspectOutcome => {
+        const saved = workflowOutput(output);
 
-  try {
-    const output = await definition.run(ctx, input);
+        return saved === undefined ? { status: "completed" } : { status: "completed", output: saved };
+      },
+    )
+    .catch(failed);
 
-    if (violation) throw violation;
+  const raced = await Promise.race([finished, endedEarly]);
 
-    outcome = stopped
-      ? { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` }
-      : output === undefined
-        ? { status: "completed" }
-        : { status: "completed", output: savedForm(output) };
-  } catch (cause) {
-    outcome =
-      stopped || cause instanceof DepthLimit
-        ? { status: "truncated", reason: `More than ${maxDepth} ctx calls in one path.` }
-        : { status: "failed", error: `${errorMessage(cause)}${unsampledHint(unsampled)}` };
-  }
+  // The first definition error fails the path even when `run` caught it and went on to finish.
+  const outcome = ended ?? raced;
 
   return { entries, choices, forks, outcome, durationMs: elapsed };
 }
@@ -463,7 +465,7 @@ export async function inspectWorkflow(
 ): Promise<WorkflowInspectGraph> {
   const maxPaths = Math.max(1, Math.floor(options.maxPaths ?? defaultMaxPaths));
   const maxDepth = Math.max(1, Math.floor(options.maxDepth ?? defaultMaxDepth));
-  const input = await parseInput(definition, options.input);
+  const input = await parseWorkflowInput(definition, options.input);
 
   const trigger: WorkflowInspectNode = {
     id: triggerId,
