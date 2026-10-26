@@ -59,6 +59,9 @@ export function createSigningKeyCache() {
 
 export type SigningKeyCache = ReturnType<typeof createSigningKeyCache>;
 
+// Spread after the caller's headers, so these exact keys always hold the signer's own values.
+const COMPUTED_HEADERS = new Set(["host", "x-amz-content-sha256", "x-amz-date"]);
+
 /** Sign a request with AWS Signature Version 4, reusing a derived key from `signingKeys`. */
 export async function signAwsRequest(signingKeys: SigningKeyCache, input: AwsSignatureInput) {
   const amzDate = toAmzDate(new Date());
@@ -81,8 +84,11 @@ export async function signAwsRequest(signingKeys: SigningKeyCache, input: AwsSig
     host: input.url.host,
   })
     // SigV4 trims each value and collapses sequential whitespace into one space, quoted or not,
-    // as the AWS SDKs do. `\s+` has no nested quantifier, so the replace stays linear.
-    .map(([name, value]) => [name.toLowerCase(), value.trim().replace(/\s+/g, " ")] as const)
+    // as the AWS SDKs do. `\s+` has no nested quantifier, so the replace stays linear. The values
+    // computed here hold no whitespace, so they skip it.
+    .map(([name, value]) =>
+      [name.toLowerCase(), COMPUTED_HEADERS.has(name) ? value : value.trim().replace(/\s+/g, " ")] as const,
+    )
     // SigV4 orders headers by character code, not by locale.
     .sort(([left], [right]) => compareCodeUnits(left, right));
 
