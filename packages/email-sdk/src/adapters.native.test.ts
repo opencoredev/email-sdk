@@ -43,7 +43,7 @@ describe("provider-native options reach each adapter", () => {
       withNative({
         template: { id: "welcome", variables: { NAME: "Ada", COUNT: 2 } },
         topicId: "topic_1",
-        headers: { "X-Trace": "t1", "idempotency-key": "native_key" },
+        headers: { "X-Trace": "t1" },
       }),
     );
 
@@ -55,8 +55,6 @@ describe("provider-native options reach each adapter", () => {
     expect(json).not.toHaveProperty("text");
     expect(json.from).toBe("Acme <hello@example.com>");
     expect(capture.calls[0]?.headers.get("x-trace")).toBe("t1");
-    // The per-send idempotency key still wins over native request headers.
-    expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
   test("Resend leaves the subject to the template only when asked", async () => {
@@ -569,38 +567,120 @@ describe("personalized sends keep their reported recipients", () => {
 });
 
 describe("native request headers", () => {
-  const sdkOwned = {
-    "authorization": "Bearer native",
-    "content-type": "text/plain",
-    "x-postmark-server-token": "native",
-    "X-Trace": "1",
-  };
+  const mailgunOptions = { apiKey: "mg", domain: "mg.example.com" };
+  // Every header each adapter sets on its own request, plus the transport's framing headers.
+  // Mixed case on purpose: HTTP header names compare case-insensitively.
+  const transport = ["Content-Length", "transfer-encoding", "HOST"];
 
-  test("add headers but never replace the adapter's, whatever their case", async () => {
+  const cases: Array<{ adapter: (fetch: typeof globalThis.fetch) => EmailAdapter; owned: string[] }> = [
+    {
+      adapter: (fetch) => resend({ apiKey: "re", fetch }),
+      owned: ["authorization", "Content-Type", "IDEMPOTENCY-KEY", ...transport],
+    },
+    {
+      adapter: (fetch) => postmark({ serverToken: "pm", fetch }),
+      owned: ["accept", "content-type", "X-Postmark-Server-Token", ...transport],
+    },
+    {
+      adapter: (fetch) => sendgrid({ apiKey: "sg", fetch }),
+      owned: ["Authorization", "CONTENT-TYPE", ...transport],
+    },
+    {
+      adapter: (fetch) => mailersend({ apiKey: "ms", fetch }),
+      owned: ["Authorization", "content-type", ...transport],
+    },
+    { adapter: (fetch) => brevo({ apiKey: "bv", fetch }), owned: ["API-KEY", "Content-Type", ...transport] },
+    { adapter: (fetch) => loops({ apiKey: "lp", transactionalId: "tx", fetch }), owned: ["authorization", "Content-Type", ...transport] },
+    {
+      adapter: (fetch) => ses({ ...sesOptions, fetch }),
+      owned: ["Authorization", "Content-Type", "X-Amz-Date", "x-amz-content-sha256", ...transport],
+    },
+    {
+      adapter: (fetch) => mailgun({ ...mailgunOptions, fetch }),
+      owned: ["Authorization", "Content-Type", ...transport],
+    },
+  ];
+
+  function countingFetch() {
+    let calls = 0;
+
+    const fetch = stubFetch(async () => {
+      calls += 1;
+
+      return new Response("{}", { headers: { "content-type": "application/json" } });
+    });
+
+    return { fetch, calls: () => calls };
+  }
+
+  for (const { adapter, owned } of cases) {
+    const name = adapter(fetch).name;
+
+    test(`${name} rejects a native header it sets itself, before any request`, async () => {
+      const { fetch, calls } = countingFetch();
+
+      for (const header of owned) {
+        await expect(
+          adapter(fetch).send(simple, withNative({ headers: { "X-Trace": "1", [header]: "native" } })),
+        ).rejects.toThrow(
+          new EmailValidationError(`${name} sets "${header}" itself, so native.headers can't set it.`),
+        );
+      }
+
+      expect(calls()).toBe(0);
+    });
+  }
+
+  test("a header the adapter doesn't set reaches the request", async () => {
     const json = jsonCapture({ id: "1", MessageID: "1" });
     const form = formCapture({ id: "1" });
 
-    await resend({ apiKey: "re", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
-    await postmark({ serverToken: "pm", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
-    await mailersend({ apiKey: "ms", fetch: json.fetch }).send(simple, withNative({ headers: sdkOwned }));
-    await mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: form.fetch }).send(
-      simple,
-      withNative({ headers: sdkOwned }),
-    );
-
-    const [resendCall, postmarkCall, mailersendCall] = json.calls;
-    expect(resendCall?.headers.get("authorization")).toBe("Bearer re");
-    expect(resendCall?.headers.get("content-type")).toBe("application/json");
-    expect(postmarkCall?.headers.get("x-postmark-server-token")).toBe("pm");
-    expect(postmarkCall?.headers.get("content-type")).toBe("application/json");
-    expect(mailersendCall?.headers.get("authorization")).toBe("Bearer ms");
-    expect(mailersendCall?.headers.get("content-type")).toBe("application/json");
-    expect(form.calls[0]?.headers.get("authorization")).toBe(
-      `Basic ${Buffer.from("api:mg").toString("base64")}`,
-    );
+    await resend({ apiKey: "re", fetch: json.fetch }).send(simple, withNative({ headers: { "X-Trace": "1" } }));
+    await postmark({ serverToken: "pm", fetch: json.fetch }).send(simple, withNative({ headers: { "X-Trace": "1" } }));
+    await mailgun({ ...mailgunOptions, fetch: form.fetch }).send(simple, withNative({ headers: { "X-Trace": "1" } }));
 
     for (const call of [...json.calls, ...form.calls]) {
       expect(call.headers.get("x-trace")).toBe("1");
     }
+
+    // fetch generates Mailgun's multipart Content-Type, boundary included.
+    expect(form.calls[0]?.headers.has("content-type")).toBe(false);
+  });
+
+  test("Mailgun keeps its multipart framing over the wire with native headers", async () => {
+    const received: Array<{
+      contentType: string | null;
+      trace: string | null;
+      fields: Record<string, FormDataEntryValue | null>;
+    }> = [];
+
+    const server = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        // formData() fails unless the boundary in Content-Type frames the body.
+        const form = await request.formData();
+
+        received.push({
+          contentType: request.headers.get("content-type"),
+          trace: request.headers.get("x-trace"),
+          fields: { from: form.get("from"), subject: form.get("subject"), text: form.get("text") },
+        });
+
+        return Response.json({ id: "mg_1" });
+      },
+    });
+
+    try {
+      await mailgun({ ...mailgunOptions, baseUrl: server.url.origin }).send(
+        simple,
+        withNative({ headers: { "X-Trace": "1" } }),
+      );
+    } finally {
+      await server.stop(true);
+    }
+
+    expect(received[0]?.contentType).toStartWith("multipart/form-data; boundary=");
+    expect(received[0]?.trace).toBe("1");
+    expect(received[0]?.fields).toMatchObject({ from: "Acme <hello@example.com>", subject: "Welcome", text: "Hello" });
   });
 });

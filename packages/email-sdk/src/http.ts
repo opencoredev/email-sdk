@@ -75,7 +75,7 @@ export function jsonProvider<
       const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
-        headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
+        headers: native?.headers ? withNativeRequestHeaders(options.name, headers, native.headers) : headers,
         body: JSON.stringify(native?.body ? { ...payload, ...native.body } : payload),
       });
 

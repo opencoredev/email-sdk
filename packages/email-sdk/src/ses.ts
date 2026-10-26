@@ -1,4 +1,4 @@
-import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { EmailAdapterError } from "./errors.js";
 import { createSigningKeyCache, signAwsRequest } from "./internal/aws-sigv4.js";
 import { jsonString } from "./internal/decode.js";
 import {
@@ -69,16 +69,6 @@ const SIGNER_HEADERS = new Set([
   "x-amz-security-token",
 ]);
 
-function assertNoSignerHeaders(headers: Readonly<Record<string, string>>) {
-  for (const name of Object.keys(headers)) {
-    if (SIGNER_HEADERS.has(name.toLowerCase())) {
-      throw new EmailValidationError(
-        `SES signs requests itself, so native.headers can't set "${name}".`,
-      );
-    }
-  }
-}
-
 export function ses(
   options: SesAdapterOptions,
 ): EmailAdapter<"ses", { baseUrl: string; region: string }, unknown, SesNativeOptions> {
@@ -95,8 +85,6 @@ export function ses(
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
       const native = context.native;
 
-      if (native?.headers) assertNoSignerHeaders(native.headers);
-
       const payload = await toSesPayload(message, options);
       const body = JSON.stringify(native ? withSesNative(payload, native) : payload);
 
@@ -112,7 +100,7 @@ export function ses(
         body,
         // Signed and sent as one lowercase set, so no header reaches SES under two spellings.
         headers: native?.headers
-          ? Object.fromEntries(withNativeRequestHeaders(SES_HEADERS, native.headers))
+          ? Object.fromEntries(withNativeRequestHeaders("ses", SES_HEADERS, native.headers, SIGNER_HEADERS))
           : SES_HEADERS,
       });
 

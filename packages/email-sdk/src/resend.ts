@@ -78,7 +78,7 @@ export function resend(
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",
         signal: context.signal,
-        headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
+        headers: native?.headers ? withNativeRequestHeaders("resend", headers, native.headers) : headers,
         body: JSON.stringify(native ? withResendNative(payload, native) : payload),
       });
 

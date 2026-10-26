@@ -123,7 +123,8 @@ passthrough is still keyed by adapter and can't leak.
   (they declared nothing: SMTP, memory, plain custom adapters) get no key.
 - Each provider's options type is the curated, camelCase fields plus `EmailNativePassthrough`
   (`body` shallow-merged into the JSON request, `headers` added to the API request). Mailgun
-  uses multipart forms, so its passthrough is `fields`.
+  uses multipart forms, so its passthrough is `fields`. `withNativeRequestHeaders` rejects a
+  native header that names one the adapter or transport sets, case-insensitively.
 - Every `jsonProvider` adapter gets the passthrough at runtime, and its return type declares
   `EmailNativePassthrough`, so types match behavior.
 - Core reads `options.native?.[adapter.name]` when it builds the adapter context.

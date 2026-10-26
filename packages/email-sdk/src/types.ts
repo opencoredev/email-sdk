@@ -133,8 +133,8 @@ export type EmailNativePassthrough = {
   /** Shallow-merged over the request body the adapter builds. Keys here replace the SDK's. */
   body?: EmailNativeObject;
   /**
-   * Extra HTTP request headers for the provider API call. These are not email headers. A header
-   * the adapter already sets, compared case-insensitively, keeps the adapter's value.
+   * Extra HTTP request headers for the provider API call. These are not email headers. Naming a
+   * header the adapter or transport sets, in any letter case, throws an `EmailValidationError`.
    */
   headers?: Readonly<Record<string, string>>;
 };

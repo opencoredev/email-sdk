@@ -368,28 +368,6 @@ describe("SES SigV4 signing", () => {
       );
     }
   });
-  test("signs native request headers whose names differ only in case from the SDK's", async () => {
-    const { requests, fetch } = signedCapture();
-    setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
-
-    await ses({ accessKeyId: "AKID", secretAccessKey: "secret", region: "eu-west-1", fetch }).send(
-      messageWithoutMetadata,
-      {
-        ...context,
-        native: { headers: { "Content-Type": "text/plain", "X-Trace": "1" } },
-      },
-    );
-
-    const [request] = requests;
-
-    if (!request) throw new Error("Expected one SES request.");
-
-    expect(request.headers.get("content-type")).toBe("application/json");
-    expect(request.headers.get("x-trace")).toBe("1");
-    expect(request.headers.get("authorization")).toBe(
-      expectedAuthorization(request, "secret", "eu-west-1"),
-    );
-  });
 
   test("collapses repeated spaces in native header values the way AWS does", async () => {
     const { requests, fetch } = signedCapture();
@@ -424,7 +402,7 @@ describe("SES SigV4 signing", () => {
       await expect(
         adapter.send(messageWithoutMetadata, { ...context, native: { headers: { [name]: "native" } } }),
       ).rejects.toThrow(new EmailValidationError(
-        `SES signs requests itself, so native.headers can't set "${name}".`,
+        `ses sets "${name}" itself, so native.headers can't set it.`,
       ));
     }
 

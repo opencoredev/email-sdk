@@ -61,11 +61,14 @@ export type MailgunNativeOptions = {
   /** Extra form fields, set after the SDK's. An array appends one field per value. */
   fields?: Readonly<Record<string, string | readonly string[]>>;
   /**
-   * Extra HTTP request headers for the provider API call. These are not email headers. A header
-   * the adapter already sets, compared case-insensitively, keeps the adapter's value.
+   * Extra HTTP request headers for the provider API call. These are not email headers. Naming a
+   * header the adapter or transport sets, in any letter case, throws an `EmailValidationError`.
    */
   headers?: Readonly<Record<string, string>>;
 };
+
+// fetch generates the multipart Content-Type, with the boundary that frames the form body.
+const MULTIPART_HEADERS = new Set(["content-type"]);
 
 export function mailgun(
   options: MailgunAdapterOptions,
@@ -142,7 +145,7 @@ export function mailgun(
     const response = await fetcher(`${baseUrl}/v3/${options.domain}/messages`, {
       method: "POST",
       signal: context.signal,
-      headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
+      headers: native?.headers ? withNativeRequestHeaders("mailgun", headers, native.headers, MULTIPART_HEADERS) : headers,
       body,
     });
 

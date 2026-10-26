@@ -113,20 +113,34 @@ export function headersToObject(headers: HeaderInput): Record<string, string> | 
   return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
+// The HTTP transport frames the body with these, so a native copy would misdescribe it.
+const TRANSPORT_HEADERS = new Set(["content-length", "host", "transfer-encoding"]);
+
 /**
- * Add a send's `native.headers` to the HTTP request headers an adapter builds. Names compare
- * case-insensitively, as HTTP defines them, and a native header never replaces one the adapter
- * set, so it cannot join or swap credentials, the content type, or the idempotency key.
+ * Add a send's `native.headers` to the HTTP request headers an adapter builds. A native header
+ * may not name one the adapter sets itself (`own`, plus `reserved` for headers it sets later, like
+ * a generated multipart Content-Type or a signature) or one the transport frames the body with.
+ * Names compare case-insensitively, as HTTP defines them. A collision throws an
+ * `EmailValidationError` before any request, so native headers can't swap credentials, the
+ * content type, or the idempotency key, or break the body's framing.
  */
 export function withNativeRequestHeaders(
+  adapter: string,
   own: HeadersInit,
   native: Readonly<Record<string, string>>,
+  reserved?: ReadonlySet<string>,
 ): Headers {
   const headers = new Headers(own);
 
-  for (const [name, value] of Object.entries(native)) {
-    if (!headers.has(name)) headers.set(name, value);
+  for (const name of Object.keys(native)) {
+    const lower = name.toLowerCase();
+
+    if (headers.has(lower) || TRANSPORT_HEADERS.has(lower) || reserved?.has(lower)) {
+      throw new EmailValidationError(`${adapter} sets "${name}" itself, so native.headers can't set it.`);
+    }
   }
+
+  for (const [name, value] of Object.entries(native)) headers.set(name, value);
 
   return headers;
 }

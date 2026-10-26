@@ -93,7 +93,7 @@ export function postmark(
       const response = await fetcher(`${baseUrl}${endpoint}`, {
         method: "POST",
         signal: context.signal,
-        headers: native?.headers ? withNativeRequestHeaders(headers, native.headers) : headers,
+        headers: native?.headers ? withNativeRequestHeaders("postmark", headers, native.headers) : headers,
         body: JSON.stringify(native ? withPostmarkNative(payload, native) : payload),
       });
 
