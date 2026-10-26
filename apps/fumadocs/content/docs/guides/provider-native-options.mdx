@@ -51,7 +51,7 @@ Postmark sends its stored `welcome` template. If the route falls back to Resend 
 - An adapter with no entry sends exactly what it would send without `native`.
 - TypeScript infers the accepted keys from the adapters you passed to `createEmailClient`. An unknown key, a key for an adapter without native options (such as SMTP), or a field from another provider fails type checking.
 - That check needs a literal name for every adapter, the same as `adapter` and `fallback` route names. An unnamed `smtp({ host })` written inside the `adapters` array gets the name type `string`, and the client then accepts any key. Pass `name: "smtp"` to keep the check.
-- The SDK doesn't check the shape of native options at runtime. If a JavaScript caller passes the wrong shape, the provider's own API returns the error. The only runtime checks are the two rules below for the `body`, `fields`, and SES `headers` escape hatches.
+- The SDK doesn't check the shape of native options at runtime. If a JavaScript caller passes the wrong shape, the provider's own API returns the error. The only runtime checks are the two rules below for the `body`, `fields`, and `headers` escape hatches.
 - Existing code annotated with `EmailSendOptions<Name>` keeps compiling. That type has no `native` field; to pass native options through your own helper, type the parameter as `Parameters<typeof email.send>[1]`.
 
 ## Templates
@@ -87,15 +87,30 @@ Resend, Postmark, SendGrid, SES, Brevo, and Loops accept two escape hatches in t
 - `body` is shallow-merged over the request body the adapter builds. Its top-level keys replace the SDK's, so `body.mail_settings` replaces the whole object that `sandboxMode` would set.
 - `headers` adds HTTP headers to the provider API request. These are not email headers; use `message.headers` for those. Native headers only add names. The send throws an `EmailValidationError` before calling the provider when a native header names, in any letter case, a header the adapter sets itself: its credentials, `Content-Type`, the per-send `Idempotency-Key`, or a name from the adapter's own `headers` option. The same goes for `Content-Length`, `Transfer-Encoding`, and `Host`, which frame the request body. Mailgun's `Content-Type` carries the multipart boundary that fetch generates, and SES signs each request with SigV4, so SES also rejects `X-Amz-Date`, `X-Amz-Security-Token`, and `X-Amz-Content-Sha256`.
 
-```ts
-await email.send(message, {
-  native: {
-    mailersend: {
-      body: { template_id: "zr6ke4n6kzon4eqy" },
-      headers: { "X-Request-Id": requestId },
+```ts title="src/send-mailersend-template.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailersend } from "@opencoredev/email-sdk/mailersend";
+
+const email = createEmailClient({
+  adapters: [mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })],
+});
+
+await email.send(
+  {
+    from: "Acme <hello@acme.com>",
+    to: "ada@example.com",
+    subject: "Welcome to Acme",
+    text: "Thanks for signing up.",
+  },
+  {
+    native: {
+      mailersend: {
+        body: { template_id: "zr6ke4n6kzon4eqy" },
+        headers: { "X-Request-Id": crypto.randomUUID() },
+      },
     },
   },
-});
+);
 ```
 
 Mailgun sends multipart form data, so its escape hatch is `fields` instead of `body`. Each field replaces the SDK's value for that name, and an array value appends one field per item: `fields: { "o:dkim": "no" }`.

@@ -8,7 +8,10 @@ description: Exact construction options, methods, routing helpers, validation re
 Construction is synchronous and requires at least one adapter after plugins register their routes.
 
 ```ts title="types.ts"
-type EmailClientOptions<Adapters, Plugins> = {
+type EmailClientOptions<
+  Adapters extends readonly EmailAdapter[],
+  Plugins extends readonly EmailPlugin[],
+> = {
   adapters?: Adapters;
   defaultAdapter?: Adapters[number]["name"];
   fallback?: EmailFallbackConfig<Adapters[number]["name"]>;
