@@ -320,10 +320,13 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
 6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
    invalid `Date`, `maxAttempts` below 1, a `ctx` call while a step callback is in flight, a step named
    `__proto__`, or a step result
-   or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run.
-   Replaying it would throw again on every wake.
-5. When `run` resolves, the run completes and its return value is stored as `output`. When it throws,
-   the run fails.
+   or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run,
+   even when the definition catches it. Replaying it would throw again on every wake. These rules
+   live in `src/workflows/rules.ts`, which `inspectWorkflow` uses too, so a preview fails where the
+   engine would.
+7. When `run` resolves, the run completes and its return value is stored as `output`. When it
+   throws, the run fails at once, without waiting for a `ctx.step` still in flight beside it; that
+   step can't save anything once the failure has.
 
 `ctx` calls inside one execution are serialized, so `Promise.all([ctx.send(a), ctx.send(b)])` runs
 the steps one after another rather than racing saves.
