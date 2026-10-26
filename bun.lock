@@ -73,7 +73,7 @@
     },
     "packages/convex-email": {
       "name": "@opencoredev/convex-email",
-      "version": "4.0.0",
+      "version": "5.0.0",
       "dependencies": {
         "zod": "^4.6.5",
       },
@@ -84,13 +84,13 @@
         "convex-test": "0.0.53",
       },
       "peerDependencies": {
-        "@opencoredev/email-sdk": "^2.0.0",
+        "@opencoredev/email-sdk": "^3.0.1",
         "convex": "^1.36.1",
       },
     },
     "packages/email-sdk": {
       "name": "@opencoredev/email-sdk",
-      "version": "2.0.0",
+      "version": "3.0.1",
       "bin": {
         "email-sdk": "dist/cli.js",
       },
@@ -104,6 +104,7 @@
         "@types/nodemailer": "^8.0.2",
         "@types/react": "^19.3.0",
         "ai": "^7.0.137",
+        "postal-mime": "4.1.4",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
       },
@@ -1317,6 +1318,8 @@
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 
     "picomatch": ["picomatch@4.0.4", "", {}, "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A=="],
+
+    "postal-mime": ["postal-mime@4.1.4", "", {}, "sha512-+6Qsn7Q2TSLMScfN4X2VQIclPRKgDAtKhytQex3fVSV/+HgVaawtsQGzKYDQLQIBR7b4Vfg+88WRGvuF/kwLSw=="],
 
     "postcss": ["postcss@8.5.26", "", { "dependencies": { "nanoid": "^3.3.17", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ=="],
 

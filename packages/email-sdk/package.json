@@ -303,6 +303,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "ai": "^7.0.137",
+    "postal-mime": "4.1.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

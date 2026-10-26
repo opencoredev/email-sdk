@@ -196,7 +196,7 @@ export class InboundError extends Error {
 /** Result of a signature check. Failures carry a reason instead of throwing. */
 export type InboundVerification =
   | { ok: true }
-  | { ok: false; reason: Exclude<InboundErrorReason, "fetch_failed" | "unsupported"> };
+  | { ok: false; reason: Exclude<InboundErrorReason, "fetch_failed" | "unsupported" | "decryption_required"> };
 
 export interface InboundClockOptions {
   /** Maximum clock skew in seconds for timestamped schemes. Defaults to 300. */
