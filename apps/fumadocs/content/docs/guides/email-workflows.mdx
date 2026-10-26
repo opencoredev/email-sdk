@@ -185,7 +185,7 @@ The key is `wf_` followed by the SHA-256 hex digest of the JSON-encoded `[runId,
 
 ## Storage and timers
 
-The engine stores each run as one JSON document through a `WorkflowStore`, and asks a `WorkflowScheduler` to call `engine.resume(runId)` when a wait ends.
+The engine stores each run as one JSON document through a `WorkflowStore`, and asks a `WorkflowScheduler` to call `engine.resume(runId, { owner })` when a wait ends, passing the timer's `owner` when it has one.
 
 ```ts
 type WorkflowStore = {
@@ -199,7 +199,8 @@ type WorkflowStore = {
 
 type WorkflowScheduler = {
   // revision: the run revision whose save asked for this wake
-  schedule(timer: { runId: string; at: number; revision: number }): void | Promise<void>;
+  // owner: set on lease-expiry wakes; pass it back as engine.resume(runId, { owner })
+  schedule(timer: { runId: string; at: number; revision: number; owner?: string }): void | Promise<void>;
   cancel(runId: string): void | Promise<void>;
 };
 ```
@@ -212,7 +213,7 @@ When a save keeps losing to concurrent writes, `cancel` throws a `WorkflowError`
 
 `sendEvent` delivers at least once. When some targets fail, it throws an `AggregateError` whose `errors` hold one error per failure, such as a `write_conflict`, but only after the other targets got the event. Those runs may already have consumed it and moved on, and a failed target may have saved the event before failing to resume. Retrying the whole call delivers the event to them again, and a run that later waits for the same event name consumes the copy. Retry only when a repeated event is harmless for your workflow; otherwise check the runs with `engine.get` first. `resumeDue` picks up a run that saved the event but failed to resume.
 
-The engine schedules a timer for each wait's deadline, and one for the lease expiry each time a worker claims a run. If the worker crashes mid-step, the lease-expiry timer resumes the run once the lease runs out, so crash recovery doesn't depend on polling when you configure a scheduler. When that timer finds the lease renewed by a step that is still running, it schedules one more for the new expiry: a step that runs for an hour under the default five-minute lease adds 12 to 18 extra timers.
+The engine schedules a timer for each wait's deadline, and one for the lease expiry each time a worker claims a run. If the worker crashes mid-step, the lease-expiry timer resumes the run once the lease runs out, so crash recovery doesn't depend on polling when you configure a scheduler. When that timer finds the lease renewed by a step that is still running, it schedules one more for the new expiry: a step that runs for an hour under the default five-minute lease adds 12 to 18 extra timers. Only the timer of the claim that still holds the run does this. A timer left by an earlier claim, such as one per short sleep before a long step, ends when it fires, as long as your resume handler passes the timer's `owner` through.
 
 Timers only need to be roughly right. `resume` does nothing when the run has finished or is still waiting, since the save that parked the run scheduled its own timer, so duplicate, late, and early timer deliveries are harmless. Timers can arrive out of order: a scheduler that keeps one timer per run must not let a timer replace one with a higher `revision`. A scheduler that keeps each timer as a separate job can ignore `revision`.
 

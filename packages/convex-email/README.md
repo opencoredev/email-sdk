@@ -369,9 +369,9 @@ export const start = internalAction({
 });
 
 export const resume = internalAction({
-  args: { runId: v.string() },
-  handler: async (ctx, { runId }) => {
-    await engine(ctx).resume(runId);
+  args: { runId: v.string(), owner: v.optional(v.string()) },
+  handler: async (ctx, { runId, owner }) => {
+    await engine(ctx).resume(runId, { owner });
   },
 });
 

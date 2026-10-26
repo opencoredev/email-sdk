@@ -1,5 +1,5 @@
 import type { Infer } from "convex/values";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import type { Doc } from "./_generated/dataModel.js";
 import { mutation, query } from "./_generated/server.js";
@@ -133,6 +133,9 @@ export const listDueRuns = query({
 /**
  * Queues a workflow step's email once. The send record shares this transaction with the enqueue, so
  * a replayed step gets the email it already queued, even after email cleanup deleted that email.
+ * Workflow keys are deduped only here, apart from the keys callers pass to `send`. A send that
+ * lands after its run ended, such as one in flight when the run was canceled, starts its retention
+ * clock at once: the run's release already happened and won't happen again.
  */
 export const enqueueSend = mutation({
   args: vEnqueueWorkflowSendArgs,
@@ -145,11 +148,23 @@ export const enqueueSend = mutation({
       .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
       .unique();
 
-    if (recorded) return recorded.emailId;
+    if (recorded) {
+      if (recorded.runId !== args.runId) {
+        throw new ConvexError({
+          code: "WORKFLOW_SEND_CONFLICT",
+          message: `Workflow send key ${idempotencyKey} belongs to run ${recorded.runId}, not ${args.runId}.`,
+        });
+      }
 
-    const emailId = await enqueueEmail(ctx, args.email);
+      return recorded.emailId;
+    }
 
-    await ctx.db.insert("workflowSends", { idempotencyKey, runId: args.runId, emailId, createdAt: Date.now() });
+    const emailId = await enqueueEmail(ctx, args.email, undefined, undefined, args.runId);
+    const now = Date.now();
+    const run = await findRun(ctx, args.runId);
+    const send = { idempotencyKey, runId: args.runId, emailId, createdAt: now };
+
+    await ctx.db.insert("workflowSends", run?.active === true ? send : { ...send, releasedAt: now });
 
     return emailId;
   },

@@ -133,7 +133,7 @@ function crashingSender(ctx: GenericActionCtx<GenericDataModel>): WorkflowEmailS
 /** The app's clock. Tests move it instead of waiting, and the engine reads it through `clock`. */
 const clock = { at: Date.parse("2026-01-01T00:00:00Z") };
 
-const resumeRef = makeFunctionReference<"action", { runId: string }>("workflows:resume");
+const resumeRef = makeFunctionReference<"action", { runId: string; owner?: string }>("workflows:resume");
 
 function engineFor(ctx: GenericActionCtx<GenericDataModel>) {
   return createWorkflowEngine({
@@ -169,9 +169,9 @@ const appWorkflows = {
       view(await engineFor(ctx).start(onboarding, { email: args.email }, { id: args.runId, subject: args.email })),
   }),
   resume: actionGeneric({
-    args: { runId: v.string() },
+    args: { runId: v.string(), owner: v.optional(v.string()) },
     returns: vRunView,
-    handler: async (ctx, args) => view(await engineFor(ctx).resume(args.runId)),
+    handler: async (ctx, args) => view(await engineFor(ctx).resume(args.runId, { owner: args.owner })),
   }),
   startParked: actionGeneric({
     args: { count: v.number(), subject: v.string() },
@@ -655,6 +655,26 @@ describe("parseWorkflowRun", () => {
     expect(parseWorkflowRun(JSON.stringify(run))).toEqual(run);
   });
 
+  test("keeps journal sequence numbers, which order number-like step names", () => {
+    const run: WorkflowRun = {
+      id: "run-1",
+      workflow: "numbers",
+      version: 1,
+      status: "waiting",
+      input: null,
+      journal: {
+        "2": { status: "retrying", kind: "step", attempts: 1, lastError: "503", sequence: 2 },
+        "10": { status: "completed", kind: "step", result: 10, completedAt: 1, sequence: 1 },
+      },
+      inbox: [],
+      revision: 3,
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    expect(parseWorkflowRun(JSON.stringify(run))).toEqual(run);
+  });
+
   test("a __proto__ journal key would be dropped, so that step name fails the run instead of repeating", async () => {
     const run: WorkflowRun = {
       id: "run-1",
@@ -896,5 +916,101 @@ describe("convex workflow send records", () => {
     await t.mutation(internal.lib.processDueEmails, { limit: 25 });
     expect(await countRows(t, "workflowSends")).toBe(0);
   });
+
+  test("a send that lands after its run was canceled starts its retention clock at once", async () => {
+    const t = convexTest(schema, modules);
+    const run = { runId: "run-1", workflow: "onboarding", status: "running", active: true, revision: 0, state: "{}" };
+
+    await t.mutation(api.lib.setConfig, { config: { workflowSendRetentionDays: 3 } });
+    await t.mutation(api.workflows.createRun, { run });
+    await t.mutation(api.workflows.saveRun, {
+      run: { ...run, status: "canceled", active: false, revision: 1 },
+      expectedRevision: 0,
+    });
+
+    // The in-flight send's enqueue reaches the component after the cancellation committed.
+    await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    const released = await t.run(async (ctx) => (await ctx.db.query("workflowSends").first())?.releasedAt);
+
+    expect(released).toBeNumber();
+
+    await t.run(async (ctx) => {
+      const send = await ctx.db.query("workflowSends").first();
+
+      if (send) await ctx.db.patch(send._id, { releasedAt: Date.now() - 4 * day });
+    });
+    await t.mutation(internal.lib.processDueEmails, { limit: 25 });
+    expect(await countRows(t, "workflowSends")).toBe(0);
+  });
+
+  test("a send for an active run waits for the run to end before its retention clock starts", async () => {
+    const t = convexTest(schema, modules);
+    const run = { runId: "run-1", workflow: "onboarding", status: "running", active: true, revision: 0, state: "{}" };
+
+    await t.mutation(api.workflows.createRun, { run });
+    await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    expect(await t.run(async (ctx) => (await ctx.db.query("workflowSends").first())?.releasedAt ?? null)).toBeNull();
+  });
+
+  test("a caller's email that reuses a workflow key is never recorded as the workflow's send", async () => {
+    const t = convexTest(schema, modules);
+    const key = workflowSend.email.idempotencyKey;
+
+    const unowned = await t.mutation(api.lib.enqueue, { ...workflowSend.email, subject: "Spoofed", idempotencyKey: key });
+
+    const owned = await t.mutation(api.lib.enqueueOwned, {
+      email: { ...workflowSend.email, subject: "Spoofed too", idempotencyKey: key },
+      ownerId: "user-1",
+    });
+
+    const emailId = await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    expect(emailId).not.toBe(unowned);
+    expect(emailId).not.toBe(owned);
+
+    const queued = await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("emails", emailId);
+
+      return id ? await ctx.db.get(id) : null;
+    });
+
+    expect(queued?.message.subject).toBe("Welcome");
+
+    // And the other way round: a later caller send with that key doesn't get the workflow's email.
+    expect(await t.mutation(api.lib.enqueue, { ...workflowSend.email, idempotencyKey: key })).toBe(unowned);
+
+    const fresh = convexTest(schema, modules);
+    const workflowEmail = await fresh.mutation(api.workflows.enqueueSend, workflowSend);
+
+    expect(await fresh.mutation(api.lib.enqueue, { ...workflowSend.email, idempotencyKey: key })).not.toBe(workflowEmail);
+  });
+
+  test("a recorded workflow key can't be replayed into another run", async () => {
+    const t = convexTest(schema, modules);
+
+    await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    await expect(t.mutation(api.workflows.enqueueSend, { ...workflowSend, runId: "run-2" })).rejects.toThrow("run-1");
+  });
 });
+
+describe("convexWorkflowScheduler", () => {
+  test("passes a lease-expiry wake's owner to the resume function", async () => {
+    clock.at = Date.parse("2026-01-01T00:00:00Z");
+
+    const t = createApp();
+
+    await t.action(app.start, { runId: "run-1", email: "ada@example.test" });
+
+    const jobs = await scheduledResumes(t);
+    const leaseExpiry = jobs.find((job) => job.at === clock.at + 5 * 60_000);
+    const sleepWake = jobs.find((job) => job.at === clock.at + 2 * day);
+
+    expect(leaseExpiry?.args).toEqual([{ runId: "run-1", owner: expect.any(String) }]);
+    expect(sleepWake?.args).toEqual([{ runId: "run-1" }]);
+  });
+});
+
 

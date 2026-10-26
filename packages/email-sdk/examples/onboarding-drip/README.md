@@ -19,4 +19,4 @@ bun test packages/email-sdk/examples/onboarding-drip
 ```
 
 In production, swap the memory store and scheduler for durable ones (see the workflows docs page)
-and call `engine.resume(runId)` from your timer or queue handler.
+and call `engine.resume(runId, { owner })` from your timer or queue handler, passing the timer's `owner`.

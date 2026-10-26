@@ -24,6 +24,9 @@ export default defineSchema({
     providerMessageId: v.optional(v.string()),
     providerFailure: v.optional(vEmailProviderFailure),
     idempotencyKey: v.optional(v.string()),
+    // Set on a workflow step's email. Its idempotency key is the workflow's own: `workflowSends`
+    // dedupes it, and a caller's lookup by the same key never matches it.
+    workflowRunId: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),
     processingLease: v.optional(v.number()),
@@ -40,7 +43,7 @@ export default defineSchema({
   })
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"])
     .index("by_status_and_updatedAt", ["status", "updatedAt"])
-    .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_idempotencyKey_and_workflowRunId", ["idempotencyKey", "workflowRunId"])
     .index("by_ownerId_and_idempotencyKey", ["ownerId", "idempotencyKey"])
     .index("by_createdAt", ["createdAt"])
     .index("by_terminalAt", ["terminalAt"])

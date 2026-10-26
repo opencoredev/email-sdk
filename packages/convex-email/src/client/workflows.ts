@@ -35,11 +35,14 @@ type WorkflowSchedulerCtx = Pick<GenericActionCtx<GenericDataModel>, "scheduler"
 
 type WorkflowRunRecord = Infer<typeof vWorkflowRunRecord>;
 
-/** The app function a timer calls; it should build the engine and call `engine.resume(runId)`. */
+/**
+ * The app function a timer calls; it should build the engine and call
+ * `engine.resume(runId, { owner })`. `owner` is set on lease-expiry wakes.
+ */
 export type ConvexWorkflowResumeRef = FunctionReference<
   "action" | "mutation",
   FunctionVisibility,
-  { runId: string }
+  { runId: string; owner?: string }
 >;
 
 /** Anything that can queue a workflow step's email through the component, such as a `ConvexEmail` instance. */
@@ -185,13 +188,16 @@ export function convexWorkflowStore(component: ConvexEmailComponentApi, ctx: Wor
  * A `WorkflowScheduler` on `ctx.scheduler.runAt`. Each wake is its own job, so a late, stale wake
  * never replaces a newer one, and `timer.revision` is not needed. `cancel` is a no-op:
  * `engine.resume` ignores wakes for runs that are waiting, canceled, or finished. Each claim adds one
- * job for its lease expiry, and that job adds one more for each lease period the execution keeps
- * renewing.
+ * job for its lease expiry, carrying the claim's `owner`. Only the job of the claim still holding
+ * the run adds one more for each lease period the execution keeps renewing; a job left by an
+ * earlier claim ends when it fires.
  */
 export function convexWorkflowScheduler(ctx: WorkflowSchedulerCtx, resume: ConvexWorkflowResumeRef): WorkflowScheduler {
   return {
     async schedule(timer) {
-      await ctx.scheduler.runAt(timer.at, resume, { runId: timer.runId });
+      const args = timer.owner === undefined ? { runId: timer.runId } : { runId: timer.runId, owner: timer.owner };
+
+      await ctx.scheduler.runAt(timer.at, resume, args);
     },
     cancel() {},
   };

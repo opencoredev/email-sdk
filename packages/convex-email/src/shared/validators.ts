@@ -219,6 +219,7 @@ const emailRecordFields = {
   status: vEmailStatusValue,
   message: v.object(vEmailMessage),
   ownerId: v.optional(v.string()),
+  workflowRunId: v.optional(v.string()),
   adapter: v.optional(v.string()),
   attemptedAdapters: v.array(v.string()),
   fallbackAdapters: v.array(v.string()),

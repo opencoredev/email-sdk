@@ -479,10 +479,13 @@ export async function enqueueEmail(
   args: ConvexEmailSendArgs,
   preloadedConfig?: ConvexEmailConfig,
   ownerId?: string,
+  workflowRunId?: string,
 ) {
   const idempotencyKey = args.idempotencyKey;
 
-  if (idempotencyKey) {
+  // A workflow step's email is deduped by its `workflowSends` record in the caller's transaction,
+  // so it never adopts a caller's email that happens to carry the same key.
+  if (idempotencyKey && workflowRunId === undefined) {
     const existing = ownerId
       ? await ctx.db
           .query("emails")
@@ -492,7 +495,9 @@ export async function enqueueEmail(
           .first()
       : await ctx.db
           .query("emails")
-          .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
+          .withIndex("by_idempotencyKey_and_workflowRunId", (q) =>
+            q.eq("idempotencyKey", idempotencyKey).eq("workflowRunId", undefined),
+          )
           .first();
 
     if (existing) {
@@ -508,6 +513,7 @@ export async function enqueueEmail(
     status: "queued",
     message,
     ownerId,
+    workflowRunId,
     adapter: args.adapter,
     attemptedAdapters: [],
     fallbackAdapters: args.fallbackAdapters ?? [],

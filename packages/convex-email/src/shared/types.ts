@@ -121,6 +121,8 @@ export type ConvexEmailDoc = {
   message: ConvexEmailMessage;
   /** Server-controlled owner recorded by exposeApi(). */
   ownerId?: string;
+  /** Set on an email a workflow step queued: the run that sent it. */
+  workflowRunId?: string;
   adapter?: string;
   attemptedAdapters: string[];
   fallbackAdapters: string[];
