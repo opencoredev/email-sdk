@@ -111,9 +111,64 @@ function mandrillAttachment(entry: JsonValue): InboundAttachment[] {
   })];
 }
 
-/** Every `cid:` reference in an HTML body, without angle brackets. */
+/** Named references a `cid:` link plausibly carries; numeric references cover every other character. */
+const namedReferences: ReadonlyMap<string, string> = new Map([
+  ["amp", "&"],
+  ["lt", "<"],
+  ["gt", ">"],
+  ["quot", "\""],
+  ["apos", "'"],
+  ["nbsp", " "],
+  ["commat", "@"],
+  ["percnt", "%"],
+  ["period", "."],
+  ["lowbar", "_"],
+  ["hyphen", "-"],
+  ["dollar", "$"],
+  ["num", "#"],
+  ["plus", "+"],
+  ["equals", "="],
+  ["excl", "!"],
+  ["tilde", "~"],
+  ["colon", ":"],
+  ["semi", ";"],
+  ["sol", "/"],
+  ["lpar", "("],
+  ["rpar", ")"],
+]);
+
+/** Decode HTML character references (numeric always, named from the table) in one pass. */
+function decodeHtmlReferences(value: string): string {
+  return value.replace(/&(?:#x([0-9a-f]{1,6});?|#([0-9]{1,7});?|([a-z]+);)/gi, (whole, hex: string | undefined, decimal: string | undefined, name: string | undefined) => {
+    if (name !== undefined) return namedReferences.get(name) ?? whole;
+
+    const code = hex === undefined ? Number(decimal) : Number.parseInt(hex, 16);
+
+    // HTML maps NUL, surrogates, and values past U+10FFFF to U+FFFD.
+    return code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? "�" : String.fromCodePoint(code);
+  });
+}
+
+const percentDecoder = new TextDecoder();
+
+/**
+ * Decode a `cid:` URL's percent escapes (RFC 2392). Each run of well-formed escapes decodes as
+ * UTF-8 with U+FFFD for bad bytes, and a stray `%` stays literal, so this never throws.
+ */
+function decodePercentEscapes(value: string): string {
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, run => percentDecoder.decode(Uint8Array.from(run.slice(1).split("%"), byte => Number.parseInt(byte, 16))));
+}
+
+/**
+ * Every `cid:` reference in an HTML body, without angle brackets: each as written, and again with
+ * its HTML references and URL escapes decoded, so an encoded link still names its Content-ID.
+ */
 function htmlContentIds(html: string | undefined): ReadonlySet<string> {
-  return new Set([...(html ?? "").matchAll(/cid:([^"'\s>)]+)/gi)].map(match => match[1]!.replace(/^<|>$/g, "")));
+  return new Set([...(html ?? "").matchAll(/cid:([^"'\s>)]+)/gi)].flatMap(match => {
+    const raw = match[1]!;
+
+    return [raw, decodePercentEscapes(decodeHtmlReferences(raw))].map(value => value.replace(/^<|>$/g, ""));
+  }));
 }
 
 /**

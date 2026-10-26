@@ -331,6 +331,39 @@ describe("Mandrill images keyed by filename", () => {
     })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: "logo.png", disposition: "inline" }]);
   });
 
+  test.each([
+    ["a percent escape", "cid:logo%40acme"],
+    ["a decimal character reference", "cid:logo&#64;acme"],
+    ["a hex character reference", "cid:logo&#X40;acme"],
+    ["a named character reference", "cid:logo&commat;acme"],
+    ["an entity-encoded percent escape", "cid:logo&#37;40acme"],
+  ])("a cid: link written with %s still names the key", async (_, src) => {
+    expect(await mandrillImages({
+      html: `<img src="${src}">`,
+      images: { [cid]: { name: "logo.png", type: "image/png", content: png64, base64: true } },
+    })).toEqual([{ filename: "logo.png", contentType: "image/png", contentId: cid, disposition: "inline" }]);
+  });
+
+  test("an &amp;-encoded cid: link names the decoded entry name", async () => {
+    expect(await mandrillImages({
+      html: `<img src="cid:a&amp;b.png">`,
+      images: { "image-1": { name: "a&b.png", type: "image/png", content: png64 } },
+    })).toEqual([{ filename: "a&b.png", contentType: "image/png", contentId: "a&b.png", disposition: "inline" }]);
+  });
+
+  test("a malformed percent escape neither throws nor hides a literal match", async () => {
+    expect(await mandrillImages({
+      html: `<img src="cid:100%zz.png"><img src="cid:50%off%40acme"><img src="cid:%E0%A4">`,
+      images: {
+        "100%zz.png": { type: "image/png", content: png64 },
+        "image-2": { name: "50%off@acme", type: "image/png", content: png64 },
+      },
+    })).toEqual([
+      { filename: "100%zz.png", contentType: "image/png", contentId: "100%zz.png", disposition: "inline" },
+      { filename: "50%off@acme", contentType: "image/png", contentId: "50%off@acme", disposition: "inline" },
+    ]);
+  });
+
   test("without a name the key is the filename", async () => {
     expect(await mandrillImages({
       images: { "logo.png": { type: "image/png", content: png64 } },
