@@ -52,6 +52,8 @@ export const onboarding = defineWorkflow({
 
 The root `@opencoredev/email-sdk` entry does not import workflows, so apps that don't use them ship no extra code.
 
+To see every path a workflow can take, with each email rendered, open [View email workflows](/docs/guides/view-email-workflows).
+
 ## How replay works
 
 Every `ctx` call has a step name. When a run wakes up after a sleep, an event, or a retry, the engine calls `run` again from the top. Steps that already finished return their saved result immediately, and the first unfinished step runs for real.
