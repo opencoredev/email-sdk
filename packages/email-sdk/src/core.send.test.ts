@@ -69,6 +69,86 @@ describe("createEmailClient v1", () => {
     expect(sends).toBe(0);
   });
 
+  test("waits for sync and async validators on every route adapter before sending", async () => {
+    const calls: string[] = [];
+    const gate = Promise.withResolvers<void>();
+
+    const primary = adapter(
+      "primary",
+      () => {
+        calls.push("send");
+
+        return { adapter: "primary" };
+      },
+      {
+        validate() {
+          calls.push("validate primary");
+        },
+      },
+    );
+
+    const backup = adapter("backup", undefined, {
+      async validate() {
+        calls.push("validate backup");
+        await gate.promise;
+        calls.push("backup ready");
+      },
+    });
+
+    const last = adapter("last", undefined, {
+      validate() {
+        calls.push("validate last");
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [primary, backup, last],
+      fallback: { adapters: ["backup", "last"] },
+    });
+
+    const sending = client.send(message);
+    await Promise.resolve();
+
+    expect(calls).toEqual(["validate primary", "validate backup"]);
+
+    gate.resolve();
+    await expect(sending).resolves.toEqual({ adapter: "primary" });
+    expect(calls).toEqual([
+      "validate primary",
+      "validate backup",
+      "backup ready",
+      "validate last",
+      "send",
+    ]);
+  });
+
+  test("an async validator rejection stops the send", async () => {
+    let sends = 0;
+    const failure = new EmailValidationError("backup rejects this message");
+
+    const primary = adapter("primary", () => {
+      sends += 1;
+
+      return { adapter: "primary" };
+    });
+
+    const backup = adapter("backup", undefined, {
+      async validate() {
+        await Promise.resolve();
+        throw failure;
+      },
+    });
+
+    const client = createEmailClient({
+      adapters: [primary, backup],
+      fallback: { adapters: ["backup"] },
+    });
+
+    await expect(client.send(message)).rejects.toBe(failure);
+    await expect(client.validate(message)).rejects.toBe(failure);
+    expect(sends).toBe(0);
+  });
+
   test("enforces message, attachment, and zoned RFC 3339 validation", async () => {
     const client = createEmailClient({ adapters: [adapter("primary")] });
 

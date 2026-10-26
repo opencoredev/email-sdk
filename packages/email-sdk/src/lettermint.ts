@@ -13,6 +13,7 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  type MessageRules,
 } from "./utils.js";
 
 export type LettermintAdapterOptions = {
@@ -24,6 +25,10 @@ export type LettermintAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+const lettermintRules: MessageRules = (message) => {
+  assertMaxItems("lettermint", "tag", message.tags ?? [], 1);
+};
+
 export function lettermint(
   options: LettermintAdapterOptions,
 ): EmailAdapter<"lettermint", { baseUrl: string }> {
@@ -32,7 +37,7 @@ export function lettermint(
 
   return {
     name: "lettermint",
-    ...builtInAdapterDefinition("lettermint"),
+    ...builtInAdapterDefinition("lettermint", lettermintRules),
     raw: { baseUrl },
     async send(message, context) {
       const headers = new Headers({

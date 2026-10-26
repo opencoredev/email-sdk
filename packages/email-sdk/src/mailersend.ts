@@ -9,7 +9,13 @@ import {
   sendAtUnixSeconds,
 } from "./payloads.js";
 import type { EmailAdapter } from "./types.js";
-import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
+import {
+  SUPPORTED_MESSAGE_FIELDS,
+  assertSupportedMessageFields,
+  assertMaxItems,
+  arrayify,
+  type MessageRules,
+} from "./utils.js";
 
 export type MailerSendAdapterOptions = {
   apiKey: string;
@@ -17,11 +23,16 @@ export type MailerSendAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const mailersendRules: MessageRules = (message) => {
+  assertMaxItems("mailersend", "replyTo", arrayify(message.replyTo), 1);
+};
+
 export function mailersend(
   options: MailerSendAdapterOptions,
 ): EmailAdapter<"mailersend", { baseUrl: string }> {
   return jsonProvider({
     name: "mailersend",
+    rules: mailersendRules,
     baseUrl: options.baseUrl ?? "https://api.mailersend.com",
     endpoint: "/v1/email",
     headers: {

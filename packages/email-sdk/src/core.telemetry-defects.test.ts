@@ -137,6 +137,25 @@ describe("send telemetry error reporting", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test("a rejection from a caller adapter's async validate is not the SDK's defect", async () => {
+    const { exceptions } = captured();
+
+    const client = createEmailClient({
+      adapters: [
+        adapter("acme-internal", undefined, {
+          async validate() {
+            await Promise.resolve();
+            crash();
+          },
+        }),
+      ],
+    });
+
+    await expect(client.send(message)).rejects.toBeInstanceOf(EmailAdapterError);
+
+    expect(exceptions).toHaveLength(0);
+  });
+
   test.each([
     ["shouldRetry", { maxAttempts: 2, shouldRetry: () => crash() }],
     ["delay", { maxAttempts: 2, shouldRetry: () => true, delay: () => crash() }],
