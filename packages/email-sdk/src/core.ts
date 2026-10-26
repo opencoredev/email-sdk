@@ -182,7 +182,7 @@ export function createEmailClient<
       const counts = acceptanceCounts(
         result?.accepted?.length ?? adapterError?.acceptedCount,
         result?.rejected?.length ?? adapterError?.rejectedCount,
-        recipients,
+        recipientsReplaced ? undefined : recipients,
         adapterError !== undefined,
       );
 

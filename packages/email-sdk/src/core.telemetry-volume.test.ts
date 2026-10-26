@@ -3,10 +3,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEmailClient } from "./core.js";
+import { mailchimp } from "./mailchimp.js";
 import { mailgun } from "./mailgun.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
+import { sequenzy } from "./sequenzy.js";
 import { failingAdapter, memoryAdapter } from "./testing.js";
 import { EmailAdapterError } from "./errors.js";
 import { createTelemetry, resetTelemetry, setSharedTelemetry } from "./telemetry.js";
@@ -313,6 +315,134 @@ describe("createEmailClient v1", () => {
       }
     });
   }
+
+  // When raw fields replace the recipients, the provider's own accepted/rejected lists are the
+  // only reliable count, so they are kept even though they don't match the message's recipients.
+  const replacedRecipientResults = [
+    {
+      name: "mailchimp",
+      adapter: (fetch: typeof globalThis.fetch) => mailchimp({ apiKey: "mc", fetch }),
+      native: {
+        mailchimp: {
+          body: {
+            message: {
+              to: [{ email: "a@example.com" }, { email: "b@example.com" }, { email: "c@example.com" }],
+            },
+          },
+        },
+      },
+      response: [
+        { _id: "1", email: "a@example.com", status: "sent" },
+        { _id: "2", email: "b@example.com", status: "queued" },
+        { _id: "3", email: "c@example.com", status: "rejected", reject_reason: "hard-bounce" },
+      ],
+      accepted: 2,
+      rejected: 1,
+    },
+    {
+      name: "sequenzy",
+      adapter: (fetch: typeof globalThis.fetch) => sequenzy({ apiKey: "sq", fetch }),
+      native: { sequenzy: { body: { to: ["a@example.com", "b@example.com", "c@example.com"] } } },
+      response: { success: true, jobId: "1", to: ["a@example.com", "b@example.com", "c@example.com"] },
+      accepted: 3,
+      rejected: 0,
+    },
+  ] as const;
+
+  for (const { name, adapter: build, native, response, accepted, rejected } of replacedRecipientResults) {
+    test(`${name} attempts keep provider-reported counts when native fields replace recipients`, async () => {
+      const capture = telemetryCapture();
+      setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+      try {
+        const client = createEmailClient({
+          adapters: [build(stubFetch(async () => Response.json(response)))],
+        });
+
+        await client.send({ ...message, to: "only@example.com" }, { native });
+        const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+        expect(attempt?.properties).toMatchObject({
+          adapter: name,
+          adapter_resolved_count: 1,
+          acceptance_basis: "explicit",
+          accepted_message_count: 1,
+          accepted_recipient_count: accepted,
+          rejected_recipient_count: rejected,
+          unknown_recipient_count: 0,
+          provider_accepted_recipient_count: accepted,
+          provider_submitted_message_count: 1,
+          provider_submitted_recipient_count: accepted,
+        });
+      } finally {
+        resetTelemetry();
+      }
+    });
+  }
+
+  test("provider lists longer than the message's recipients still count as unknown without native", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const client = createEmailClient({
+        adapters: [
+          mailchimp({
+            apiKey: "mc",
+            fetch: stubFetch(async () =>
+              Response.json([
+                { _id: "1", email: "a@example.com", status: "sent" },
+                { _id: "2", email: "b@example.com", status: "sent" },
+              ]),
+            ),
+          }),
+        ],
+      });
+
+      await client.send({ ...message, to: "only@example.com" });
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({
+        acceptance_basis: "unknown",
+        accepted_recipient_count: 0,
+        provider_submitted_recipient_count: 0,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("provider-reported counts without native are unchanged", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const client = createEmailClient({
+        adapters: [
+          mailchimp({
+            apiKey: "mc",
+            fetch: stubFetch(async () =>
+              Response.json([
+                { _id: "1", email: "a@example.com", status: "sent" },
+                { _id: "2", email: "b@example.com", status: "rejected", reject_reason: "spam" },
+              ]),
+            ),
+          }),
+        ],
+      });
+
+      await client.send({ ...message, to: ["a@example.com", "b@example.com"] });
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({
+        acceptance_basis: "explicit",
+        attempted_recipient_count: 2,
+        accepted_recipient_count: 1,
+        rejected_recipient_count: 1,
+        unknown_recipient_count: 0,
+        provider_submitted_recipient_count: 1,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
 
   test("native options that keep the recipients still infer submissions", async () => {
     const capture = telemetryCapture();
