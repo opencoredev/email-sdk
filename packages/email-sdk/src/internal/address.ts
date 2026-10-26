@@ -10,9 +10,10 @@ type ScannedMailbox = {
 
 /**
  * Splits a mailbox such as `"Ada <team>" <ada@example.test> (work)` around its angle-addr, with
- * RFC 5322 comments removed. Quoted strings and comments may hold `<`, `>`, `(`, `)`, and `,`, so
- * the scan steps over them instead of matching brackets inside them. Returns undefined when a
- * quote, comment, or angle-addr is never closed.
+ * each RFC 5322 comment replaced by a space so it still separates the tokens around it. Quoted
+ * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, so the scan steps over them instead
+ * of matching brackets inside them. Returns undefined when a quote, comment, or angle-addr is
+ * never closed, or when a comma outside them makes the string an address list.
  */
 function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   let outside = "";
@@ -43,7 +44,9 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
       }
     } else if (character === "(") {
       commentDepth = 1;
-      continue;
+      kept = " ";
+    } else if (character === ",") {
+      return undefined;
     } else if (character === '"') {
       quoted = true;
     } else if (character === "<" && angle === undefined) {

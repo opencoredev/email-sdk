@@ -31,6 +31,9 @@ const cases: ReadonlyArray<{
   { name: "leading comment inside the angle-addr", address: "<(work)ada@example.test>", expected: "ada@example.test" },
   { name: "plain address with a comment", address: "ada@example.test (work)", expected: "ada@example.test" },
   { name: "plain address after a comment", address: "(work) ada@example.test", expected: "ada@example.test" },
+  { name: "comment between tokens", address: "ada( work )bob@example.test", expected: "ada bob@example.test" },
+  { name: "address list after a quoted name", address: '"Ada <bad name>" <ada@example.test>,evil@example.test', expected: '"Ada <bad name>" <ada@example.test>,evil@example.test' },
+  { name: "address list after an angle-addr", address: "Ada <ada@example.test>, evil@example.test", expected: "Ada <ada@example.test>, evil@example.test" },
   { name: "unclosed angle-addr", address: "Ada <ada@example.test", expected: "Ada <ada@example.test" },
   { name: "stray closing bracket", address: "attacker@example.com> evil", expected: "attacker@example.com> evil" },
   { name: "unclosed quote", address: '"Ada <ada@example.test>', expected: '"Ada <ada@example.test>' },
@@ -59,7 +62,7 @@ describe("SMTP envelope validation", () => {
     },
   );
 
-  test.each(["Ada <ada@example.test", "attacker@example.com> evil", '"Ada <ada@example.test>', "Ada <>"])(
+  test.each(["Ada <ada@example.test", "attacker@example.com> evil", '"Ada <ada@example.test>', "Ada <>", "ada( work )bob@example.test", '"Ada <bad name>" <ada@example.test>,evil@example.test', "Ada <ada@example.test>, evil@example.test"])(
     "rejects %s",
     (to) => {
       expect(() => validateBuiltInAdapter("smtp", message(to))).toThrow("SMTP envelope address");
