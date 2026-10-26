@@ -293,14 +293,53 @@ export function remoteAttachment(
 }
 
 /** Message-ID values without angle brackets. */
+/**
+ * Message IDs from a `Message-ID`, `In-Reply-To`, or `References` value. Comments are CFWS
+ * (RFC 5322 3.6.4), so a `<id>` inside one is skipped. A value with no `<id>` falls back to
+ * whitespace- or comma-separated tokens, as some providers send bare IDs.
+ */
 export function messageIds(value: string | undefined): string[] {
   if (!value) return [];
 
-  const bracketed = [...value.matchAll(/<([^<>\s]+)>/g)].map(match => match[1]!);
+  const bracketed: string[] = [];
+  let bare = "";
+  let depth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]!;
+
+    if (depth > 0) {
+      if (char === "\\") index += 1;
+      else if (char === "(") depth += 1;
+      else if (char === ")") depth -= 1;
+
+      continue;
+    }
+
+    if (char === "(") {
+      depth = 1;
+      bare += " ";
+    } else if (char === "<") {
+      const end = value.indexOf(">", index + 1);
+
+      // No `>` follows, so no later `<` can close either.
+      if (end === -1) break;
+
+      // Start from the last `<` before the `>`, so a run of `<` is scanned once.
+      const start = value.lastIndexOf("<", end);
+      const id = value.slice(start + 1, end);
+
+      if (id && !/\s/.test(id)) bracketed.push(id);
+
+      index = end;
+    } else {
+      bare += char;
+    }
+  }
 
   if (bracketed.length) return bracketed;
 
-  return value.split(/[\s,]+/).filter(Boolean);
+  return bare.split(/[\s,]+/).filter(Boolean);
 }
 
 export function firstMessageId(value: string | undefined): string | undefined {
