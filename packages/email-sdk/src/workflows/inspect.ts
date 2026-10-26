@@ -351,7 +351,8 @@ async function tracePath(
 
         entries.push({ ...base, kind: "step", step: name, result, label: stepLabel(result) });
 
-        return value;
+        // The graph keeps its own copy, so a workflow that edits the result can't rewrite the node.
+        return savedForm(value);
       })();
 
       // As in the engine, a rejected call leaves no step running.
@@ -485,7 +486,9 @@ export async function inspectWorkflow(
       break;
     }
 
-    const trace = await tracePath(definition, input, options, planned, maxDepth);
+    // Each path gets its own saved copy, as each engine run does, so a workflow that edits its
+    // input can't change later paths or the trigger node.
+    const trace = await tracePath(definition, savedForm(input), options, planned, maxDepth);
 
     const end: WorkflowInspectNode = {
       id: `${trace.choices.map(choicePrefix).join("")}${endId}`,

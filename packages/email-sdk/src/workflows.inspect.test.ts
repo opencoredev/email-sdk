@@ -341,6 +341,41 @@ describe("inspectWorkflow", () => {
     expect(toMermaid(graph).split("\n").every((line) => line.startsWith("  ") || line === "flowchart TD")).toBe(true);
   });
 
+  test("gives every path a fresh copy of the input, apart from the trigger node", async () => {
+    const workflow = defineWorkflow({
+      name: "mutates-input",
+      run: async (ctx, input: { count: number }) => {
+        input.count += 1;
+        await ctx.waitForEvent("activated", { timeout: "1d" });
+        await ctx.send("mail", message("ada@example.com", String(input.count), "Hi"));
+      },
+    });
+
+    const graph = await inspectWorkflow(workflow, { input: { count: 0 } });
+    const subjects = graph.nodes.flatMap((node) => (node.kind === "send" ? [node.email.subject] : []));
+
+    expect(graph.paths).toHaveLength(2);
+    expect(subjects).toEqual(["1", "1"]);
+    expect(nodeById(graph, "$trigger")).toMatchObject({ kind: "trigger", input: { count: 0 } });
+  });
+
+  test("a step mock the workflow edits leaves the recorded result unchanged", async () => {
+    const workflow = defineWorkflow({
+      name: "edits-mock",
+      run: async (ctx) => {
+        const plan = await ctx.step<{ tier: string }>("load-plan", () => ({ tier: "free" }));
+
+        plan.tier = "edited";
+      },
+    });
+
+    const mock = { tier: "pro" };
+    const graph = await inspectWorkflow(workflow, { input: null, steps: { "load-plan": mock } });
+
+    expect(nodeById(graph, "load-plan")).toMatchObject({ result: { status: "mocked", value: { tier: "pro" } } });
+    expect(mock).toEqual({ tier: "pro" });
+  });
+
   test.each([
     [
       "as a Promise.all sibling of a step",
