@@ -318,7 +318,8 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
    changes what the code sees. `run` starts inside a
    promise callback, so a synchronous throw fails the run like a rejection.
 6. A `WorkflowError` from the definition's own `ctx` call (a negative duration or timeout, an
-   invalid `Date`, `maxAttempts` below 1, a `ctx` call while a step callback is in flight, a step named
+   invalid `Date`, a retry policy with `maxAttempts` that isn't a positive integer or a bad
+   `backoff`, a reused step name, a `ctx` call while a step callback is in flight, a step named
    `__proto__`, or a step result
    or output that isn't JSON, such as `NaN`, a sparse array, or a circular object) fails the run,
    even when the definition catches it. Replaying it would throw again on every wake. These rules
@@ -327,6 +328,28 @@ sleeps for real; `scheduler.advance("2d", engine)` moves the clock and fires due
 7. When `run` resolves, the run completes and its return value is stored as `output`. When it
    throws, the run fails at once, without waiting for a `ctx.step` still in flight beside it; that
    step can't save anything once the failure has.
+
+### Inspector parity
+
+`inspectWorkflow` runs the definition against a tracing `ctx` that takes every definition- and
+input-level check from `src/workflows/rules.ts`, so a preview fails where the engine fails the run.
+`src/workflows.parity.test.ts` runs each case through both and requires the same outcome.
+
+| Check (thrown by) | Code | Parity row |
+| --- | --- | --- |
+| Input schema rejects, or its result isn't JSON (`parseWorkflowInput`) | `invalid_input`, `invalid_value` | yes |
+| Reserved name, overlap with a running step (guard) | `invalid_definition` | yes |
+| Reused step name, latched even when caught (guard) | `duplicate_step` | yes |
+| Sleep, `sleepUntil`, and event timeout values (`sleepMs`, `sleepUntilMs`, `eventTimeoutMs`) | `invalid_duration` | yes |
+| Definition and step retry policies (`resolveRetry`) | `invalid_definition`, `invalid_duration` | yes |
+| Step result and workflow output (`assertStepResult`, `workflowOutput`) | `invalid_value` | yes |
+| Event payload (`assertEventPayload`; the inspector checks every `events` sample up front) | `invalid_value` | yes |
+
+Engine options (lease, engine-level `retry`, duplicate registrations, `resumeDue` concurrency),
+`workflow_not_registered`, and `write_conflict` have no inspector equivalent. The inspector also
+never runs step callbacks or the email client, so a message the client rejects still previews as a
+send. `maxDepth` counts every attempted `ctx` call, and the first definition error ends the path,
+so a definition that catches errors in a loop always returns.
 
 `ctx` calls inside one execution are serialized, so `Promise.all([ctx.send(a), ctx.send(b)])` runs
 the steps one after another rather than racing saves.

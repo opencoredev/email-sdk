@@ -18,7 +18,7 @@ The command imports the module, runs the workflow against a tracing `ctx`, and p
 | `<module>` | File that exports the workflow. `.js` and `.mjs` work everywhere; `.ts` needs Bun or a Node version that strips types (22.18+), and its imports must resolve as written. |
 | `--export <name>` | Export to inspect. Defaults to the `default` export, or the only exported workflow definition. |
 | `--input <json\|@file>` | Start input, parsed by the workflow's input schema as `start` would. Defaults to `null`. |
-| `--events <json\|@file>` | Sample payloads keyed by event name, used on each `received` branch. |
+| `--events <json\|@file>` | Sample payloads keyed by event name, used on each `received` branch. Each must be JSON that `sendEvent` would accept. |
 | `--steps <json\|@file>` | `ctx.step` results keyed by step name. Steps without one return `undefined` and show as `unknown`; their callbacks never run. |
 | `--subject <subject>` | Value for `ctx.subject`. |
 | `--format <json\|mermaid\|text>` | `json` (default) is the full graph, `mermaid` is a flowchart, `text` is one block per path. |
