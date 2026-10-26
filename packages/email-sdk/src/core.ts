@@ -137,10 +137,10 @@ export function createEmailClient<
   const telemetrySource = getTelemetrySource();
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
 
-  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke) => {
+  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke, recipientsReplaced) => {
     if (!telemetry?.enabled) return invoke();
 
-    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke);
+    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke, recipientsReplaced);
   };
 
   const measureAttemptTelemetry = async <T extends EmailSendResult>(
@@ -149,6 +149,7 @@ export function createEmailClient<
     path: AttemptPath,
     recipients: number,
     invoke: () => T | PromiseLike<T>,
+    recipientsReplaced = false,
   ): Promise<T> => {
     const startedAt = Date.now();
     const adapterName = normalizeAdapterName(adapter.name);
@@ -187,7 +188,12 @@ export function createEmailClient<
 
       const { accepted, rejected } = counts;
       const acceptedMessages = path === "personalized_native" ? accepted : Number(accepted > 0);
-      const inferred = resolved && result?.accepted === undefined && result?.rejected === undefined;
+
+      const inferred =
+        resolved &&
+        !recipientsReplaced &&
+        result?.accepted === undefined &&
+        result?.rejected === undefined;
 
       const acceptanceBasis = counts.explicit
         ? "explicit"

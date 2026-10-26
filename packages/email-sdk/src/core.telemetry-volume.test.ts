@@ -3,7 +3,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEmailClient } from "./core.js";
+import { mailgun } from "./mailgun.js";
+import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
+import { sendgrid } from "./sendgrid.js";
 import { failingAdapter, memoryAdapter } from "./testing.js";
 import { EmailAdapterError } from "./errors.js";
 import { createTelemetry, resetTelemetry, setSharedTelemetry } from "./telemetry.js";
@@ -254,6 +257,81 @@ describe("createEmailClient v1", () => {
         });
       expect(JSON.stringify(attempts)).not.toContain("private-message-id");
       expect(JSON.stringify(attempts)).not.toContain("@example.com");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  // A raw native body or form field can replace the recipients, so the message's own count
+  // no longer says how many addresses the provider was sent.
+  const recipientOverrides = [
+    {
+      name: "postmark",
+      adapter: (fetch: typeof globalThis.fetch) => postmark({ serverToken: "pm", fetch }),
+      native: { postmark: { body: { To: "a@example.com, b@example.com, c@example.com" } } },
+    },
+    {
+      name: "resend",
+      adapter: (fetch: typeof globalThis.fetch) => resend({ apiKey: "re", fetch }),
+      native: { resend: { body: { to: ["a@example.com", "b@example.com", "c@example.com"] } } },
+    },
+    {
+      name: "sendgrid",
+      adapter: (fetch: typeof globalThis.fetch) => sendgrid({ apiKey: "sg", fetch }),
+      native: { sendgrid: { body: { personalizations: [{ to: [{ email: "a@example.com" }] }] } } },
+    },
+    {
+      name: "mailgun",
+      adapter: (fetch: typeof globalThis.fetch) =>
+        mailgun({ apiKey: "mg", domain: "mg.example.com", fetch }),
+      native: { mailgun: { fields: { to: "a@example.com,b@example.com,c@example.com" } } },
+    },
+  ] as const;
+
+  for (const { name, adapter: build, native } of recipientOverrides) {
+    test(`${name} attempts with recipient-replacing native fields infer no submissions`, async () => {
+      const capture = telemetryCapture();
+      setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+      try {
+        const client = createEmailClient({
+          adapters: [build(stubFetch(async () => Response.json({ id: "1", MessageID: "1" })))],
+        });
+
+        await client.send({ ...message, to: "only@example.com" }, { native });
+        const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+        expect(attempt?.properties).toMatchObject({
+          adapter: name,
+          adapter_resolved_count: 1,
+          acceptance_basis: "unknown",
+          accepted_recipient_count: 0,
+          provider_submitted_message_count: 0,
+          provider_submitted_recipient_count: 0,
+        });
+      } finally {
+        resetTelemetry();
+      }
+    });
+  }
+
+  test("native options that keep the recipients still infer submissions", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const client = createEmailClient({
+        adapters: [resend({ apiKey: "re", fetch: stubFetch(async () => Response.json({ id: "1" })) })],
+      });
+
+      await client.send(
+        { ...message, to: ["a@example.com", "b@example.com"] },
+        { native: { resend: { topicId: "topic_1", headers: { "X-Trace": "1" } } } },
+      );
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({
+        acceptance_basis: "inferred_from_success",
+        provider_submitted_recipient_count: 2,
+      });
     } finally {
       resetTelemetry();
     }

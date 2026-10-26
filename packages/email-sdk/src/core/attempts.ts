@@ -11,6 +11,7 @@ import type {
   EmailAfterSendEvent,
   EmailHooks,
   EmailMessage,
+  EmailNativeObject,
   EmailRetryConfig,
   EmailSendMiddleware,
   EmailNativeSendOptions,
@@ -51,13 +52,28 @@ export function acceptanceCounts(
 
 export type AttemptPath = "single" | "personalized_native" | "personalized_expanded";
 
-/** Runs one adapter call, timing it for telemetry when telemetry is on. */
+/**
+ * Runs one adapter call, timing it for telemetry when telemetry is on. `recipientsReplaced` marks
+ * a call whose native options may send to recipients other than the message's, so a success
+ * without recipient lists can't be read as a submission to `recipients` addresses.
+ */
 export type MeasureAttempt = <T extends EmailSendResult>(
   adapter: EmailAdapter,
   path: AttemptPath,
   recipients: number,
   invoke: () => T | PromiseLike<T>,
+  recipientsReplaced?: boolean,
 ) => T | PromiseLike<T>;
+
+// The raw passthroughs can replace any top-level request field, recipients included. Typed
+// native options can't.
+export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
+
+function replacesRecipients(native: EmailNativeObject | undefined) {
+  if (!native) return false;
+
+  return RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
+}
 
 export type AttemptInput = {
   adapter: EmailAdapter;
@@ -90,6 +106,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
+    const native = input.options?.native?.[input.adapter.name];
 
     try {
       const adapterResult = await input.measureAttempt(
@@ -104,8 +121,9 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
             signal: input.options?.signal,
             idempotencyKey: input.options?.idempotencyKey,
             metadata: input.options?.metadata,
-            native: input.options?.native?.[input.adapter.name],
+            native,
           }),
+        replacesRecipients(native),
       );
 
       throwIfAborted(input.options?.signal);

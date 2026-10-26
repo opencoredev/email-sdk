@@ -18,7 +18,12 @@ import type {
   EmailSendResult,
 } from "../types.js";
 import { emailAddressOf, normalizeAdapterResult } from "../utils.js";
-import { attemptAdapter, defaultDelay, type MeasureAttempt } from "./attempts.js";
+import {
+  attemptAdapter,
+  defaultDelay,
+  RECIPIENT_REPLACING_NATIVE_KEYS,
+  type MeasureAttempt,
+} from "./attempts.js";
 import {
   failureAttempt,
   isAbort,
@@ -239,10 +244,8 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
   }
 }
 
-// The raw passthroughs can replace any top-level request field, recipients included, and the
-// personalized result must name exactly who was sent to. Typed native options can't.
-const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
-
+// The personalized result must name exactly who was sent to, so the raw passthroughs that can
+// replace the recipients are refused outright.
 export function assertNativeKeepsRecipients(
   names: readonly string[],
   native: EmailNativeOptionsMap | undefined,
