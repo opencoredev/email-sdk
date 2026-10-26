@@ -12,6 +12,30 @@ export { createWorkflowEngine } from "./workflows/engine.js";
 
 export { WorkflowError, WorkflowNonRetryableError } from "./workflows/errors.js";
 
+export {
+  describeRun,
+  formatWorkflowDuration,
+  formatWorkflowGraph,
+  inspectWorkflow,
+  toMermaid,
+} from "./workflows/inspect.js";
+
+export type {
+  WorkflowInspectBranch,
+  WorkflowInspectDelay,
+  WorkflowInspectEdge,
+  WorkflowInspectEmail,
+  WorkflowInspectGraph,
+  WorkflowInspectNode,
+  WorkflowInspectOptions,
+  WorkflowInspectOutcome,
+  WorkflowInspectPath,
+  WorkflowInspectStepResult,
+  WorkflowRunTimeline,
+  WorkflowRunTimelineEntry,
+  WorkflowRunTimelineWait,
+} from "./workflows/inspect.js";
+
 export { workflowIdempotencyKey } from "./workflows/idempotency.js";
 
 export type { WorkflowErrorCode } from "./workflows/errors.js";
