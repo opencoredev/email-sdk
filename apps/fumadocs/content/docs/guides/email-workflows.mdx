@@ -304,7 +304,7 @@ test("a user who never activates gets a nudge", async () => {
 
 ## Limits
 
-- Steps run one at a time. `Promise.all` over `ctx` calls is allowed, but they still run in order.
+- Steps run one at a time. `Promise.all` over `ctx` calls with no `ctx.step` among them, such as several sends, is allowed, but they still run in order. A `ctx.step` beside any other `ctx` call fails the run (see [How replay works](#how-replay-works)).
 - There are no child workflows yet.
 - Events sent to a subject before any run exists for it are dropped.
 - A run's inbox keeps its newest 50 unconsumed events and drops older ones.
