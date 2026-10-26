@@ -415,7 +415,7 @@ export function parseStructuredHeader(value: string | undefined): ContentType {
       let text = piece.value;
 
       if (!piece.encoded) {
-        if (/^[\x00-\x7f]*$/.test(text)) {
+        if (!/[^\p{ASCII}]/u.test(text)) {
           for (let index = 0; index < text.length; index += 1) bytes.push(text.charCodeAt(index));
         } else {
           // Raw Unicode some mailers send is already text; it must not pass through a byte conversion.
@@ -526,6 +526,50 @@ function contentIdOf(headers: readonly InboundHeader[]): string | undefined {
 }
 
 /**
+ * Join the soft line breaks of `format=flowed` text (RFC 3676). A line ending in a space continues
+ * on the next line of the same quote depth; one leading space is stuffing; `-- ` is a signature
+ * separator and never flows. With `delsp=yes` the space before a soft break is not content. Line
+ * breaks keep the form they were sent in.
+ */
+function unflow(text: string, delsp: boolean): string {
+  const pieces: string[] = [];
+  let flowed = false;
+  let depth = 0;
+  let lineBreak = "";
+
+  for (let lineStart = 0; lineStart <= text.length;) {
+    const newline = text.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? text.length : newline;
+    const crlf = lineEnd > lineStart && text[lineEnd - 1] === "\r";
+    const line = text.slice(lineStart, crlf ? lineEnd - 1 : lineEnd);
+    let quotes = 0;
+
+    while (line[quotes] === ">") quotes += 1;
+
+    const content = line.slice(line[quotes] === " " ? quotes + 1 : quotes);
+    const signature = content === "-- ";
+
+    if (flowed && quotes === depth && !signature) {
+      if (delsp) pieces[pieces.length - 1] = pieces.at(-1)!.slice(0, -1);
+
+      pieces.push(content);
+    } else {
+      pieces.push(lineBreak, quotes ? line : content);
+    }
+
+    flowed = !signature && content.endsWith(" ");
+    depth = quotes;
+    lineBreak = crlf ? "\r\n" : "\n";
+
+    if (newline === -1) break;
+
+    lineStart = newline + 1;
+  }
+
+  return pieces.join("");
+}
+
+/**
  * Walk one entity. A `resource` is a non-root part of `multipart/related` (RFC 2387), such as an
  * image or stylesheet the root references by `cid:`; it is always kept as an attachment.
  */
@@ -603,6 +647,7 @@ function walk(entity: MimeEntity, state: WalkState, depth: number, defaultType =
     const text = decodeCharset(bytes, contentType.params.get("charset"));
 
     if (type === "text/html") state.html.push(text);
+    else if (contentType.params.get("format")?.toLowerCase() === "flowed") state.text.push(unflow(text, contentType.params.get("delsp")?.toLowerCase() === "yes"));
     else state.text.push(text);
 
     return;

@@ -513,3 +513,96 @@ describe("MIME edge cases (RFC 2045/2046/2047/2231/5322)", () => {
     expect(parseMimeMessage(bytes).text).toBe(expected);
   });
 });
+
+describe("review round 2 regressions", () => {
+  const raw = (message: string) => Uint8Array.from(message, char => char.charCodeAt(0));
+
+  test("interleaved parameter comments are scanned in linear time", () => {
+    const n = 50_000;
+    const started = performance.now();
+    const parsed = parseMimeMessage(`Content-Type: text/plain;${" ".repeat(n)}name=x${"(a)x".repeat(n)}\r\n\r\nhi`);
+
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(parsed.attachments[0]?.filename).toBe(`x${"(a)x".repeat(n)}`);
+  });
+
+  test("comments between media type and parameter tokens are ignored", () => {
+    for (const message of [
+      "Content-Type: text(comment)/plain\r\n\r\nhello",
+      "Content-Type: text/(comment)plain\r\n\r\nhello",
+      "Content-Type: text (comment) / plain\r\n\r\nhello",
+      "Content-Type: multipart/mixed; boundary(comment)=b\r\n\r\n--b\r\n\r\nhello\r\n--b--",
+      "Content-Type: multipart/mixed; boundary=(comment)b\r\n\r\n--b\r\n\r\nhello\r\n--b--",
+      "Content-Type: multipart/mixed; boundary (comment) = \"b\"\r\n\r\n--b\r\n\r\nhello\r\n--b--",
+    ]) {
+      const parsed = parseMimeMessage(message);
+
+      expect(parsed.text).toBe("hello");
+      expect(parsed.attachments).toEqual([]);
+    }
+  });
+
+  test("CFWS before a domain literal keeps the address", () => {
+    expect(parseAddressList("user@ [IPv6:2001:db8::1], next@example.com")).toEqual([{ address: "user@[IPv6:2001:db8::1]" }, { address: "next@example.com" }]);
+    expect(parseAddressList("user@(c) [IPv6:2001:db8::1], next@example.com")).toEqual([{ address: "user@[IPv6:2001:db8::1]", name: "c" }, { address: "next@example.com" }]);
+    expect(parseAddressList("Ops <ops@ [a>b]>, next@example.com")).toEqual([{ address: "ops@[a>b]", name: "Ops" }, { address: "next@example.com" }]);
+
+    const email = emailFromMime({
+      provider: "cloudflare",
+      raw: "From: user@ [IPv6:2001:db8::1]\r\nTo: user@ [IPv6:2001:db8::1], next@example.com\r\n\r\nhi",
+    });
+
+    expect(email.from).toEqual({ address: "user@[IPv6:2001:db8::1]" });
+    expect(email.to).toEqual([{ address: "user@[IPv6:2001:db8::1]" }, { address: "next@example.com" }]);
+  });
+
+  test("mixed RFC 2231 sections decode as one byte stream in the declared charset", () => {
+    const filename = (disposition: string) => parseMimeMessage(raw(`Content-Type: application/octet-stream\r\nContent-Disposition: attachment; ${disposition}\r\n\r\nx`)).attachments[0]?.filename;
+
+    expect(filename("filename*0*=Shift_JIS''%83; filename*1=\"e.txt\"")).toBe("テ.txt");
+    expect(filename("filename*0*=iso-2022-jp''%1B%24%42; filename*1=\"$3$s$K$A$O\"; filename*2*=%1B%28%42.txt")).toBe("こんにちは.txt");
+    expect(emailFromMime({ provider: "cloudflare", raw: raw("Content-Type: application/octet-stream\r\nContent-Disposition: attachment; filename*0*=Shift_JIS''%83; filename*1=\"e.txt\"\r\n\r\nx") }).attachments[0]?.filename).toBe("テ.txt");
+  });
+
+  test("comments do not supply threading IDs", () => {
+    const email = emailFromMime({
+      provider: "cloudflare",
+      raw: "Message-ID: (see <wrong@example.com>) <right@example.com>\r\nIn-Reply-To: (see <fake@example.com>) <parent@example.com>\r\nReferences: (see <fake@example.com>) <parent@example.com> (a (nested <x@y>) b) <grand@example.com>\r\n\r\nhi",
+    });
+
+    expect(email.messageId).toBe("right@example.com");
+    expect(email.inReplyTo).toBe("parent@example.com");
+    expect(email.references).toEqual(["parent@example.com", "grand@example.com"]);
+
+    const started = performance.now();
+    const hostile = emailFromMime({ provider: "cloudflare", raw: `References: ${"<".repeat(100_000)}a@b> ${"(".repeat(100_000)}\r\n\r\nhi` });
+
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(hostile.references).toEqual(["a@b"]);
+  });
+
+  test("parentheses inside a domain literal are data, not a comment", () => {
+    expect(parseAddressList("user@[a(b)c], next@example.com")).toEqual([{ address: "user@[a(b)c]" }, { address: "next@example.com" }]);
+    expect(parseAddressList("Ops <user@[a(b)c]>, next@example.com")).toEqual([{ address: "user@[a(b)c]", name: "Ops" }, { address: "next@example.com" }]);
+  });
+
+  test("each quoted display-name word is unquoted on its own", () => {
+    expect(parseAddressList("\"John\" \"Doe\" <john@example.com>")).toEqual([{ address: "john@example.com", name: "John Doe" }]);
+    expect(parseAddressList("\"Ada \\\"L\\\"\" Lovelace <ada@example.com>")).toEqual([{ address: "ada@example.com", name: "Ada \"L\" Lovelace" }]);
+    expect(emailFromMime({ provider: "cloudflare", raw: "From: \"John\" \"Doe\" <john@example.com>\r\n\r\nhi" }).from).toEqual({ address: "john@example.com", name: "John Doe" });
+  });
+
+  test("an obsolete source route is dropped from the address", () => {
+    expect(parseAddressList("<@route1.example,@route2.example:user@example.com>")).toEqual([{ address: "user@example.com" }]);
+    expect(parseAddressList("Ops <@relay.example:ops@example.com>, next@example.com")).toEqual([{ address: "ops@example.com", name: "Ops" }, { address: "next@example.com" }]);
+    expect(parseAddressList("<\"a:b\"@example.com>")).toEqual([{ address: "\"a:b\"@example.com" }]);
+  });
+
+  test("format=flowed text is unwrapped", () => {
+    expect(parseMimeMessage("Content-Type: text/plain; format=flowed; delsp=yes\r\n\r\nhello \r\nworld\r\n >quote\r\n").text).toBe("helloworld\r\n>quote\r\n");
+    expect(parseMimeMessage("Content-Type: text/plain; format=flowed\r\n\r\nhello \r\nworld\r\n> a \r\n> b\r\n-- \r\nsig\r\n").text).toBe("hello world\r\n> a b\r\n-- \r\nsig\r\n");
+    expect(parseMimeMessage("Content-Type: text/plain; format=flowed\r\n\r\n> a \r\n>> b\r\n").text).toBe("> a \r\n>> b\r\n");
+    expect(parseMimeMessage("Content-Type: text/plain\r\n\r\nhello \r\nworld").text).toBe("hello \r\nworld");
+    expect(emailFromMime({ provider: "cloudflare", raw: "Content-Type: text/plain; format=flowed\n\nhello \nworld\n" }).text).toBe("hello world\n");
+  });
+});
