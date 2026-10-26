@@ -965,14 +965,22 @@ function unquotePhrase(phrase: string): string {
 function withoutRoute(address: string): string {
   if (!address.startsWith("@")) return address;
 
-  const colon = address.indexOf(":");
-  const quote = address.indexOf("\"");
-  const bracket = address.indexOf("[");
+  // Route domains may be literals such as `@[IPv6:2001:db8::1]`, whose colons are data.
+  let literal = false;
 
-  // A route is domains only, so its colon comes before any quoted local part or literal.
-  if (colon === -1 || (quote !== -1 && quote < colon) || (bracket !== -1 && bracket < colon)) return address;
+  for (let index = 1; index < address.length; index += 1) {
+    const char = address[index];
 
-  return address.slice(colon + 1);
+    if (literal) {
+      if (char === "\\") index += 1;
+      else if (char === "]") literal = false;
+    } else if (char === "[") literal = true;
+    else if (char === ":") return address.slice(index + 1);
+    // A route is domains only, so a quote before its colon means there is no route.
+    else if (char === "\"") return address;
+  }
+
+  return address;
 }
 
 /** Parse `"Ada, L." <ada@example.com>, bob@example.com` into addresses. */

@@ -608,6 +608,15 @@ describe("review round 2 regressions", () => {
 });
 
 describe("review round 3 regressions", () => {
+  test("a source route with domain-literal relays is dropped", () => {
+    expect(parseAddressList("<@[127.0.0.1]:user@example.com>")).toEqual([{ address: "user@example.com" }]);
+    expect(parseAddressList("<@[IPv6:2001:db8::1]:user@example.com>")).toEqual([{ address: "user@example.com" }]);
+    expect(parseAddressList("Ops <@a.example,@[127.0.0.1]:ops@example.com>")).toEqual([{ address: "ops@example.com", name: "Ops" }]);
+    expect(parseAddressList("<@[a\\]:b]:user@example.com>")).toEqual([{ address: "user@example.com" }]);
+    expect(parseAddressList("<@a.example:\"x:y\"@example.com>")).toEqual([{ address: "\"x:y\"@example.com" }]);
+    expect(parseAddressList("<\"@a:b\"@example.com>")).toEqual([{ address: "\"@a:b\"@example.com" }]);
+  });
+
   test("a leading byte-order mark is dropped from each encoded word", () => {
     expect(decodeEncodedWords("=?UTF-16LE?B?//5BAA==?= =?UTF-16LE?B?//5CAA==?=")).toBe("AB");
     expect(decodeEncodedWords("=?UTF-16BE?B?/v8AQQ==?= =?UTF-16BE?B?/v8AQg==?=")).toBe("AB");
