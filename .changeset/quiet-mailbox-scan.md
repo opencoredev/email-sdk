@@ -2,7 +2,7 @@
 "@opencoredev/email-sdk": patch
 ---
 
-String addresses now resolve to the right mailbox when the display name or a comment holds angle brackets. The SDK skips quoted strings (with escaped quotes) and RFC 5322 comments, then takes the first `<...>` outside them. This address is what SMTP envelope validation, recipient-variable checks, and the adapters that send bare addresses (SendGrid, Lettr, SendHeron, Mailgun) use. The SMTP adapter now also builds its envelope (`MAIL FROM` and `RCPT TO`) from these resolved addresses instead of letting Nodemailer re-parse the original strings, so the mailbox the SDK validates is the one it delivers to.
+String addresses now resolve to the right mailbox when the display name or a comment holds angle brackets. The SDK skips quoted strings (with escaped quotes) and RFC 5322 comments, then takes the first `<...>` outside them. This is the address used by SMTP envelope validation, recipient-variable lookups and batch results (including SendGrid and Mailgun batch sends), and the Lettr and SendHeron recipient fields. Adapters that send a name and email pair (SendGrid's `from` and `to` fields, for example) still parse addresses on their own and are unchanged. The SMTP adapter now also builds its envelope (`MAIL FROM` and `RCPT TO`) from these resolved addresses instead of letting Nodemailer re-parse the original strings, so the mailbox the SDK validates is the one it delivers to.
 
 Changed results:
 
@@ -16,4 +16,4 @@ Changed results:
 - Input with an unclosed quote or comment, such as `"Ada <ada@example.test>` or `Ada <ada@example.test> (work`, is returned as-is, so validation rejects it instead of picking an address out of it.
 - SMTP envelope validation also rejects `(`, `)`, `,`, `:`, `;`, `"`, and `\` in the resolved address, so bare lists like `ada@example.test,bob@example.test` and quoted local parts like `"ada"@example.test` fail before connecting.
 
-Bare addresses, `Name <a@b>`, `Ada <ada@example.test> (work)`, and unclosed or stray angle brackets resolve as before.
+Bare addresses, IPv6 domain literals such as `ada@[IPv6:2001:db8::1]`, `Name <a@b>`, `Ada <ada@example.test> (work)`, and unclosed or stray angle brackets resolve as before.

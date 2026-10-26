@@ -806,8 +806,12 @@ export function validateBuiltInAdapter(
     ]) {
       const envelope = emailAddressOf(address);
 
-      const hasInvalidCharacter = [...envelope].some((character) => {
+      const literalStart = envelope.endsWith("]") ? envelope.lastIndexOf("@[") : -1;
+
+      const hasInvalidCharacter = [...envelope].some((character, index) => {
         const codePoint = character.codePointAt(0) ?? 0;
+
+        if (character === ":" && literalStart !== -1 && index > literalStart) return false;
 
         return codePoint <= 0x20 || codePoint >= 0x7f || '<>(),:;"\\'.includes(character);
       });

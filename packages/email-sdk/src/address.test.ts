@@ -37,6 +37,9 @@ const cases: ReadonlyArray<{
   { name: "address list after an angle-addr", address: "Ada <ada@example.test>, evil@example.test", expected: "Ada <ada@example.test>, evil@example.test" },
   { name: "semicolon after an angle-addr", address: "Ada <ada@example.test>;evil@example.test", expected: "Ada <ada@example.test>;evil@example.test" },
   { name: "group syntax", address: "Team: Ada <ada@example.test>;", expected: "Team: Ada <ada@example.test>;" },
+  { name: "IPv6 domain literal", address: "ada@[IPv6:2001:db8::1]", expected: "ada@[IPv6:2001:db8::1]" },
+  { name: "IPv6 domain literal in an angle-addr", address: "Ada <ada@[IPv6:2001:db8::1]>", expected: "ada@[IPv6:2001:db8::1]" },
+  { name: "unclosed domain literal", address: "Ada <ada@[IPv6:2001:db8::1>", expected: "Ada <ada@[IPv6:2001:db8::1>" },
   { name: "unclosed angle-addr", address: "Ada <ada@example.test", expected: "Ada <ada@example.test" },
   { name: "stray closing bracket", address: "attacker@example.com> evil", expected: "attacker@example.com> evil" },
   { name: "unclosed quote", address: '"Ada <ada@example.test>', expected: '"Ada <ada@example.test>' },
@@ -58,7 +61,7 @@ describe("SMTP envelope validation", () => {
     text: "Hi",
   });
 
-  test.each(["Ada <ada@example.test> (work)", "ada@example.test (work)", '"Ada <team>" <ada@example.test>'])(
+  test.each(["Ada <ada@example.test> (work)", "ada@example.test (work)", '"Ada <team>" <ada@example.test>', "Ada <ada@[IPv6:2001:db8::1]>"])(
     "accepts %s",
     (to) => {
       expect(() => validateBuiltInAdapter("smtp", message(to))).not.toThrow();

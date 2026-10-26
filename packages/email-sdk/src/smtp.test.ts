@@ -228,6 +228,7 @@ describe("smtp injection guards", () => {
     "ada@example.com (a(b),evil@example.com )",
     "(a\\)b)ada@example.com (work)",
     '"ada"@example.com',
+    "ada:x@[IPv6:2001:db8::1]",
   ])("rejects envelope address %s before connecting", async (to) => {
     await expect(send({ ...baseMessage, to })).rejects.toBeInstanceOf(EmailValidationError);
   });
@@ -317,7 +318,7 @@ describe("smtp injection guards", () => {
       from: '"Sender <team>" <sender@example.com>',
       to: ["Ada <ada@example.com> (work)", "bob@example.com (work)"],
       cc: "(team)cy@example.com (work)",
-      bcc: '"Dee <ops>" <dee@example.com>',
+      bcc: ['"Dee <ops>" <dee@example.com>', { email: "eve@[IPv6:2001:db8::1]" }],
     });
 
     const envelope = transmitted.commands.filter(
@@ -330,6 +331,7 @@ describe("smtp injection guards", () => {
       "RCPT TO:<BOB@EXAMPLE.COM>",
       "RCPT TO:<CY@EXAMPLE.COM>",
       "RCPT TO:<DEE@EXAMPLE.COM>",
+      "RCPT TO:<EVE@[IPV6:2001:DB8::1]>",
     ]);
   });
 

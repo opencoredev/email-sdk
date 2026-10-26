@@ -11,10 +11,11 @@ type ScannedMailbox = {
 /**
  * Splits a mailbox such as `"Ada <team>" <ada@example.test> (work)` around its angle-addr, with
  * each RFC 5322 comment replaced by a space so it still separates the tokens around it. Quoted
- * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, so the scan steps over them instead
- * of matching brackets inside them. Returns undefined when a quote, comment, or angle-addr is
- * never closed, when a comment is nested or holds a backslash (Nodemailer parses those differently),
- * or when a `,`, `;`, or `:` outside them makes the string an address list or group.
+ * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, and a `[...]` domain literal may hold
+ * the colons of an IPv6 address, so the scan steps over them instead of matching inside them.
+ * Returns undefined when a quote, comment, domain literal, or angle-addr is never closed, when a
+ * comment is nested or holds a backslash (Nodemailer parses those differently), or when a `,`,
+ * `;`, or `:` outside them makes the string an address list or group.
  */
 function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   let outside = "";
@@ -22,6 +23,7 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   let inAngle = false;
   let quoted = false;
   let inComment = false;
+  let inLiteral = false;
 
   for (let index = 0; index < mailbox.length; index += 1) {
     const character = mailbox.charAt(index);
@@ -43,6 +45,10 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
       } else if (character === '"') {
         quoted = false;
       }
+    } else if (inLiteral) {
+      if (character === "]") inLiteral = false;
+    } else if (character === "[") {
+      inLiteral = true;
     } else if (character === "(") {
       inComment = true;
       kept = " ";
@@ -63,7 +69,7 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
     else outside += kept;
   }
 
-  if (quoted || inAngle || inComment) return undefined;
+  if (quoted || inAngle || inComment || inLiteral) return undefined;
 
   return { outside, angle };
 }
