@@ -2,8 +2,8 @@ import { parseBrevoInbound, type BrevoInboundOptions } from "./inbound/brevo.js"
 import { fetchGraphInboundEmail, graphValidationResponse, parseGraphNotifications, type GraphInboundApiOptions } from "./inbound/graph.js";
 import { parseJetEmailInbound, verifyJetEmailInbound } from "./inbound/jetemail.js";
 import { parseLettermintInbound, verifyLettermintInbound } from "./inbound/lettermint.js";
-import { parseMandrillInbound, verifyMandrillInbound } from "./inbound/mailchimp.js";
-import { parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/mailersend.js";
+import { isMandrillWebhookTest, parseMandrillInbound, verifyMandrillInbound } from "./inbound/mailchimp.js";
+import { isMailerSendRouteTest, parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/mailersend.js";
 import { parseMailgunInbound, verifyMailgunInbound } from "./inbound/mailgun.js";
 import { parseMailPaceInbound, verifyMailPaceInbound } from "./inbound/mailpace.js";
 import { parsePostmarkInbound } from "./inbound/postmark.js";
@@ -88,11 +88,11 @@ export { parseJetEmailInbound, verifyJetEmailInbound } from "./inbound/jetemail.
 
 export { parseLettermintInbound, verifyLettermintInbound } from "./inbound/lettermint.js";
 
-export { parseMandrillInbound, verifyMandrillInbound } from "./inbound/mailchimp.js";
+export { isMandrillWebhookTest, parseMandrillInbound, verifyMandrillInbound } from "./inbound/mailchimp.js";
 
 export type { MandrillInboundVerificationOptions } from "./inbound/mailchimp.js";
 
-export { parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/mailersend.js";
+export { isMailerSendRouteTest, parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/mailersend.js";
 
 export { fetchMailgunStoredEmail, parseMailgunInbound, verifyMailgunInbound } from "./inbound/mailgun.js";
 
@@ -179,6 +179,10 @@ export type InboundHandlerResult =
   | { type: "emails"; emails: InboundEmail[] }
   | { type: "handshake"; response: Response };
 
+function acknowledged(): Response {
+  return new Response(null, { status: 200 });
+}
+
 function endpointAuth(payload: InboundRequestPayload, auth: InboundEndpointAuth): InboundVerification {
   if ("none" in auth) return auth.none === true ? { ok: true } : { ok: false, reason: "secret_missing" };
 
@@ -251,6 +255,9 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
     if (validation) return { type: "handshake", response: validation };
   }
 
+  // Mandrill checks a new webhook URL with a HEAD request before it falls back to a test POST.
+  if (config.provider === "mailchimp" && request.method === "HEAD") return { type: "handshake", response: acknowledged() };
+
   // Copy headers before reading the body: Bun drops a FormData Content-Type from headers
   // first accessed after the body is consumed.
   const headers = new Headers(request.headers);
@@ -289,10 +296,10 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
       if (message.Type === "SubscriptionConfirmation") {
         if (config.confirmSubscription !== false) await confirmSnsSubscription(message, fetchOptions);
 
-        return { type: "handshake", response: new Response(null, { status: 200 }) };
+        return { type: "handshake", response: acknowledged() };
       }
 
-      if (message.Type === "UnsubscribeConfirmation") return { type: "handshake", response: new Response(null, { status: 200 }) };
+      if (message.Type === "UnsubscribeConfirmation") return { type: "handshake", response: acknowledged() };
 
       return { type: "emails", emails: [await parseSesInbound(payload, { ...config, ...fetchOptions, skipVerification: true })] };
     }
@@ -307,10 +314,17 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
       };
     }
 
-    case "mailchimp":
-      assertVerified("mailchimp", await verifyMandrillInbound(payload, { secret: config.secret, url: config.url ?? request.url }));
+    case "mailchimp": {
+      const url = config.url ?? request.url;
+      const check = await verifyMandrillInbound(payload, { secret: config.secret, url });
+
+      if (!check.ok && await isMandrillWebhookTest(payload, { url })) return { type: "handshake", response: acknowledged() };
+
+      assertVerified("mailchimp", check);
 
       return { type: "emails", emails: await parseMandrillInbound(payload) };
+    }
+
     case "sparkpost":
       assertVerified("sparkpost", verifySparkPostInbound(payload, { secret: config.secret }));
 
@@ -320,6 +334,8 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
 
       return { type: "emails", emails: parseLettrInbound(payload) };
     case "mailersend":
+      if (await isMailerSendRouteTest(payload)) return { type: "handshake", response: acknowledged() };
+
       assertVerified("mailersend", await verifyMailerSendInbound(payload, { secret: config.secret }));
 
       return { type: "emails", emails: [parseMailerSendInbound(payload)] };

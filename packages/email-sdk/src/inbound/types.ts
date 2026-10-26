@@ -172,6 +172,7 @@ export type InboundErrorReason =
   | "secret_missing"
   | "payload_invalid"
   | "unsupported"
+  | "decryption_required"
   | "fetch_failed";
 
 /** Thrown when an inbound request fails verification, parsing, or fetching. */

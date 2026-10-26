@@ -35,7 +35,7 @@ Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | 
 handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult>
 ```
 
-Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request and SNS subscription confirmations. A Graph handshake fails with `secret_missing` when `clientState` is empty, so a subscription is only confirmed once its notifications can be checked. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
+Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request, SNS subscription confirmations, MailerSend's `webhook.test` route check, and Mandrill's HEAD probe and empty test POST. The provider test secrets (MailerSend's published key, Mandrill's `test-webhook`) only ever produce a handshake for a body that carries no message; they never authenticate an email. A Graph handshake fails with `secret_missing` when `clientState` is empty, so a subscription is only confirmed once its notifications can be checked. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
 
 | `provider` | Required config | Optional |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 | `"mailpace"` | `publicKey` | |
 | `"brevo"` | `auth` | `apiKey`, `baseUrl` |
 
-`auth` is `{ basic: { username, password } }`, `{ bearer: token }`, or `{ none: true }`. Secrets and keys accept an array during rotation; any match passes.
+`auth` is `{ basic: { username, password } }`, `{ bearer: token }`, or `{ none: true }`. Secrets and keys accept an array during rotation; any match passes, and a malformed entry is skipped.
 
 ## Functions by provider
 
@@ -77,7 +77,7 @@ Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ 
 | JetEmail | `verifyJetEmailInbound` | `parseJetEmailInbound` |
 | Mailtrap | `verifyMailtrapInbound` | |
 
-`verifySnsMessage` takes the result of `parseSnsMessage(body)`. `parseGraphNotifications` checks `clientState` on every notification, and `graphValidationResponse(url)` answers the subscription handshake. `parseMandrillInbound`, `parseSparkPostInbound`, `parseLettrInbound`, and `parseBrevoInbound` return arrays, because one post can carry several messages.
+`isMailerSendRouteTest(payload)` and `isMandrillWebhookTest(payload, { url })` detect the providers' setup checks when you verify by hand; answer those with a 200 and do not parse them. `verifySnsMessage` takes the result of `parseSnsMessage(body)`. `parseGraphNotifications` checks `clientState` on every notification, and `graphValidationResponse(url)` answers the subscription handshake. `parseMandrillInbound`, `parseSparkPostInbound`, `parseLettrInbound`, and `parseBrevoInbound` return arrays, because one post can carry several messages.
 
 ### Fetching from provider APIs
 
@@ -126,6 +126,7 @@ All comparisons run in constant time. A valid signature does not stop a replay i
 | `secret_missing` | No secret or key configured, or the key is malformed | 500 (fix the config) |
 | `payload_invalid` | Body is not the provider's documented format | 400 |
 | `unsupported` | For example an SNS message that is not an email notification | 200, then ignore |
+| `decryption_required` | SES stored the message with receipt-rule encryption, which only the S3 encryption client can decrypt | 500, so SNS retries; decrypt it yourself and call `sesEmailFromNotification` |
 | `fetch_failed` | A provider API or download failed; see `status` | 502, or retry |
 
 ## MIME parsing

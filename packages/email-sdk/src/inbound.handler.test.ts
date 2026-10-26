@@ -292,7 +292,7 @@ describe("SES receiving", () => {
 
       const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
 
-      await expect(parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).rejects.toMatchObject({ reason: "unsupported", provider: "ses" });
+      await expect(parseSesInbound({ body }, { fetch, s3, topicArn, now: signedAt })).rejects.toMatchObject({ reason: "decryption_required", provider: "ses" });
       await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/1" }, s3)).rejects.toThrow("encrypted");
     }
   });
@@ -307,7 +307,7 @@ describe("SES receiving", () => {
 
     const s3 = { accessKeyId: "AKIATEST", secretAccessKey: "secret", region: "us-east-1", fetch };
 
-    await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/1" }, s3)).rejects.toMatchObject({ reason: "unsupported" });
+    await expect(fetchSesInboundFromS3({ bucket: "inbound-mail", key: "mail/1" }, s3)).rejects.toMatchObject({ reason: "decryption_required" });
     expect(cancelled).toBe(true);
   });
 
@@ -477,6 +477,46 @@ describe("handleInbound", () => {
 
     expect(result.type).toBe("handshake");
     expect(visited).toContain(subscribeUrl);
+  });
+
+  test("answers the MailerSend route test only when the published test secret signed it", async () => {
+    const body = JSON.stringify({ type: "webhook.test", message: "This is a ping test message", created_at: "2026-03-27T07:24:20.577080Z" });
+    const signed = (secret: string, payload = body) => ({ signature: createHmac("sha256", secret).update(payload).digest("hex") });
+    const config = { provider: "mailersend", secret: "production-route-secret" } as const;
+    const result = await handleInbound(post(body, signed("test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G")), config);
+
+    expect(result.type).toBe("handshake");
+    expect(result.type === "handshake" && result.response.status).toBe(200);
+
+    // The public test secret never authenticates an email, even one shaped like a test.
+    const email = JSON.stringify({ type: "inbound.message", data: { id: "x", subject: "forged", headers: {} } });
+    await expect(handleInbound(post(email, signed("test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G", email)), config)).rejects.toMatchObject({ reason: "signature_invalid" });
+
+    const smuggled = JSON.stringify({ type: "webhook.test", data: { id: "x", subject: "forged", headers: {} } });
+    await expect(handleInbound(post(smuggled, signed("test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G", smuggled)), config)).rejects.toMatchObject({ reason: "signature_invalid" });
+    await expect(handleInbound(post(body, signed("someone-else")), config)).rejects.toMatchObject({ reason: "signature_invalid" });
+  });
+
+  test("answers Mandrill's HEAD probe and its empty test-key POST", async () => {
+    const url = "https://example.test/inbound";
+    const config = { provider: "mailchimp", secret: "production-webhook-key", url } as const;
+    const head = await handleInbound(new Request(url, { method: "HEAD" }), config);
+
+    expect(head.type === "handshake" && head.response.status).toBe(200);
+
+    const form = (events: string, key: string) => {
+      const signature = createHmac("sha1", key).update(`${url}mandrill_events${events}`).digest("base64");
+
+      return post(new URLSearchParams({ mandrill_events: events }), { "x-mandrill-signature": signature });
+    };
+
+    const probe = await handleInbound(form("[]", "test-webhook"), config);
+
+    expect(probe.type === "handshake" && probe.response.status).toBe(200);
+
+    const forged = JSON.stringify([{ event: "inbound", msg: { email: "a@x.test", subject: "forged" } }]);
+    await expect(handleInbound(form(forged, "test-webhook"), config)).rejects.toMatchObject({ reason: "signature_invalid" });
+    await expect(handleInbound(form("[]", "someone-else"), config)).rejects.toMatchObject({ reason: "signature_invalid" });
   });
 
   test("parseInbound dispatches by provider", async () => {

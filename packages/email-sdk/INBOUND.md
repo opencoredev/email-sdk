@@ -40,6 +40,9 @@ Usage lives in the docs site: [Receive email](https://email-sdk.dev/docs/guides/
 ## Notes and open gaps
 
 - Mailtrap does not publish field names for its webhook event, so the SDK verifies the signature and leaves you to read the inbox and message IDs. Use them with `fetchMailtrapInboundEmail`.
-- MailerSend's docs describe signing for webhooks in general. The SDK applies the same `Signature` scheme to inbound route posts.
+- MailerSend's docs describe signing for webhooks in general. The SDK applies the same `Signature` scheme to inbound route posts. Saving a route sends a `webhook.test` request signed with a published test secret ([URL validation](https://developers.mailersend.com/api/v1/inbound.html)); `isMailerSendRouteTest` accepts that key only for a body with no message `data`, and `handleInbound` answers it as a handshake.
+- Mandrill probes a new webhook URL with HEAD, then falls back to a POST of `mandrill_events=[]` signed with the key `test-webhook` ([webhooks](https://mailchimp.com/developer/transactional/docs/webhooks/)). `handleInbound` answers both as handshakes; `isMandrillWebhookTest` accepts the public key only for that empty array.
+- SES receipt-rule message encryption stores ciphertext that only the S3 encryption client can decrypt. `fetchSesInboundFromS3` throws `decryption_required` instead of returning ciphertext, so a route can return a 5xx and let SNS retry.
+- Resend, MailPace, and SendGrid skip malformed keys in a rotation list.
 - Postmark, Brevo, and unsigned SendGrid endpoints have no message signature. `handleInbound` makes you pick Basic, Bearer, or an explicit `{ none: true }`.
 - The MIME parser is built in, with no dependency. See "MIME parsing" in the reference page for its limits.

@@ -85,21 +85,26 @@ export async function verifyResendInbound(
 
   const content = concatBytes(utf8Bytes(`${id}.${timestamp}.`), toBytes(payload.body));
 
+  // A malformed secret is skipped, so one bad entry in a rotation list cannot block the valid one.
+  let usable = 0;
+
   for (const secret of secrets) {
     let key: Uint8Array<ArrayBuffer>;
 
     try {
       key = decodeBase64Strict(secret.replace(/^whsec_/, ""));
     } catch {
-      return rejected("secret_missing");
+      continue;
     }
+
+    usable += 1;
 
     const expected = await hmac("SHA-256", key, content);
 
     if (candidates.some(candidate => timingSafeEqual(candidate, expected))) return verified;
   }
 
-  return rejected("signature_invalid");
+  return rejected(usable ? "signature_invalid" : "secret_missing");
 }
 
 function addresses(value: JsonValue | undefined): InboundAddress[] {

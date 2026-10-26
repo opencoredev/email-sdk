@@ -90,6 +90,12 @@ describe("Resend", () => {
     expect(await verifyResendInbound({ body, headers: headers() }, { secret: ["whsec_b3RoZXI=", secret], now })).toEqual({ ok: true });
   });
 
+  test("skips a malformed key in a rotation list", async () => {
+    expect(await verifyResendInbound({ body, headers: headers() }, { secret: ["malformed!", secret], now })).toEqual({ ok: true });
+    expect(await verifyResendInbound({ body, headers: headers() }, { secret: ["malformed!", "whsec_b3RoZXI="], now })).toEqual({ ok: false, reason: "signature_invalid" });
+    expect(await verifyResendInbound({ body, headers: headers() }, { secret: ["malformed!"], now })).toEqual({ ok: false, reason: "secret_missing" });
+  });
+
   test("verifies the exact body bytes, not a decoded copy", async () => {
     const original = new Uint8Array([...new TextEncoder().encode('{"type":"email.received","data":{"subject":"'), 0xef, 0xbf, 0xbd, ...new TextEncoder().encode('"}}')]);
     const signature = createHmac("sha256", key).update(Buffer.concat([Buffer.from(`msg_1.${seconds}.`), original])).digest("base64");
@@ -210,6 +216,17 @@ describe("Resend", () => {
 });
 
 describe("Postmark", () => {
+  test("keeps Postmark's MessageID out of the RFC messageId", () => {
+    const email = parsePostmarkInbound({ body: JSON.stringify({ MessageID: "883953f4-6105-42a2-a16a-77a8eac79483", Headers: [] }) });
+
+    expect(email.id).toBe("883953f4-6105-42a2-a16a-77a8eac79483");
+    expect(email.messageId).toBeUndefined();
+
+    const withHeader = parsePostmarkInbound({ body: JSON.stringify({ MessageID: "pm-1", Headers: [{ Name: "Message-ID", Value: "<orig@example.com>" }] }) });
+
+    expect(withHeader.messageId).toBe("orig@example.com");
+  });
+
   test("keeps zero-byte attachments", async () => {
     const body = JSON.stringify({ Attachments: [{ Name: "empty.txt", ContentType: "text/plain", Content: "", ContentLength: 0 }] });
     const [attachment] = parsePostmarkInbound({ body }).attachments;
@@ -581,6 +598,13 @@ describe("MailPace", () => {
 
     expect(await verifyMailPaceInbound({ body, headers: { "x-mailpace-signature": signature } }, { publicKey: rawKey })).toEqual({ ok: true });
     expect(await verifyMailPaceInbound({ body: `${body}\n`, headers: { "x-mailpace-signature": signature } }, { publicKey: rawKey })).toEqual({ ok: false, reason: "signature_invalid" });
+  });
+
+  test("skips a malformed key in a rotation list", async () => {
+    const headers = { "x-mailpace-signature": sign(null, Buffer.from(body), privateKey).toString("base64") };
+
+    expect(await verifyMailPaceInbound({ body, headers }, { publicKey: ["malformed!", rawKey] })).toEqual({ ok: true });
+    expect(await verifyMailPaceInbound({ body, headers }, { publicKey: ["malformed!"] })).toEqual({ ok: false, reason: "secret_missing" });
   });
 
   test("parses the included raw message", () => {

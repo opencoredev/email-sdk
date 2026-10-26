@@ -32,6 +32,30 @@ export async function verifyMailerSendInbound(
   return verifyHmac("SHA-256", readHeader(payload.headers, "signature"), "hex", options.secret, toBytes(payload.body));
 }
 
+/** MailerSend signs its route URL test with this published secret, not the route's own. */
+const ROUTE_TEST_SECRET = "test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8G";
+
+/**
+ * True for the `webhook.test` request MailerSend sends when a route is saved, signed with its
+ * public test secret. Anyone can produce that signature, so only a body with no message `data`
+ * qualifies, and it must be answered with a 2xx and never treated as an email.
+ */
+export async function isMailerSendRouteTest(payload: InboundRequestPayload): Promise<boolean> {
+  const check = await verifyMailerSendInbound(payload, { secret: ROUTE_TEST_SECRET });
+
+  if (!check.ok) return false;
+
+  let root: JsonObject;
+
+  try {
+    root = parseJsonObjectBody(provider, payload.body);
+  } catch {
+    return false;
+  }
+
+  return jsonText(root.type) === "webhook.test" && !("data" in root);
+}
+
 /** SPF qualifier characters (RFC 7208) to results. */
 function spfQualifier(code: string | undefined): InboundSecurity["spf"] {
   switch (code) {

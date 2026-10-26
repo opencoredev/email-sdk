@@ -54,6 +54,27 @@ export async function verifyMandrillInbound(
   return verifyHmac("SHA-1", readHeader(payload.headers, "x-mandrill-signature"), "base64", options.secret, utf8Bytes(signed));
 }
 
+/**
+ * True for the POST Mandrill sends when a webhook URL is saved and its HEAD probe fails: an empty
+ * `mandrill_events` array signed with the public key `test-webhook`. Answer it with a 2xx; it
+ * carries no events, and the public key never authenticates a request that does.
+ */
+export async function isMandrillWebhookTest(
+  payload: InboundRequestPayload,
+  options: Pick<MandrillInboundVerificationOptions, "url">,
+): Promise<boolean> {
+  const check = await verifyMandrillInbound(payload, { secret: "test-webhook", url: options.url });
+
+  if (!check.ok) return false;
+
+  const { fields } = await parseFormBody(provider, payload);
+  const events = fields.get("mandrill_events");
+
+  if (fields.size !== 1 || events?.length !== 1) return false;
+
+  return events[0]!.trim() === "[]";
+}
+
 function mandrillSecurity(message: JsonObject): InboundSecurity {
   const dkim = jsonObject(message.dkim);
   const signedDkim = dkim?.signed;

@@ -452,7 +452,7 @@ export async function fetchSesInboundFromS3(location: SesS3Location, options: Se
 
     throw new InboundError(
       "SES encrypted this message with KMS before storing it in S3. Decrypt it with the S3 encryption client and pass the MIME to sesEmailFromNotification.",
-      { reason: "unsupported", provider },
+      { reason: "decryption_required", provider },
     );
   }
 

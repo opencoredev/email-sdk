@@ -41,19 +41,24 @@ export async function verifyMailPaceInbound(
 
   const body = toBytes(payload.body);
 
+  // A malformed key is skipped, so one bad entry in a rotation list cannot block the valid one.
+  let usable = 0;
+
   for (const key of keys) {
     let cryptoKey: CryptoKey;
 
     try {
       cryptoKey = await crypto.subtle.importKey("raw", decodeBase64Strict(key.trim()), { name: "Ed25519" }, false, ["verify"]);
     } catch {
-      return rejected("secret_missing");
+      continue;
     }
+
+    usable += 1;
 
     if (await crypto.subtle.verify({ name: "Ed25519" }, cryptoKey, signature, body)) return verified;
   }
 
-  return rejected("signature_invalid");
+  return rejected(usable ? "signature_invalid" : "secret_missing");
 }
 
 /** Parse a MailPace inbound webhook. The included `raw` message is parsed for full fidelity. */

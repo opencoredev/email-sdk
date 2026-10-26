@@ -63,7 +63,7 @@ function emailFromJson(data: JsonObject): InboundEmail {
   return {
     provider,
     id: jsonText(data.MessageID),
-    messageId: firstMessageId(headers.get("message-id")) ?? jsonText(data.MessageID),
+    messageId: firstMessageId(headers.get("message-id")),
     from,
     to: fullAddresses(data.ToFull, data.To),
     cc: fullAddresses(data.CcFull, data.Cc),

@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         secret_missing: 500,
         payload_invalid: 400,
         unsupported: 200,
+        decryption_required: 500,
         fetch_failed: 502,
       }[error.reason];
 
@@ -121,6 +122,8 @@ await handleInbound(request, {
 });
 ```
 
+`handleInbound` cannot read mail stored with SES receipt-rule message encryption, because only the S3 encryption client can decrypt it. Those requests fail with `decryption_required`. Return a 5xx for it, as in the route above, so SNS retries instead of dropping the message. To keep encryption on, decrypt the object yourself and pass the MIME to `sesEmailFromNotification`.
+
 `topicArn` is required. A valid SNS signature only proves that some AWS account's topic sent the message, so without it anyone could post mail to your endpoint. Pass `allowAnyTopic: true` only if you check the topic yourself. SNS messages older than one hour are rejected; change that with `toleranceSeconds`.
 
 ### Cloudflare Email Workers
@@ -177,10 +180,10 @@ await handleInbound(request, {
 
 | Provider | Config |
 | --- | --- |
-| Mailchimp Transactional | `{ provider: "mailchimp", secret: webhookKey, url: "https://your.app/api/inbound" }`. `url` must match the URL saved in Mandrill exactly. |
+| Mailchimp Transactional | `{ provider: "mailchimp", secret: webhookKey, url: "https://your.app/api/inbound" }`. `url` must match the URL saved in Mandrill exactly. Mandrill checks a new URL with a HEAD request, then an empty test POST; `handleInbound` answers both with a handshake. Export the route for HEAD too (`export { POST as HEAD }` in Next.js) to pass the first check. |
 | SparkPost | `{ provider: "sparkpost", secret: relayAuthToken }` |
 | Lettr | `{ provider: "lettr", secret: forwardingToken }` |
-| MailerSend | `{ provider: "mailersend", secret: routeSigningSecret }` |
+| MailerSend | `{ provider: "mailersend", secret: routeSigningSecret }`. Saving a route sends a `webhook.test` request signed with MailerSend's public test secret; `handleInbound` answers it with a handshake and never returns it as an email. |
 | MailPace | `{ provider: "mailpace", publicKey: domainVerificationKey }` |
 | Lettermint | `{ provider: "lettermint", secret: "whsec_…" }` |
 | Primitive | `{ provider: "primitive", secret: webhookSecret }` |
