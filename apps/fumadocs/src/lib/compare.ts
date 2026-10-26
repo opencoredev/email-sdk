@@ -128,6 +128,14 @@ export const comparePairs: ComparePair[] = [
       "MailerSend is the transactional arm of the MailerLite family, and it inherits that lineage: a generous free tier, a template gallery with a drag-and-drop editor, and team-friendly features like domain-level permissions that appeal to mixed marketing-and-engineering orgs. Its API covers the full common surface — CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — making it structurally one of the closest matches to Resend in the SDK's capability matrix; neither exposes per-message metadata. Resend differentiates on developer experience instead: React Email integration, a minimal API, and fast domain verification. Costs diverge with volume and features, so the practical decision is usually whether you want MailerSend's built-in template tooling or prefer owning templates in code with Resend and React Email.",
   },
   {
+    slug: "resend-vs-mailtrap",
+    a: "resend",
+    b: "mailtrap",
+    lastmod: "2026-10-26",
+    intro:
+      "Mailtrap grew up as an email testing product: its Email Sandbox is a fake SMTP server that captures outgoing mail in dev, staging, and QA so nothing reaches real inboxes, and its Email Sending API handles production delivery from the same account. Resend skips the sandbox story and focuses on a polished transactional API with fast onboarding and React Email templates. In the unified message shape the two trade exactly one field each way: Mailtrap carries per-message metadata (sent as custom_variables) and Resend does not, while Resend supports native scheduled sending and Mailtrap has none. Two Mailtrap edges matter when it sits behind another adapter: a message may carry at most one tag, which Mailtrap stores as its category, and at most one replyTo, and the SDK rejects a second of either before any request. With Email SDK the swap is a one-line adapter change, so testing on Mailtrap's sandbox and sending through either provider can share the same send call.",
+  },
+  {
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
@@ -218,6 +226,7 @@ export const adapterConfigSnippets: Partial<Record<ProviderKey, string>> = {
   mailgun: `mailgun({ apiKey: process.env.MAILGUN_API_KEY!, domain: "mg.yourdomain.com" })`,
   brevo: `brevo({ apiKey: process.env.BREVO_API_KEY! })`,
   mailersend: `mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })`,
+  mailtrap: `mailtrap({ apiKey: process.env.MAILTRAP_API_KEY! })`,
   loops: `loops({
     apiKey: process.env.LOOPS_API_KEY!,
     transactionalId: "your-template-id",
