@@ -13,6 +13,8 @@ import {
   payloadError,
   providerFetch,
   rejected,
+  responseBytes,
+  responseText,
   utf8Bytes,
   verdict,
   verified,
@@ -231,7 +233,7 @@ async function fetchSigningKey(url: URL, hash: string, options: SnsVerificationO
 
   return crypto.subtle.importKey(
     "spki",
-    certificatePublicKey(await response.text()),
+    certificatePublicKey(await responseText(provider, response)),
     { name: "RSASSA-PKCS1-v1_5", hash },
     false,
     ["verify"],
@@ -456,7 +458,7 @@ export async function fetchSesInboundFromS3(location: SesS3Location, options: Se
     );
   }
 
-  return new Uint8Array(await response.arrayBuffer());
+  return responseBytes(provider, response);
 }
 
 export interface SesInboundOptions extends SnsVerificationOptions {

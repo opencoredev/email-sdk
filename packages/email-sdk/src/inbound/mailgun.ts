@@ -19,6 +19,8 @@ import {
   providerFetch,
   readHeader,
   rejected,
+  responseBytes,
+  responseText,
   signingSecrets,
   timestampFresh,
   timingSafeEqual,
@@ -280,10 +282,10 @@ export async function fetchMailgunStoredEmail(
   // Mailgun documents a JSON object with `body-mime` for this Accept header; a raw RFC 2822
   // response is read as the message itself.
   if (!/\bjson\b/i.test(response.headers.get("content-type") ?? "")) {
-    return emailFromMime({ provider, raw: new Uint8Array(await response.arrayBuffer()) });
+    return emailFromMime({ provider, raw: await responseBytes(provider, response) });
   }
 
-  const data = parseJsonBody(provider, await response.text());
+  const data = parseJsonBody(provider, await responseText(provider, response));
 
   if (!isJsonObject(data)) throw payloadError(provider, "Mailgun API returned a non-object JSON body.");
 

@@ -458,13 +458,37 @@ export async function providerFetch(
   return response;
 }
 
+/**
+ * Read a provider response body. The connection can drop, or `signal` abort, after the headers
+ * arrived, so a failed read is a `fetch_failed` error like a failed request.
+ */
+async function readBody<T>(provider: InboundProvider, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    throw new InboundError(`${provider} inbound fetch failed while reading the response body.`, {
+      reason: "fetch_failed",
+      provider,
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
+}
+
+export function responseText(provider: InboundProvider, response: Response): Promise<string> {
+  return readBody(provider, () => response.text());
+}
+
+export async function responseBytes(provider: InboundProvider, response: Response): Promise<Uint8Array> {
+  return new Uint8Array(await readBody(provider, () => response.arrayBuffer()));
+}
+
 export async function fetchJson(
   provider: InboundProvider,
   url: string | URL,
   init: RequestInit & { fetch?: typeof fetch },
 ): Promise<JsonObject> {
   const response = await providerFetch(provider, url, init);
-  const value = parseJsonBody(provider, await response.text());
+  const value = parseJsonBody(provider, await responseText(provider, response));
 
   if (!isJsonObject(value)) throw payloadError(provider, `${provider} API returned a non-object JSON body.`);
 
@@ -476,9 +500,7 @@ export async function fetchBytes(
   url: string | URL,
   init: RequestInit & { fetch?: typeof fetch },
 ): Promise<Uint8Array> {
-  const response = await providerFetch(provider, url, init);
-
-  return new Uint8Array(await response.arrayBuffer());
+  return responseBytes(provider, await providerFetch(provider, url, init));
 }
 
 export interface InboundBasicAuthOptions {
