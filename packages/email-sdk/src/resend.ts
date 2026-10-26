@@ -19,6 +19,7 @@ import {
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
   mapAttachments,
+  IDEMPOTENCY_HEADERS,
   withNativeRequestHeaders,
 } from "./utils.js";
 
@@ -78,7 +79,7 @@ export function resend(
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",
         signal: context.signal,
-        headers: native?.headers ? withNativeRequestHeaders("resend", headers, native.headers) : headers,
+        headers: native?.headers ? withNativeRequestHeaders("resend", headers, native.headers, IDEMPOTENCY_HEADERS) : headers,
         body: JSON.stringify(native ? withResendNative(payload, native) : payload),
       });
 

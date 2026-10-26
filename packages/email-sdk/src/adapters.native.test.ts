@@ -575,7 +575,7 @@ describe("native request headers", () => {
   const cases: Array<{ adapter: (fetch: typeof globalThis.fetch) => EmailAdapter; owned: string[] }> = [
     {
       adapter: (fetch) => resend({ apiKey: "re", fetch }),
-      owned: ["authorization", "Content-Type", "IDEMPOTENCY-KEY", ...transport],
+      owned: ["authorization", "Content-Type", ...transport],
     },
     {
       adapter: (fetch) => postmark({ serverToken: "pm", fetch }),
@@ -630,6 +630,50 @@ describe("native request headers", () => {
       expect(calls()).toBe(0);
     });
   }
+
+  // The idempotencyKey send option owns this header, set or not, so a native copy can't pin
+  // one key across sends, retries, or the recipients of a personalized send.
+  for (const [header, idempotencyKey] of [
+    ["Idempotency-Key", undefined],
+    ["idempotency-key", undefined],
+    ["IDEMPOTENCY-KEY", "idem_123"],
+  ] as const) {
+    test(`resend always reserves ${header} (idempotencyKey ${idempotencyKey ?? "unset"})`, async () => {
+      const { fetch, calls } = countingFetch();
+
+      await expect(
+        resend({ apiKey: "re", fetch }).send(simple, {
+          ...context,
+          idempotencyKey,
+          native: { headers: { [header]: "native" } },
+        }),
+      ).rejects.toThrow(
+        new EmailValidationError(
+          `resend sets "${header}" itself, so native.headers can't set it. Use the idempotencyKey send option instead.`,
+        ),
+      );
+      expect(calls()).toBe(0);
+    });
+  }
+
+  test("a personalized Resend send can't reuse one native idempotency key per recipient", async () => {
+    const { fetch, calls } = countingFetch();
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch })], telemetry: false });
+
+    await expect(
+      client.sendPersonalized(
+        {
+          message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+          recipients: [
+            { to: "ada@example.com", variables: {} },
+            { to: "bob@example.com", variables: {} },
+          ],
+        },
+        { native: { resend: { headers: { "Idempotency-Key": "campaign" } } } },
+      ),
+    ).rejects.toThrow(EmailValidationError);
+    expect(calls()).toBe(0);
+  });
 
   test("a header the adapter doesn't set reaches the request", async () => {
     const json = jsonCapture({ id: "1", MessageID: "1" });
