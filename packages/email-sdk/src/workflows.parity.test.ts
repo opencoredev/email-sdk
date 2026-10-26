@@ -40,10 +40,16 @@ type ParityCase = {
    * What both must report, checked on top of agreeing with each other. With `steps`, both must also
    * record exactly these steps: the engine's journal and current wait, and the inspector's nodes.
    */
-  expected: { status: WorkflowRunStatus; error?: string; sends: string[]; steps?: string[] };
+  expected: { status: WorkflowRunStatus; error?: string; sends: string[]; steps?: string[]; output?: WorkflowJsonValue };
 };
 
-type Observed = { status: WorkflowRunStatus | "truncated" | "rejected"; error?: string; sends: string[]; steps?: string[] };
+type Observed = {
+  status: WorkflowRunStatus | "truncated" | "rejected";
+  error?: string;
+  sends: string[];
+  steps?: string[];
+  output?: WorkflowJsonValue;
+};
 
 type Cyclic = { self?: WorkflowJsonValue };
 
@@ -319,6 +325,18 @@ const cases = {
     },
     expected: { status: "completed", sends: ["first", "second"] },
   },
+  "an output a pending send edits after run returns": {
+    run: (ctx) => {
+      const output = { done: false };
+
+      void ctx.send("late", mail("Late")).then(() => {
+        output.done = true;
+      });
+
+      return output;
+    },
+    expected: { status: "completed", sends: ["late"], output: { done: true } },
+  },
 } satisfies Record<string, ParityCase>;
 
 function definitionFor(entry: ParityCase): AnyWorkflowDefinition {
@@ -401,6 +419,8 @@ async function throughEngine(definition: AnyWorkflowDefinition, entry: ParityCas
     observed.steps = [...journaled, ...waiting];
   }
 
+  if (entry.expected.output !== undefined && run?.output !== undefined) observed.output = run.output;
+
   return observed;
 }
 
@@ -435,6 +455,10 @@ async function throughInspector(definition: AnyWorkflowDefinition, entry: Parity
 
   if (entry.expected.steps !== undefined) observed.steps = recorded.map((node) => node.step);
 
+  if (entry.expected.output !== undefined && outcome?.status === "completed" && outcome.output !== undefined) {
+    observed.output = outcome.output;
+  }
+
   return observed;
 }
 
@@ -447,6 +471,7 @@ describe("workflows: engine and inspector agree", () => {
     expect(inspected).toEqual(engine);
     expect(engine.status).toBe(entry.expected.status);
     expect(engine.sends).toEqual(entry.expected.sends);
+    expect(engine.output).toEqual(entry.expected.output);
 
     if (entry.expected.error === undefined) expect(engine.error).toBeUndefined();
     else expect(engine.error).toContain(entry.expected.error);

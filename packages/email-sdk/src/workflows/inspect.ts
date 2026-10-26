@@ -255,6 +255,9 @@ function errorMessage(cause: unknown) {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/** `run` returned this output; the path completes once its pending calls settle. */
+type Returned = { status: "returned"; output: WorkflowJsonValue | void };
+
 /**
  * Runs the definition once, taking `choices` at the first timed waits and `received` after them.
  * The `ctx` rules, value checks, and duration parsing come from the engine's own rules module, and
@@ -291,6 +294,17 @@ async function tracePath(
 
   function failed(cause: unknown): WorkflowInspectOutcome {
     return { status: "failed", error: `${errorMessage(cause)}${unsampledHint(unsampled)}` };
+  }
+
+  /** The path's end once `run` returned and its calls settled, or `invalid_value` for a non-JSON output. */
+  function completedOutcome(output: WorkflowJsonValue | void): WorkflowInspectOutcome {
+    try {
+      const saved = workflowOutput(output);
+
+      return saved === undefined ? { status: "completed" } : { status: "completed", output: saved };
+    } catch (cause) {
+      return failed(cause);
+    }
   }
 
   function end(outcome: WorkflowInspectOutcome) {
@@ -437,24 +451,19 @@ async function tracePath(
   };
 
   // Starting inside `then` turns a synchronous throw from `run` into a failed path.
-  const finished = Promise.resolve()
+  const finished: Promise<Returned | WorkflowInspectOutcome> = Promise.resolve()
     .then(async () => await definition.run(ctx, input))
-    .then(
-      (output): WorkflowInspectOutcome => {
-        const saved = workflowOutput(output);
-
-        return saved === undefined ? { status: "completed" } : { status: "completed", output: saved };
-      },
-    )
-    .catch(failed);
+    .then((output): Returned => ({ status: "returned", output }), failed);
 
   const raced = await Promise.race([finished, endedEarly]);
 
   // As in the engine, a call the definition forgot to await still runs before the path completes.
-  if (raced.status === "completed") await Promise.race([queue.idle, endedEarly]);
+  if (raced.status === "returned") await Promise.race([queue.idle, endedEarly]);
 
-  // The first definition error fails the path even when `run` caught it and went on to finish.
-  const outcome = ended ?? raced;
+  // The first definition error fails the path even when `run` caught it and went on to finish. The
+  // output is saved only now, as the engine saves it, so a call that settled meanwhile and edited
+  // the returned object shows in it.
+  const outcome = ended ?? (raced.status === "returned" ? completedOutcome(raced.output) : raced);
 
   return { entries, choices, forks, outcome, durationMs: elapsed };
 }
