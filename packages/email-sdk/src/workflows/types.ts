@@ -41,7 +41,9 @@ export type WorkflowStepKind = "send" | "step" | "sleep" | "event";
 
 /**
  * One journal entry, keyed by step name. A completed entry replays its `result`; a retrying entry
- * counts failed attempts of a send or step that will run again.
+ * counts failed attempts of a send or step that will run again. `sequence` numbers entries from 1
+ * in the order the run first journaled them, since an object's key order puts number-like step
+ * names first. Runs saved before it existed have none.
  */
 export type WorkflowStepRecord =
   | {
@@ -49,12 +51,14 @@ export type WorkflowStepRecord =
       kind: WorkflowStepKind;
       result?: WorkflowJsonValue;
       completedAt: number;
+      sequence?: number;
     }
   | {
       status: "retrying";
       kind: "send" | "step";
       attempts: number;
       lastError: string;
+      sequence?: number;
     };
 
 /**

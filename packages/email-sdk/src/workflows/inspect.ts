@@ -2,6 +2,7 @@ import { isObjectLike, isString, isStringMember } from "../internal/decode.js";
 import type { EmailAddress, EmailMessage, OneOrMany } from "../types.js";
 import { durationToMs } from "./duration.js";
 import { WorkflowError } from "./errors.js";
+import { stepNameError } from "./step-name.js";
 import type {
   AnyWorkflowDefinition,
   WorkflowContext,
@@ -62,7 +63,12 @@ export type WorkflowInspectOutcome =
   | { status: "truncated"; reason: string };
 
 type NodeBase = {
-  /** Stable id: the step name, prefixed with the branch choices that lead to it. */
+  /**
+   * Stable id: the step name, prefixed with the branch choices that lead to it, as in
+   * `activated:timeout/nudge`. Step names and the steps in the prefix are URI-encoded, so `:` and
+   * `/` only ever separate. The trigger is `$trigger` and each end node is its prefix plus `$end`;
+   * an encoded step name never contains `$`, so no step can take either id.
+   */
   id: string;
   /** A one-line, human-readable description of the node. */
   label: string;
@@ -126,6 +132,15 @@ type Trace = {
 const defaultMaxPaths = 32;
 
 const defaultMaxDepth = 100;
+
+const triggerId = "$trigger";
+
+const endId = "$end";
+
+/** The id prefix for one branch choice. Encoding keeps `:` and `/` out of the step name. */
+function choicePrefix(choice: Choice) {
+  return `${encodeURIComponent(choice.step)}:${choice.branch}/`;
+}
 
 class DepthLimit extends Error {}
 
@@ -276,13 +291,17 @@ async function tracePath(
       throw new DepthLimit(`More than ${maxDepth} ctx calls in one path.`);
     }
 
+    const invalidName = stepNameError(name);
+
+    if (invalidName) throw invalidName;
+
     if (seen.has(name)) {
       throw new WorkflowError("duplicate_step", `Step name "${name}" is used more than once in this run.`);
     }
 
     seen.add(name);
 
-    return { id: `${prefix}${name}`, offsetMs: elapsed };
+    return { id: `${prefix}${encodeURIComponent(name)}`, offsetMs: elapsed };
   }
 
   function received(event: string) {
@@ -365,7 +384,7 @@ async function tracePath(
       if (planned[index] === undefined) forks.push(index);
 
       choices.push({ step: name, branch });
-      prefix = `${prefix}${name}:${branch}/`;
+      prefix = `${prefix}${choicePrefix({ step: name, branch })}`;
 
       if (branch === "timeout") {
         elapsed += timeoutMs;
@@ -416,7 +435,7 @@ export async function inspectWorkflow(
   const input = await parseInput(definition, options.input);
 
   const trigger: WorkflowInspectNode = {
-    id: "trigger",
+    id: triggerId,
     kind: "trigger",
     workflow: definition.name,
     version: definition.version,
@@ -438,10 +457,9 @@ export async function inspectWorkflow(
     }
 
     const trace = await tracePath(definition, input, options, planned, maxDepth);
-    const endPrefix = trace.choices.map((choice) => `${choice.step}:${choice.branch}/`).join("");
 
     const end: WorkflowInspectNode = {
-      id: `${endPrefix}end`,
+      id: `${trace.choices.map(choicePrefix).join("")}${endId}`,
       kind: "end",
       outcome: trace.outcome,
       label: outcomeLabel(trace.outcome),
@@ -493,13 +511,41 @@ export async function inspectWorkflow(
   };
 }
 
+/** The visible escape for one character of user text, or the character itself when it is printable. */
+function escapeChar(char: string) {
+  switch (char) {
+    case "\\":
+      return "\\\\";
+    case "\n":
+      return "\\n";
+    case "\r":
+      return "\\r";
+    case "\t":
+      return "\\t";
+    default: {
+      const code = char.codePointAt(0) ?? 0;
+      const control = code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+
+      return control ? `\\u${code.toString(16).padStart(4, "0")}` : char;
+    }
+  }
+}
+
+/**
+ * Keeps user text on one line: line breaks, tabs, and other control characters become visible
+ * escapes such as `\n` and `\u001b`, and backslashes double so an escape can't be faked. Nothing
+ * else changes, so the separators the formatters add stay unambiguous.
+ */
+function oneLine(text: string) {
+  return Array.from(text, escapeChar).join("");
+}
+
 function mermaidText(text: string) {
-  return text
+  return oneLine(text)
     .replaceAll("&", "#amp;")
     .replaceAll('"', "#quot;")
     .replaceAll("<", "#lt;")
-    .replaceAll(">", "#gt;")
-    .replaceAll("\n", " ");
+    .replaceAll(">", "#gt;");
 }
 
 function mermaidNode(id: string, node: WorkflowInspectNode) {
@@ -557,11 +603,11 @@ export function toMermaid(graph: WorkflowInspectGraph): string {
 /** Renders an inspected graph as plain text: one block per path, one line per node. */
 export function formatWorkflowGraph(graph: WorkflowInspectGraph): string {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-  const cancel = graph.cancelOn.length > 0 ? ` (cancels on: ${graph.cancelOn.join(", ")})` : "";
-  const lines = [`${graph.workflow} v${graph.version}${cancel}`];
+  const cancel = graph.cancelOn.length > 0 ? ` (cancels on: ${graph.cancelOn.map(oneLine).join(", ")})` : "";
+  const lines = [`${oneLine(graph.workflow)} v${graph.version}${cancel}`];
 
   for (const path of graph.paths) {
-    const choices = path.choices.map((choice) => `${choice.step} ${choice.branch}`).join(", ");
+    const choices = path.choices.map((choice) => `${oneLine(choice.step)} ${choice.branch}`).join(", ");
 
     lines.push("", `${path.id}${choices ? ` [${choices}]` : ""}: ${path.outcome.status} after ${formatWorkflowDuration(path.durationMs)}`);
 
@@ -570,9 +616,9 @@ export function formatWorkflowGraph(graph: WorkflowInspectGraph): string {
 
       if (!node) continue;
 
-      const name = node.kind === "trigger" || node.kind === "end" ? node.kind : `${node.kind} ${node.step}`;
+      const name = node.kind === "trigger" || node.kind === "end" ? node.kind : `${node.kind} ${oneLine(node.step)}`;
 
-      lines.push(`  +${formatWorkflowDuration(node.offsetMs).padEnd(7)} ${name.padEnd(28)} ${node.label}`);
+      lines.push(`  +${formatWorkflowDuration(node.offsetMs).padEnd(7)} ${name.padEnd(28)} ${oneLine(node.label)}`);
     }
   }
 
@@ -684,12 +730,35 @@ function describeWait(wait: NonNullable<WorkflowRun["wait"]>): WorkflowRunTimeli
 }
 
 /**
+ * The journal's entries in the order the run reached them. Object key order can't say: number-like
+ * step names always enumerate first. With every entry numbered, the engine's `sequence` decides.
+ * A journal saved before `sequence` existed falls back to completion time, with a retrying entry
+ * last, since steps run one at a time and a retrying step is the one the run is on. Ties keep
+ * key order.
+ */
+function journalInRunOrder(journal: WorkflowRun["journal"]): [string, WorkflowStepRecord][] {
+  const entries = Object.entries(journal);
+
+  if (entries.every(([, record]) => record.sequence !== undefined)) {
+    return entries.toSorted(([, a], [, b]) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  }
+
+  const position = (record: WorkflowStepRecord) => (record.status === "completed" ? record.completedAt : Number.POSITIVE_INFINITY);
+
+  return entries.toSorted(([, a], [, b]) => {
+    const difference = position(a) - position(b);
+
+    return Number.isNaN(difference) ? 0 : difference;
+  });
+}
+
+/**
  * Turns a stored `WorkflowRun` into a timeline: every journaled step in the order it ran, with its
  * kind, status, completion time, and a short result summary, followed by the step the run is
  * blocked on. Also reports the current wait and its deadline, the output, error, and cancel reason.
  */
 export function describeRun(run: WorkflowRun): WorkflowRunTimeline {
-  const entries = Object.entries(run.journal).map(([step, record]) => timelineEntry(step, record, run));
+  const entries = journalInRunOrder(run.journal).map(([step, record]) => timelineEntry(step, record, run));
   const wait = run.wait;
 
   if ((wait?.kind === "sleep" || wait?.kind === "event") && !Object.hasOwn(run.journal, wait.step)) {

@@ -50,7 +50,7 @@ export function layoutGraph(graph: WorkflowInspectGraph): GraphLayout {
     return count;
   }
 
-  const rootId = graph.nodes[0]?.id ?? "trigger";
+  const rootId = graph.nodes[0]?.id ?? "";
   const columns = countLeaves(rootId);
   const byId = new Map<string, PlacedNode>();
   let maxDepth = 0;

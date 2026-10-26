@@ -223,6 +223,13 @@ function withoutIndex(inbox: readonly WorkflowInboxEvent[], index: number): Work
   return [...inbox.slice(0, index), ...inbox.slice(index + 1)];
 }
 
+/** The journal with `record` saved as step `name`, numbered in the order steps first appeared. */
+function journalWith(journal: WorkflowRun["journal"], name: string, record: WorkflowStepRecord): WorkflowRun["journal"] {
+  const sequence = journal[name]?.sequence ?? Object.keys(journal).length + 1;
+
+  return { ...journal, [name]: { ...record, sequence } };
+}
+
 function definitionKey(name: string, version: number) {
   return `${name}@${version}`;
 }
@@ -471,6 +478,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     let lost = false;
     let infrastructureError: Error | undefined;
     let signalSuspended: () => void = () => {};
+
     let signalViolation: (error: WorkflowError) => void = () => {};
 
     const suspended = new Promise<ExecutionOutcome>((resolve) => {
@@ -639,7 +647,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         ...run,
         status: "running",
         wait: undefined,
-        journal: { ...run.journal, [name]: record },
+        journal: journalWith(run.journal, name, record),
       });
     }
 
@@ -706,7 +714,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           ...run,
           status: "waiting",
           wait: { kind: "retry", step: name, until },
-          journal: { ...run.journal, [name]: { status: "retrying", kind, attempts: attempt, lastError: error.message } },
+          journal: journalWith(run.journal, name, { status: "retrying", kind, attempts: attempt, lastError: error.message }),
         }));
 
         if (saved) await scheduleWake(current);

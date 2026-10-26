@@ -207,7 +207,7 @@ function layerGroups(layout: GraphLayout, mode: Mode, frame: WorkflowViewerFrame
   const root: LayerGroup = { id: "root", label: "", depth: 0, items: [] };
 
   groups.push(root);
-  walk(layout.nodes[0]?.node.id ?? "trigger", root);
+  walk(layout.nodes[0]?.node.id ?? "", root);
 
   return groups;
 }
@@ -638,7 +638,7 @@ export function WorkflowViewer({ data = onboardingViewerData }: { data?: Workflo
   const samplePath = data.graph.paths.find((path) => path.id === data.samplePathId);
   const pathNodes = useMemo(() => new Set(samplePath?.nodes ?? []), [samplePath]);
   const [mode, setMode] = useState<Mode>("definition");
-  const [selectedId, setSelectedId] = useState(() => data.graph.nodes.find((node) => node.kind === "send")?.id ?? "trigger");
+  const [selectedId, setSelectedId] = useState(() => data.graph.nodes.find((node) => node.kind === "send")?.id ?? data.graph.nodes[0]?.id ?? "");
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const frame = data.frames[frameIndex] ?? data.frames[0];

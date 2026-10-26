@@ -42,7 +42,7 @@ The callback of `ctx.step` never runs, so a step can't send, wait, or touch your
 
 Exploration is deterministic and capped. `maxPaths` (default 32) limits how many paths are explored, and each timed wait can double the count. `maxDepth` (default 100) cuts a path off after that many `ctx` calls, which stops an unbounded loop. When a cap is hit, `truncated` is `true` and a cut-off path ends in a `truncated` node. A path whose code throws ends in a `failed` node with the error. A failure on a `received` branch notes any event that had no sample payload, the usual cause.
 
-The graph is plain JSON: `{ workflow, version, cancelOn, nodes, edges, paths, truncated, limits }`. Node ids are step names, prefixed with the branch choices that lead to them, so `activated:timeout/nudge` is the nudge on the timeout branch. `toMermaid(graph)` renders a flowchart and `formatWorkflowGraph(graph)` a plain-text outline.
+The graph is plain JSON: `{ workflow, version, cancelOn, nodes, edges, paths, truncated, limits }`. Node ids are step names, prefixed with the branch choices that lead to them, so `activated:timeout/nudge` is the nudge on the timeout branch. Step names in ids are URI-encoded, and the trigger and end nodes use `$trigger` and `$end`, which no encoded step name can match. `toMermaid(graph)` renders a flowchart and `formatWorkflowGraph(graph)` a plain-text outline.
 
 ## Inspect from the terminal
 
@@ -175,7 +175,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
   ],
   "nodes": [
     {
-      "id": "trigger",
+      "id": "$trigger",
       "kind": "trigger",
       "workflow": "onboarding",
       "version": 1,
@@ -279,7 +279,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
       "label": "You're all set → ada@example.com"
     },
     {
-      "id": "activated:received/end",
+      "id": "activated:received/$end",
       "kind": "end",
       "outcome": {
         "status": "completed",
@@ -310,7 +310,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
       "label": "Need a hand? → ada@example.com"
     },
     {
-      "id": "activated:timeout/end",
+      "id": "activated:timeout/$end",
       "kind": "end",
       "outcome": {
         "status": "completed",
@@ -324,7 +324,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
   ],
   "edges": [
     {
-      "from": "trigger",
+      "from": "$trigger",
       "to": "welcome"
     },
     {
@@ -350,7 +350,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
     },
     {
       "from": "activated:received/activated-mail",
-      "to": "activated:received/end"
+      "to": "activated:received/$end"
     },
     {
       "from": "activated",
@@ -359,7 +359,7 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
     },
     {
       "from": "activated:timeout/nudge",
-      "to": "activated:timeout/end"
+      "to": "activated:timeout/$end"
     }
   ],
   "paths": [
@@ -372,14 +372,14 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
         }
       ],
       "nodes": [
-        "trigger",
+        "$trigger",
         "welcome",
         "before-tip",
         "pick-tip",
         "tip",
         "activated",
         "activated:received/activated-mail",
-        "activated:received/end"
+        "activated:received/$end"
       ],
       "outcome": {
         "status": "completed",
@@ -398,14 +398,14 @@ Every docs page has a markdown twin. [`/docs/guides/view-email-workflows.md`](/d
         }
       ],
       "nodes": [
-        "trigger",
+        "$trigger",
         "welcome",
         "before-tip",
         "pick-tip",
         "tip",
         "activated",
         "activated:timeout/nudge",
-        "activated:timeout/end"
+        "activated:timeout/$end"
       ],
       "outcome": {
         "status": "completed",

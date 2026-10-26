@@ -25,10 +25,11 @@ function nodeIdForStep(graph: WorkflowInspectGraph, path: WorkflowInspectPath, s
 
 function frameFor(graph: WorkflowInspectGraph, path: WorkflowInspectPath, run: WorkflowRun, label: string): WorkflowViewerFrame {
   const timeline = describeRun(run);
-  const endId = path.nodes.at(-1) ?? "trigger";
+  const triggerId = path.nodes[0] ?? "";
+  const endId = path.nodes.at(-1) ?? triggerId;
 
   const completedNodeIds = [
-    "trigger",
+    triggerId,
     ...timeline.entries.flatMap((entry) => {
       const id = entry.status === "completed" ? nodeIdForStep(graph, path, entry.step) : undefined;
 

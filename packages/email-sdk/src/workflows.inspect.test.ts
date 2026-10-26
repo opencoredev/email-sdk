@@ -65,26 +65,26 @@ describe("inspectWorkflow", () => {
     expect(graph.truncated).toBe(false);
 
     expect(graph.nodes.map((node) => [node.id, node.kind, node.offsetMs])).toEqual([
-      ["trigger", "trigger", 0],
+      ["$trigger", "trigger", 0],
       ["welcome", "send", 0],
       ["before-tip", "sleep", 0],
       ["tip", "send", 172_800_000],
       ["activated", "waitForEvent", 172_800_000],
       ["activated:received/activated-mail", "send", 172_800_000],
-      ["activated:received/end", "end", 172_800_000],
+      ["activated:received/$end", "end", 172_800_000],
       ["activated:timeout/nudge", "send", 432_000_000],
-      ["activated:timeout/end", "end", 432_000_000],
+      ["activated:timeout/$end", "end", 432_000_000],
     ]);
 
     expect(graph.edges).toEqual([
-      { from: "trigger", to: "welcome" },
+      { from: "$trigger", to: "welcome" },
       { from: "welcome", to: "before-tip" },
       { from: "before-tip", to: "tip" },
       { from: "tip", to: "activated" },
       { from: "activated", to: "activated:received/activated-mail", branch: "received" },
-      { from: "activated:received/activated-mail", to: "activated:received/end" },
+      { from: "activated:received/activated-mail", to: "activated:received/$end" },
       { from: "activated", to: "activated:timeout/nudge", branch: "timeout" },
-      { from: "activated:timeout/nudge", to: "activated:timeout/end" },
+      { from: "activated:timeout/nudge", to: "activated:timeout/$end" },
     ]);
 
     expect(graph.paths.map((path) => [path.choices, path.outcome, path.durationMs])).toEqual([
@@ -255,6 +255,92 @@ describe("inspectWorkflow", () => {
     expect(graph.paths[0]?.outcome).toMatchObject({ status: "failed" });
   });
 
+  test.each(["trigger", "end", "$trigger", "$end", "a:received/b"])(
+    "a step named %p gets its own node, apart from the trigger and end nodes",
+    async (name) => {
+      const workflow = defineWorkflow({
+        name: "collision",
+        run: async (ctx) => {
+          await ctx.send(name, message("c@d.test", "Hello", "Hi"));
+        },
+      });
+
+      const graph = await inspectWorkflow(workflow, { input: null });
+      const ids = graph.nodes.map((node) => node.id);
+
+      expect(graph.nodes.map((node) => node.kind)).toEqual(["trigger", "send", "end"]);
+      expect(new Set(ids).size).toBe(3);
+      expect(graph.nodes[1]).toMatchObject({ kind: "send", step: name });
+      expect(graph.edges.every((edge) => edge.from !== edge.to)).toBe(true);
+      expect(graph.paths[0]?.nodes).toEqual(ids);
+    },
+  );
+
+  test("branch prefixes can't make two different nodes share an id", async () => {
+    const workflow = defineWorkflow({
+      name: "prefixes",
+      run: async (ctx) => {
+        await ctx.sleep("a:received/end", "1m");
+
+        const first = await ctx.waitForEvent("a", { timeout: "1d" });
+
+        if (first.status === "received") return;
+
+        await ctx.sleep("received/end", "1m");
+      },
+    });
+
+    const graph = await inspectWorkflow(workflow, { input: null });
+    const ids = graph.nodes.map((node) => node.id);
+
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(graph.nodes.map((node) => node.kind)).toEqual(["trigger", "sleep", "waitForEvent", "end", "sleep", "end"]);
+    expect(graph.edges.every((edge) => edge.from !== edge.to)).toBe(true);
+  });
+
+  test("rejects the step name the engine reserves, as the engine does", async () => {
+    const workflow = defineWorkflow({
+      name: "reserved",
+      run: async (ctx) => {
+        await ctx.send("__proto__", message("c@d.test", "Hello", "Hi"));
+      },
+    });
+
+    const graph = await inspectWorkflow(workflow, { input: null });
+
+    expect(graph.paths[0]?.outcome).toMatchObject({ status: "failed", error: expect.stringContaining('"__proto__" can\'t name a step') });
+    expect(graph.nodes.map((node) => node.kind)).toEqual(["trigger", "end"]);
+  });
+
+  test("keeps every node on one line in the text outline", async () => {
+    const workflow = defineWorkflow({
+      name: "lines",
+      cancelOn: ["a|b\n\"<x>"],
+      run: async (ctx) => {
+        await ctx.send("quotes\nnext|<x>", message("c@d.test", "Hi\r\nspoof|\"<tag>\u001b[31m", "Hi"));
+        await ctx.waitForEvent("wait\nhere", { timeout: "1d" });
+        throw new Error("bad\nthing");
+      },
+    });
+
+    const graph = await inspectWorkflow(workflow, { input: null });
+    const text = formatWorkflowGraph(graph);
+
+    expect(text).not.toContain("\r");
+    expect(text).not.toContain("\u001b");
+
+    for (const line of text.split("\n")) {
+      expect(line === "" || /^(lines|path-|  \+|Truncated)/.test(line)).toBe(true);
+    }
+
+    expect(text).toContain('lines v1 (cancels on: a|b\\n"<x>)');
+    expect(text).toContain('send quotes\\nnext|<x>');
+    expect(text).toContain('Hi\\r\\nspoof|"<tag>\\u001b[31m → c@d.test');
+    expect(text).toContain("[wait\\nhere received]");
+    expect(text).toContain("Failed: bad\\nthing");
+    expect(toMermaid(graph).split("\n").every((line) => line.startsWith("  ") || line === "flowchart TD")).toBe(true);
+  });
+
   test("validates input with the definition's schema", async () => {
     const workflow = defineWorkflow({
       name: "schema",
@@ -324,6 +410,53 @@ describe("describeRun", () => {
       ["activated", "completed", 'Received {"plan":"pro"}'],
       ["activated-mail", "completed", "Sent via memory (msg_3)"],
     ]);
+  });
+
+  test("lists steps in the order they ran, even when their names look like numbers", async () => {
+    const clock = createManualClock(0);
+
+    const numbers = defineWorkflow({
+      name: "numbers",
+      run: async (ctx) => {
+        await ctx.step("10", () => 10);
+        clock.advance("1s");
+        await ctx.step("2", () => 2);
+        await ctx.step("b", () => 3);
+        await ctx.step("1", () => 1);
+      },
+    });
+
+    const engine = createWorkflowEngine({
+      clock,
+      store: createMemoryWorkflowStore(),
+      email: { send: async () => ({ adapter: "test" }) },
+      workflows: [numbers],
+    });
+
+    const timeline = describeRun(await engine.start(numbers, null));
+
+    expect(timeline.entries.map((entry) => entry.step)).toEqual(["10", "2", "b", "1"]);
+  });
+
+  test("orders a journal without sequence numbers by completion time, retrying steps last", () => {
+    const timeline = describeRun({
+      id: "r1",
+      workflow: "w",
+      version: 1,
+      status: "waiting",
+      input: null,
+      journal: {
+        "2": { status: "completed", kind: "step", result: 2, completedAt: 2_000 },
+        "3": { status: "retrying", kind: "step", attempts: 1, lastError: "503" },
+        "10": { status: "completed", kind: "step", result: 10, completedAt: 1_000 },
+      },
+      inbox: [],
+      revision: 4,
+      createdAt: 0,
+      updatedAt: 3_000,
+    });
+
+    expect(timeline.entries.map((entry) => entry.step)).toEqual(["10", "2", "3"]);
   });
 
   test("reports cancellation and a retrying step", () => {

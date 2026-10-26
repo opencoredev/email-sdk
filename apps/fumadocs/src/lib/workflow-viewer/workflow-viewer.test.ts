@@ -22,7 +22,7 @@ test("the sample run follows the received branch and ends completed", () => {
 
   expect(onboardingViewerData.frames.map((frame) => frame.atMs)).toEqual([0, 2 * 86_400_000, 3 * 86_400_000]);
   expect(last?.timeline.status).toBe("completed");
-  expect(last?.activeNodeId).toBe("activated:received/end");
+  expect(last?.activeNodeId).toBe("activated:received/$end");
   expect(onboardingViewerData.frames[1]?.activeNodeId).toBe("activated");
 });
 

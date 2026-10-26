@@ -10,7 +10,7 @@ export const onboardingViewerData: WorkflowViewerData = {
     ],
     "nodes": [
       {
-        "id": "trigger",
+        "id": "$trigger",
         "kind": "trigger",
         "workflow": "onboarding",
         "version": 1,
@@ -114,7 +114,7 @@ export const onboardingViewerData: WorkflowViewerData = {
         "label": "You're all set → ada@example.com"
       },
       {
-        "id": "activated:received/end",
+        "id": "activated:received/$end",
         "kind": "end",
         "outcome": {
           "status": "completed",
@@ -145,7 +145,7 @@ export const onboardingViewerData: WorkflowViewerData = {
         "label": "Need a hand? → ada@example.com"
       },
       {
-        "id": "activated:timeout/end",
+        "id": "activated:timeout/$end",
         "kind": "end",
         "outcome": {
           "status": "completed",
@@ -159,7 +159,7 @@ export const onboardingViewerData: WorkflowViewerData = {
     ],
     "edges": [
       {
-        "from": "trigger",
+        "from": "$trigger",
         "to": "welcome"
       },
       {
@@ -185,7 +185,7 @@ export const onboardingViewerData: WorkflowViewerData = {
       },
       {
         "from": "activated:received/activated-mail",
-        "to": "activated:received/end"
+        "to": "activated:received/$end"
       },
       {
         "from": "activated",
@@ -194,7 +194,7 @@ export const onboardingViewerData: WorkflowViewerData = {
       },
       {
         "from": "activated:timeout/nudge",
-        "to": "activated:timeout/end"
+        "to": "activated:timeout/$end"
       }
     ],
     "paths": [
@@ -207,14 +207,14 @@ export const onboardingViewerData: WorkflowViewerData = {
           }
         ],
         "nodes": [
-          "trigger",
+          "$trigger",
           "welcome",
           "before-tip",
           "pick-tip",
           "tip",
           "activated",
           "activated:received/activated-mail",
-          "activated:received/end"
+          "activated:received/$end"
         ],
         "outcome": {
           "status": "completed",
@@ -233,14 +233,14 @@ export const onboardingViewerData: WorkflowViewerData = {
           }
         ],
         "nodes": [
-          "trigger",
+          "$trigger",
           "welcome",
           "before-tip",
           "pick-tip",
           "tip",
           "activated",
           "activated:timeout/nudge",
-          "activated:timeout/end"
+          "activated:timeout/$end"
         ],
         "outcome": {
           "status": "completed",
@@ -294,7 +294,7 @@ export const onboardingViewerData: WorkflowViewerData = {
       },
       "activeNodeId": "before-tip",
       "completedNodeIds": [
-        "trigger",
+        "$trigger",
         "welcome"
       ]
     },
@@ -355,7 +355,7 @@ export const onboardingViewerData: WorkflowViewerData = {
       },
       "activeNodeId": "activated",
       "completedNodeIds": [
-        "trigger",
+        "$trigger",
         "welcome",
         "before-tip",
         "pick-tip",
@@ -421,16 +421,16 @@ export const onboardingViewerData: WorkflowViewerData = {
           "outcome": "activated"
         }
       },
-      "activeNodeId": "activated:received/end",
+      "activeNodeId": "activated:received/$end",
       "completedNodeIds": [
-        "trigger",
+        "$trigger",
         "welcome",
         "before-tip",
         "pick-tip",
         "tip",
         "activated",
         "activated:received/activated-mail",
-        "activated:received/end"
+        "activated:received/$end"
       ]
     }
   ]
