@@ -662,4 +662,10 @@ describe("review round 3 regressions", () => {
     expect(body("utf-32", "AAD+/wAAAGgAAABp")).toBe("hi");
     expect(body("utf-32le", "aAAAAGkAAAA=")).toBe("hi");
   });
+
+  test("a comment opener inside a domain literal does not hide later Authentication-Results clauses", () => {
+    const raw = "Authentication-Results: mx.trusted.test; spf=fail smtp.mailfrom=a@[x(y]; dkim=fail\r\n\r\nhi";
+
+    expect(emailFromMime({ provider: "cloudflare", raw, trustedAuthServIds: ["mx.trusted.test"] }).security).toEqual({ spf: "fail", dkim: "fail" });
+  });
 });

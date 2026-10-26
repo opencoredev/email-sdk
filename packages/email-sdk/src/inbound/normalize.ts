@@ -30,18 +30,32 @@ export function headerFields(headers: InboundHeaders) {
   };
 }
 
-/** Split on `;` outside quoted strings, after removing comments. */
+/**
+ * Split on `;` outside quoted strings, after removing comments. A property value may be an
+ * addr-spec such as `smtp.mailfrom=a@[x(y]`, whose domain literal holds data, not a comment.
+ */
 function resultClauses(value: string): string[] {
   const clauses: string[] = [];
   let current = "";
   let quoted = false;
   let comment = 0;
+  let literal = false;
+  // Only CFWS has followed an `@` so far, so a `[` here opens a domain literal.
+  let afterAt = false;
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
 
-    if (char === "\\" && (quoted || comment)) {
+    if (char === "\\" && (quoted || comment || literal)) {
+      if (literal) current += char + (value[index + 1] ?? "");
+
       index += 1;
+      continue;
+    }
+
+    if (literal) {
+      current += char;
+      literal = char !== "]";
       continue;
     }
 
@@ -51,7 +65,13 @@ function resultClauses(value: string): string[] {
     else if (!comment && !quoted && char === ";") {
       clauses.push(current.trim());
       current = "";
-    } else if (!comment) current += char;
+    } else if (!comment) {
+      current += char;
+
+      if (!quoted && char === "[" && afterAt) literal = true;
+    }
+
+    if (!quoted && !comment && char !== "(" && char !== ")" && char !== " " && char !== "\t") afterAt = char === "@";
   }
 
   clauses.push(current.trim());
