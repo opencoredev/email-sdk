@@ -8,7 +8,12 @@ import {
   optionalStringAddresses,
   stringAddresses,
 } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import type {
+  EmailMessage,
+  EmailAdapter,
+  EmailNativeObject,
+  EmailNativePassthrough,
+} from "./types.js";
 import {
   builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
@@ -16,6 +21,7 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  withNativeRequestHeaders,
 } from "./utils.js";
 
 export type SesAdapterOptions = {
@@ -29,9 +35,43 @@ export type SesAdapterOptions = {
   configurationSetName?: string;
 };
 
+/** Identify a stored SES template by name or ARN, not both. */
+export type SesTemplateRef = { name: string; arn?: never } | { arn: string; name?: never };
+
+/**
+ * Experimental. SES-only send options, passed as `native: { ses: { ... } }`. `headers` can't
+ * set the headers SigV4 signing owns (`Authorization`, `Host`, and `X-Amz-*` date, token, and
+ * content hash); the send throws an `EmailValidationError` instead.
+ * https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
+ */
+export type SesNativeOptions = EmailNativePassthrough & {
+  /** Overrides the adapter's `configurationSetName` for this send. */
+  configurationSetName?: string;
+  /**
+   * Send a stored SES template (`Content.Template`). The template supplies the subject and body,
+   * so the message's `subject`, `html`, and `text` are not sent. Headers and attachments are.
+   */
+  template?: SesTemplateRef & { data?: EmailNativeObject };
+  /** Subscription management for a contact list (`ListManagementOptions`). */
+  listManagement?: { contactListName: string; topicName?: string };
+  feedbackForwardingEmailAddress?: string;
+};
+
+const SES_HEADERS = { "content-type": "application/json" };
+
+// signAwsRequest sets these on every request. A native copy would be signed or sent beside the
+// signer's own, and SES would reject the signature.
+const SIGNER_HEADERS = new Set([
+  "authorization",
+  "host",
+  "x-amz-content-sha256",
+  "x-amz-date",
+  "x-amz-security-token",
+]);
+
 export function ses(
   options: SesAdapterOptions,
-): EmailAdapter<"ses", { baseUrl: string; region: string }> {
+): EmailAdapter<"ses", { baseUrl: string; region: string }, unknown, SesNativeOptions> {
   const baseUrl = options.baseUrl ?? `https://email.${options.region}.amazonaws.com`;
   const signingKeys = createSigningKeyCache();
 
@@ -43,7 +83,10 @@ export function ses(
       const fetcher = options.fetch ?? fetch;
       // Built per send so an invalid baseUrl still fails the send, not the adapter factory.
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
-      const body = JSON.stringify(await toSesPayload(message, options));
+      const native = context.native;
+
+      const payload = await toSesPayload(message, options);
+      const body = JSON.stringify(native ? withSesNative(payload, native) : payload);
 
       // Credentials are read on every send so refreshed STS credentials take effect.
       const headers = await signAwsRequest(signingKeys, {
@@ -55,9 +98,10 @@ export function ses(
         method: "POST",
         url: endpoint,
         body,
-        headers: {
-          "content-type": "application/json",
-        },
+        // Signed and sent as one lowercase set, so no header reaches SES under two spellings.
+        headers: native?.headers
+          ? Object.fromEntries(withNativeRequestHeaders("ses", SES_HEADERS, native.headers, SIGNER_HEADERS))
+          : SES_HEADERS,
       });
 
       const response = await fetcher(endpoint, {
@@ -142,4 +186,35 @@ async function toSesPayload(message: EmailMessage, options: SesAdapterOptions) {
       },
     },
   };
+}
+
+type SesPayload = Awaited<ReturnType<typeof toSesPayload>>;
+
+function withSesNative(payload: SesPayload, native: SesNativeOptions) {
+  const template = native.template;
+  const simple = payload.Content.Simple;
+  const listManagement = native.listManagement;
+
+  const withNative = {
+    ...payload,
+    ConfigurationSetName: native.configurationSetName ?? payload.ConfigurationSetName,
+    FeedbackForwardingEmailAddress: native.feedbackForwardingEmailAddress,
+    ListManagementOptions: listManagement && {
+      ContactListName: listManagement.contactListName,
+      TopicName: listManagement.topicName,
+    },
+    Content: template
+      ? {
+          Template: {
+            TemplateName: template.name,
+            TemplateArn: template.arn,
+            TemplateData: JSON.stringify(template.data ?? {}),
+            Headers: simple.Headers,
+            Attachments: simple.Attachments,
+          },
+        }
+      : payload.Content,
+  };
+
+  return native.body ? { ...withNative, ...native.body } : withNative;
 }

@@ -3,7 +3,7 @@ import { firstString, jsonProvider } from "./http.js";
 import { isJsonString, isStringMember, jsonField } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { formatAddress, formatAddresses } from "./payloads.js";
-import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailAttachment, EmailMessage, EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
@@ -33,7 +33,7 @@ const sequenzyRules: MessageRules = (message) => {
 
 export function sequenzy(
   options: SequenzyAdapterOptions,
-): EmailAdapter<"sequenzy", { baseUrl: string }> {
+): EmailAdapter<"sequenzy", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "sequenzy",
     rules: sequenzyRules,

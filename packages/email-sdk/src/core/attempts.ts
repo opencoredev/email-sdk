@@ -11,9 +11,10 @@ import type {
   EmailAfterSendEvent,
   EmailHooks,
   EmailMessage,
+  EmailNativeObject,
   EmailRetryConfig,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   EmailSendResult,
 } from "../types.js";
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
@@ -23,19 +24,27 @@ import { recipientCount } from "./send-telemetry.js";
 
 export const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
+/**
+ * Validates provider-reported counts against the recipients the SDK sent. `recipients` is
+ * `undefined` when native fields replaced the message's recipients: the SDK then doesn't know how
+ * many addresses the provider got, so the provider's counts only need to be well formed.
+ */
 export function acceptanceCounts(
   accepted: number | undefined,
   rejected: number | undefined,
-  recipients: number,
+  recipients: number | undefined,
   requireComplete: boolean,
 ) {
+  const limit = recipients ?? Number.MAX_SAFE_INTEGER;
+
   const valid = (count: number | undefined) =>
-    count === undefined || (Number.isSafeInteger(count) && count >= 0 && count <= recipients);
+    count === undefined || (Number.isSafeInteger(count) && count >= 0 && count <= limit);
 
   if (
     !valid(accepted) ||
     !valid(rejected) ||
-    (accepted !== undefined &&
+    (recipients !== undefined &&
+      accepted !== undefined &&
       rejected !== undefined &&
       (accepted + rejected > recipients || (requireComplete && accepted + rejected !== recipients)))
   ) {
@@ -51,18 +60,34 @@ export function acceptanceCounts(
 
 export type AttemptPath = "single" | "personalized_native" | "personalized_expanded";
 
-/** Runs one adapter call, timing it for telemetry when telemetry is on. */
+/**
+ * Runs one adapter call, timing it for telemetry when telemetry is on. `recipientsReplaced` marks
+ * a call whose native options may send to recipients other than the message's, so a success
+ * without recipient lists can't be read as a submission to `recipients` addresses, and recipient
+ * lists the provider does report are kept even when they don't match `recipients`.
+ */
 export type MeasureAttempt = <T extends EmailSendResult>(
   adapter: EmailAdapter,
   path: AttemptPath,
   recipients: number,
   invoke: () => T | PromiseLike<T>,
+  recipientsReplaced?: boolean,
 ) => T | PromiseLike<T>;
+
+// The raw passthroughs can replace any top-level request field, recipients included. Typed
+// native options can't.
+export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
+
+function replacesRecipients(native: EmailNativeObject | undefined) {
+  if (!native) return false;
+
+  return RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
+}
 
 export type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
-  options?: EmailSendOptions;
+  options?: EmailNativeSendOptions;
   retry?: EmailRetryConfig;
   hooks: readonly EmailHooks[];
   middleware: readonly EmailSendMiddleware[];
@@ -90,6 +115,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
+    const native = input.options?.native?.[input.adapter.name];
 
     try {
       const adapterResult = await input.measureAttempt(
@@ -104,7 +130,9 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
             signal: input.options?.signal,
             idempotencyKey: input.options?.idempotencyKey,
             metadata: input.options?.metadata,
+            native,
           }),
+        replacesRecipients(native),
       );
 
       throwIfAborted(input.options?.signal);

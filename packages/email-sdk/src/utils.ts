@@ -113,6 +113,51 @@ export function headersToObject(headers: HeaderInput): Record<string, string> | 
   return Object.fromEntries(headers.map((header) => [header.name, header.value]));
 }
 
+// The HTTP transport frames the body with these, so a native copy would misdescribe it.
+const TRANSPORT_HEADERS = new Set(["content-length", "host", "transfer-encoding"]);
+
+/**
+ * The header an adapter maps the `idempotencyKey` send option to. Such an adapter reserves it on
+ * every send, set or not, so a native copy can't pin one key across sends or the recipients of a
+ * personalized send.
+ */
+const IDEMPOTENCY_HEADER = "idempotency-key";
+
+export const IDEMPOTENCY_HEADERS: ReadonlySet<string> = new Set([IDEMPOTENCY_HEADER]);
+
+/**
+ * Add a send's `native.headers` to the HTTP request headers an adapter builds. A native header
+ * may not name one the adapter sets itself (`own`, plus `reserved` for headers it sets later, like
+ * a generated multipart Content-Type or a signature) or one the transport frames the body with.
+ * Names compare case-insensitively, as HTTP defines them. A collision throws an
+ * `EmailValidationError` before any request, so native headers can't swap credentials, the
+ * content type, or the idempotency key, or break the body's framing.
+ */
+export function withNativeRequestHeaders(
+  adapter: string,
+  own: HeadersInit,
+  native: Readonly<Record<string, string>>,
+  reserved?: ReadonlySet<string>,
+): Headers {
+  const headers = new Headers(own);
+
+  for (const name of Object.keys(native)) {
+    const lower = name.toLowerCase();
+
+    if (headers.has(lower) || TRANSPORT_HEADERS.has(lower) || reserved?.has(lower)) {
+      const hint = lower === IDEMPOTENCY_HEADER ? " Use the idempotencyKey send option instead." : "";
+
+      throw new EmailValidationError(
+        `${adapter} sets "${name}" itself, so native.headers can't set it.${hint}`,
+      );
+    }
+  }
+
+  for (const [name, value] of Object.entries(native)) headers.set(name, value);
+
+  return headers;
+}
+
 export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined {
   if (!headers) {
     return undefined;

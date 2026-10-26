@@ -8,7 +8,7 @@ import {
   commonHeadersObject,
   optionalSingleApiAddress,
 } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -27,7 +27,9 @@ const plunkRules: MessageRules = (message) => {
   assertMaxItems("plunk", "replyTo", arrayify(message.replyTo), 1);
 };
 
-export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { baseUrl: string }> {
+export function plunk(
+  options: PlunkAdapterOptions,
+): EmailAdapter<"plunk", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "plunk",
     rules: plunkRules,

@@ -3,6 +3,7 @@ import type {
   EmailEnvelope as V1EmailEnvelope,
   EmailMessage as V1EmailMessage,
   EmailPersonalizedInput,
+  EmailNativeSendOptions,
   EmailSendOptions as V1EmailSendOptions,
   EmailSendResult as V1EmailSendResult,
 } from "../types.js";
@@ -99,7 +100,7 @@ export function toV1Options(
   };
 }
 
-export function toLegacyOptions(options: V1EmailSendOptions | undefined): SendOptions | undefined {
+export function toLegacyOptions(options: EmailNativeSendOptions | undefined): SendOptions | undefined {
   if (!options) return undefined;
 
   return {
