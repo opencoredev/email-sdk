@@ -724,3 +724,48 @@ describe("review round 4 regressions", () => {
     expect(decodeCharset(Uint8Array.of(0xef, 0xbb, 0xbf, 0x41), "x-unicode20utf8")).toBe("A");
   });
 });
+
+describe("review round 5 regressions", () => {
+  // obs-id-left is a local-part (RFC 5322 4.5.4), so a quoted id-left may hold `>`, spaces, and
+  // escapes. Each value is scanned as Message-ID, In-Reply-To, and References.
+  const quotedIds: [name: string, value: string, ids: string[]][] = [
+    ["a > in a quoted id-left", '<"a>b"@example.com> <next@example.com>', ['"a>b"@example.com', "next@example.com"]],
+    ["a space in a quoted id-left", '<"a b"@example.com> <next@example.com>', ['"a b"@example.com', "next@example.com"]],
+    ["an escaped quote", '<"a\\"> b"@example.com> <next@example.com>', ['"a\\"> b"@example.com', "next@example.com"]],
+    ["a domain literal after a quoted id-left", '<"a>b"@[c>d]> <next@example.com>', ['"a>b"@[c>d]', "next@example.com"]],
+    ["a comment between IDs", '<"a>b"@example.com> (see <fake@example.com>) <next@example.com>', ['"a>b"@example.com', "next@example.com"]],
+  ];
+
+  describe.each(["Message-ID", "In-Reply-To", "References"])("%s", header => {
+    test.each(quotedIds)("%s", (_name, value, ids) => {
+      const email = emailFromMime({ provider: "cloudflare", raw: `${header}: ${value}\r\n\r\nhi` });
+
+      expect(messageIds(value)).toEqual(ids);
+
+      if (header === "Message-ID") expect(email.messageId).toBe(ids[0]);
+      else if (header === "In-Reply-To") expect(email.inReplyTo).toBe(ids[0]);
+      else expect(email.references).toEqual(ids);
+    });
+  });
+
+  test("a bare ID keeps its quoted id-left whole", () => {
+    expect(messageIds('"a b"@example.com next@example.com')).toEqual(['"a b"@example.com', "next@example.com"]);
+    expect(messageIds('"a<b (c),"@example.com')).toEqual(['"a<b (c),"@example.com']);
+    expect(messageIds('"a\\" b"@example.com')).toEqual(['"a\\" b"@example.com']);
+  });
+
+  test("an unclosed quote is data, as before", () => {
+    expect(messageIds('<"a@example.com> <next@example.com>')).toEqual(['"a@example.com', "next@example.com"]);
+    expect(messageIds('"a b@example.com')).toEqual(['"a', "b@example.com"]);
+    expect(messageIds('<a b@example.com>')).toEqual([]);
+  });
+
+  test("the scan stays linear on unclosed quotes and brackets", () => {
+    const value = '<"\\'.repeat(100_000);
+    const started = performance.now();
+
+    expect(messageIds(value)).toEqual([]);
+    expect(messageIds('"\\"'.repeat(100_000))).toHaveLength(1);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+});

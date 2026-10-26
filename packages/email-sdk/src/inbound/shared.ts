@@ -296,16 +296,25 @@ export function remoteAttachment(
  * Message IDs from a `Message-ID`, `In-Reply-To`, or `References` value. Comments are CFWS
  * (RFC 5322 3.6.4), so a `<id>` inside one is skipped. A value with no `<id>` falls back to
  * whitespace- or comma-separated tokens, as some providers send bare IDs. A domain literal such
- * as `[a(b)c]` or `[a>b]` is data in either form.
+ * as `[a(b)c]` or `[a>b]` is data in either form, and so is a quoted id-left such as `"a> b"`
+ * (obs-id-left is a local-part, RFC 5322 4.5.4). An unclosed quote is an ordinary character.
  */
 export function messageIds(value: string | undefined): string[] {
   if (!value) return [];
 
+  const closeQuote = quoteCloser(value);
   const bracketed: string[] = [];
-  let bare = "";
+  const bare: string[] = [];
+  let token = "";
   let depth = 0;
   let literal = false;
   let afterAt = false;
+
+  const flush = () => {
+    if (token) bare.push(token);
+
+    token = "";
+  };
 
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]!;
@@ -319,35 +328,47 @@ export function messageIds(value: string | undefined): string[] {
     }
 
     if (literal) {
-      bare += char;
+      token += char;
 
       if (char === "\\") {
-        bare += value[index + 1] ?? "";
+        token += value[index + 1] ?? "";
         index += 1;
       } else if (char === "]") literal = false;
 
       continue;
     }
 
+    const close = char === '"' ? closeQuote(index) : undefined;
+
+    if (close !== undefined) {
+      token += value.slice(index, close + 1);
+      index = close;
+      afterAt = false;
+
+      continue;
+    }
+
     if (char === "(") {
       depth = 1;
-      bare += " ";
+      flush();
     } else if (char === "<") {
-      const id = bracketedId(value, index + 1);
+      const id = bracketedId(value, index + 1, closeQuote);
 
       // No `>` closes this one, and the scan reached the end, so no later `<` can close either.
       if (id === undefined) break;
 
       const text = value.slice(id.start, id.end);
 
-      if (text && !/\s/.test(text)) bracketed.push(text);
+      if (text && !id.spaced) bracketed.push(text);
 
       index = id.end;
+    } else if (/[\s,]/.test(char)) {
+      flush();
     } else {
       // A bare ID has no CFWS inside it, so only `@[` opens its domain literal.
       if (char === "[" && afterAt) literal = true;
 
-      bare += char;
+      token += char;
     }
 
     afterAt = char === "@";
@@ -355,7 +376,33 @@ export function messageIds(value: string | undefined): string[] {
 
   if (bracketed.length) return bracketed;
 
-  return bare.split(/[\s,]+/).filter(Boolean);
+  flush();
+
+  return bare;
+}
+
+/**
+ * Returns a lookup for the `"` that closes a quoted string opened at a given index. Escapes are
+ * read the same way from any opening quote, so once a quote has no close, no later one has
+ * either; remembering that keeps a value full of unclosed quotes linear.
+ */
+function quoteCloser(value: string): (open: number) => number | undefined {
+  let unclosedFrom = value.length;
+
+  return open => {
+    if (open >= unclosedFrom) return undefined;
+
+    for (let index = open + 1; index < value.length; index += 1) {
+      const char = value[index];
+
+      if (char === "\\") index += 1;
+      else if (char === '"') return index;
+    }
+
+    unclosedFrom = open;
+
+    return undefined;
+  };
 }
 
 interface BracketedId {
@@ -363,14 +410,17 @@ interface BracketedId {
   start: number;
   /** Index of the closing `>`. */
   end: number;
+  /** Whether the ID has whitespace outside a quoted string, which no msg-id allows. */
+  spaced: boolean;
 }
 
 /**
- * Find the `>` that closes a msg-id, skipping a `>` inside a domain literal. A later `<` restarts
- * the ID, so a run of `<` is scanned once.
+ * Find the `>` that closes a msg-id, skipping a `>` inside a domain literal or a quoted id-left.
+ * A later `<` restarts the ID, so a run of `<` is scanned once.
  */
-function bracketedId(value: string, from: number): BracketedId | undefined {
+function bracketedId(value: string, from: number, closeQuote: (open: number) => number | undefined): BracketedId | undefined {
   let start = from;
+  let spaced = false;
   let literal = false;
   let afterAt = false;
 
@@ -384,10 +434,22 @@ function bracketedId(value: string, from: number): BracketedId | undefined {
       continue;
     }
 
-    if (char === ">") return { start, end: index };
+    const close = char === '"' ? closeQuote(index) : undefined;
 
-    if (char === "<") start = index + 1;
-    else if (char === "[" && afterAt) literal = true;
+    if (close !== undefined) {
+      index = close;
+      afterAt = false;
+
+      continue;
+    }
+
+    if (char === ">") return { start, end: index, spaced };
+
+    if (char === "<") {
+      start = index + 1;
+      spaced = false;
+    } else if (char === "[" && afterAt) literal = true;
+    else if (/\s/.test(char)) spaced = true;
 
     afterAt = char === "@";
   }

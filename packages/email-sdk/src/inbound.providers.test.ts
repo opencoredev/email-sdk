@@ -813,3 +813,36 @@ describe("Cloudflare Email Workers", () => {
     await expect(parseCloudflareInbound(message)).rejects.toMatchObject({ reason: "payload_invalid" });
   });
 });
+
+describe("quoted id-left threading fallbacks", () => {
+  const thread = { "Message-ID": '<"a>b"@example.com>', "In-Reply-To": '<"p q"@example.com>', References: '<"r>s"@example.com> <"p q"@example.com>' };
+  const expected = { messageId: '"a>b"@example.com', inReplyTo: '"p q"@example.com', references: ['"r>s"@example.com', '"p q"@example.com'] };
+  const list = Object.entries(thread);
+
+  test("Postmark", () => {
+    const email = parsePostmarkInbound({ body: JSON.stringify({ MessageID: "pm-1", Headers: list.map(([Name, Value]) => ({ Name, Value })) }) });
+
+    expect(email).toMatchObject(expected);
+  });
+
+  test("Lettermint", () => {
+    const body = JSON.stringify({ event: "message.inbound", data: { headers: list.map(([name, value]) => ({ name, value })) } });
+
+    expect(parseLettermintInbound({ body })).toMatchObject(expected);
+  });
+
+  test("Resend", () => {
+    expect(parseResendInbound({ body: JSON.stringify({ type: "email.received", data: { headers: thread } }) })).toMatchObject(expected);
+  });
+
+  test("Mailtrap", async () => {
+    const fetch = stubFetch(async () => Response.json({ id: "m3", headers: thread }));
+
+    expect(await fetchMailtrapInboundEmail(42, "m3", { apiToken: "mt_token", fetch })).toMatchObject(expected);
+  });
+
+  test("JetEmail bare and bracketed messageId", () => {
+    expect(parseJetEmailInbound({ body: JSON.stringify({ uid: "u1", messageId: '"a b"@example.com' }) }).messageId).toBe('"a b"@example.com');
+    expect(parseJetEmailInbound({ body: JSON.stringify({ uid: "u1", messageId: '<"a>b"@example.com>' }) }).messageId).toBe('"a>b"@example.com');
+  });
+});

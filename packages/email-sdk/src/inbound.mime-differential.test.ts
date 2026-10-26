@@ -70,6 +70,8 @@ const corpus: [name: string, raw: Uint8Array][] = [
   ["review: byte order picks unmarked UTF-16", bytes("Subject: =?UTF-16?B?/v8AQQ==?= =?UTF-16?B?//5CAA==?=\r\n\r\nhi")],
   ["review: > in a message-ID domain literal", bytes("Message-ID: <thread@[a>b]>\r\nIn-Reply-To: <parent@[a>b]>\r\nReferences: <x@[a>b]> <y@example.com>\r\n\r\nhi")],
   ["review: parentheses in a bare message-ID literal", bytes("Message-ID: thread@[a(b)c]\r\n\r\nhi")],
+  ["review: > in a quoted message-ID id-left", bytes('Message-ID: <"a>b"@example.com>\r\nIn-Reply-To: <"p>q"@[c>d]>\r\nReferences: <"a>b"@example.com> <"e\\"f"@example.com> <next@[c>d]>\r\n\r\nhi')],
+  ["review: space in a quoted message-ID id-left", bytes('Message-ID: <"a b"@example.com>\r\nIn-Reply-To: <"c d"@example.com>\r\n\r\nhi')],
   ["review: format=flowed delsp=yes", bytes("Content-Type: text/plain; format=flowed; delsp=yes\r\n\r\nhello \r\nworld\r\n >quote\r\n")],
 
   // Real client shapes.
