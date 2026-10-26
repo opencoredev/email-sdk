@@ -13,7 +13,7 @@ type ScannedMailbox = {
  * each RFC 5322 comment replaced by a space so it still separates the tokens around it. Quoted
  * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, so the scan steps over them instead
  * of matching brackets inside them. Returns undefined when a quote, comment, or angle-addr is
- * never closed, or when a comma outside them makes the string an address list.
+ * never closed, or when a `,`, `;`, or `:` outside them makes the string an address list or group.
  */
 function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   let outside = "";
@@ -45,7 +45,7 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
     } else if (character === "(") {
       commentDepth = 1;
       kept = " ";
-    } else if (character === ",") {
+    } else if (character === "," || character === ";" || character === ":") {
       return undefined;
     } else if (character === '"') {
       quoted = true;

@@ -218,6 +218,18 @@ describe("smtp injection guards", () => {
     ).rejects.toBeInstanceOf(EmailValidationError);
   });
 
+  test.each([
+    '"Ada <bad name>" <ada@example.com>,evil@example.com',
+    '"Ada <bad name>" <ada@example.com>;evil@example.com',
+    '"Ada <bad name>" <ada@example.com>:evil@example.com;',
+    "ada@example.com,evil@example.com",
+    "ada@example.com;evil@example.com",
+    "ada@example.com(work",
+    '"ada"@example.com',
+  ])("rejects envelope address %s before connecting", async (to) => {
+    await expect(send({ ...baseMessage, to })).rejects.toBeInstanceOf(EmailValidationError);
+  });
+
   test("rejects a CRLF injected header name", async () => {
     await expect(
       send({
@@ -295,6 +307,28 @@ describe("smtp injection guards", () => {
     expect(transmitted.result.id).toBe("test-id");
     const dataHeaderLines = transmitted.data.split(/\r\n\r\n/)[0]?.split(/\r\n|[\r\n]/) ?? [];
     expect(dataHeaderLines.some((line) => line.toLowerCase().startsWith("bcc:"))).toBe(false);
+  });
+
+  test("sends RCPT TO for the resolved mailbox, not a bracket inside a name or comment", async () => {
+    const transmitted = await captureSmtpData({
+      ...baseMessage,
+      from: '"Sender <team>" <sender@example.com>',
+      to: ["Ada <ada@example.com> (work)", "bob@example.com (work)"],
+      cc: "(a(b)c)cy@example.com (work)",
+      bcc: '"Dee <ops>" <dee@example.com>',
+    });
+
+    const envelope = transmitted.commands.filter(
+      (command) => command.startsWith("MAIL") || command.startsWith("RCPT"),
+    );
+
+    expect(envelope).toEqual([
+      "MAIL FROM:<SENDER@EXAMPLE.COM>",
+      "RCPT TO:<ADA@EXAMPLE.COM>",
+      "RCPT TO:<BOB@EXAMPLE.COM>",
+      "RCPT TO:<CY@EXAMPLE.COM>",
+      "RCPT TO:<DEE@EXAMPLE.COM>",
+    ]);
   });
 
   test("encodes non-ASCII subjects and attachments as MIME parts", async () => {
