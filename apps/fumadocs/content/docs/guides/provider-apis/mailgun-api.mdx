@@ -158,7 +158,7 @@ Mailgun uses standard HTTP status codes, and error bodies carry a JSON `message`
 | `429` | Rate limited | Wait, then retry. |
 | `500` | Mailgun server error | Retry with exponential backoff. |
 
-Every response carries rate-limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Mailgun describes the reset value as "Unix milliseconds (UTC) until the limit resets", and windows differ per endpoint. This helper retries `429` and `5xx` with exponential backoff, waits for the reset time when it is later than the backoff, and caps any single wait at 30 seconds:
+Every response carries rate-limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Mailgun describes the reset value as "Unix milliseconds (UTC) until the limit resets", and windows differ per endpoint. This helper retries `429` and `5xx` with exponential backoff, waits for the reset time when it is later than the backoff, and caps any single wait at 30 seconds. If Mailgun asks for a longer wait, the helper returns the `429` after `maxAttempts`, so a job queue can try again later:
 
 ```ts title="send-with-retry.ts"
 type MailgunSendResult = { ok: true; id: string } | { ok: false; status: number; message: string };
@@ -242,27 +242,36 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 type MailgunSignature = { timestamp: string; token: string; signature: string };
 
-const seenTokens = new Set<string>();
+const toleranceMs = 15 * 60 * 1000;
+const seenTokens = new Map<string, number>();
 
-export function verifyMailgunSignature(signingKey: string, { timestamp, token, signature }: MailgunSignature) {
-  const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestamp));
+export function claimToken(token: string, timestamp: string) {
+  const now = Date.now();
 
-  if (!Number.isFinite(ageSeconds) || ageSeconds > 15 * 60) return false;
+  for (const [seen, expiresAt] of seenTokens) if (expiresAt < now) seenTokens.delete(seen);
 
   if (seenTokens.has(token)) return false;
+  seenTokens.set(token, Number(timestamp) * 1000 + toleranceMs);
+
+  return true;
+}
+
+export function verifyMailgunSignature(signingKey: string, { timestamp, token, signature }: MailgunSignature) {
+  const ageMs = Math.abs(Date.now() - Number(timestamp) * 1000);
+
+  if (!Number.isFinite(ageMs) || ageMs > toleranceMs) return false;
 
   if (!/^[0-9a-f]{64}$/i.test(signature)) return false;
 
   const expected = createHmac("sha256", signingKey).update(timestamp + token).digest();
-  const valid = timingSafeEqual(expected, Buffer.from(signature, "hex"));
 
-  if (valid) seenTokens.add(token);
+  if (!timingSafeEqual(expected, Buffer.from(signature, "hex"))) return false;
 
-  return valid;
+  return claimToken(token, timestamp);
 }
 ```
 
-`seenTokens` lives in memory here. With more than one server process, keep used tokens in a shared store such as Redis.
+Mailgun signs the timestamp and token, not the event body. TLS stops anyone from changing the body in transit, and `claimToken` stops a captured request from being replayed with edited `event-data`: each token is accepted once and forgotten after the 15-minute window. `seenTokens` lives in memory here, so with more than one server process, keep used tokens in a shared store such as Redis with the same expiry.
 
 ### Respond with the right status
 
@@ -358,6 +367,8 @@ await email.send(scheduledMessage, { fallback: { adapters: [] } });
 ```ts title="webhook-sdk.ts"
 import { normalizeWebhookEvent, verifyMailgunWebhook } from "@opencoredev/email-sdk/webhooks";
 
+import { claimToken } from "./verify-webhook";
+
 export async function handleMailgunWebhook(request: Request) {
   const body = await request.text();
 
@@ -370,6 +381,15 @@ export async function handleMailgunWebhook(request: Request) {
   if (!valid) return new Response("Invalid signature", { status: 401 });
 
   const event = await normalizeWebhookEvent({ provider: "mailgun", body });
+  const signed: unknown = event.payload.signature;
+
+  if (typeof signed !== "object" || signed === null || !("token" in signed) || !("timestamp" in signed)) {
+    return new Response("Missing signature", { status: 401 });
+  }
+
+  if (typeof signed.token !== "string" || !claimToken(signed.token, String(signed.timestamp))) {
+    return new Response("Replayed webhook", { status: 406 });
+  }
 
   if (event.status === "bounced" || event.status === "complained") {
     console.log("suppress recipient", event.providerMessageId, event.type);
@@ -379,7 +399,7 @@ export async function handleMailgunWebhook(request: Request) {
 }
 ```
 
-`verifyMailgunWebhook` rejects timestamps more than 300 seconds old by default, and this handler widens that to 15 minutes because Mailgun warns that webhook delivery can lag. It does not track used tokens, so add your own replay check if you need one. `normalizeWebhookEvent` maps `delivered` to `delivered`, a permanent `failed` event to `bounced`, and `complained` to `complained`. The handler returns `401` for a bad signature instead of `406`, so Mailgun keeps retrying while you fix a rotated key.
+`verifyMailgunWebhook` rejects timestamps more than 300 seconds old by default, and this handler widens that to 15 minutes because Mailgun warns that webhook delivery can lag. It does not track used tokens, so the handler calls `claimToken` from `verify-webhook.ts` and answers a replay with `406`, which tells Mailgun not to retry it. `normalizeWebhookEvent` maps `delivered` to `delivered`, a permanent `failed` event to `bounced`, and `complained` to `complained`. The handler returns `401` for a bad signature instead of `406`, so Mailgun keeps retrying while you fix a rotated key.
 
 ### Check the setup from the CLI
 
