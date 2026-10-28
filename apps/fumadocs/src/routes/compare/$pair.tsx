@@ -6,6 +6,7 @@ import { CompareTable } from "@/components/compare-table";
 import { DocsVersionLink } from "@/components/docs-version-link";
 import {
   comparePairLastmod,
+  getAlternativesGuides,
   getComparePair,
   getComparePairTitle,
   getFallbackGaps,
@@ -115,6 +116,7 @@ function ComparePage() {
   const gapsAtoB = getFallbackGaps(pair.a, pair.b);
   const gapsBtoA = getFallbackGaps(pair.b, pair.a);
   const faq = buildCompareFaq(pair);
+  const alternativesGuides = getAlternativesGuides(pair);
 
   return (
     <HomeLayout {...baseOptions()}>
@@ -217,6 +219,19 @@ function ComparePage() {
                 </Link>
                 .
               </p>
+              {alternativesGuides.map((guide) => (
+                <p className="mt-3" key={guide.docs}>
+                  Moving off {guide.name}?{" "}
+                  <DocsVersionLink
+                    className="text-fd-primary underline-offset-4 hover:underline"
+                    docsPath={guide.docs}
+                    forceLatest
+                  >
+                    Compare {guide.name} alternatives
+                  </DocsVersionLink>{" "}
+                  and migrate with {guide.name} kept as the fallback.
+                </p>
+              ))}
             </CompareSection>
           </div>
         </article>

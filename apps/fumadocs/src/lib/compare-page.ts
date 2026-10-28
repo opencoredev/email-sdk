@@ -1,6 +1,7 @@
 import {
   type ComparePair,
   getAdapterConfigSnippet,
+  getAlternativesGuides,
   getComparePairTitle,
   getFallbackGaps,
   getFieldSupport,
@@ -167,7 +168,9 @@ ${faq.map((entry) => `### ${entry.question}\n\n${entry.answer}`).join("\n\n")}
 - [${a.name} adapter](${siteUrl}${a.docs})
 - [${b.name} adapter](${siteUrl}${b.docs})
 - [Email DNS checker](${siteUrl}/tools/email-dns-checker): verify SPF, DKIM, and DMARC for a sending domain.
-`;
+${getAlternativesGuides(pair)
+  .map((guide) => `- [${guide.name} alternatives](${siteUrl}${guide.docs}): compare replacements and migrate with ${guide.name} as the fallback.\n`)
+  .join("")}`;
 }
 
 function markField(key: ProviderKey, field: (typeof messageFields)[number]) {
