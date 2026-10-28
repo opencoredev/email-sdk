@@ -75,9 +75,9 @@ Install the SDK:
 npm install @opencoredev/email-sdk
 ```
 
-`src/email.ts` in the [complete code](#complete-code) registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `sendgrid`, so deploying this file changes nothing until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction.
+`src/email.ts` in the [complete code](#complete-code) registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `sendgrid`, so after you deploy this file the same provider keeps sending until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction.
 
-Before any request leaves your server, the client checks the message against every adapter in its route. A message with `sendAt` throws `EmailValidationError` here, because Postmark has no scheduled send. You find the gap in development, not as a missing email in production.
+Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `sendAt` throws `EmailValidationError`, even while SendGrid is still primary, because Postmark has no scheduled send. Before you deploy, run your real messages through `email.validate()` in a test. For a message type that has to keep that field, pass `fallback: { adapters: [] }` on its send until you've moved it.
 
 ### 3. Decide which emails may fail over
 
@@ -173,17 +173,26 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 
 import { EmailRouteError, EmailValidationError } from "@opencoredev/email-sdk";
 
+const testEnv = {
+  EMAIL_SDK_TELEMETRY: "0",
+  POSTMARK_SERVER_TOKEN: "test-postmark-token",
+  SENDGRID_API_KEY: "SG.test",
+  EMAIL_PRIMARY: "postmark",
+};
+
+const savedEnv = Object.fromEntries(Object.keys(testEnv).map((key) => [key, process.env[key]]));
+
 const realFetch = globalThis.fetch;
 
-const calls: string[] = [];
+const calls: { host: string; body: string }[] = [];
 
 let postmarkStatus = 200;
 
-function fakeProviders(input: RequestInfo | URL): Promise<Response> {
+function fakeProviders(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = String(input);
-  calls.push(new URL(url).host);
+  calls.push({ host: new URL(url).host, body: String(init?.body) });
 
-  if (url.startsWith("https://api.postmarkapp.com/")) {
+  if (url === "https://api.postmarkapp.com/email") {
     return Promise.resolve(
       postmarkStatus === 200
         ? Response.json({ MessageID: "pm_1", To: "ada@example.com", ErrorCode: 0 })
@@ -203,10 +212,7 @@ let send: typeof import("./send");
 let client: typeof import("./email");
 
 beforeAll(async () => {
-  process.env.EMAIL_SDK_TELEMETRY = "0";
-  process.env.POSTMARK_SERVER_TOKEN = "test-postmark-token";
-  process.env.SENDGRID_API_KEY = "SG.test";
-  process.env.EMAIL_PRIMARY = "postmark";
+  Object.assign(process.env, testEnv);
   globalThis.fetch = Object.assign(fakeProviders, { preconnect: realFetch.preconnect });
   client = await import("./email");
   send = await import("./send");
@@ -219,6 +225,11 @@ afterEach(() => {
 
 afterAll(() => {
   globalThis.fetch = realFetch;
+
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("SendGrid to Postmark migration example", () => {
@@ -226,7 +237,12 @@ describe("SendGrid to Postmark migration example", () => {
     const result = await send.sendPasswordReset("ada@example.com", "https://acme.com/reset/abc");
 
     expect(result).toMatchObject({ adapter: "postmark", id: "pm_1" });
-    expect(calls).toEqual(["api.postmarkapp.com"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.postmarkapp.com"]);
+    expect(JSON.parse(calls[0].body)).toMatchObject({
+      From: "Acme <security@acme.com>",
+      To: "ada@example.com",
+      Tag: "type:password-reset",
+    });
   });
 
   test("falls back to SendGrid when Postmark returns a 503", async () => {
@@ -235,7 +251,12 @@ describe("SendGrid to Postmark migration example", () => {
     const result = await send.sendPasswordReset("ada@example.com", "https://acme.com/reset/abc");
 
     expect(result).toMatchObject({ adapter: "sendgrid", id: "sg_1" });
-    expect(calls).toEqual(["api.postmarkapp.com", "api.sendgrid.com"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.postmarkapp.com", "api.sendgrid.com"]);
+    expect(JSON.parse(calls[1].body)).toMatchObject({
+      personalizations: [{ to: [{ email: "ada@example.com" }] }],
+      subject: "Reset your Acme password",
+      categories: ["password-reset"],
+    });
   });
 
   test("a receipt with fallback turned off stops after Postmark fails", async () => {
@@ -244,7 +265,8 @@ describe("SendGrid to Postmark migration example", () => {
     const failure = await send.sendReceipt("ada@example.com", "ord_123").catch((error) => error);
 
     expect(failure).toBeInstanceOf(EmailRouteError);
-    expect(calls).toEqual(["api.postmarkapp.com"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.postmarkapp.com"]);
+    expect(JSON.parse(calls[0].body)).toMatchObject({ Metadata: { orderId: "ord_123" } });
   });
 
   test("rejects a scheduled send before any request, because Postmark has no sendAt", async () => {
@@ -265,7 +287,7 @@ describe("SendGrid to Postmark migration example", () => {
 });
 ```
 
-Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.0.1. They prove the routing and the request each adapter builds. They don't prove delivery, which needs a real send from your own accounts.
+Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.0.1. They prove the routing and the main fields of each provider request. They don't prove delivery, which needs a real send from your own accounts.
 
 <Card title="Migrate from the SendGrid SDK" href="/docs/guides/migrate/sendgrid" description="Keep SendGrid and replace direct Mail Send calls with Email SDK." />
 <Card title="Retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="How delivery certainty decides when fallback runs." />

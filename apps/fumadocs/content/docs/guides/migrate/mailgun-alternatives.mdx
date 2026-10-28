@@ -75,9 +75,9 @@ Install the SDK:
 npm install @opencoredev/email-sdk
 ```
 
-`src/email.ts` in the [complete code](#complete-code) registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `mailgun`, so deploying this file changes nothing until you flip the variable. `MAILGUN_BASE_URL` is optional; set it to `https://api.eu.mailgun.net` for an EU domain. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction.
+`src/email.ts` in the [complete code](#complete-code) registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `mailgun`, so after you deploy this file the same provider keeps sending until you flip the variable. `MAILGUN_BASE_URL` is optional; set it to `https://api.eu.mailgun.net` for an EU domain. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction.
 
-Before any request leaves your server, the client checks the message against every adapter in its route. A message with `metadata` throws `EmailValidationError` here, because Resend has no metadata field. You find the gap in development, not as a missing email in production. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason.
+Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `metadata` throws `EmailValidationError`, even while Mailgun is still primary, because Resend has no metadata field. Before you deploy, run your real messages through `email.validate()` in a test. For a message type that has to keep that field, pass `fallback: { adapters: [] }` on its send until you've moved it. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason.
 
 ### 3. Decide which emails may fail over
 
@@ -175,15 +175,26 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 
 import { EmailRouteError, EmailValidationError } from "@opencoredev/email-sdk";
 
+const testEnv = {
+  EMAIL_SDK_TELEMETRY: "0",
+  RESEND_API_KEY: "re_test",
+  MAILGUN_API_KEY: "test-mailgun-key",
+  MAILGUN_DOMAIN: "mg.acme.com",
+  MAILGUN_BASE_URL: "https://api.eu.mailgun.net",
+  EMAIL_PRIMARY: "resend",
+};
+
+const savedEnv = Object.fromEntries(Object.keys(testEnv).map((key) => [key, process.env[key]]));
+
 const realFetch = globalThis.fetch;
 
-const calls: string[] = [];
+const calls: { host: string; body: RequestInit["body"] }[] = [];
 
 let resendStatus = 200;
 
-function fakeProviders(input: RequestInfo | URL): Promise<Response> {
+function fakeProviders(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = String(input);
-  calls.push(new URL(url).host);
+  calls.push({ host: new URL(url).host, body: init?.body });
 
   if (url === "https://api.resend.com/emails") {
     return Promise.resolve(
@@ -193,7 +204,7 @@ function fakeProviders(input: RequestInfo | URL): Promise<Response> {
     );
   }
 
-  if (url === "https://api.mailgun.net/v3/mg.acme.com/messages") {
+  if (url === "https://api.eu.mailgun.net/v3/mg.acme.com/messages") {
     return Promise.resolve(Response.json({ id: "<mg_1@mg.acme.com>", message: "Queued. Thank you." }));
   }
 
@@ -205,12 +216,7 @@ let send: typeof import("./send");
 let client: typeof import("./email");
 
 beforeAll(async () => {
-  process.env.EMAIL_SDK_TELEMETRY = "0";
-  process.env.RESEND_API_KEY = "re_test";
-  process.env.MAILGUN_API_KEY = "test-mailgun-key";
-  process.env.MAILGUN_DOMAIN = "mg.acme.com";
-  delete process.env.MAILGUN_BASE_URL;
-  process.env.EMAIL_PRIMARY = "resend";
+  Object.assign(process.env, testEnv);
   globalThis.fetch = Object.assign(fakeProviders, { preconnect: realFetch.preconnect });
   client = await import("./email");
   send = await import("./send");
@@ -223,6 +229,11 @@ afterEach(() => {
 
 afterAll(() => {
   globalThis.fetch = realFetch;
+
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("Mailgun to Resend migration example", () => {
@@ -230,16 +241,31 @@ describe("Mailgun to Resend migration example", () => {
     const result = await send.sendMagicLink("ada@example.com", "https://acme.com/login/abc");
 
     expect(result).toMatchObject({ adapter: "resend", id: "re_1" });
-    expect(calls).toEqual(["api.resend.com"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.resend.com"]);
+    expect(JSON.parse(String(calls[0].body))).toMatchObject({
+      from: "Acme <login@mg.acme.com>",
+      to: ["ada@example.com"],
+      tags: [{ name: "type", value: "magic-link" }],
+    });
   });
 
-  test("falls back to Mailgun when Resend returns a 503", async () => {
+  test("falls back to Mailgun's EU endpoint when Resend returns a 503", async () => {
     resendStatus = 503;
 
     const result = await send.sendMagicLink("ada@example.com", "https://acme.com/login/abc");
 
     expect(result).toMatchObject({ adapter: "mailgun", id: "<mg_1@mg.acme.com>" });
-    expect(calls).toEqual(["api.resend.com", "api.mailgun.net"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.resend.com", "api.eu.mailgun.net"]);
+
+    const form = calls[1].body;
+
+    expect(form).toBeInstanceOf(FormData);
+
+    if (!(form instanceof FormData)) return;
+
+    expect(form.getAll("to")).toEqual(["ada@example.com"]);
+    expect(form.get("subject")).toBe("Your Acme sign-in link");
+    expect(form.getAll("o:tag")).toEqual(["magic-link"]);
   });
 
   test("a receipt with fallback turned off stops after Resend fails", async () => {
@@ -248,7 +274,10 @@ describe("Mailgun to Resend migration example", () => {
     const failure = await send.sendReceipt("ada@example.com", "ord_123").catch((error) => error);
 
     expect(failure).toBeInstanceOf(EmailRouteError);
-    expect(calls).toEqual(["api.resend.com"]);
+    expect(calls.map((call) => call.host)).toEqual(["api.resend.com"]);
+    expect(JSON.parse(String(calls[0].body))).toMatchObject({
+      tags: [{ name: "order", value: "ord_123" }],
+    });
   });
 
   test("rejects Mailgun-style metadata before any request, because Resend has no metadata field", async () => {
@@ -269,7 +298,7 @@ describe("Mailgun to Resend migration example", () => {
 });
 ```
 
-Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.0.1. They prove the routing and the request each adapter builds. They don't prove delivery, which needs a real send from your own accounts.
+Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.0.1. They prove the routing and the main fields of each provider request. They don't prove delivery, which needs a real send from your own accounts.
 
 <Card title="Mailgun adapter" href="/docs/adapters/mailgun" description="Options, EU region, field mapping, and native batch sends." />
 <Card title="Retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="How delivery certainty decides when fallback runs." />
