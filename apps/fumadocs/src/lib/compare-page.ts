@@ -11,7 +11,14 @@ import {
 } from "./compare";
 import { siteUrl } from "./shared";
 
+/** Page <title> before the site-name suffix: the pair's search title, or the shared template. */
+export function buildComparePageTitle(pair: ComparePair) {
+  return pair.search?.title ?? `${getComparePairTitle(pair)}: transactional email API comparison`;
+}
+
 export function buildCompareDescription(pair: ComparePair) {
+  if (pair.search) return pair.search.description;
+
   const a = getProvider(pair.a);
   const b = getProvider(pair.b);
 
@@ -40,7 +47,12 @@ export function buildCompareFaq(pair: ComparePair) {
             : ""
         }. Messages that avoid those fields fail over cleanly.`;
 
+  const verdict = pair.search
+    ? [{ question: `Should I use ${a.name} or ${b.name}?`, answer: pair.search.verdict }]
+    : [];
+
   return [
+    ...verdict,
     {
       question: `Can I switch from ${a.name} to ${b.name} without rewriting my email code?`,
       answer: `Yes. With Email SDK both providers share one typed send() call and one message shape, so switching from ${a.name} to ${b.name} is a one-line adapter change plus an API key. The SDK fails fast if a message uses a field ${b.name} does not support, so nothing is silently dropped.`,
@@ -131,7 +143,7 @@ export function renderCompareMarkdown(pair: ComparePair) {
 > ${buildCompareDescription(pair)}
 
 Canonical page: ${canonicalUrl}
-
+${pair.search ? `\n**Short answer:** ${pair.search.verdict}\n` : ""}
 ${pair.intro}
 
 ## Message field support

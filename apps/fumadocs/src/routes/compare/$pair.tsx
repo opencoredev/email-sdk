@@ -14,6 +14,7 @@ import {
 import {
   buildCompareDescription,
   buildCompareFaq,
+  buildComparePageTitle,
   fallbackSnippet,
   listFields,
   sendSnippet,
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/compare/$pair")({
     if (!pair) return {};
 
     const title = getComparePairTitle(pair);
-    const pageTitle = `${title}: transactional email API comparison - ${appName}`;
+    const pageTitle = `${buildComparePageTitle(pair)} - ${appName}`;
     const description = buildCompareDescription(pair);
     const canonicalUrl = `${siteUrl}/compare/${pair.slug}`;
     const imageUrl = `${siteUrl}/og/compare/${pair.slug}.png`;
@@ -126,6 +127,11 @@ function ComparePage() {
             </Link>
           </p>
           <h1 className="mt-3 text-4xl font-medium leading-tight md:text-5xl">{title}</h1>
+          {pair.search ? (
+            <p className="mt-5 text-base leading-7 text-fd-foreground md:text-lg">
+              <strong className="font-medium">Short answer:</strong> {pair.search.verdict}
+            </p>
+          ) : null}
           <p className="mt-5 text-base leading-7 text-fd-muted-foreground md:text-lg">
             {pair.intro}
           </p>

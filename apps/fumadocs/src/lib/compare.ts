@@ -64,6 +64,21 @@ export type ComparePair = {
   intro: string;
   /** Date this pair's own content last changed; the published date is comparePairLastmod(). */
   lastmod: string;
+  /**
+   * Search copy for pairs that already rank, written to the queries people type
+   * ("resend vs mailgun", "should i use resend or loops?"). Without it the page
+   * uses the shared template title and description.
+   */
+  search?: CompareSearchCopy;
+};
+
+export type CompareSearchCopy = {
+  /** Full <title>, without the site name suffix. Keep it under about 60 characters. */
+  title: string;
+  /** Meta description, under about 160 characters. */
+  description: string;
+  /** Answer-first verdict shown under the H1, in the .md mirror, and as the first FAQ answer. */
+  verdict: string;
 };
 
 /**
@@ -99,7 +114,14 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-ses",
     a: "resend",
     b: "ses",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "Resend vs Amazon SES: Managed API or AWS Infrastructure?",
+      description:
+        "Resend vs Amazon SES for transactional email: SES is cheaper per message on AWS, Resend is a managed product. Verdict, field support and code for both.",
+      verdict:
+        "Pick Amazon SES if you already run on AWS, want the lowest unit cost, and will manage sending reputation and bounces yourself. Pick Resend for a managed product with a clean dashboard and React Email templates. Resend supports scheduled sending and SES doesn't, so Email SDK rejects a fallback to SES for messages that set sendAt.",
+    },
     intro:
       "Amazon SES is the cheapest way to send email at scale — fractions of a cent per message — and it sits inside the AWS ecosystem you may already run on, with IAM auth, CloudWatch metrics, and regional endpoints. The trade-off is that SES is infrastructure, not a product: you manage your own sending reputation, configuration sets, and bounce handling, and the console is unmistakably AWS. Resend is a managed product with opinionated defaults, a clean dashboard, and React Email support, priced per-message at a premium over raw SES. In the unified message model the gap is scheduling and structured data: Resend supports sendAt natively while SES has no scheduled-send API, and neither exposes per-message metadata, so both lean on tags for categorization.",
   },
@@ -107,7 +129,14 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailgun",
     a: "resend",
     b: "mailgun",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "Resend vs Mailgun: Which Email API Should Developers Use?",
+      description:
+        "Resend vs Mailgun for developers: a short verdict, side-by-side message field support, and the same TypeScript send code for both providers.",
+      verdict:
+        "Pick Resend for a small, modern outbound API with React Email templates and a fast first send. Pick Mailgun when you need per-message metadata or its mature routing and inbound parsing. Both support CC, BCC, custom headers, attachments, tags and scheduled sending, so Email SDK can fall back from Resend to Mailgun for any message, and from Mailgun to Resend for messages without metadata.",
+    },
     intro:
       "Mailgun was one of the original developer email APIs and it still shows: flexible routing, inbound parsing, EU and US regions, and a message API that supports everything in the unified shape — CC, BCC, headers, attachments, tags, metadata, and scheduled delivery. It is a strong pick when you need inbound mail or regional data residency alongside outbound sends. Resend is younger and more focused: outbound transactional email with a polished developer experience, React Email templates, and a simpler pricing page, but no per-message metadata field and no inbound handling. If your application round-trips structured data on every message, Mailgun's metadata support matters; if your priority is shipping the first send this afternoon, Resend's onboarding is hard to beat, and the SDK keeps a later migration to a single-line change.",
   },
@@ -115,7 +144,14 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-loops",
     a: "resend",
     b: "loops",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "Resend vs Loops: Which Should You Use for Transactional Email?",
+      description:
+        "Should you use Resend or Loops? Resend is a full transactional send API; Loops pairs template-based sends with lifecycle email. Field support and code compared.",
+      verdict:
+        "Use Resend if you build transactional messages in code and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if the same tool should also run your lifecycle and marketing email: its transactional API sends a saved template with data variables and attachments, and supports none of those other fields.",
+    },
     intro:
       "Resend and Loops both target modern SaaS teams but solve different problems. Resend is a transactional email API in the classic sense: you construct a message — recipients, subject, HTML, attachments — and it delivers it, with scheduling, tags, and full header control. Loops is an email platform for product companies where transactional sends are one feature next to marketing loops and audience management; its transactional API is intentionally minimal and template-driven, so the unified message shape maps onto a much smaller surface — no CC or BCC, no custom headers, no tags, and no scheduled sending, though it does carry per-message metadata (data variables) and attachments. Pick Loops when the same tool should own lifecycle and marketing email; pick Resend when you want a full-fidelity send API.",
   },
@@ -171,7 +207,14 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
+      description:
+        "SendGrid vs Amazon SES (AWS SES) compared: price model, what each platform bundles, message field support, and one TypeScript send call for both.",
+      verdict:
+        "Pick Amazon SES if you are on AWS and want the lowest cost per message, and can handle deliverability yourself. Pick SendGrid if you want templates, analytics and marketing email bundled in one product and accept a higher per-message price. SendGrid supports per-message metadata and scheduled sending and SES supports neither, so a SendGrid-to-SES fallback only works for messages that skip both.",
+    },
     intro:
       "SendGrid versus Amazon SES is usually a cost-versus-convenience decision. SES wins on raw price by an order of magnitude and integrates natively with IAM, CloudWatch, and the rest of AWS — if your infrastructure already lives there, sending through SES keeps billing and auth in one place. What SES does not give you is a product: no template marketing tools, minimal UI, and deliverability management is your job. SendGrid charges more per message but bundles IP management, marketing email, template editing, and analytics into one platform. In the message model SendGrid supports per-message metadata and native scheduled sending; SES supports neither, so the SDK's field-support checks matter when SES is your fallback — tags are the only categorization that survives the hop.",
   },
@@ -187,7 +230,14 @@ export const comparePairs: ComparePair[] = [
     slug: "mailgun-vs-ses",
     a: "mailgun",
     b: "ses",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "Mailgun vs Amazon SES: Price, Features and Fallback",
+      description:
+        "Mailgun vs Amazon SES: lowest unit price against an included operations layer. A short verdict, message field support, and code for both via one SDK.",
+      verdict:
+        "Pick Amazon SES for the lowest unit price if you can run deliverability yourself. Pick Mailgun if you want inbound routing, EU region hosting, searchable logs and send-time optimization included. Mailgun supports per-message metadata and scheduled sending and SES supports neither, so Email SDK rejects a Mailgun-to-SES fallback for messages that use them.",
+    },
     intro:
       "Mailgun and Amazon SES both court high-volume senders, but with different bargains. SES offers the lowest unit price in the industry and rock-solid infrastructure, in exchange for doing your own deliverability work: warming IPs, processing bounces via SNS, and living without much of a UI. Mailgun costs more per message but includes the operational layer — send-time optimization, inbound routing and parsing, EU region hosting, searchable logs, and human support tiers. The unified message shape exposes a real functional gap too: Mailgun supports per-message metadata and native scheduled delivery while SES supports neither, so a Mailgun-to-SES fallback drops both fields and the SDK will fail fast rather than lose them silently. Teams often start on Mailgun and graduate to SES when volume justifies the operational investment.",
   },
@@ -195,7 +245,14 @@ export const comparePairs: ComparePair[] = [
     slug: "brevo-vs-mailersend",
     a: "brevo",
     b: "mailersend",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
+    search: {
+      title: "Brevo vs MailerSend: Transactional Email API Compared",
+      description:
+        "Brevo vs MailerSend for developers: suite against focused transactional API. A short verdict, message field support, and the same send code for both.",
+      verdict:
+        "Pick Brevo if one vendor should run transactional email next to campaigns, automation, SMS and a CRM. Pick MailerSend for a narrower, developer-focused transactional API with a template editor and inbound routing. On the message shape they differ on one field: Brevo supports per-message metadata and MailerSend doesn't.",
+    },
     intro:
       "Brevo and MailerSend are both European-rooted platforms that pair transactional APIs with approachable marketing tooling, which makes them a common shortlist for teams that want one vendor for both jobs. Brevo is the broader suite: campaigns, automation, SMS, WhatsApp, and a CRM alongside its SMTP and API sending, priced by send volume with a usable free tier. MailerSend is narrower and more developer-focused within the MailerLite family, with a clean REST API, template editor, and inbound routing. In the unified message shape they differ on exactly one field: Brevo supports per-message metadata while MailerSend does not — both handle CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — so failing over from Brevo to MailerSend only needs care when messages carry metadata.",
   },
