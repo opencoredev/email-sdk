@@ -1,0 +1,406 @@
+---
+title: Mailgun API guide for Node.js and TypeScript
+description: "Use the Mailgun API from Node.js and TypeScript: API keys, US and EU base URLs, fetch code for sending, attachments, tags, errors, rate limits, and webhooks."
+---
+
+This guide covers the Mailgun Messages API from Node.js and TypeScript with plain `fetch`, so you can see every field Mailgun expects and every response it sends back. The last section sends the same email through Email SDK's `mailgun` adapter and adds a second provider as a fallback.
+
+Every Mailgun detail on this page was checked against [Mailgun's documentation](https://documentation.mailgun.com/docs/mailgun/api-reference/api-overview) in October 2026. Already using Email SDK? The [Mailgun adapter reference](/docs/adapters/mailgun) lists every option.
+
+## What you need
+
+- A Mailgun account and a sending domain. New accounts get a sandbox domain that can only send to up to 5 authorized recipients ([Sandbox domain](https://documentation.mailgun.com/docs/mailgun/user-manual/domains/domains-sandbox), checked Oct 2026). For real traffic, add your own domain and verify its DNS records. The [email DNS checker](/tools/email-dns-checker) shows whether SPF, DKIM, and DMARC resolve.
+- An API key, covered in the next section.
+- A server runtime with `fetch`, `FormData`, and `Blob` built in. The examples below ran unchanged on Node.js 24 and Bun 1.4. Keep this code on the server: an API key in a browser bundle lets anyone send mail from your domain.
+
+## Authenticate with an API key
+
+Mailgun uses HTTP Basic auth. The username is always `api` and the password is your API key ([Authentication](https://documentation.mailgun.com/docs/mailgun/api-reference/mg-auth), checked Oct 2026). In `fetch` that is one header:
+
+```ts
+const headers = { Authorization: `Basic ${btoa(`api:${apiKey}`)}` };
+```
+
+Mailgun has two kinds of API key, and your app should usually hold the narrower one.
+
+| Key | What it can do | Use it for |
+| --- | --- | --- |
+| Primary account API key | Every API endpoint, for every domain on the account | Admin scripts, domain and webhook setup |
+| Domain sending key | Only `POST /messages` and `POST /messages.mime` for the one domain it was created on | The send path in your application |
+
+Create a sending key in the dashboard under Sending, Domains, your domain, Domain Settings, Sending API keys. Mailgun shows it once, so copy it into your secret store right away. Webhooks use a third secret, the webhook signing key, which is neither of these keys. It comes up again in [Webhooks](#webhooks).
+
+## Pick the US or EU base URL
+
+A Mailgun domain lives in the region where you created it. Messages, event logs, suppressions, tags, and routes stay in that region, while your account, API keys, and domain names are global ([API overview](https://documentation.mailgun.com/docs/mailgun/api-reference/api-overview), checked Oct 2026). Call the host that matches the domain's region.
+
+| Service | US | EU |
+| --- | --- | --- |
+| REST API | `https://api.mailgun.net` | `https://api.eu.mailgun.net` |
+| Outgoing SMTP | `smtp.mailgun.org` | `smtp.eu.mailgun.org` |
+
+Regions are isolated for webhooks too: a webhook created in the US region does not fire for an EU domain ([Configuring webhooks](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/configuring-webhooks), checked Oct 2026). The examples read the base URL from `MAILGUN_BASE_URL` so one codebase can serve either region.
+
+## Send an email with fetch
+
+The endpoint is `POST {base}/v3/{domain}/messages` with a `multipart/form-data` body ([Send an email](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages), checked Oct 2026). `from`, `to`, and `subject` are required, plus at least one of `text`, `html`, `amp-html`, or `template`. Mailgun builds the MIME message for you.
+
+This script sends an invoice email with a tag, a custom variable, a Reply-To header, and a PDF attachment:
+
+```ts title="send-fetch.ts"
+import { readFile } from "node:fs/promises";
+
+const apiKey = process.env.MAILGUN_API_KEY;
+const domain = process.env.MAILGUN_DOMAIN;
+const baseUrl = process.env.MAILGUN_BASE_URL ?? "https://api.mailgun.net";
+
+if (!apiKey || !domain) throw new Error("Set MAILGUN_API_KEY and MAILGUN_DOMAIN.");
+
+const form = new FormData();
+form.append("from", `Acme <hello@${domain}>`);
+form.append("to", "Ada Lovelace <ada@example.com>");
+form.append("subject", "Your invoice from Acme");
+form.append("text", "Thanks for your order. Your invoice is attached.");
+form.append("html", "<p>Thanks for your order. Your invoice is attached.</p>");
+
+form.append("o:tag", "invoice");
+form.append("v:order-id", "ord_123");
+form.append("h:Reply-To", "billing@acme.com");
+
+const pdf = await readFile(new URL("./invoice.pdf", import.meta.url));
+form.append("attachment", new Blob([pdf], { type: "application/pdf" }), "invoice.pdf");
+
+const response = await fetch(`${baseUrl}/v3/${domain}/messages`, {
+  method: "POST",
+  headers: { Authorization: `Basic ${btoa(`api:${apiKey}`)}` },
+  body: form,
+});
+
+const body: unknown = await response.json();
+
+if (!response.ok) throw new Error(`Mailgun returned ${response.status}: ${JSON.stringify(body)}`);
+
+if (typeof body !== "object" || body === null || !("id" in body) || typeof body.id !== "string") {
+  throw new Error("Mailgun response has no message id.");
+}
+
+console.log(body.id);
+```
+
+A successful send returns `200` with a JSON body holding `id` and `message`. `message` is a human-readable status. Store `id`: it is the message ID that later shows up in event logs and webhook payloads.
+
+Pass a `FormData` body and leave out the `Content-Type` header. `fetch` sets `multipart/form-data` with the right boundary on its own, and a hand-written header without the boundary breaks the request.
+
+### Field prefixes
+
+Everything beyond the basic fields uses a prefix:
+
+| Prefix | Meaning | Example |
+| --- | --- | --- |
+| `h:` | Adds a MIME header to the message | `h:Reply-To`, `h:X-Request-Id` |
+| `v:` | Custom variable, returned in events and webhooks | `v:order-id` |
+| `o:` | Sending option | `o:tag`, `o:deliverytime`, `o:testmode`, `o:tracking` |
+| `t:` | Template option | `t:variables`, `t:version` |
+
+All `o:`, `h:`, `v:`, and `t:` values on one message share a 16 KB limit.
+
+### Multiple recipients
+
+Append `to` once per address, or pass a comma-separated list. Mailgun drops duplicate addresses. Without recipient variables, every address in `to` receives the same message and can see the others in the To header. For one individual email per recipient, add `recipient-variables`, a JSON object keyed by address, and reference values as `%recipient.name%` in the subject or body. One batch call takes up to 1,000 recipients ([Batch sending](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/batch-sending), checked Oct 2026).
+
+## Attachments and inline images
+
+Mailgun reads files from repeated multipart parts ([Send with attachments](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/send-attachments), checked Oct 2026):
+
+- `attachment` for regular file attachments, as in `send-fetch.ts` above.
+- `inline` for images shown in the HTML body. Reference them as `cid:<filename>`.
+
+```ts title="send-options.ts"
+import { readFile } from "node:fs/promises";
+
+export function rfc2822(date: Date) {
+  return date.toUTCString().replace("GMT", "+0000");
+}
+
+export async function addInlineLogo(form: FormData) {
+  const logo = await readFile(new URL("./logo.png", import.meta.url));
+  form.append("inline", new Blob([logo], { type: "image/png" }), "logo.png");
+  form.append("html", '<p><img src="cid:logo.png" alt="Acme"></p><p>Your order shipped.</p>');
+}
+
+export function scheduleFor(form: FormData, sendAt: Date) {
+  form.append("o:deliverytime", rfc2822(sendAt));
+}
+```
+
+Each part needs a filename, which is the third argument to `form.append`. Without one, the recipient sees a generic name.
+
+## Tags, variables, and scheduling
+
+**Tags** (`o:tag`) group messages for analytics and filtering. A message can carry up to 3 tags, each ASCII-only, case-insensitive, and at most 128 characters. Each domain allows 100,000 distinct tags by default ([Tags](https://documentation.mailgun.com/docs/mailgun/user-manual/tracking-messages/track-tagging), checked Oct 2026).
+
+**Variables** (`v:name`) attach your own data, such as an order ID, so you can match webhook events back to your records. They come back as `user-variables` in events and webhooks. Mailgun also writes them into the delivered email's `X-Mailgun-Variables` header, so recipients can read them by viewing the raw message. Never put secrets or internal data there. Values over 4 KB are truncated in events and webhooks.
+
+**Scheduling** (`o:deliverytime`) takes an RFC 2822 date such as `Fri, 30 Oct 2026 14:00:00 +0000`. The `rfc2822` helper above builds one from a `Date`. Depending on your plan, you can schedule 3 or 7 days ahead ([Scheduling delivery](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/schedule-delivery), checked Oct 2026).
+
+**Test mode** (`o:testmode=yes`) makes Mailgun accept the message without delivering it. Mailgun's docs note that test-mode messages are still charged ([Test mode](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/test-mode), checked Oct 2026), so use a local stand-in for automated tests.
+
+## Errors and rate limits
+
+Mailgun uses standard HTTP status codes, and error bodies carry a JSON `message` ([API overview](https://documentation.mailgun.com/docs/mailgun/api-reference/api-overview), checked Oct 2026).
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| `400` | Bad request, such as an invalid address or a missing field | Fix the request. Retrying sends the same error. |
+| `401` | Missing or wrong API key | Check the key and the `api:` username. |
+| `403` | Valid key without access to this resource | Check the key's permissions. A domain sending key can only send for its own domain. |
+| `404` | Resource not found | Check the domain name and the region's base URL. |
+| `429` | Rate limited | Wait, then retry. |
+| `500` | Mailgun server error | Retry with exponential backoff. |
+
+Every response carries rate-limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Mailgun describes the reset value as "Unix milliseconds (UTC) until the limit resets", and windows differ per endpoint. This helper retries `429` and `5xx` with exponential backoff, waits for the reset time when it is later than the backoff, and caps any single wait at 30 seconds:
+
+```ts title="send-with-retry.ts"
+type MailgunSendResult = { ok: true; id: string } | { ok: false; status: number; message: string };
+
+const retryable = new Set([429, 500, 502, 503, 504]);
+
+export async function sendWithRetry(
+  url: string,
+  apiKey: string,
+  buildForm: () => FormData,
+  maxAttempts = 3,
+): Promise<MailgunSendResult> {
+  for (let attempt = 1; ; attempt += 1) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Basic ${btoa(`api:${apiKey}`)}` },
+      body: buildForm(),
+    });
+
+    const body: unknown = await response.json().catch(() => undefined);
+    const message = readString(body, "message") ?? response.statusText;
+
+    if (response.ok) {
+      const id = readString(body, "id");
+
+      if (!id) return { ok: false, status: response.status, message: "Response has no message id." };
+
+      return { ok: true, id };
+    }
+
+    if (!retryable.has(response.status) || attempt >= maxAttempts) {
+      return { ok: false, status: response.status, message };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(response, attempt)));
+  }
+}
+
+function retryDelayMs(response: Response, attempt: number) {
+  const backoff = 500 * 2 ** (attempt - 1);
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
+  const untilReset = reset > Date.now() ? reset - Date.now() : 0;
+
+  return Math.min(Math.max(backoff, untilReset), 30_000);
+}
+
+function readString(value: unknown, key: string): string | undefined {
+  if (typeof value !== "object" || value === null || !(key in value)) return undefined;
+  const field: unknown = Reflect.get(value, key);
+
+  return typeof field === "string" ? field : undefined;
+}
+```
+
+`buildForm` is a function because a `FormData` body is consumed by the first request, so each attempt builds a fresh one.
+
+<Callout type="warn" title="Retries can send twice">
+  The Messages API takes no idempotency key. If a request times out or returns a `5xx` after Mailgun queued the message, a retry delivers a second copy. Retry those cases only when a duplicate is better than a missing email.
+</Callout>
+
+## Webhooks
+
+Webhooks push delivery events to your server as JSON `POST` requests ([Webhooks](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/webhooks), checked Oct 2026). You configure them per event type, at the account or domain level, with up to 3 URLs per event type. HTTPS endpoints need a certificate from a trusted CA.
+
+| Event | Fires when |
+| --- | --- |
+| `accepted` | Mailgun accepted the request and queued the message |
+| `delivered` | The recipient's mail server accepted the message |
+| `temporary_fail` | Delivery failed for now. Mailgun will retry. |
+| `permanent_fail` | Delivery failed for good, for example a nonexistent address |
+| `opened`, `clicked` | Open or click tracking recorded an event |
+| `unsubscribed` | The recipient used the unsubscribe link |
+| `complained` | The recipient marked the message as spam |
+
+Each payload has two parts: `event-data` with the event itself and a `signature` object with `timestamp`, `token`, and `signature`. Inside `event-data`, both failure webhooks report `"event": "failed"` with `severity` set to `permanent` or `temporary` ([Webhook payloads](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/webhook-payloads), checked Oct 2026).
+
+### Verify the signature
+
+`signature` is the hex HMAC-SHA256 of `timestamp` followed by `token`, keyed with your webhook signing key from Settings, API Security ([Securing webhooks](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/securing-webhooks), checked Oct 2026). Mailgun also suggests rejecting reused tokens and stale timestamps, without being too strict on time because webhook delivery can lag.
+
+```ts title="verify-webhook.ts"
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+type MailgunSignature = { timestamp: string; token: string; signature: string };
+
+const seenTokens = new Set<string>();
+
+export function verifyMailgunSignature(signingKey: string, { timestamp, token, signature }: MailgunSignature) {
+  const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestamp));
+
+  if (!Number.isFinite(ageSeconds) || ageSeconds > 15 * 60) return false;
+
+  if (seenTokens.has(token)) return false;
+
+  const expected = createHmac("sha256", signingKey).update(timestamp + token).digest("hex");
+  const valid =
+    expected.length === signature.length &&
+    timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+
+  if (valid) seenTokens.add(token);
+
+  return valid;
+}
+```
+
+`seenTokens` lives in memory here. With more than one server process, keep used tokens in a shared store such as Redis.
+
+### Respond with the right status
+
+Return `200` once you have stored the event. A `406` tells Mailgun to drop the event without retrying. Any other status makes Mailgun retry for up to 8 hours, at 5 minutes, 10 minutes, 15 minutes, 1 hour, 2 hours, and 4 hours. Mailgun's retry docs exclude delivery notifications from this schedule ([Webhook retries](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/webhook-retries), checked Oct 2026).
+
+## The same email with Email SDK
+
+Email SDK wraps all of the above in a typed client. The `mailgun` adapter builds the same multipart request, and you can list a second provider that takes over when Mailgun fails.
+
+<PackageInstallTabs />
+
+Create the client once. This one sends through Mailgun and falls back to Postmark:
+
+```ts title="email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailgun } from "@opencoredev/email-sdk/mailgun";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+
+export const email = createEmailClient({
+  adapters: [
+    mailgun({
+      apiKey: process.env.MAILGUN_API_KEY!,
+      domain: process.env.MAILGUN_DOMAIN!,
+      baseUrl: process.env.MAILGUN_BASE_URL ?? "https://api.mailgun.net",
+    }),
+    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+  ],
+  defaultAdapter: "mailgun",
+  retry: { maxAttempts: 3 },
+  fallback: { adapters: ["postmark"], onUnknownDelivery: "continue" },
+});
+```
+
+Then send the invoice email from the first example:
+
+```ts title="send-sdk.ts"
+import { readFile } from "node:fs/promises";
+
+import { email } from "./email";
+
+const result = await email.send({
+  from: "Acme <hello@mg.acme.com>",
+  to: "Ada Lovelace <ada@example.com>",
+  replyTo: "billing@acme.com",
+  subject: "Your invoice from Acme",
+  text: "Thanks for your order. Your invoice is attached.",
+  html: "<p>Thanks for your order. Your invoice is attached.</p>",
+  tags: [{ name: "type", value: "invoice" }],
+  metadata: { orderId: "ord_123" },
+  attachments: [
+    {
+      filename: "invoice.pdf",
+      content: await readFile(new URL("./invoice.pdf", import.meta.url)),
+      contentType: "application/pdf",
+    },
+  ],
+});
+
+console.log(result.adapter, result.id);
+```
+
+The adapter posts to `{baseUrl}/v3/{domain}/messages` with the same fields you built by hand ([`mailgun.ts`](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/src/mailgun.ts)):
+
+| Email SDK field | Mailgun field |
+| --- | --- |
+| `to`, `cc`, `bcc` | `to`, `cc`, `bcc`, one entry per address |
+| `replyTo` | `h:Reply-To` |
+| `headers` | `h:<Name>` |
+| `tags` | `o:tag`, using each tag's `value` |
+| `metadata` | `v:<key>`, values converted to strings |
+| `sendAt` | `o:deliverytime` in RFC 2822 |
+| `attachments` | `attachment` or `inline`, by `disposition` |
+| `sendPersonalized()` recipients | `recipient-variables`, up to 1,000 per call |
+
+`result.id` is Mailgun's message ID from the response body. For EU domains, set `baseUrl: "https://api.eu.mailgun.net"`.
+
+### How the fallback behaves
+
+`retry: { maxAttempts: 3 }` allows three calls to Mailgun in total, with a short exponential backoff between them. The SDK's default backoff does not read Mailgun's `X-RateLimit-Reset` header.
+
+After the last attempt, the fallback decision depends on whether Mailgun might have queued the message. The Mailgun adapter can't prove a failed request was never queued, so it reports every failure, HTTP error or network error, as `delivery: "unknown"`. With the default `onUnknownDelivery: "stop"`, the client throws an `EmailRouteError` and never calls Postmark. The client above sets `onUnknownDelivery: "continue"`, which accepts a possible duplicate in exchange for not losing the email. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off.
+
+Before the first request, the client checks the message against every adapter in the route. Postmark has no scheduled sending and takes one tag per message, so a message with `sendAt` or two tags fails with `EmailValidationError` while Postmark is in the fallback list. Send those through Mailgun alone:
+
+```ts
+await email.send(scheduledMessage, { fallback: { adapters: [] } });
+```
+
+### Verify webhooks with Email SDK
+
+`@opencoredev/email-sdk/webhooks` checks the same HMAC and normalizes the payload:
+
+```ts title="webhook-sdk.ts"
+import { normalizeWebhookEvent, verifyMailgunWebhook } from "@opencoredev/email-sdk/webhooks";
+
+export async function handleMailgunWebhook(request: Request) {
+  const body = await request.text();
+
+  const valid = await verifyMailgunWebhook({
+    body,
+    secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY!,
+    toleranceSeconds: 15 * 60,
+  });
+
+  if (!valid) return new Response("Invalid signature", { status: 401 });
+
+  const event = await normalizeWebhookEvent({ provider: "mailgun", body });
+
+  if (event.status === "bounced" || event.status === "complained") {
+    console.log("suppress recipient", event.providerMessageId, event.type);
+  }
+
+  return new Response("ok");
+}
+```
+
+`verifyMailgunWebhook` rejects timestamps more than 300 seconds old by default, and this handler widens that to 15 minutes because Mailgun warns that webhook delivery can lag. It does not track used tokens, so add your own replay check if you need one. `normalizeWebhookEvent` maps `delivered` to `delivered`, a permanent `failed` event to `bounced`, and `complained` to `complained`. The handler returns `401` for a bad signature instead of `406`, so Mailgun keeps retrying while you fix a rotated key.
+
+### Check the setup from the CLI
+
+```bash
+MAILGUN_API_KEY="..." MAILGUN_DOMAIN="mg.acme.com" \
+  npx --package @opencoredev/email-sdk email-sdk doctor --adapter mailgun
+```
+
+The [adapter reference](/docs/adapters/mailgun#verify-from-the-cli) shows a dry-run send as well.
+
+## When to use Mailgun's own SDK
+
+Mailgun publishes an official JavaScript client, [`mailgun.js`](https://github.com/mailgun/mailgun.js). It covers the whole Mailgun API: domains, routes, suppressions, mailing lists, and validation. Email SDK covers sending and webhook verification only, with the same message shape across 27 adapters. Use `mailgun.js` or raw `fetch` for account management. Use Email SDK when you want send code that keeps working if you add a fallback provider or switch providers later.
+
+All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1 and run against a local Mailgun stand-in that checks the multipart fields. No real email was sent.
+
+<Cards>
+  <Card title="Mailgun adapter" href="/docs/adapters/mailgun" description="Every adapter option, capability, and CLI check." />
+  <Card title="Retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="When a failed send moves to the next provider." />
+  <Card title="Postmark vs Mailgun" href="/compare/postmark-vs-mailgun" description="Field support side by side for the fallback pair used here." />
+  <Card title="SendGrid vs Mailgun" href="/compare/sendgrid-vs-mailgun" description="Two providers with identical message-field support." />
+</Cards>

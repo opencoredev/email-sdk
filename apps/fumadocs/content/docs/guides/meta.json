@@ -6,6 +6,7 @@
     "production-send-pipeline",
     "test-email-behavior",
     "troubleshoot-failed-sends",
+    "provider-apis",
     "migrate",
     "authoring"
   ]

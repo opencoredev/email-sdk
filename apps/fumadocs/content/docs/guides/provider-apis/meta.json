@@ -1,0 +1,7 @@
+{
+  "title": "Provider API guides",
+  "icon": "MailAtSign",
+  "pages": [
+    "mailgun-api"
+  ]
+}
