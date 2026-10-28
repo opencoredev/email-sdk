@@ -183,7 +183,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
     intro:
       "Postmark and Mailgun both come from the developer-tools generation of email providers, but they optimize for different things. Postmark optimizes for deliverability and clarity: separate transactional and broadcast message streams, aggressive list hygiene, detailed delivery events, and a UI your support team can actually use. Mailgun optimizes for flexibility: powerful routing and inbound parsing, EU region hosting for data residency, send-time optimization, and native scheduled delivery — the one field in the unified message shape Postmark doesn't support. Both carry CC, BCC, reply-to, headers, attachments, tags, and metadata, so the SDK can fail over between them for most messages. Teams typically choose Postmark for critical low-volume transactional mail and Mailgun when inbound processing or EU residency is a requirement — or run both, with one as the fallback route.",
   },
@@ -199,7 +199,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-28",
     intro:
       "SendGrid and Mailgun are the two heavyweight generalists of email infrastructure, and on the unified message shape they are actually identical: both support every field the SDK models — CC, BCC, reply-to, custom headers, attachments, tags, metadata, and scheduled sending — which makes them fully interchangeable as fallbacks for each other. The decision therefore comes down to the platforms around the API. SendGrid brings Twilio-scale infrastructure, marketing campaigns in the same account, subusers, and granular IP management. Mailgun counters with stronger inbound mail processing, straightforward EU data residency, message retention options, and a reputation for developer-friendly logs and webhooks. Pricing at low volume is comparable; at high volume both reward negotiation, so benchmark real traffic — ideally through the SDK, where swapping the adapter is one line — before committing either way.",
   },
@@ -289,6 +289,22 @@ export const adapterConfigSnippets: Partial<Record<ProviderKey, string>> = {
     transactionalId: "your-template-id",
   })`,
 };
+
+/** Blog guides to a provider's own API, linked from every compare page that includes the provider. */
+export const providerApiGuides: Partial<Record<ProviderKey, { slug: string; title: string }>> = {
+  mailgun: {
+    slug: "mailgun-api-nodejs-typescript",
+    title: "Mailgun API guide for Node.js and TypeScript",
+  },
+};
+
+export function getProviderApiGuides(pair: ComparePair) {
+  return [pair.a, pair.b].flatMap((key) => {
+    const guide = providerApiGuides[key];
+
+    return guide ? [guide] : [];
+  });
+}
 
 export function getAdapterConfigSnippet(key: ProviderKey): string {
   return adapterConfigSnippets[key] ?? `${key}({ apiKey: process.env.EMAIL_API_KEY! })`;

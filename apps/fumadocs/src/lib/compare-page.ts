@@ -5,6 +5,7 @@ import {
   getFallbackGaps,
   getFieldSupport,
   getProvider,
+  getProviderApiGuides,
   messageFieldLabels,
   messageFields,
   type ProviderKey,
@@ -178,7 +179,9 @@ ${faq.map((entry) => `### ${entry.question}\n\n${entry.answer}`).join("\n\n")}
 
 - [${a.name} adapter](${siteUrl}${a.docs})
 - [${b.name} adapter](${siteUrl}${b.docs})
-- [Email DNS checker](${siteUrl}/tools/email-dns-checker): verify SPF, DKIM, and DMARC for a sending domain.
+${getProviderApiGuides(pair)
+  .map((guide) => `- [${guide.title}](${siteUrl}/blog/${guide.slug})\n`)
+  .join("")}- [Email DNS checker](${siteUrl}/tools/email-dns-checker): verify SPF, DKIM, and DMARC for a sending domain.
 `;
 }
 
