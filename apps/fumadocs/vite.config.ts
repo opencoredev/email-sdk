@@ -71,6 +71,12 @@ export default defineConfig(({ mode }) => {
     // server/middleware/geo.ts sends page requests to Notra GEO analytics.
     nitro: {
       serverDir: "./server",
+      // Old /docs/v/<x> pages are prerendered to static files, so headers set in
+      // route handlers never reach production. Route rules become platform
+      // routing config (Vercel config.json) and also cover the .md mirrors.
+      routeRules: {
+        "/docs/v/**": { headers: { "x-robots-tag": "noindex, follow" } },
+      },
     },
     define: {
       "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),

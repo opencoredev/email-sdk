@@ -10,10 +10,12 @@ import {
   getComparePairTitle,
   getFallbackGaps,
   getProvider,
+  getProviderApiGuides,
 } from "@/lib/compare";
 import {
   buildCompareDescription,
   buildCompareFaq,
+  buildComparePageTitle,
   fallbackSnippet,
   listFields,
   sendSnippet,
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/compare/$pair")({
     if (!pair) return {};
 
     const title = getComparePairTitle(pair);
-    const pageTitle = `${title}: transactional email API comparison - ${appName}`;
+    const pageTitle = `${buildComparePageTitle(pair)} - ${appName}`;
     const description = buildCompareDescription(pair);
     const canonicalUrl = `${siteUrl}/compare/${pair.slug}`;
     const imageUrl = `${siteUrl}/og/compare/${pair.slug}.png`;
@@ -115,6 +117,7 @@ function ComparePage() {
   const gapsAtoB = getFallbackGaps(pair.a, pair.b);
   const gapsBtoA = getFallbackGaps(pair.b, pair.a);
   const faq = buildCompareFaq(pair);
+  const apiGuides = getProviderApiGuides(pair);
 
   return (
     <HomeLayout {...baseOptions()}>
@@ -126,6 +129,11 @@ function ComparePage() {
             </Link>
           </p>
           <h1 className="mt-3 text-4xl font-medium leading-tight md:text-5xl">{title}</h1>
+          {pair.search ? (
+            <p className="mt-5 text-base leading-7 text-fd-foreground md:text-lg">
+              <strong className="font-medium">Short answer:</strong> {pair.search.verdict}
+            </p>
+          ) : null}
           <p className="mt-5 text-base leading-7 text-fd-muted-foreground md:text-lg">
             {pair.intro}
           </p>
@@ -217,6 +225,19 @@ function ComparePage() {
                 </Link>
                 .
               </p>
+              {apiGuides.map((guide) => (
+                <p className="mt-3" key={guide.slug}>
+                  Calling the API directly? Read the{" "}
+                  <Link
+                    className="text-fd-primary underline-offset-4 hover:underline"
+                    params={{ slug: guide.slug }}
+                    to="/blog/$slug"
+                  >
+                    {guide.title}
+                  </Link>
+                  .
+                </p>
+              ))}
             </CompareSection>
           </div>
         </article>

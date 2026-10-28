@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "bun:test";
 
-import { getLocalBlogPostDetail } from "./local-blog-runtime";
+import { getLocalBlogPostDetail, getLocalBlogPostMarkdown } from "./local-blog-runtime";
 import { localBlogPosts } from "./local-blog-posts";
 
 const slug = "email-sdk-v1-safer-typescript-transactional-email";
@@ -43,5 +43,22 @@ describe("local blog posts", () => {
     expect(detail?.html).toContain("/blog/email-sdk-v1/adapter-pipeline.svg");
     expect(detail?.html).not.toContain("<h1>");
     expect(detail?.html.toLowerCase()).not.toContain("mcp");
+  });
+
+  test("every local post has a Markdown body and a social card", () => {
+    for (const post of localBlogPosts) {
+      expect(getLocalBlogPostMarkdown(post.slug)?.length ?? 0).toBeGreaterThan(500);
+      expect(getLocalBlogPostDetail(post.slug)?.html.length ?? 0).toBeGreaterThan(500);
+      expect(existsSync(fileURLToPath(new URL(`../../public${post.image}`, import.meta.url)))).toBeTrue();
+    }
+  });
+
+  test("renders the Mailgun API guide without MDX leftovers", () => {
+    const html = getLocalBlogPostDetail("mailgun-api-nodejs-typescript")?.html ?? "";
+
+    expect(html).toContain("api.eu.mailgun.net");
+    expect(html).toContain("<table>");
+    expect(html).not.toContain("<h1>");
+    expect(html).not.toMatch(/<(Callout|Cards|Card|PackageInstallTabs)\b/);
   });
 });

@@ -1,4 +1,5 @@
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
+import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
 import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
@@ -7,6 +8,7 @@ import { localBlogPosts } from "./local-blog-posts";
 // mirror both read from here, so adding a post means adding one entry.
 const localBlogMarkdown = new Map([
   ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
+  ["mailgun-api-nodejs-typescript", mailgunApiMarkdown],
 ]);
 
 const localBlogBodies = new Map(
