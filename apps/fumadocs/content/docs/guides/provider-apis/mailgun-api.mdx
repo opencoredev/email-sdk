@@ -11,7 +11,7 @@ Every Mailgun detail on this page was checked against [Mailgun's documentation](
 
 - A Mailgun account and a sending domain. New accounts get a sandbox domain that can only send to up to 5 authorized recipients ([Sandbox domain](https://documentation.mailgun.com/docs/mailgun/user-manual/domains/domains-sandbox), checked Oct 2026). For real traffic, add your own domain and verify its DNS records. The [email DNS checker](/tools/email-dns-checker) shows whether SPF, DKIM, and DMARC resolve.
 - An API key, covered in the next section.
-- A server runtime with `fetch`, `FormData`, and `Blob` built in. The examples below ran unchanged on Node.js 24 and Bun 1.4. Keep this code on the server: an API key in a browser bundle lets anyone send mail from your domain.
+- A server runtime with `fetch`, `FormData`, and `Blob` built in. The raw `fetch` examples below ran unchanged on Node.js 24 and Bun 1.4. Keep this code on the server: an API key in a browser bundle lets anyone send mail from your domain.
 
 ## Authenticate with an API key
 
@@ -43,7 +43,7 @@ Regions are isolated for webhooks too: a webhook created in the US region does n
 
 ## Send an email with fetch
 
-The endpoint is `POST {base}/v3/{domain}/messages` with a `multipart/form-data` body ([Send an email](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages), checked Oct 2026). `from`, `to`, and `subject` are required, plus at least one of `text`, `html`, `amp-html`, or `template`. Mailgun builds the MIME message for you.
+The endpoint is `POST {base}/v3/{domain}/messages` with a `multipart/form-data` body ([Send an email](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages), checked Oct 2026). `from`, `to`, and `subject` are required, plus at least one of `text`, `html`, `amp-html`, or `template`. A stored template with a preset From or Subject header can supply those two. Mailgun builds the MIME message for you.
 
 This script sends an invoice email with a tag, a custom variable, a Reply-To header, and a PDF attachment:
 
@@ -168,14 +168,14 @@ const retryable = new Set([429, 500, 502, 503, 504]);
 export async function sendWithRetry(
   url: string,
   apiKey: string,
-  buildForm: () => FormData,
+  form: FormData,
   maxAttempts = 3,
 ): Promise<MailgunSendResult> {
   for (let attempt = 1; ; attempt += 1) {
     const response = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Basic ${btoa(`api:${apiKey}`)}` },
-      body: buildForm(),
+      body: form,
     });
 
     const body: unknown = await response.json().catch(() => undefined);
@@ -212,8 +212,6 @@ function readString(value: unknown, key: string): string | undefined {
   return typeof field === "string" ? field : undefined;
 }
 ```
-
-`buildForm` is a function because a `FormData` body is consumed by the first request, so each attempt builds a fresh one.
 
 <Callout type="warn" title="Retries can send twice">
   The Messages API takes no idempotency key. If a request times out or returns a `5xx` after Mailgun queued the message, a retry delivers a second copy. Retry those cases only when a duplicate is better than a missing email.
@@ -253,10 +251,10 @@ export function verifyMailgunSignature(signingKey: string, { timestamp, token, s
 
   if (seenTokens.has(token)) return false;
 
-  const expected = createHmac("sha256", signingKey).update(timestamp + token).digest("hex");
-  const valid =
-    expected.length === signature.length &&
-    timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  if (!/^[0-9a-f]{64}$/i.test(signature)) return false;
+
+  const expected = createHmac("sha256", signingKey).update(timestamp + token).digest();
+  const valid = timingSafeEqual(expected, Buffer.from(signature, "hex"));
 
   if (valid) seenTokens.add(token);
 
