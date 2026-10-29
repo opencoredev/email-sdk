@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "resend-api-nodejs-typescript",
+    title: "Resend API Guide for Node.js and TypeScript",
+    description:
+      "Use the Resend API from Node.js and TypeScript with fetch: API keys, attachments, scheduling, idempotency keys, batch sends, rate limits, and webhook signatures.",
+    publishedAt: "2026-10-29",
+    updatedAt: "2026-10-29",
+    readTime: "15 min read",
+    image: "/og/blog/resend-api-nodejs-typescript.svg",
+    imageAlt: "Resend API guide card: fetch, idempotency keys, retries and webhooks in TypeScript",
+    tags: ["Resend", "Node.js", "TypeScript"],
+  },
+  {
     slug: "sendgrid-alternatives",
     title: "SendGrid Alternatives for Developers, and How to Switch",
     description:

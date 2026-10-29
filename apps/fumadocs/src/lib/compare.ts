@@ -98,7 +98,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-postmark",
     a: "resend",
     b: "postmark",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-29",
     intro:
       "Resend and Postmark are both developer-first transactional email APIs, but they grew up in different eras. Postmark has spent over a decade earning a reputation for fast, reliable inbox delivery and strict separation of transactional and broadcast streams, which makes it a favorite for password resets, receipts, and other must-arrive mail. Resend is the newer entrant, built by the team behind React Email, and wins on developer experience: a modern dashboard, first-class React templates, and quick domain setup. In the message model the practical differences show up at the edges — Resend supports scheduled sending natively while Postmark does not, and Postmark exposes structured metadata on each message while Resend leans on tags. Both handle CC, BCC, reply-to, custom headers, and attachments without fuss.",
   },
@@ -114,7 +114,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-ses",
     a: "resend",
     b: "ses",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     search: {
       title: "Resend vs Amazon SES: Managed API or AWS Infrastructure?",
       description:
@@ -144,7 +144,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-loops",
     a: "resend",
     b: "loops",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     search: {
       title: "Resend vs Loops: Which Should You Use for Transactional Email?",
       description:
@@ -159,7 +159,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailersend",
     a: "resend",
     b: "mailersend",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-29",
     intro:
       "MailerSend is the transactional arm of the MailerLite family, and it inherits that lineage: a generous free tier, a template gallery with a drag-and-drop editor, and team-friendly features like domain-level permissions that appeal to mixed marketing-and-engineering orgs. Its API covers the full common surface — CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — making it structurally one of the closest matches to Resend in the SDK's capability matrix; neither exposes per-message metadata. Resend differentiates on developer experience instead: React Email integration, a minimal API, and fast domain verification. Costs diverge with volume and features, so the practical decision is usually whether you want MailerSend's built-in template tooling or prefer owning templates in code with Resend and React Email.",
   },
@@ -167,7 +167,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailtrap",
     a: "resend",
     b: "mailtrap",
-    lastmod: "2026-10-26",
+    lastmod: "2026-10-29",
     intro:
       "Mailtrap grew up as an email testing product: its Email Sandbox is a fake SMTP server that captures outgoing mail in dev, staging, and QA so nothing reaches real inboxes, and its Email Sending API handles production delivery from the same account. Resend skips the sandbox story and focuses on a polished transactional API with fast onboarding and React Email templates. In the unified message shape the two trade exactly one field each way: Mailtrap carries per-message metadata (sent as custom_variables) and Resend does not, while Resend supports native scheduled sending and Mailtrap has none. Two Mailtrap edges matter when it sits behind another adapter: a message may carry at most one tag, which Mailtrap stores as its category, and at most one replyTo, and the SDK rejects a second of either before any request. With Email SDK the swap is a one-line adapter change, so testing on Mailtrap's sandbox and sending through either provider can share the same send call.",
   },
@@ -309,6 +309,13 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "mailgun-alternatives",
       title: "Mailgun alternatives guide",
       lead: "Moving off Mailgun?",
+    },
+  ],
+  resend: [
+    {
+      slug: "resend-api-nodejs-typescript",
+      title: "Resend API guide for Node.js and TypeScript",
+      lead: "Calling the API directly?",
     },
   ],
   sendgrid: [
