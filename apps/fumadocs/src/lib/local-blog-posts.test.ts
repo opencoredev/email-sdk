@@ -61,4 +61,20 @@ describe("local blog posts", () => {
     expect(html).not.toContain("<h1>");
     expect(html).not.toMatch(/<(Callout|Cards|Card|PackageInstallTabs)\b/);
   });
+
+  test("renders the SendGrid and Mailgun alternatives guides without MDX leftovers", () => {
+    for (const [guideSlug, provider] of [
+      ["sendgrid-alternatives", "SendGrid"],
+      ["mailgun-alternatives", "Mailgun"],
+    ] as const) {
+      const html = getLocalBlogPostDetail(guideSlug)?.html ?? "";
+
+      expect(html).toContain(`Migrate with ${provider} as the fallback`);
+      expect(html).toContain("<table>");
+      expect(html).toContain("onUnknownDelivery");
+      expect(html).not.toContain("<h1>");
+      expect(html).not.toContain('href="#');
+      expect(html).not.toMatch(/<(Callout|Cards|Card|PackageInstallTabs)\b/);
+    }
+  });
 });

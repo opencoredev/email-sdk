@@ -1,5 +1,7 @@
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
+import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
+import sendgridAlternativesMarkdown from "../../content/blog/sendgrid-alternatives.md?raw";
 import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
@@ -9,6 +11,8 @@ import { localBlogPosts } from "./local-blog-posts";
 const localBlogMarkdown = new Map([
   ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
   ["mailgun-api-nodejs-typescript", mailgunApiMarkdown],
+  ["sendgrid-alternatives", sendgridAlternativesMarkdown],
+  ["mailgun-alternatives", mailgunAlternativesMarkdown],
 ]);
 
 const localBlogBodies = new Map(
