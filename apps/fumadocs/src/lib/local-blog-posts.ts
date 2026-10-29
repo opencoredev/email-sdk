@@ -3,7 +3,7 @@ import type { BlogPost } from "./blog-types";
 export const localBlogPosts: readonly BlogPost[] = [
   {
     slug: "sendgrid-alternatives",
-    title: "SendGrid Alternatives for Developers: Prices, API Fit, and a Safe Switch",
+    title: "SendGrid Alternatives for Developers, and How to Switch",
     description:
       "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback.",
     publishedAt: "2026-10-29",
@@ -15,7 +15,7 @@ export const localBlogPosts: readonly BlogPost[] = [
   },
   {
     slug: "mailgun-alternatives",
-    title: "Mailgun Alternatives for Developers: Prices, Log Retention, and a Safe Switch",
+    title: "Mailgun Alternatives for Developers, and How to Switch",
     description:
       "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
     publishedAt: "2026-10-29",

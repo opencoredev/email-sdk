@@ -1,4 +1,4 @@
-# SendGrid Alternatives for Developers: Prices, API Fit, and a Safe Switch
+# SendGrid Alternatives for Developers, and How to Switch
 
 People leave SendGrid for two reasons. Twilio [retired the free plan in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan), so even a side project now pays from $19.95 a month after the 60-day trial. The other reason is deliverability or support trouble, which this page can't measure for you. Either way, picking a provider is the easy part. The hard part is switching without a rewrite and without losing mail during the cutover.
 

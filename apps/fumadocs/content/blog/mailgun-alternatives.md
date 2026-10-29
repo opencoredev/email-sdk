@@ -1,4 +1,4 @@
-# Mailgun Alternatives for Developers: Prices, Log Retention, and a Safe Switch
+# Mailgun Alternatives for Developers, and How to Switch
 
 Mailgun is a capable API, and it still supports every message field Email SDK models. Teams usually look elsewhere for narrower reasons: the free plan and Basic keep [one day of logs](https://www.mailgun.com/pricing/), the free plan caps you at 100 emails a day, or they want a different deliverability or support experience. The switch itself is the risky part, because a half-finished migration loses mail.
 
