@@ -86,7 +86,7 @@ A provider can return a 5xx or time out after it already accepted your message. 
 
 Set `EMAIL_PRIMARY=postmark` in one environment first. Watch Postmark's activity feed and your error logs for a few days. To roll back, set `EMAIL_PRIMARY=sendgrid`.
 
-Once Postmark has handled a full week of real traffic, remove the SendGrid adapter, its API key, and its DNS records. Keep a `fallback` with another provider if you want a standing backup.
+Once Postmark has handled a full week of real traffic, remove the SendGrid adapter so no new mail goes to SendGrid. Wait until any scheduled sends SendGrid still holds have gone out, then delete its API key and DNS records. Keep a `fallback` with another provider if you want a standing backup.
 
 ### 5. Move what the SDK doesn't carry
 

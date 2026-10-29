@@ -106,7 +106,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-sendgrid",
     a: "resend",
     b: "sendgrid",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-29",
     intro:
       "SendGrid (now part of Twilio) is the incumbent of transactional email: it has been around since 2009, handles enormous volume, and its v3 Mail Send API covers nearly every feature a sender could ask for — including per-message metadata and scheduled sends. That maturity comes with a sprawling dashboard, IP-reputation management you may need to do yourself on shared pools, and a pricing ladder that can surprise you as volume grows. Resend is the opposite trade: a small, sharp API with excellent defaults, React Email templates, and a fast path from signup to first send, at the cost of fewer enterprise controls. On the message shape itself the two are nearly equivalent; SendGrid's extra metadata field support is the only structural difference the SDK has to reconcile.",
   },
@@ -129,7 +129,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailgun",
     a: "resend",
     b: "mailgun",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     search: {
       title: "Resend vs Mailgun: Which Email API Should Developers Use?",
       description:
@@ -175,7 +175,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-29",
     intro:
       "Postmark and SendGrid are the classic head-to-head of transactional email. Postmark's pitch is focus: transactional mail only (broadcasts live on a separate stream), consistently fast inbox delivery, 45 days of full-content message history, and pricing that is simple if never the cheapest. SendGrid's pitch is breadth: one platform for transactional and marketing email, dedicated IP options, subusers for multi-tenant setups, and an API that has accumulated every feature over fifteen years — including native scheduled sending, which Postmark lacks. Both support CC, BCC, reply-to, custom headers, attachments, tags, and per-message metadata in the unified message shape, so switching between them with the SDK is nearly lossless; only scheduled sends need a migration plan when moving from SendGrid to Postmark, and the SDK's field checks will flag exactly that.",
   },
@@ -183,7 +183,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     intro:
       "Postmark and Mailgun both come from the developer-tools generation of email providers, but they optimize for different things. Postmark optimizes for deliverability and clarity: separate transactional and broadcast message streams, aggressive list hygiene, detailed delivery events, and a UI your support team can actually use. Mailgun optimizes for flexibility: powerful routing and inbound parsing, EU region hosting for data residency, send-time optimization, and native scheduled delivery — the one field in the unified message shape Postmark doesn't support. Both carry CC, BCC, reply-to, headers, attachments, tags, and metadata, so the SDK can fail over between them for most messages. Teams typically choose Postmark for critical low-volume transactional mail and Mailgun when inbound processing or EU residency is a requirement — or run both, with one as the fallback route.",
   },
@@ -199,7 +199,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     intro:
       "SendGrid and Mailgun are the two heavyweight generalists of email infrastructure, and on the unified message shape they are actually identical: both support every field the SDK models — CC, BCC, reply-to, custom headers, attachments, tags, metadata, and scheduled sending — which makes them fully interchangeable as fallbacks for each other. The decision therefore comes down to the platforms around the API. SendGrid brings Twilio-scale infrastructure, marketing campaigns in the same account, subusers, and granular IP management. Mailgun counters with stronger inbound mail processing, straightforward EU data residency, message retention options, and a reputation for developer-friendly logs and webhooks. Pricing at low volume is comparable; at high volume both reward negotiation, so benchmark real traffic — ideally through the SDK, where swapping the adapter is one line — before committing either way.",
   },
@@ -207,7 +207,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     search: {
       title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
       description:
@@ -222,7 +222,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-brevo",
     a: "sendgrid",
     b: "brevo",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-29",
     intro:
       "SendGrid and Brevo (formerly Sendinblue) both bundle transactional and marketing email into one platform, and both support the entire unified message shape — CC, BCC, reply-to, headers, attachments, tags, metadata, and scheduled sending — so with the SDK they are drop-in replacements for each other at the API level. The differences are commercial and regional. Brevo is European, GDPR-native, and prices by messages sent rather than contacts stored, with a workable free tier that makes it popular with early-stage teams; it also folds in SMS, WhatsApp, and a CRM. SendGrid is the larger sender with deeper deliverability tooling, dedicated IP options, and Twilio's enterprise support behind it. For EU-heavy audiences Brevo's regional footing is a genuine advantage; for very high volume SendGrid's infrastructure usually wins.",
   },
@@ -230,7 +230,7 @@ export const comparePairs: ComparePair[] = [
     slug: "mailgun-vs-ses",
     a: "mailgun",
     b: "ses",
-    lastmod: "2026-10-28",
+    lastmod: "2026-10-29",
     search: {
       title: "Mailgun vs Amazon SES: Price, Features and Fallback",
       description:

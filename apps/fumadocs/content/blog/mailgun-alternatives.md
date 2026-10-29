@@ -86,7 +86,7 @@ A provider can return a 5xx or time out after it already accepted your message. 
 
 Set `EMAIL_PRIMARY=resend` in one environment first. Watch Resend's logs and your error logs for a few days. To roll back, set `EMAIL_PRIMARY=mailgun`.
 
-Once Resend has handled a full week of real traffic, remove the Mailgun adapter, its API key, and its DNS records. Keep a `fallback` with another provider if you want a standing backup.
+Once Resend has handled a full week of real traffic, remove the Mailgun adapter so no new mail goes to Mailgun. Wait until any scheduled sends Mailgun still holds have gone out, then delete its API key and DNS records. Keep a `fallback` with another provider if you want a standing backup.
 
 ### 5. Move webhooks
 
