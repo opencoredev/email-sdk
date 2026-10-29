@@ -5,7 +5,7 @@ import {
   getFallbackGaps,
   getFieldSupport,
   getProvider,
-  getProviderApiGuides,
+  getProviderBlogGuides,
   messageFieldLabels,
   messageFields,
   type ProviderKey,
@@ -179,7 +179,7 @@ ${faq.map((entry) => `### ${entry.question}\n\n${entry.answer}`).join("\n\n")}
 
 - [${a.name} adapter](${siteUrl}${a.docs})
 - [${b.name} adapter](${siteUrl}${b.docs})
-${getProviderApiGuides(pair)
+${getProviderBlogGuides(pair)
   .map((guide) => `- [${guide.title}](${siteUrl}/blog/${guide.slug})\n`)
   .join("")}- [Email DNS checker](${siteUrl}/tools/email-dns-checker): verify SPF, DKIM, and DMARC for a sending domain.
 `;

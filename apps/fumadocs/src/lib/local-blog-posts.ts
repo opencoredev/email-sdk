@@ -2,6 +2,30 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "sendgrid-alternatives",
+    title: "SendGrid Alternatives for Developers: Prices, API Fit, and a Safe Switch",
+    description:
+      "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback.",
+    publishedAt: "2026-10-29",
+    updatedAt: "2026-10-29",
+    readTime: "11 min read",
+    image: "/og/blog/sendgrid-alternatives.svg",
+    imageAlt: "SendGrid alternatives card: sourced prices, field support, and a fallback migration in TypeScript",
+    tags: ["SendGrid", "Migration", "TypeScript"],
+  },
+  {
+    slug: "mailgun-alternatives",
+    title: "Mailgun Alternatives for Developers: Prices, Log Retention, and a Safe Switch",
+    description:
+      "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
+    publishedAt: "2026-10-29",
+    updatedAt: "2026-10-29",
+    readTime: "11 min read",
+    image: "/og/blog/mailgun-alternatives.svg",
+    imageAlt: "Mailgun alternatives card: sourced prices, log retention, and a fallback migration in TypeScript",
+    tags: ["Mailgun", "Migration", "TypeScript"],
+  },
+  {
     slug: "mailgun-api-nodejs-typescript",
     title: "Mailgun API Guide for Node.js and TypeScript",
     description:

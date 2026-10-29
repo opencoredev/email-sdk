@@ -10,7 +10,7 @@ import {
   getComparePairTitle,
   getFallbackGaps,
   getProvider,
-  getProviderApiGuides,
+  getProviderBlogGuides,
 } from "@/lib/compare";
 import {
   buildCompareDescription,
@@ -117,7 +117,7 @@ function ComparePage() {
   const gapsAtoB = getFallbackGaps(pair.a, pair.b);
   const gapsBtoA = getFallbackGaps(pair.b, pair.a);
   const faq = buildCompareFaq(pair);
-  const apiGuides = getProviderApiGuides(pair);
+  const blogGuides = getProviderBlogGuides(pair);
 
   return (
     <HomeLayout {...baseOptions()}>
@@ -225,9 +225,9 @@ function ComparePage() {
                 </Link>
                 .
               </p>
-              {apiGuides.map((guide) => (
+              {blogGuides.map((guide) => (
                 <p className="mt-3" key={guide.slug}>
-                  Calling the API directly? Read the{" "}
+                  {guide.lead} Read the{" "}
                   <Link
                     className="text-fd-primary underline-offset-4 hover:underline"
                     params={{ slug: guide.slug }}

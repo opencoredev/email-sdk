@@ -290,20 +290,38 @@ export const adapterConfigSnippets: Partial<Record<ProviderKey, string>> = {
   })`,
 };
 
-/** Blog guides to a provider's own API, linked from every compare page that includes the provider. */
-export const providerApiGuides: Partial<Record<ProviderKey, { slug: string; title: string }>> = {
-  mailgun: {
-    slug: "mailgun-api-nodejs-typescript",
-    title: "Mailgun API guide for Node.js and TypeScript",
-  },
+export type ProviderBlogGuide = {
+  slug: string;
+  title: string;
+  /** Question shown before the link, for example "Moving off SendGrid?". */
+  lead: string;
 };
 
-export function getProviderApiGuides(pair: ComparePair) {
-  return [pair.a, pair.b].flatMap((key) => {
-    const guide = providerApiGuides[key];
+/** Blog guides about a provider, linked from every compare page that includes the provider. */
+export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBlogGuide[]>> = {
+  mailgun: [
+    {
+      slug: "mailgun-api-nodejs-typescript",
+      title: "Mailgun API guide for Node.js and TypeScript",
+      lead: "Calling the API directly?",
+    },
+    {
+      slug: "mailgun-alternatives",
+      title: "Mailgun alternatives guide",
+      lead: "Moving off Mailgun?",
+    },
+  ],
+  sendgrid: [
+    {
+      slug: "sendgrid-alternatives",
+      title: "SendGrid alternatives guide",
+      lead: "Moving off SendGrid?",
+    },
+  ],
+};
 
-    return guide ? [guide] : [];
-  });
+export function getProviderBlogGuides(pair: ComparePair): ProviderBlogGuide[] {
+  return [pair.a, pair.b].flatMap((key) => providerBlogGuides[key] ?? []);
 }
 
 export function getAdapterConfigSnippet(key: ProviderKey): string {

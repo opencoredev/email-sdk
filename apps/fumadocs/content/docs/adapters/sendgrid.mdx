@@ -14,6 +14,8 @@ These values come from the adapter's exported `capabilities` declaration. The [f
 
 The SendGrid adapter calls the [Twilio SendGrid Mail Send API](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send) with plain `fetch`. It supports every `EmailMessage` field: recipients land in a `personalizations` entry, `metadata` becomes `custom_args`, and tags become `categories`.
 
+Moving off SendGrid instead? [SendGrid alternatives for developers](/blog/sendgrid-alternatives) compares prices and field support, then switches providers with SendGrid kept as the fallback.
+
 <ProviderBadge adapter="sendgrid" />
 
 ## Configure
