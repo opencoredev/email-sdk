@@ -45,9 +45,9 @@ function getSitemapEntries() {
   }, "2026-10-05");
 
   // Canonical HTML pages only, plus the RSS feed. Machine files (llms.txt,
-  // llms-full.txt, llms.md, the .md mirrors, agents.md, auth.md, feed.json,
-  // feeds/docs.jsonl) stay served for agents, but listing them here invites
-  // search engines to index them as thin duplicates of the HTML pages.
+  // llms-full.txt, llms.md, docs/llms.txt, the .md mirrors, agents.md,
+  // auth.md, feed.json, feeds/docs.jsonl) stay served for agents, but listing
+  // them here invites search engines to index them as thin duplicates.
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
