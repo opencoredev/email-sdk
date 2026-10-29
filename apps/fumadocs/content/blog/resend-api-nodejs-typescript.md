@@ -21,9 +21,9 @@ A key has one of two permissions ([Create API key](https://resend.com/docs/api-r
 | Permission | What it can do | Use it for |
 | --- | --- | --- |
 | `full_access` | Create, read, update, and delete any resource | Admin scripts, domain and webhook setup |
-| `sending_access` | Send email only, optionally limited to one domain | The send path in your application |
+| `sending_access` | Send email, plus replying, forwarding, and drafts in Resend Inboxes; optionally limited to one domain | The send path in your application |
 
-Give your app a `sending_access` key scoped to its domain. Resend shows the key value once, so copy it into your secret store right away. A sending key that calls any other endpoint gets `401 restricted_api_key`.
+Give your app a `sending_access` key scoped to its domain. Resend shows the key value once, so copy it into your secret store right away. A sending key that calls an admin endpoint, such as domains or API keys, gets `401 restricted_api_key`.
 
 ## Send an email with fetch
 
