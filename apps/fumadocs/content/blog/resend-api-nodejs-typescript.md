@@ -130,7 +130,7 @@ Resend returns standard HTTP status codes, and error bodies carry a `name` such 
 
 The default rate limit is 10 requests per second per team, shared by every API key on the team ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Oct 2026). Responses carry `ratelimit-limit`, `ratelimit-remaining`, `ratelimit-reset`, and `retry-after`, all in seconds. Free plans also have a daily quota that resets at midnight UTC.
 
-This helper retries `429` rate limits and `5xx` errors with the same idempotency key on every attempt. It waits for `retry-after` when Resend sends one, caps any single wait at 30 seconds, and gives up on quota errors right away:
+This helper retries network errors, timeouts, `429` rate limits, and `5xx` errors with the same idempotency key on every attempt. Each attempt times out after 10 seconds. It waits for `retry-after` when Resend sends one, caps any single wait at 30 seconds, and gives up on quota errors right away:
 
 `send-with-retry.ts`:
 
@@ -147,15 +147,27 @@ export async function sendWithRetry(
   maxAttempts = 3,
 ): Promise<ResendSendResult> {
   for (let attempt = 1; ; attempt += 1) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
-      },
-      body: JSON.stringify(payload),
-    });
+    let response: Response;
+
+    try {
+      response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (attempt >= maxAttempts) return { ok: false, status: 0, name: "network_error", message };
+
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs(undefined, attempt)));
+      continue;
+    }
 
     const body: unknown = await response.json().catch(() => undefined);
 
@@ -178,9 +190,9 @@ export async function sendWithRetry(
   }
 }
 
-function retryDelayMs(response: Response, attempt: number) {
+function retryDelayMs(response: Response | undefined, attempt: number) {
   const backoff = 500 * 2 ** (attempt - 1);
-  const retryAfter = Number(response.headers.get("retry-after")) * 1000;
+  const retryAfter = Number(response?.headers.get("retry-after")) * 1000;
 
   return Math.min(Math.max(backoff, Number.isFinite(retryAfter) ? retryAfter : 0), 30_000);
 }
@@ -193,7 +205,7 @@ function readString(value: unknown, key: string): string | undefined {
 }
 ```
 
-Because the key stays the same across attempts, a retry after a timeout or a `5xx` can't produce a second email within Resend's 24-hour window. Without the header, the same retry could deliver a duplicate.
+Because the key stays the same across attempts, a retry after a timeout, a dropped connection, or a `5xx` can't produce a second email within Resend's 24-hour window, even if the first request did get through. Without the header, the same retry could deliver a duplicate. `status: 0` in the result means no response arrived at all.
 
 ## Send a batch
 
@@ -339,7 +351,7 @@ The adapter posts to `https://api.resend.com/emails` with the fields you built b
 | `attachments` | `attachments`, with `content` Base64-encoded and `contentId` as `content_id` |
 | `idempotencyKey` send option | `Idempotency-Key` header |
 
-`result.id` is Resend's email ID. `metadata` on a message throws an `EmailValidationError` before any request, because Resend has no metadata field. Use `tags` for values that fit Resend's character rules.
+`result.id` is the email ID from the provider named in `result.adapter`: Resend's email ID when Resend sends, or Postmark's `MessageID` when the fallback does. Store both fields so you look up the message and match webhooks with the right provider. `metadata` on a message throws an `EmailValidationError` before any request, because Resend has no metadata field. Use `tags` for values that fit Resend's character rules.
 
 ### How the fallback behaves
 
