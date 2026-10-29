@@ -62,6 +62,17 @@ describe("local blog posts", () => {
     expect(html).not.toMatch(/<(Callout|Cards|Card|PackageInstallTabs)\b/);
   });
 
+  test("renders the Resend API guide without MDX leftovers", () => {
+    const html = getLocalBlogPostDetail("resend-api-nodejs-typescript")?.html ?? "";
+
+    expect(html).toContain("Idempotency-Key");
+    expect(html).toContain("svix-signature");
+    expect(html).toContain("onUnknownDelivery");
+    expect(html).toContain("<table>");
+    expect(html).not.toContain("<h1>");
+    expect(html).not.toMatch(/<(Callout|Cards|Card|PackageInstallTabs)\b/);
+  });
+
   test("renders the SendGrid and Mailgun alternatives guides without MDX leftovers", () => {
     for (const [guideSlug, provider] of [
       ["sendgrid-alternatives", "SendGrid"],
