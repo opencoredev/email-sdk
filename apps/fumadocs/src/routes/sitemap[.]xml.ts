@@ -37,11 +37,6 @@ function getSitemapEntries() {
       "2026-06-01",
     ) || "2026-06-01";
 
-  const latestDocsUpdate = Object.values(docsLastmod).reduce(
-    (latest, date) => (date > latest ? date : latest),
-    "2026-06-01",
-  );
-
   // Seed is the index page's own lastmod; pair edits push it later.
   const compareLastmod = comparePairs.reduce((latest, pair) => {
     const date = comparePairLastmod(pair);
@@ -49,21 +44,10 @@ function getSitemapEntries() {
     return date > latest ? date : latest;
   }, "2026-10-05");
 
-  // /llms.txt indexes docs, comparisons, and blog posts; /llms-full.txt inlines
-  // docs and comparisons. Each lastmod follows the newest dependency, floored
-  // at the routes' own last content edit.
-  const llmsIndexLastmod = [
-    latestDocsUpdate,
-    latestBlogUpdate,
-    compareLastmod,
-    "2026-10-05",
-  ].reduce((latest, date) => (date > latest ? date : latest), "");
-
-  const llmsFullLastmod = [latestDocsUpdate, compareLastmod, "2026-10-05"].reduce(
-    (latest, date) => (date > latest ? date : latest),
-    "",
-  );
-
+  // Canonical HTML pages only, plus the RSS feed. Machine files (llms.txt,
+  // llms-full.txt, llms.md, docs/llms.txt, the .md mirrors, agents.md,
+  // auth.md, feed.json, feeds/docs.jsonl) stay served for agents, but listing
+  // them here invites search engines to index them as thin duplicates.
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
@@ -138,61 +122,7 @@ function getSitemapEntries() {
       priority: "0.8",
     })),
     {
-      loc: `${siteUrl}/llms.txt`,
-      lastmod: llmsIndexLastmod,
-      changefreq: "weekly",
-      priority: "0.5",
-    },
-    {
-      loc: `${siteUrl}/llms-full.txt`,
-      lastmod: llmsFullLastmod,
-      changefreq: "weekly",
-      priority: "0.5",
-    },
-    {
-      loc: `${siteUrl}/llms.md`,
-      lastmod: llmsIndexLastmod,
-      changefreq: "weekly",
-      priority: "0.4",
-    },
-    {
-      loc: `${siteUrl}/docs/llms.txt`,
-      lastmod: latestDocsUpdate,
-      changefreq: "weekly",
-      priority: "0.4",
-    },
-    {
-      loc: `${siteUrl}/index.md`,
-      lastmod: "2026-09-28",
-      changefreq: "weekly",
-      priority: "0.4",
-    },
-    {
-      loc: `${siteUrl}/agents.md`,
-      lastmod: "2026-10-12",
-      changefreq: "monthly",
-      priority: "0.3",
-    },
-    {
-      loc: `${siteUrl}/auth.md`,
-      lastmod: "2026-08-31",
-      changefreq: "monthly",
-      priority: "0.3",
-    },
-    {
-      loc: `${siteUrl}/feeds/docs.jsonl`,
-      lastmod: llmsIndexLastmod,
-      changefreq: "weekly",
-      priority: "0.3",
-    },
-    {
       loc: `${siteUrl}/rss.xml`,
-      lastmod: latestBlogUpdate,
-      changefreq: "weekly",
-      priority: "0.3",
-    },
-    {
-      loc: `${siteUrl}/feed.json`,
       lastmod: latestBlogUpdate,
       changefreq: "weekly",
       priority: "0.3",
