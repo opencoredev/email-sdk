@@ -51,7 +51,7 @@ function getSitemapEntries() {
   const entries: SitemapEntry[] = [
     {
       loc: `${siteUrl}/`,
-      lastmod: "2026-09-28",
+      lastmod: "2026-10-30",
       changefreq: "weekly",
       priority: "1.0",
     },

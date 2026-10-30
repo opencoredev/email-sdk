@@ -20,7 +20,7 @@
   "adapters/postmark.mdx": "2026-09-06",
   "adapters/pricing.mdx": "2026-09-26",
   "adapters/primitive.mdx": "2026-09-06",
-  "adapters/resend.mdx": "2026-10-29",
+  "adapters/resend.mdx": "2026-10-30",
   "adapters/scaleway.mdx": "2026-09-06",
   "adapters/sendgrid.mdx": "2026-10-29",
   "adapters/sendheron.mdx": "2026-09-26",

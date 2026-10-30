@@ -63,6 +63,22 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
     ],
   },
   {
+    label: "Guides",
+    links: [
+      { label: "Send email from Node.js", href: "/blog/send-email-nodejs-typescript", internal: true },
+      { label: "Resend API guide", href: "/blog/resend-api-nodejs-typescript", internal: true },
+      { label: "Mailgun API guide", href: "/blog/mailgun-api-nodejs-typescript", internal: true },
+    ],
+  },
+  {
+    label: "Choosing a provider",
+    links: [
+      { label: "Resend pricing", href: "/blog/resend-pricing", internal: true },
+      { label: "SendGrid alternatives", href: "/blog/sendgrid-alternatives", internal: true },
+      { label: "Mailgun alternatives", href: "/blog/mailgun-alternatives", internal: true },
+    ],
+  },
+  {
     label: "Legal",
     links: [
       { label: "Privacy", href: "/privacy", internal: true },

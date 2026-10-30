@@ -449,3 +449,4 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [Resend vs SendGrid](/compare/resend-vs-sendgrid) and [Resend vs Mailgun](/compare/resend-vs-mailgun): other providers next to Resend.
 - [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): the same walkthrough for Mailgun's multipart API.
 - [Resend pricing](/blog/resend-pricing): plans, the free tier's daily cap, overage rates, and what counts against the quota.
+- [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.

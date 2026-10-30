@@ -434,3 +434,5 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1 and
 - [Postmark vs Mailgun](/compare/postmark-vs-mailgun): field support side by side for the fallback pair used here.
 - [Resend vs Mailgun](/compare/resend-vs-mailgun) and [SendGrid vs Mailgun](/compare/sendgrid-vs-mailgun): other providers next to Mailgun.
 - [Mailgun vs Amazon SES](/compare/mailgun-vs-ses): unit price against an included operations layer.
+- [Mailgun alternatives](/blog/mailgun-alternatives): prices and log retention elsewhere, and a switch with Mailgun kept as the fallback.
+- [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.
