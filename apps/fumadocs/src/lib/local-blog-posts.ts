@@ -31,7 +31,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Resend API from Node.js and TypeScript with fetch: API keys, attachments, scheduling, idempotency keys, batch sends, rate limits, and webhook signatures.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-10-29",
+    updatedAt: "2026-10-30",
     readTime: "15 min read",
     image: "/og/blog/resend-api-nodejs-typescript.svg",
     imageAlt: "Resend API guide card: fetch, idempotency keys, retries and webhooks in TypeScript",
