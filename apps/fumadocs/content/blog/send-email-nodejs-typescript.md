@@ -168,7 +168,7 @@ export const email = createEmailClient({
 });
 ```
 
-How it behaves: the client tries Resend up to three times with the same idempotency key. If Resend still fails, the fallback depends on whether Resend might have accepted the message. The Resend adapter reports every failed request, an HTTP error or a network error, as delivery `"unknown"`, because a timeout can't prove the provider didn't accept it. The default, `onUnknownDelivery: "stop"`, throws an `EmailRouteError` and never calls Postmark. Setting it to `"continue"`, as above, sends through Postmark anyway and accepts that the recipient might get two copies. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the choice.
+How it behaves: the client tries Resend up to three times. Pass an `idempotencyKey` to `email.send`, as `send-welcome.ts` does, so every attempt carries the same key and a retry can't send twice. Without one, a request Resend accepted but answered with an error can be sent again. If Resend still fails, the fallback depends on whether Resend might have accepted the message. The Resend adapter reports every failed request, an HTTP error or a network error, as delivery `"unknown"`, because a timeout can't prove the provider didn't accept it. The default, `onUnknownDelivery: "stop"`, throws an `EmailRouteError` and never calls Postmark. Setting it to `"continue"`, as above, sends through Postmark anyway and accepts that the recipient might get two copies. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the choice.
 
 ## Test without sending real email
 
@@ -182,7 +182,7 @@ import { expect, test } from "bun:test";
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 
-test("signup sends one welcome email", async () => {
+test("records a welcome email without sending it", async () => {
   const memory = memoryAdapter();
   const email = createEmailClient({ adapters: [memory] });
 
@@ -197,6 +197,8 @@ test("signup sends one welcome email", async () => {
   expect(memory.raw?.sent[0]?.message.to).toBe("ada@example.com");
 });
 ```
+
+In an app, build the client from `memoryAdapter()` when `NODE_ENV` is `test`, the same way `email.ts` picks Resend or SMTP, so tests run your real send functions against it.
 
 With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` returns the message as JSON without connecting anywhere, and [Ethereal](https://ethereal.email) gives you a throwaway SMTP inbox to look at the rendered email. [Test email behavior](/docs/guides/test-email-behavior) covers failure cases with Email SDK.
 
