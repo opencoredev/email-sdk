@@ -448,3 +448,4 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [Resend vs Postmark](/compare/resend-vs-postmark): field support side by side for the fallback pair used here.
 - [Resend vs SendGrid](/compare/resend-vs-sendgrid) and [Resend vs Mailgun](/compare/resend-vs-mailgun): other providers next to Resend.
 - [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): the same walkthrough for Mailgun's multipart API.
+- [Resend pricing](/blog/resend-pricing): plans, the free tier's daily cap, overage rates, and what counts against the quota.
