@@ -2,6 +2,30 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "resend-pricing",
+    title: "Resend Pricing: Free Tier, Pro, Scale and Overage",
+    description:
+      "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume.",
+    publishedAt: "2026-10-30",
+    updatedAt: "2026-10-30",
+    readTime: "8 min read",
+    image: "/og/blog/resend-pricing.svg",
+    imageAlt: "Resend pricing card: free tier, Pro and Scale plans, and overage rates",
+    tags: ["Resend", "Pricing", "Transactional email"],
+  },
+  {
+    slug: "send-email-nodejs-typescript",
+    title: "How to Send Email from Node.js and TypeScript",
+    description:
+      "Send email from Node.js and TypeScript with SMTP and Nodemailer, a provider's HTTP API and fetch, or one client for any provider, and test it without sending.",
+    publishedAt: "2026-10-30",
+    updatedAt: "2026-10-30",
+    readTime: "7 min read",
+    image: "/og/blog/send-email-nodejs-typescript.svg",
+    imageAlt: "Send email from Node.js card: SMTP, HTTP APIs, and one client for any provider",
+    tags: ["Node.js", "TypeScript", "Nodemailer"],
+  },
+  {
     slug: "resend-api-nodejs-typescript",
     title: "Resend API Guide for Node.js and TypeScript",
     description:
