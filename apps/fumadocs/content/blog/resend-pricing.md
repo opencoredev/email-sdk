@@ -21,7 +21,7 @@ Resend bills transactional email (the `/emails` API) separately from marketing e
 | Scale | $1,150 | 2,500,000 | $0.46 | none | 1,000 |
 | Enterprise | custom | custom | custom | none | by contract |
 
-All plans keep 30 days of email logs. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Billing is monthly only: Resend has no annual plans and no annual discount. Registered nonprofits can apply for 50% off paid plans.
+Free, Pro and Scale keep 30 days of email logs; Enterprise retention is set by contract. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Billing is monthly only: Resend has no annual plans and no annual discount. Registered nonprofits can apply for 50% off paid plans.
 
 Every plan includes the REST API, the SMTP relay, the official SDKs, inbound email, scheduled sending, batch sending, open and link tracking, and DKIM, SPF and DMARC authentication. Open and click tracking also work on Free.
 

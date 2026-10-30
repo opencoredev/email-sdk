@@ -92,7 +92,7 @@ const { id } = (await response.json()) as { id: string };
 console.log("Sent", id);
 ```
 
-The `Idempotency-Key` header means a retry with the same key can't send the email twice. Each provider names its fields differently, though: Postmark wants `From`, `To` and `HtmlBody`, Mailgun takes multipart form fields, and SES signs requests with AWS Signature Version 4. Code written against one API is a rewrite for the next. The provider guides walk through each API in full: [Resend](/blog/resend-api-nodejs-typescript) and [Mailgun](/blog/mailgun-api-nodejs-typescript).
+The `Idempotency-Key` header means a retry with the same key within 24 hours can't send the email twice ([Resend idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys)). Each provider names its fields differently, though: Postmark wants `From`, `To` and `HtmlBody`, Mailgun takes multipart form fields, and SES signs requests with AWS Signature Version 4. Code written against one API is a rewrite for the next. The provider guides walk through each API in full: [Resend](/blog/resend-api-nodejs-typescript) and [Mailgun](/blog/mailgun-api-nodejs-typescript).
 
 ## Option 3: one client for any provider
 
@@ -168,7 +168,7 @@ export const email = createEmailClient({
 });
 ```
 
-How it behaves: the client tries Resend up to three times with the same idempotency key. If Resend still fails, the fallback depends on whether Resend might have accepted the message. HTTP adapters report every failed request, an HTTP error or a network error, as delivery `"unknown"`, because a timeout can't prove the provider didn't accept it. The default, `onUnknownDelivery: "stop"`, throws an `EmailRouteError` and never calls Postmark. Setting it to `"continue"`, as above, sends through Postmark anyway and accepts that the recipient might get two copies. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the choice.
+How it behaves: the client tries Resend up to three times with the same idempotency key. If Resend still fails, the fallback depends on whether Resend might have accepted the message. The Resend adapter reports every failed request, an HTTP error or a network error, as delivery `"unknown"`, because a timeout can't prove the provider didn't accept it. The default, `onUnknownDelivery: "stop"`, throws an `EmailRouteError` and never calls Postmark. Setting it to `"continue"`, as above, sends through Postmark anyway and accepts that the recipient might get two copies. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the choice.
 
 ## Test without sending real email
 
