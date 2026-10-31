@@ -216,5 +216,6 @@ With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` ret
 - [Quickstart](/docs/getting-started/quickstart): install Email SDK and send a first email.
 - [Migrate from Nodemailer](/docs/guides/migrate/nodemailer): move existing Nodemailer code to Email SDK and keep SMTP.
 - [SMTP adapter reference](/docs/adapters/smtp): host, port, TLS and authentication options.
+- [Resend SMTP settings](/blog/resend-smtp-nodejs): Nodemailer pointed at Resend's SMTP server.
 - [Resend API guide](/blog/resend-api-nodejs-typescript) and [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): raw HTTP API walkthroughs.
 - [Compare email providers](/compare): field support and code for each provider pair.
