@@ -64,7 +64,7 @@ console.log("Sent", info.messageId);
 
 To use STARTTLS instead, set `port: 587` and `secure: false`, and add `requireTLS: true` so Nodemailer refuses to send your API key if the upgrade to TLS fails. Create the transport once and reuse it. Each `sendMail` call still makes several round trips to the server.
 
-`delivered@resend.dev` is one of Resend's [test addresses](https://resend.com/docs/dashboard/emails/send-test-emails). It accepts the message without touching a real inbox, and `bounced@resend.dev` returns an SMTP `550 5.1.1` so you can test bounce handling. Test sends still count against your quota.
+`delivered@resend.dev` is one of Resend's [test addresses](https://resend.com/docs/dashboard/emails/send-test-emails). It accepts the message without touching a real inbox. `bounced@resend.dev` simulates a hard bounce: Resend accepts the message, then reports the bounce (SMTP `550 5.1.1`, unknown user) in the dashboard and as an `email.bounced` webhook event, so you can test your bounce handling. Test sends still count against your quota.
 
 To check the host, port and key without sending anything, call `await transporter.verify()`. It connects, negotiates TLS and logs in, then disconnects.
 
@@ -108,7 +108,6 @@ Use a key that names the email and the thing that triggered it, so the same even
 | `ETIMEDOUT` or `ECONNECTION` | Your host or network blocks the port. Try 2465 or 2587 |
 | A timeout or `wrong version number` right after connecting | `secure` doesn't match the port: `true` for 465 and 2465, `false` for 25, 587 and 2587 |
 | The `from` address is rejected | The domain isn't verified in Resend, or the address is on another domain |
-| `bounced@resend.dev` returns `550 5.1.1` | Expected: that address simulates a hard bounce |
 
 Nodemailer puts the SMTP reply code on `error.responseCode` and its own code on `error.code`. A 4xx reply is temporary and worth retrying after a pause. A 5xx reply is permanent, so fix the message or the account before trying again.
 
