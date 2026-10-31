@@ -5,8 +5,10 @@
   "keywords": [
     "bun",
     "email",
+    "email-parsing",
     "email-sdk",
     "helo",
+    "inbound-email",
     "iterable",
     "mailgun",
     "microsoft-graph",
@@ -218,6 +220,12 @@
       "require": "./dist/webhooks.cjs",
       "default": "./dist/webhooks.js"
     },
+    "./inbound": {
+      "types": "./dist/inbound.d.ts",
+      "import": "./dist/inbound.js",
+      "require": "./dist/inbound.cjs",
+      "default": "./dist/inbound.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js",
@@ -295,6 +303,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "ai": "^7.0.153",
+    "postal-mime": "4.1.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

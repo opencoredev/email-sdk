@@ -2,6 +2,9 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
+    "check-types": {
+      "dependsOn": ["$TURBO_EXTENDS$", "build"]
+    },
     "test": {
       "dependsOn": ["$TURBO_EXTENDS$", "build"]
     }
