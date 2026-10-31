@@ -20,6 +20,21 @@ describe("comparison Markdown mirrors", () => {
     expect(markdown).toContain("## Frequently asked questions");
   });
 
+  test("fallback FAQ names repeated headers and adapter limits, not only missing fields", () => {
+    const sendgridMailgun = getComparePair("sendgrid-vs-mailgun");
+    const postmarkSes = getComparePair("postmark-vs-ses");
+
+    if (!sendgridMailgun || !postmarkSes) throw new Error("expected both pairs to exist");
+
+    const repeatedHeaders = buildCompareFaq(sendgridMailgun).at(-1)?.answer;
+    expect(repeatedHeaders).toStartWith("Partially.");
+    expect(repeatedHeaders).toContain("from Mailgun to SendGrid for messages using repeated header names");
+
+    const oneTag = buildCompareFaq(postmarkSes).at(-1)?.answer;
+    expect(oneTag).toContain("from Postmark to AWS SES for messages using Metadata");
+    expect(oneTag).toContain("Postmark: Accepts one tag");
+  });
+
   test("does not render an unknown pair", () => {
     expect(getComparePair("unknown-vs-provider")).toBeUndefined();
   });
