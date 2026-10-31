@@ -42,6 +42,14 @@ export const transporter = nodemailer.createTransport({
   secure: true,
   auth: { user: "resend", pass: apiKey },
 });
+```
+
+Send a first test message from a separate script, so importing the transport elsewhere never sends anything:
+
+`send-test.ts`:
+
+```ts
+import { transporter } from "./resend-smtp";
 
 const info = await transporter.sendMail({
   from: "Acme <hello@acme.com>",
@@ -62,7 +70,7 @@ To check the host, port and key without sending anything, call `await transporte
 
 ## Idempotency keys and custom headers over SMTP
 
-SMTP has no idempotency key of its own, so a timeout leaves you unsure whether the message went out, and a blind retry can send it twice. Resend reads a `Resend-Idempotency-Key` header on SMTP messages and won't send a second email with the same key ([idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys)). Nodemailer passes it through `headers`:
+SMTP has no idempotency key of its own, so a timeout leaves you unsure whether the message went out, and a blind retry can send it twice. Resend reads a `Resend-Idempotency-Key` header on SMTP messages and won't send a second email with the same key for 24 hours ([idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys)). Nodemailer passes it through `headers`:
 
 `send-welcome-smtp.ts`:
 
@@ -83,7 +91,7 @@ export async function sendWelcome(userId: string, to: string) {
 }
 ```
 
-Use a key that names the email and the thing that triggered it, so the same event always produces the same key. Resend's docs mention two other headers that are useful here: `X-Entity-Ref-ID` keeps Gmail from threading unrelated emails together, and `List-Unsubscribe` gives recipients a one-click unsubscribe.
+Use a key that names the email and the thing that triggered it, so the same event always produces the same key. A replay more than 24 hours later sends again. Resend's docs mention two other headers that are useful here: `X-Entity-Ref-ID` keeps Gmail from threading unrelated emails together, and `List-Unsubscribe` adds an unsubscribe link to the mail client's interface. One-click unsubscribe also needs a `List-Unsubscribe-Post` header and an HTTPS endpoint that accepts the POST ([RFC 8058](https://www.rfc-editor.org/rfc/rfc8058)).
 
 ## Limits and logs
 
@@ -165,7 +173,7 @@ A few things the SMTP adapter does that are worth knowing:
 - Port 465 turns on implicit TLS by itself. For 2465, set `secure: true`. Other ports use STARTTLS, and when you pass `auth` the adapter requires the upgrade, so it never sends the key in plain text.
 - It opens a connection for each send and closes it afterwards, with a 15-second timeout (`timeoutMs`).
 - The `idempotencyKey` option becomes the message's `Message-ID`. Resend reads its own header for deduplication, which is why `send-welcome.ts` sets `Resend-Idempotency-Key` as well. The Resend adapter sends the key in the API's `Idempotency-Key` header.
-- When the server answers with an SMTP error code, the adapter reports the message as not sent. It retries a 4xx reply and gives up on a 5xx. When the connection drops or times out mid-send, it reports delivery as `"unknown"`, and by default a fallback provider isn't tried for unknown deliveries. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains why.
+- When the server answers with an SMTP error code, the adapter reports the message as not sent, and marks a 4xx reply as retryable and a 5xx as final. The client makes one attempt by default, so retries only happen when you set `retry: { maxAttempts }` on `createEmailClient`. When the connection drops or times out mid-send, it reports delivery as `"unknown"`, and by default a fallback provider isn't tried for unknown deliveries. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains why.
 
 Tests can swap in `memoryAdapter` from `@opencoredev/email-sdk/testing` and assert on what would have been sent. [How to send email from Node.js](/blog/send-email-nodejs-typescript) shows that, plus adding a second provider as a fallback.
 
