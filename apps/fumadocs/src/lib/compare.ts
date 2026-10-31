@@ -86,7 +86,7 @@ export type CompareSearchCopy = {
  * page dependencies change (renderer, field matrix, FAQ data, config snippets),
  * since those change every pair's rendered output without touching its entry.
  */
-export const compareRenderLastmod = "2026-09-21";
+export const compareRenderLastmod = "2026-10-31";
 
 /** Published modification date for a compare page: its own edit or the latest shared-render change, whichever is newer. */
 export function comparePairLastmod(pair: ComparePair): string {
