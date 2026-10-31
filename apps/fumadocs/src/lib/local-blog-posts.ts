@@ -2,12 +2,24 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "resend-smtp-nodejs",
+    title: "Resend SMTP Settings and Nodemailer Setup for Node.js",
+    description:
+      "Resend SMTP settings: smtp.resend.com, ports 465, 587, 2465 and 2587, API key login, Nodemailer code in TypeScript, idempotency headers and common errors.",
+    publishedAt: "2026-10-31",
+    updatedAt: "2026-10-31",
+    readTime: "7 min read",
+    image: "/og/blog/resend-smtp-nodejs.svg",
+    imageAlt: "Resend SMTP card: smtp.resend.com, ports 465 and 587, and Nodemailer in TypeScript",
+    tags: ["Resend", "SMTP", "Nodemailer"],
+  },
+  {
     slug: "resend-pricing",
     title: "Resend Pricing: Free Tier, Pro, Scale and Overage",
     description:
       "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-10-30",
+    updatedAt: "2026-10-31",
     readTime: "8 min read",
     image: "/og/blog/resend-pricing.svg",
     imageAlt: "Resend pricing card: free tier, Pro and Scale plans, and overage rates",
@@ -19,7 +31,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Send email from Node.js and TypeScript with SMTP and Nodemailer, a provider's HTTP API and fetch, or one client for any provider, and test it without sending.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-10-30",
+    updatedAt: "2026-10-31",
     readTime: "7 min read",
     image: "/og/blog/send-email-nodejs-typescript.svg",
     imageAlt: "Send email from Node.js card: SMTP, HTTP APIs, and one client for any provider",
@@ -31,7 +43,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Resend API from Node.js and TypeScript with fetch: API keys, attachments, scheduling, idempotency keys, batch sends, rate limits, and webhook signatures.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-10-30",
+    updatedAt: "2026-10-31",
     readTime: "15 min read",
     image: "/og/blog/resend-api-nodejs-typescript.svg",
     imageAlt: "Resend API guide card: fetch, idempotency keys, retries and webhooks in TypeScript",

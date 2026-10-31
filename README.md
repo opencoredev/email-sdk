@@ -71,6 +71,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [How to send email from Node.js and TypeScript](https://email-sdk.dev/blog/send-email-nodejs-typescript)
 - [Resend API guide for Node.js and TypeScript](https://email-sdk.dev/blog/resend-api-nodejs-typescript)
 - [Resend pricing](https://email-sdk.dev/blog/resend-pricing)
+- [Resend SMTP settings for Node.js](https://email-sdk.dev/blog/resend-smtp-nodejs)
 - [Mailgun API guide for Node.js and TypeScript](https://email-sdk.dev/blog/mailgun-api-nodejs-typescript)
 - [SendGrid alternatives for developers](https://email-sdk.dev/blog/sendgrid-alternatives)
 - [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
