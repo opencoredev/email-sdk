@@ -1,5 +1,11 @@
 # @opencoredev/email-sdk
 
+## 3.0.2
+
+### Patch Changes
+
+- c1a455b: Update Nodemailer to 10.2.1 for SMTP delivery and Zod to 4.6.7 for Convex input validation.
+
 ## 3.0.1
 
 ### Patch Changes
