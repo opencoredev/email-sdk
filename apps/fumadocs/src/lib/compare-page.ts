@@ -10,6 +10,7 @@ import {
   messageFields,
   type ProviderKey,
 } from "./compare";
+import { ADAPTER_SUPPORT_ENTRIES } from "./adapter-support";
 import { siteUrl } from "./shared";
 
 /** Page <title> before the site-name suffix: the pair's search title, or the shared template. */
@@ -30,23 +31,40 @@ export function buildCompareFaq(pair: ComparePair) {
   const a = getProvider(pair.a);
   const b = getProvider(pair.b);
   const gapsAtoB = getFallbackGaps(pair.a, pair.b);
-  const gapsBtoA = getFallbackGaps(pair.b, pair.a);
 
   const gapAnswer =
     gapsAtoB.length > 0
       ? `${a.name} supports ${listFields(gapsAtoB)} in the unified message shape, which ${b.name} does not.`
       : `${b.name} supports every message field that ${a.name} supports, so nothing is lost moving a message from ${a.name} to ${b.name}.`;
 
+  const restrictionsAtoB = getFallbackRestrictions(pair.a, pair.b);
+  const restrictionsBtoA = getFallbackRestrictions(pair.b, pair.a);
+
+  const rejectedDirections = [
+    ...(restrictionsAtoB.length > 0
+      ? [`from ${a.name} to ${b.name} for messages using ${restrictionsAtoB.join(", ")}`]
+      : []),
+    ...(restrictionsBtoA.length > 0
+      ? [`from ${b.name} to ${a.name} for messages using ${restrictionsBtoA.join(", ")}`]
+      : []),
+  ];
+
+  const limits = [
+    ...getAdapterLimits(pair.a).map((limit) => `${a.name}: ${limit}`),
+    ...getAdapterLimits(pair.b).map((limit) => `${b.name}: ${limit}`),
+  ];
+
+  const limitsNote =
+    limits.length > 0
+      ? ` Adapter limits also apply. ${limits.join(" ")}`
+      : "";
+
   const fallbackAnswer =
-    gapsBtoA.length === 0 && gapsAtoB.length === 0
-      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK can fail over between them in either direction without dropping data.`
-      : `Partially. Email SDK checks field support before every send: a fallback from ${a.name} to ${b.name} is rejected for messages using ${
-          gapsAtoB.length > 0 ? listFields(gapsAtoB) : "no fields"
-        }${
-          gapsBtoA.length > 0
-            ? `, and from ${b.name} to ${a.name} for messages using ${listFields(gapsBtoA)}`
-            : ""
-        }. Messages that avoid those fields fail over cleanly.`;
+    rejectedDirections.length === 0
+      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK's field checks pass a fallback in either direction.${limitsNote}`
+      : `Partially. Email SDK checks field support before every send: a fallback is rejected ${rejectedDirections.join(
+          ", and ",
+        )}. Messages that avoid those fail over cleanly.${limitsNote}`;
 
   const verdict = pair.search
     ? [{ question: `Should I use ${a.name} or ${b.name}?`, answer: pair.search.verdict }]
@@ -98,6 +116,34 @@ const client = createEmailClient({
   defaultAdapter: "${pair.a}",
   fallback: ["${pair.b}"],
 });`;
+}
+
+/**
+ * What a fallback from one adapter to another rejects: message fields the target
+ * lacks, plus repeated header names when only the source accepts them.
+ */
+function getFallbackRestrictions(from: ProviderKey, to: ProviderKey) {
+  const restrictions = getFallbackGaps(from, to).map((field) => messageFieldLabels[field]);
+
+  if (supportsRepeatedHeaders(from) && !supportsRepeatedHeaders(to)) {
+    restrictions.push("repeated header names");
+  }
+
+  return restrictions;
+}
+
+function getAdapterSupportEntry(key: ProviderKey) {
+  return ADAPTER_SUPPORT_ENTRIES.find((entry) => entry.id === key);
+}
+
+function supportsRepeatedHeaders(key: ProviderKey) {
+  return getAdapterSupportEntry(key)?.capabilities.repeatedHeaders === true;
+}
+
+function getAdapterLimits(key: ProviderKey): readonly string[] {
+  const entry = getAdapterSupportEntry(key);
+
+  return entry && "limits" in entry ? entry.limits : [];
 }
 
 export function listFields(fields: ReturnType<typeof getFallbackGaps>) {

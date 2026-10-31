@@ -86,7 +86,7 @@ export type CompareSearchCopy = {
  * page dependencies change (renderer, field matrix, FAQ data, config snippets),
  * since those change every pair's rendered output without touching its entry.
  */
-export const compareRenderLastmod = "2026-09-21";
+export const compareRenderLastmod = "2026-10-31";
 
 /** Published modification date for a compare page: its own edit or the latest shared-render change, whichever is newer. */
 export function comparePairLastmod(pair: ComparePair): string {
@@ -198,7 +198,14 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-ses",
     a: "postmark",
     b: "ses",
-    lastmod: "2026-07-22",
+    lastmod: "2026-10-31",
+    search: {
+      title: "Postmark vs Amazon SES: Managed Email or Raw AWS?",
+      description:
+        "Postmark vs Amazon SES (AWS SES) for transactional email: a managed service against raw AWS sending. A short verdict, field support and code for both.",
+      verdict:
+        "Pick Postmark if you want deliverability, message history and support handled for you and accept a higher price per message. Pick Amazon SES if you run on AWS, want the lowest unit cost, and will manage sending reputation and bounces yourself. Neither supports scheduled sending. Postmark supports per-message metadata and SES doesn't, so Email SDK's field checks pass an SES-to-Postmark fallback for messages with at most one tag (Postmark accepts one) and reject Postmark-to-SES for messages with metadata. Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
+    },
     intro:
       "Postmark and Amazon SES sit at opposite ends of the managed-vs-infrastructure spectrum. Postmark is a premium managed service: you pay per message for excellent deliverability out of the box, human support, and a dashboard with full message history — a strong default for teams that want transactional email to be someone else's operational problem. SES is a raw sending engine priced near cost; deliverability is largely yours to manage through dedicated IPs, configuration sets, and bounce processing, which rewards teams with the volume to justify the effort. In the unified message model Postmark's structured metadata has no SES equivalent, while neither offers native scheduled sending. The SDK's fail-fast checks flag metadata before a Postmark-to-SES fallback silently drops it, so the cost gap can be exploited without losing data integrity.",
   },
@@ -206,9 +213,16 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-10-29",
+    lastmod: "2026-10-31",
+    search: {
+      title: "SendGrid vs Mailgun: Which Email API to Choose?",
+      description:
+        "SendGrid vs Mailgun for developers: a short verdict, side-by-side message field support, and one TypeScript send call that works with either API.",
+      verdict:
+        "Pick SendGrid if marketing campaigns, subusers and IP management should live in the same account as your transactional email. Pick Mailgun for inbound routing and parsing, EU region hosting and developer-friendly logs. Both support every message field Email SDK models, including metadata and scheduled sending, so its field checks pass a SendGrid-to-Mailgun fallback for any message, and Mailgun-to-SendGrid for messages without repeated header names. Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
+    },
     intro:
-      "SendGrid and Mailgun are the two heavyweight generalists of email infrastructure, and on the unified message shape they are actually identical: both support every field the SDK models — CC, BCC, reply-to, custom headers, attachments, tags, metadata, and scheduled sending — which makes them fully interchangeable as fallbacks for each other. The decision therefore comes down to the platforms around the API. SendGrid brings Twilio-scale infrastructure, marketing campaigns in the same account, subusers, and granular IP management. Mailgun counters with stronger inbound mail processing, straightforward EU data residency, message retention options, and a reputation for developer-friendly logs and webhooks. Pricing at low volume is comparable; at high volume both reward negotiation, so benchmark real traffic — ideally through the SDK, where swapping the adapter is one line — before committing either way.",
+      "SendGrid and Mailgun are the two heavyweight generalists of email infrastructure, and on the unified message shape they are actually identical: both support every field the SDK models — CC, BCC, reply-to, custom headers, attachments, tags, metadata, and scheduled sending — so either can serve as the other's fallback. The one edge is repeated header names, which Mailgun accepts and SendGrid rejects. The decision therefore comes down to the platforms around the API. SendGrid brings Twilio-scale infrastructure, marketing campaigns in the same account, subusers, and granular IP management. Mailgun counters with stronger inbound mail processing, straightforward EU data residency, message retention options, and a reputation for developer-friendly logs and webhooks. Pricing at low volume is comparable; at high volume both reward negotiation, so benchmark real traffic — ideally through the SDK, where swapping the adapter is one line — before committing either way.",
   },
   {
     slug: "sendgrid-vs-ses",
