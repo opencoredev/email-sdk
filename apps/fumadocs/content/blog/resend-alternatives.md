@@ -65,7 +65,7 @@ Email SDK puts both providers behind one client. Resend stays configured as the 
 
 ### 1. Prepare SES
 
-Do this before any code ships, because it takes a few days. Verify your sending domain in SES and publish its DKIM records, in the region you'll send from. Request production access, since new accounts start in the SES sandbox and can only send to verified addresses. Create a configuration set with an event destination for bounces and complaints, and load the addresses Resend has suppressed into the SES account-level suppression list. Keep Resend's DNS records in place, because Resend still sends whenever it's the primary or the fallback.
+Do this before any code ships, because it takes a few days. Verify your sending domain in SES and publish its DKIM records, in the region you'll send from. Request production access, since new accounts start in the SES sandbox and can only send to verified addresses. Create a configuration set with an event destination for send, delivery, bounce, and complaint events, and load the addresses Resend has suppressed into the SES account-level suppression list. Keep Resend's DNS records in place, because Resend still sends whenever it's the primary or the fallback.
 
 ### 2. Configure both adapters
 
@@ -75,7 +75,7 @@ Install the SDK:
 npm install @opencoredev/email-sdk
 ```
 
-`src/email.ts` in the complete code at the end of this post registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `resend`, so after you deploy this file Resend keeps sending until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction. The SES adapter signs its own requests with AWS Signature V4, so you don't need the AWS SDK.
+`src/email.ts` in the complete code at the end of this post registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `resend`, so after you deploy this file Resend keeps sending until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction. The SES adapter signs its own requests with AWS Signature V4, so you don't need the AWS SDK, and `configurationSetName` attaches your configuration set to every send so its events get published.
 
 Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `sendAt` throws `EmailValidationError`, even while Resend is still primary, because SES has no scheduled send. Before you deploy, run your real messages through `email.validate()` in a test. For a message type that has to keep `sendAt`, pass `{ adapter: "resend", fallback: { adapters: [] } }` on its send until you've moved scheduling into a queue.
 
@@ -87,7 +87,7 @@ A provider can return a 5xx or time out after it already accepted your message. 
 
 `onUnknownDelivery: "continue"` turns failover on for those failures. That's the right trade for a password reset, where a duplicate is harmless and a missing email locks someone out. It's the wrong trade for a receipt. `src/send.ts` passes `fallback: { adapters: [] }` on the receipt, so a failed receipt throws `EmailRouteError` instead of trying a second provider.
 
-Moving the primary to SES also changes your retry story. Resend drops a repeated request that carries the same `idempotencyKey`. SES has no idempotency keys, so a retry after an `unknown` failure can deliver twice. Before your queue retries an SES send, look the message up through your configuration set's events.
+Moving the primary to SES also changes your retry story. Resend drops a repeated request that carries the same `idempotencyKey`. SES has no idempotency keys, so a retry after an `unknown` failure can deliver twice. Before your queue retries an SES send, look for its Send or Delivery event from the configuration set, matched by a tag you set on each message, such as an order ID. A missing event doesn't prove SES never sent it, because events can arrive late, so mail that must never go out twice shouldn't retry automatically.
 
 ### 4. Cut over
 
@@ -138,6 +138,7 @@ export const email = createEmailClient({
       accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
       region: requireEnv("AWS_REGION"),
+      configurationSetName: requireEnv("SES_CONFIGURATION_SET"),
     }),
     resend({ apiKey: requireEnv("RESEND_API_KEY") }),
   ],
@@ -192,6 +193,7 @@ const testEnv = {
   AWS_ACCESS_KEY_ID: "AKIATEST",
   AWS_SECRET_ACCESS_KEY: "test-secret",
   AWS_REGION: "us-east-1",
+  SES_CONFIGURATION_SET: "transactional",
   RESEND_API_KEY: "re_test",
   EMAIL_PRIMARY: "ses",
 };
@@ -255,6 +257,7 @@ describe("Resend to Amazon SES migration example", () => {
     expect(result).toMatchObject({ adapter: "ses", id: "ses_1" });
     expect(calls.map((call) => call.host)).toEqual(["email.us-east-1.amazonaws.com"]);
     expect(JSON.parse(calls[0].body)).toMatchObject({
+      ConfigurationSetName: "transactional",
       FromEmailAddress: "Acme <security@acme.com>",
       Destination: { ToAddresses: ["ada@example.com"] },
       EmailTags: [{ Name: "type", Value: "password-reset" }],
