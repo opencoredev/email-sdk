@@ -98,7 +98,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-postmark",
     a: "resend",
     b: "postmark",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     intro:
       "Resend and Postmark are both developer-first transactional email APIs, but they grew up in different eras. Postmark has spent over a decade earning a reputation for fast, reliable inbox delivery and strict separation of transactional and broadcast streams, which makes it a favorite for password resets, receipts, and other must-arrive mail. Resend is the newer entrant, built by the team behind React Email, and wins on developer experience: a modern dashboard, first-class React templates, and quick domain setup. In the message model the practical differences show up at the edges — Resend supports scheduled sending natively while Postmark does not, and Postmark exposes structured metadata on each message while Resend leans on tags. Both handle CC, BCC, reply-to, custom headers, and attachments without fuss.",
   },
@@ -106,7 +106,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-sendgrid",
     a: "resend",
     b: "sendgrid",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     search: {
       title: "Resend vs SendGrid: Which Email API Should You Pick?",
       description:
@@ -121,7 +121,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-ses",
     a: "resend",
     b: "ses",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     search: {
       title: "Resend vs Amazon SES: Managed API or AWS Infrastructure?",
       description:
@@ -136,7 +136,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailgun",
     a: "resend",
     b: "mailgun",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     search: {
       title: "Resend vs Mailgun: Which Email API Should Developers Use?",
       description:
@@ -151,7 +151,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-loops",
     a: "resend",
     b: "loops",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     search: {
       title: "Resend vs Loops: Which Should You Use for Transactional Email?",
       description:
@@ -166,7 +166,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailersend",
     a: "resend",
     b: "mailersend",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     intro:
       "MailerSend is the transactional arm of the MailerLite family, and it inherits that lineage: a generous free tier, a template gallery with a drag-and-drop editor, and team-friendly features like domain-level permissions that appeal to mixed marketing-and-engineering orgs. Its API covers the full common surface — CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — making it structurally one of the closest matches to Resend in the SDK's capability matrix; neither exposes per-message metadata. Resend differentiates on developer experience instead: React Email integration, a minimal API, and fast domain verification. Costs diverge with volume and features, so the practical decision is usually whether you want MailerSend's built-in template tooling or prefer owning templates in code with Resend and React Email.",
   },
@@ -174,7 +174,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailtrap",
     a: "resend",
     b: "mailtrap",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-01",
     intro:
       "Mailtrap grew up as an email testing product: its Email Sandbox is a fake SMTP server that captures outgoing mail in dev, staging, and QA so nothing reaches real inboxes, and its Email Sending API handles production delivery from the same account. Resend skips the sandbox story and focuses on a polished transactional API with fast onboarding and React Email templates. In the unified message shape the two trade exactly one field each way: Mailtrap carries per-message metadata (sent as custom_variables) and Resend does not, while Resend supports native scheduled sending and Mailtrap has none. Two Mailtrap edges matter when it sits behind another adapter: a message may carry at most one tag, which Mailtrap stores as its category, and at most one replyTo, and the SDK rejects a second of either before any request. With Email SDK the swap is a one-line adapter change, so testing on Mailtrap's sandbox and sending through either provider can share the same send call.",
   },
@@ -182,7 +182,14 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
-    lastmod: "2026-10-29",
+    lastmod: "2026-11-01",
+    search: {
+      title: "Postmark vs SendGrid: Which Transactional Email API?",
+      description:
+        "Postmark vs SendGrid (Twilio SendGrid) for transactional email: a short verdict, side-by-side field support, and one TypeScript send call for either API.",
+      verdict:
+        "Pick Postmark if you send transactional email only and want fast delivery, 45 days of message history and simple volume pricing. Pick SendGrid if marketing campaigns, subusers and dedicated IPs should share an account with your transactional email, or if you need scheduled sending, which Postmark lacks. Email SDK's field checks pass a Postmark-to-SendGrid fallback for messages without repeated header names, and SendGrid-to-Postmark for messages with no sendAt and at most one tag (Postmark accepts one). Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
+    },
     intro:
       "Postmark and SendGrid are the classic head-to-head of transactional email. Postmark's pitch is focus: transactional mail only (broadcasts live on a separate stream), consistently fast inbox delivery, 45 days of full-content message history, and pricing that is simple if never the cheapest. SendGrid's pitch is breadth: one platform for transactional and marketing email, dedicated IP options, subusers for multi-tenant setups, and an API that has accumulated every feature over fifteen years — including native scheduled sending, which Postmark lacks. Both support CC, BCC, reply-to, custom headers, attachments, tags, and per-message metadata in the unified message shape, so switching between them with the SDK is nearly lossless; only scheduled sends need a migration plan when moving from SendGrid to Postmark, and the SDK's field checks will flag exactly that.",
   },
@@ -190,7 +197,14 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-10-29",
+    lastmod: "2026-11-01",
+    search: {
+      title: "Postmark vs Mailgun: Which Email API for Developers?",
+      description:
+        "Postmark vs Mailgun for transactional email: a short verdict, side-by-side message field support, and one TypeScript send call that works with either API.",
+      verdict:
+        "Pick Postmark for transactional-only mail with separate message streams and 45 days of message history. Pick Mailgun for inbound routing, EU region hosting, scheduled sending and native batch personalization. Both support metadata and repeated header names, so Email SDK's field checks pass a Postmark-to-Mailgun fallback for any message, and Mailgun-to-Postmark for messages with no sendAt and at most one tag (Postmark accepts one). Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
+    },
     intro:
       "Postmark and Mailgun both come from the developer-tools generation of email providers, but they optimize for different things. Postmark optimizes for deliverability and clarity: separate transactional and broadcast message streams, aggressive list hygiene, detailed delivery events, and a UI your support team can actually use. Mailgun optimizes for flexibility: powerful routing and inbound parsing, EU region hosting for data residency, send-time optimization, and native scheduled delivery — the one field in the unified message shape Postmark doesn't support. Both carry CC, BCC, reply-to, headers, attachments, tags, and metadata, so the SDK can fail over between them for most messages. Teams typically choose Postmark for critical low-volume transactional mail and Mailgun when inbound processing or EU residency is a requirement — or run both, with one as the fallback route.",
   },
@@ -347,6 +361,11 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "resend-smtp-nodejs",
       title: "Resend SMTP guide",
       lead: "Connecting over SMTP?",
+    },
+    {
+      slug: "resend-alternatives",
+      title: "Resend alternatives guide",
+      lead: "Moving off Resend?",
     },
   ],
   sendgrid: [

@@ -309,4 +309,5 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 - [Mailgun API guide for Node.js and TypeScript](/blog/mailgun-api-nodejs-typescript): raw requests, regions, rate limits, and webhooks.
 - [Retries and fallback](/docs/concepts/fallbacks-and-retries): how delivery certainty decides when fallback runs.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): the same migration, starting from SendGrid.
+- [Resend alternatives](/blog/resend-alternatives): the same migration, starting from Resend.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.

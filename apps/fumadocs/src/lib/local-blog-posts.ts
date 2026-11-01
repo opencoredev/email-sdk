@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "resend-alternatives",
+    title: "Resend Alternatives for Developers, and How to Switch",
+    description:
+      "Compare Resend alternatives by price, field support, and duplicate protection, then move to Amazon SES in TypeScript with Resend kept as the fallback.",
+    publishedAt: "2026-11-01",
+    updatedAt: "2026-11-01",
+    readTime: "11 min read",
+    image: "/og/blog/resend-alternatives.svg",
+    imageAlt: "Resend alternatives card: sourced prices, field support, and a fallback migration in TypeScript",
+    tags: ["Resend", "Migration", "TypeScript"],
+  },
+  {
     slug: "resend-smtp-nodejs",
     title: "Resend SMTP Settings and Nodemailer Setup for Node.js",
     description:
@@ -19,7 +31,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-10-31",
+    updatedAt: "2026-11-01",
     readTime: "8 min read",
     image: "/og/blog/resend-pricing.svg",
     imageAlt: "Resend pricing card: free tier, Pro and Scale plans, and overage rates",
@@ -43,7 +55,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Resend API from Node.js and TypeScript with fetch: API keys, attachments, scheduling, idempotency keys, batch sends, rate limits, and webhook signatures.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-10-31",
+    updatedAt: "2026-11-01",
     readTime: "15 min read",
     image: "/og/blog/resend-api-nodejs-typescript.svg",
     imageAlt: "Resend API guide card: fetch, idempotency keys, retries and webhooks in TypeScript",
@@ -55,7 +67,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-10-30",
+    updatedAt: "2026-11-01",
     readTime: "11 min read",
     image: "/og/blog/sendgrid-alternatives.svg",
     imageAlt: "SendGrid alternatives card: sourced prices, field support, and a fallback migration in TypeScript",
@@ -67,7 +79,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-10-30",
+    updatedAt: "2026-11-01",
     readTime: "11 min read",
     image: "/og/blog/mailgun-alternatives.svg",
     imageAlt: "Mailgun alternatives card: sourced prices, log retention, and a fallback migration in TypeScript",
