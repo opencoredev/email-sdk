@@ -1,4 +1,4 @@
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { getLatestDocsRedirect } from "@/lib/docs-redirects";
 import { getDocsSource, getLLMText, markdownPathToSlugs } from "@/lib/source";
@@ -25,7 +25,17 @@ export const Route = createFileRoute("/docs/{$}.md")({
         const page = getDocsSource(resolved.version).getPage(resolved.slugs);
 
         if (!page) {
-          throw resolveMissingMarkdownPage(resolved);
+          // Return the 404 instead of throwing notFound(): a server route
+          // handler turns a thrown notFound() into a 500, which crawlers
+          // probing made-up .md paths hit on every request.
+          if (resolved.version.current) {
+            return new Response("Not found", {
+              status: 404,
+              headers: { "Content-Type": "text/plain; charset=utf-8" },
+            });
+          }
+
+          throw redirectMissingVersionedPage(resolved);
         }
 
         const body = await getLLMText(page, resolved.version);
@@ -50,9 +60,7 @@ export const Route = createFileRoute("/docs/{$}.md")({
   },
 });
 
-function resolveMissingMarkdownPage(resolved: ReturnType<typeof resolveDocsVersionedSlugs>) {
-  if (resolved.version.current) return notFound();
-
+function redirectMissingVersionedPage(resolved: ReturnType<typeof resolveDocsVersionedSlugs>) {
   const latestPage = getDocsSource(latestDocsVersion).getPage(resolved.slugs);
 
   if (latestPage) {
