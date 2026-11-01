@@ -1,6 +1,7 @@
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
+import resendAlternativesMarkdown from "../../content/blog/resend-alternatives.md?raw";
 import resendApiMarkdown from "../../content/blog/resend-api-nodejs-typescript.md?raw";
 import resendPricingMarkdown from "../../content/blog/resend-pricing.md?raw";
 import resendSmtpMarkdown from "../../content/blog/resend-smtp-nodejs.md?raw";
@@ -21,6 +22,7 @@ const localBlogMarkdown = new Map([
   ["resend-pricing", resendPricingMarkdown],
   ["send-email-nodejs-typescript", sendEmailNodeMarkdown],
   ["resend-smtp-nodejs", resendSmtpMarkdown],
+  ["resend-alternatives", resendAlternativesMarkdown],
 ]);
 
 const localBlogBodies = new Map(

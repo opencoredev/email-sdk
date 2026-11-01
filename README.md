@@ -75,6 +75,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Mailgun API guide for Node.js and TypeScript](https://email-sdk.dev/blog/mailgun-api-nodejs-typescript)
 - [SendGrid alternatives for developers](https://email-sdk.dev/blog/sendgrid-alternatives)
 - [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
+- [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
 
 ## Telemetry
 
