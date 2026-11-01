@@ -186,7 +186,7 @@ export const comparePairs: ComparePair[] = [
     search: {
       title: "Postmark vs SendGrid: Which Transactional Email API?",
       description:
-        "Postmark vs SendGrid (Twilio SendGrid) for transactional email: a short verdict, side-by-side message field support, and one TypeScript send call for either API.",
+        "Postmark vs SendGrid (Twilio SendGrid) for transactional email: a short verdict, side-by-side field support, and one TypeScript send call for either API.",
       verdict:
         "Pick Postmark if you send transactional email only and want fast delivery, 45 days of message history and simple volume pricing. Pick SendGrid if marketing campaigns, subusers and dedicated IPs should share an account with your transactional email, or if you need scheduled sending, which Postmark lacks. Email SDK's field checks pass a Postmark-to-SendGrid fallback for messages without repeated header names, and SendGrid-to-Postmark for messages with no sendAt and at most one tag (Postmark accepts one). Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
     },
