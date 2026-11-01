@@ -75,7 +75,7 @@ Install the SDK:
 npm install @opencoredev/email-sdk
 ```
 
-`src/email.ts` in the complete code at the end of this post registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `resend`, so after you deploy this file Resend keeps sending until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction. The SES adapter signs its own requests with AWS Signature V4, so you don't need the AWS SDK, and `configurationSetName` attaches your configuration set to every send so its events get published.
+`src/email.ts` in the complete code at the end of this post registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `resend`, so after you deploy this file Resend keeps sending until you flip the variable. The fallback list names both providers. The SDK always skips whichever one is primary, so the other one is the backup in either direction. The SES adapter signs its own requests with AWS Signature V4, so you don't need the AWS SDK. `sessionToken` covers temporary credentials from an IAM role, and `configurationSetName` attaches your configuration set to every send so its events get published.
 
 Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `sendAt` throws `EmailValidationError`, even while Resend is still primary, because SES has no scheduled send. Before you deploy, run your real messages through `email.validate()` in a test. For a message type that has to keep `sendAt`, pass `{ adapter: "resend", fallback: { adapters: [] } }` on its send until you've moved scheduling into a queue.
 
@@ -87,13 +87,13 @@ A provider can return a 5xx or time out after it already accepted your message. 
 
 `onUnknownDelivery: "continue"` turns failover on for those failures. That's the right trade for a password reset, where a duplicate is harmless and a missing email locks someone out. It's the wrong trade for a receipt. `src/send.ts` passes `fallback: { adapters: [] }` on the receipt, so a failed receipt throws `EmailRouteError` instead of trying a second provider.
 
-Moving the primary to SES also changes your retry story. Resend drops a repeated request that carries the same `idempotencyKey`. SES has no idempotency keys, so a retry after an `unknown` failure can deliver twice. Before your queue retries an SES send, look for its Send or Delivery event from the configuration set, matched by a tag you set on each message, such as an order ID. A missing event doesn't prove SES never sent it, because events can arrive late, so mail that must never go out twice shouldn't retry automatically.
+Moving the primary to SES also changes your retry story. Resend drops a repeated request that carries the same `idempotencyKey`. SES has no idempotency keys, so a retry after an `unknown` failure can deliver twice. Before your queue retries an SES send, look for its Send or Delivery event from the configuration set, matched by a tag you set on each message, like the `order` tag on the receipt below. A missing event doesn't prove SES never sent it, because events can arrive late, so mail that must never go out twice shouldn't retry automatically.
 
 ### 4. Cut over
 
 Set `EMAIL_PRIMARY=ses` in one environment first. Watch the SES sending statistics, your bounce and complaint rates, and your error logs for a few days. To roll back, set `EMAIL_PRIMARY=resend`.
 
-Once SES has handled a full week of real traffic, decide whether to keep Resend as the standing fallback. If you remove it, wait until any scheduled sends Resend still holds have gone out, then delete its API key and DNS records.
+Once SES has handled a full week of real traffic, decide whether to keep Resend as the standing fallback. If you remove it, wait until any scheduled sends Resend still holds have gone out, then delete its API key and its sending DNS records. If Resend still receives your inbound mail, keep its MX records.
 
 ### 5. Move what the SDK doesn't carry
 
@@ -137,6 +137,7 @@ export const email = createEmailClient({
     ses({
       accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
+      sessionToken: process.env.AWS_SESSION_TOKEN,
       region: requireEnv("AWS_REGION"),
       configurationSetName: requireEnv("SES_CONFIGURATION_SET"),
     }),
@@ -172,7 +173,10 @@ export async function sendReceipt(to: string, orderId: string) {
       to,
       subject: `Your Acme receipt for order ${orderId}`,
       text: `Thanks for your order ${orderId}.`,
-      tags: [{ name: "type", value: "receipt" }],
+      tags: [
+        { name: "type", value: "receipt" },
+        { name: "order", value: orderId },
+      ],
     },
     { fallback: { adapters: [] } },
   );
@@ -285,6 +289,12 @@ describe("Resend to Amazon SES migration example", () => {
 
     expect(failure).toBeInstanceOf(EmailRouteError);
     expect(calls.map((call) => call.host)).toEqual(["email.us-east-1.amazonaws.com"]);
+    expect(JSON.parse(calls[0].body)).toMatchObject({
+      EmailTags: [
+        { Name: "type", Value: "receipt" },
+        { Name: "order", Value: "ord_123" },
+      ],
+    });
   });
 
   test("rejects a scheduled send before any request, because SES has no sendAt", async () => {
