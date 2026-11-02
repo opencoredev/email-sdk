@@ -1,3 +1,4 @@
+import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?raw";
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
@@ -23,6 +24,7 @@ const localBlogMarkdown = new Map([
   ["send-email-nodejs-typescript", sendEmailNodeMarkdown],
   ["resend-smtp-nodejs", resendSmtpMarkdown],
   ["resend-alternatives", resendAlternativesMarkdown],
+  ["brevo-api-nodejs-typescript", brevoApiMarkdown],
 ]);
 
 const localBlogBodies = new Map(

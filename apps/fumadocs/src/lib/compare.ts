@@ -257,7 +257,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-brevo",
     a: "sendgrid",
     b: "brevo",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-02",
     search: {
       title: "SendGrid vs Brevo (Sendinblue): Which Email API?",
       description:
@@ -287,7 +287,7 @@ export const comparePairs: ComparePair[] = [
     slug: "brevo-vs-mailersend",
     a: "brevo",
     b: "mailersend",
-    lastmod: "2026-10-28",
+    lastmod: "2026-11-02",
     search: {
       title: "Brevo vs MailerSend: Transactional Email API Compared",
       description:
@@ -341,6 +341,13 @@ export type ProviderBlogGuide = {
 
 /** Blog guides about a provider, linked from every compare page that includes the provider. */
 export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBlogGuide[]>> = {
+  brevo: [
+    {
+      slug: "brevo-api-nodejs-typescript",
+      title: "Brevo API guide for Node.js and TypeScript",
+      lead: "Calling the API directly?",
+    },
+  ],
   mailgun: [
     {
       slug: "mailgun-api-nodejs-typescript",
