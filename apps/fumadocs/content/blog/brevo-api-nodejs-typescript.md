@@ -176,7 +176,22 @@ This helper retries network errors, timeouts, `429`, and `5xx` with the same ide
 ```ts
 type BrevoEmail = Record<string, unknown> & { headers?: Record<string, string> };
 
+type BrevoBody = { messageId?: string; code?: string; message?: string };
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function readBrevoBody(response: Response): Promise<BrevoBody> {
+  const json: unknown = await response.json().catch(() => null);
+
+  if (typeof json !== "object" || json === null) return {};
+
+  const text = (key: string) => {
+    const value: unknown = Reflect.get(json, key);
+    return typeof value === "string" ? value : undefined;
+  };
+
+  return { messageId: text("messageId"), code: text("code"), message: text("message") };
+}
 
 export async function sendWithRetry(email: BrevoEmail, apiKey: string, maxAttempts = 3) {
   const idempotencyKey = crypto.randomUUID();
@@ -198,8 +213,9 @@ export async function sendWithRetry(email: BrevoEmail, apiKey: string, maxAttemp
       continue;
     }
 
-    const result: { messageId?: string; code?: string; message?: string } = await response.json().catch(() => ({}));
+    const result = await readBrevoBody(response);
 
+    // A 2xx means Brevo accepted the email, even if its body couldn't be read.
     if (response.ok) return { messageId: result.messageId, idempotencyKey };
     // An earlier attempt reached Brevo, so this email is already on its way.
     if (response.status === 400 && result.code === "duplicate_parameter") return { messageId: undefined, idempotencyKey };
@@ -238,15 +254,20 @@ import { timingSafeEqual } from "node:crypto";
 
 type BrevoEvent = { event: string; email: string; "message-id"?: string; tags?: string[] };
 
-function tokenMatches(header: string | null, expected: string) {
-  const given = Buffer.from(header ?? "");
-  const wanted = Buffer.from(`Bearer ${expected}`);
+const webhookToken = process.env.BREVO_WEBHOOK_TOKEN;
 
-  return given.length === wanted.length && timingSafeEqual(given, wanted);
+if (!webhookToken) throw new Error("Set BREVO_WEBHOOK_TOKEN.");
+
+const expected = Buffer.from(`Bearer ${webhookToken}`);
+
+function tokenMatches(header: string | null) {
+  const given = Buffer.from(header ?? "");
+
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 export async function handleBrevoWebhook(request: Request) {
-  if (!tokenMatches(request.headers.get("authorization"), process.env.BREVO_WEBHOOK_TOKEN!)) {
+  if (!tokenMatches(request.headers.get("authorization"))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
