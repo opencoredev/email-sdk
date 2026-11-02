@@ -303,7 +303,8 @@ async function toGraphPayload(message: EmailMessage, saveToSentItems?: boolean) 
       subject: message.subject,
       body: {
         contentType: message.html ? "HTML" : "Text",
-        content: message.html ?? message.text ?? "",
+        // || not ??: validation treats an empty string as no content, so fall through to text.
+        content: message.html || message.text || "",
       },
       toRecipients: graphRecipients(message.to),
       ccRecipients: cc.length > 0 ? cc : undefined,

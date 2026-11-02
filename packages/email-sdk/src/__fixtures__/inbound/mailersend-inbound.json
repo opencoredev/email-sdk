@@ -1,0 +1,49 @@
+{
+  "type": "inbound.message",
+  "inbound_id": "inb_123",
+  "url": "https://example.com/inbound",
+  "created_at": "2025-10-06T09:00:00.000000Z",
+  "data": {
+    "object": "message",
+    "id": "msg_ms_1",
+    "recipients": {
+      "to": {
+        "raw": "support@acme.test",
+        "data": [
+          {
+            "name": "",
+            "email": "support@acme.test"
+          }
+        ]
+      },
+      "rcptTo": [
+        {
+          "email": "support@acme.test"
+        }
+      ]
+    },
+    "from": {
+      "raw": "José <jose@example.net>",
+      "name": "José",
+      "email": "jose@example.net"
+    },
+    "sender": {
+      "email": "bounce@example.net"
+    },
+    "subject": "Café order",
+    "date": "Mon, 6 Oct 2025 09:00:00 +0000",
+    "headers": {
+      "Message-ID": "<msg-42@example.net>"
+    },
+    "text": "x",
+    "html": "<p>x</p>",
+    "raw": "Received: from mx2.example.net by mx.acme.test; Mon, 6 Oct 2025 09:00:02 +0000\r\nReceived: from mail.example.net by mx2.example.net; Mon, 6 Oct 2025 09:00:01 +0000\r\nAuthentication-Results: mx.acme.test; spf=pass smtp.mailfrom=example.net;\r\n dkim=pass header.d=example.net; dmarc=pass header.from=example.net\r\nFrom: =?UTF-8?B?Sm9zw6kgR2FyY8OtYQ==?= <jose@example.net>\r\nTo: \"Support, Acme\" <support@acme.test>, ops@acme.test\r\nCc: Team: ana@acme.test, (Bob) bob@acme.test;\r\nReply-To: <replies@example.net>\r\nSubject: =?UTF-8?Q?Caf=C3=A9_order?= =?UTF-8?Q?_=E2=9C=89?= #42\r\nDate: Mon, 6 Oct 2025 09:00:00 +0000\r\nMessage-ID: <msg-42@example.net>\r\nIn-Reply-To: <msg-41@acme.test>\r\nReferences: <msg-40@acme.test>\r\n  <msg-41@acme.test>\r\nX-Custom: one\r\nX-Custom: two\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"outer-b\"\r\n\r\nThis is a multi-part message in MIME format.\r\n--outer-b\r\nContent-Type: multipart/related; boundary=\"rel-b\"\r\n\r\n--rel-b\r\nContent-Type: multipart/alternative; boundary=alt-b\r\n\r\n--alt-b\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nOl=E1, here is a long line that gets soft-wrapped by the quoted-printable enc=\r\noder, and an equals sign: =3D.\r\n--alt-b\r\nContent-Type: text/html; charset=\"utf-8\"\r\nContent-Transfer-Encoding: base64\r\n\r\nPHA+T2zDoSA8aW1nIHNyYz0iY2lkOmxvZ29AYWNtZSI+PC9wPg==\r\n--alt-b--\r\n--rel-b\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <logo@acme>\r\nContent-Disposition: inline\r\n\r\niVBORw0KGgoAAAANSUhEUg==\r\n--rel-b--\r\n--outer-b\r\nContent-Type: application/pdf; name=\"fallback.pdf\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment;\r\n filename*0*=UTF-8''r%C3%A9sum%C3%A9%20;\r\n filename*1=final.pdf\r\n\r\nJVBERi0xLjQKJeLjz9MKZmFrZSBwZGYgYnl0ZXMAAQIK\r\n--outer-b\r\nContent-Type: message/rfc822\r\nContent-Disposition: attachment; filename=\"forwarded.eml\"\r\n\r\nFrom: a@example.org\r\nSubject: inner\r\n\r\ninner body\r\n--outer-b--\r\nepilogue\r\n",
+    "attachments": [],
+    "spf_check": {
+      "code": "+",
+      "value": null
+    },
+    "dkim_check": false,
+    "created_at": "2025-10-06T09:00:00.000000Z"
+  }
+}

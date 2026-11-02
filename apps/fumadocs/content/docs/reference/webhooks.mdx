@@ -3,7 +3,7 @@ title: Webhooks
 description: Verify Resend and Mailgun webhook requests and normalize Resend, Postmark, and Mailgun delivery events.
 ---
 
-Import webhook helpers from `@opencoredev/email-sdk/webhooks`, not the root SDK. They use Web Crypto and do not create an email client, send email, or emit telemetry.
+Import webhook helpers from `@opencoredev/email-sdk/webhooks`, not the root SDK. These cover delivery events for mail you sent; to receive mail, see [Receive email](/docs/guides/receive-email). They use Web Crypto and do not create an email client, send email, or emit telemetry.
 
 ## Verify before processing
 
@@ -56,7 +56,7 @@ const valid = await verifyMailgunWebhook({
 });
 ```
 
-This helper accepts Mailgun's JSON event webhook envelope with a nested `signature` object containing `timestamp`, `token`, and hexadecimal `signature`. It does not handle inbound multipart/form-data routes. For subaccount events, explicitly select `signatureField: "parent-signature"` when using the parent account's signing key.
+This helper accepts Mailgun's JSON event webhook envelope with a nested `signature` object containing `timestamp`, `token`, and hexadecimal `signature`. It does not handle inbound multipart/form-data routes; use `verifyMailgunInbound` from [`@opencoredev/email-sdk/inbound`](/docs/reference/inbound) for those. For subaccount events, explicitly select `signatureField: "parent-signature"` when using the parent account's signing key.
 
 <Callout type="warn" title="Mailgun signatures do not bind event-data">
 Mailgun signs only timestamp concatenated with token, not the event body. Changing `event-data` does not invalidate that signature. Require HTTPS, protect signing tokens, and persist replay protection for the token as well as delivery ID; consider Mailgun's documented TLS client authentication where available. Do not describe this helper as proof of body integrity.

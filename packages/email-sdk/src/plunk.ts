@@ -32,7 +32,7 @@ export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { bas
         to: apiAddresses(message.to),
         from: apiAddress(message.from),
         subject: message.subject,
-        body: message.html ?? message.text,
+        body: message.html || message.text,
         data: message.metadata,
         headers: commonHeadersObject(message),
         reply: replyTo?.email,

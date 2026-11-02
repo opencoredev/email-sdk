@@ -53,7 +53,7 @@ export function sequenzy(
         to: toSequenzyRecipients(message),
         slug,
         subject: slug ? undefined : message.subject,
-        body: slug ? undefined : (message.html ?? message.text),
+        body: slug ? undefined : (message.html || message.text),
         preview,
         variables,
         subscriberExternalId,
