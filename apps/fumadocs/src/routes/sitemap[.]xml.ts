@@ -42,7 +42,7 @@ function getSitemapEntries() {
     const date = comparePairLastmod(pair);
 
     return date > latest ? date : latest;
-  }, "2026-10-05");
+  }, "2026-11-02");
 
   // Canonical HTML pages only, plus the RSS feed. Machine files (llms.txt,
   // llms-full.txt, llms.md, docs/llms.txt, the .md mirrors, agents.md,
