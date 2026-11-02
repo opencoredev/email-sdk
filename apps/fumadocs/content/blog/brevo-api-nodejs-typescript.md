@@ -169,7 +169,7 @@ Error bodies carry a `code` and a `message`, such as `{ "code": "missing_paramet
 
 The send endpoint is generous: 1,000 requests per second on the general tier, 2,000 on Professional, and more on Enterprise ([Rate limits](https://developers.brevo.com/docs/api-limits), checked Nov 2026). Most other endpoints are far lower, and everything else under `/v3/smtp/` shares 300 requests an hour on the general tier, so polling logs or email status in a loop runs out long before sending does. Responses carry `x-sib-ratelimit-limit`, `x-sib-ratelimit-remaining`, and `x-sib-ratelimit-reset`, the last one in seconds.
 
-This helper retries network errors, timeouts, `429`, and `5xx` with the same idempotency key on every attempt. Each attempt times out after 10 seconds, and any single wait is capped at 30 seconds:
+This helper retries network errors, timeouts, `429`, and `5xx` with the same idempotency key on every attempt. Each attempt times out after 10 seconds, and any single wait is capped at 30 seconds. The caller supplies the key: create it with `crypto.randomUUID()` when you enqueue the email, store it with the job, and pass the same key if the job runs again. A fresh key per call would let a rerun send a second copy:
 
 `send-with-retry.ts`:
 
@@ -193,8 +193,8 @@ async function readBrevoBody(response: Response): Promise<BrevoBody> {
   return { messageId: text("messageId"), code: text("code"), message: text("message") };
 }
 
-export async function sendWithRetry(email: BrevoEmail, apiKey: string, maxAttempts = 3) {
-  const idempotencyKey = crypto.randomUUID();
+// Pass the same key every time this email is retried, including when a job queue reruns it.
+export async function sendWithRetry(email: BrevoEmail, apiKey: string, idempotencyKey: string, maxAttempts = 3) {
   const body = JSON.stringify({ ...email, headers: { ...email.headers, idempotencyKey } });
 
   for (let attempt = 1; ; attempt++) {
