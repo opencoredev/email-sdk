@@ -106,7 +106,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-sendgrid",
     a: "resend",
     b: "sendgrid",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-03",
     search: {
       title: "Resend vs SendGrid: Which Email API Should You Pick?",
       description:
@@ -182,7 +182,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-03",
     search: {
       title: "Postmark vs SendGrid: Which Transactional Email API?",
       description:
@@ -227,7 +227,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-03",
     search: {
       title: "SendGrid vs Mailgun: Which Email API to Choose?",
       description:
@@ -242,7 +242,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-10-29",
+    lastmod: "2026-11-03",
     search: {
       title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
       description:
@@ -257,7 +257,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-brevo",
     a: "sendgrid",
     b: "brevo",
-    lastmod: "2026-11-02",
+    lastmod: "2026-11-03",
     search: {
       title: "SendGrid vs Brevo (Sendinblue): Which Email API?",
       description:
@@ -383,6 +383,11 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
     },
   ],
   sendgrid: [
+    {
+      slug: "sendgrid-api-nodejs-typescript",
+      title: "SendGrid API guide for Node.js and TypeScript",
+      lead: "Calling the API directly?",
+    },
     {
       slug: "sendgrid-alternatives",
       title: "SendGrid alternatives guide",

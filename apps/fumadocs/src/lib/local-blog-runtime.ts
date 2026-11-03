@@ -8,6 +8,7 @@ import resendPricingMarkdown from "../../content/blog/resend-pricing.md?raw";
 import resendSmtpMarkdown from "../../content/blog/resend-smtp-nodejs.md?raw";
 import sendEmailNodeMarkdown from "../../content/blog/send-email-nodejs-typescript.md?raw";
 import sendgridAlternativesMarkdown from "../../content/blog/sendgrid-alternatives.md?raw";
+import sendgridApiMarkdown from "../../content/blog/sendgrid-api-nodejs-typescript.md?raw";
 import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
@@ -25,6 +26,7 @@ const localBlogMarkdown = new Map([
   ["resend-smtp-nodejs", resendSmtpMarkdown],
   ["resend-alternatives", resendAlternativesMarkdown],
   ["brevo-api-nodejs-typescript", brevoApiMarkdown],
+  ["sendgrid-api-nodejs-typescript", sendgridApiMarkdown],
 ]);
 
 const localBlogBodies = new Map(

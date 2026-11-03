@@ -22,7 +22,7 @@
   "adapters/primitive.mdx": "2026-11-01",
   "adapters/resend.mdx": "2026-11-01",
   "adapters/scaleway.mdx": "2026-09-06",
-  "adapters/sendgrid.mdx": "2026-10-31",
+  "adapters/sendgrid.mdx": "2026-11-03",
   "adapters/sendheron.mdx": "2026-09-26",
   "adapters/sequenzy.mdx": "2026-11-02",
   "adapters/ses.mdx": "2026-11-01",

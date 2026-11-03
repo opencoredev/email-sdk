@@ -2,12 +2,24 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "sendgrid-api-nodejs-typescript",
+    title: "SendGrid API Guide for Node.js and TypeScript",
+    description:
+      "Use the SendGrid API from Node.js and TypeScript with fetch: API keys, v3 Mail Send, templates, scheduling, sandbox mode, rate limits, and signed webhooks.",
+    publishedAt: "2026-11-03",
+    updatedAt: "2026-11-03",
+    readTime: "13 min read",
+    image: "/og/blog/sendgrid-api-nodejs-typescript.svg",
+    imageAlt: "SendGrid API guide card: API keys, Mail Send, sandbox mode, and signed webhooks in TypeScript",
+    tags: ["SendGrid", "Node.js", "TypeScript"],
+  },
+  {
     slug: "brevo-api-nodejs-typescript",
     title: "Brevo API Guide for Node.js and TypeScript",
     description:
       "Use the Brevo API from Node.js and TypeScript with fetch: the api-key header, templates, scheduling, batch sends, idempotency keys, rate limits, and webhooks.",
     publishedAt: "2026-11-02",
-    updatedAt: "2026-11-02",
+    updatedAt: "2026-11-03",
     readTime: "14 min read",
     image: "/og/blog/brevo-api-nodejs-typescript.svg",
     imageAlt: "Brevo API guide card: fetch, batch sends, idempotency, and webhooks in TypeScript",
@@ -79,7 +91,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-01",
+    updatedAt: "2026-11-03",
     readTime: "11 min read",
     image: "/og/blog/sendgrid-alternatives.svg",
     imageAlt: "SendGrid alternatives card: sourced prices, field support, and a fallback migration in TypeScript",

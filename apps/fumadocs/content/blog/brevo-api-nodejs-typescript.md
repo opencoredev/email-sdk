@@ -414,5 +414,6 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [SendGrid vs Brevo](/compare/sendgrid-vs-brevo) and [Brevo vs MailerSend](/compare/brevo-vs-mailersend): Brevo's message fields next to other providers.
 - [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): the fallback provider used here, called with plain `fetch`.
 - [Resend API guide](/blog/resend-api-nodejs-typescript): the same walkthrough for Resend.
+- [SendGrid API guide](/blog/sendgrid-api-nodejs-typescript): the same walkthrough for SendGrid.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): moving off SendGrid with SendGrid kept as the fallback.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.
