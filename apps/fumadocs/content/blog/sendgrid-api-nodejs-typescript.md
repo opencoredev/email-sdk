@@ -100,10 +100,12 @@ SendGrid answers `202 Accepted` with an empty body. The only ID you get back is 
 | `template_id` | string | IDs starting with `d-` are dynamic templates. |
 | `categories` | array of strings | Up to 10, each up to 255 characters. They come back on every event. |
 | `custom_args` | object | Your own key-value pairs, at most 10,000 bytes in total. They come back on every event. |
-| `headers` | object | Custom headers. `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`, `Content-Type`, and a few others are reserved. |
+| `headers` | object | Custom headers only. Standard ones are reserved (below). |
 | `attachments` | array | Each with Base64 `content`, `filename`, and optional `type`, `disposition`, `content_id`. |
 | `send_at` | Unix timestamp in seconds | Up to 72 hours ahead. |
 | `batch_id` | string | Lets you pause or cancel a scheduled send. |
+
+The reserved header names are `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`, `Content-Type`, `Content-Transfer-Encoding`, `DKIM-Signature`, `Received`, `x-sg-id`, and `x-sg-eid`. SendGrid builds those from the body fields or sets them itself.
 
 Personalizations are where SendGrid differs most from other APIs. Two entries in `personalizations` send two separate emails, so a recipient never sees the other's address. Put everyone in one entry's `to` list and they all see each other.
 
@@ -136,32 +138,36 @@ if (!apiKey) throw new Error("Set SENDGRID_API_KEY.");
 
 const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 
+async function sendGrid(path: string, expected: number, body?: unknown) {
+  const response = await fetch(`https://api.sendgrid.com${path}`, {
+    method: "POST",
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status !== expected) throw new Error(`SendGrid ${path} ${response.status}: ${await response.text()}`);
+
+  return response;
+}
+
 // 1. Create a batch ID (201 Created).
-const batch: { batch_id: string } = await fetch("https://api.sendgrid.com/v3/mail/batch", {
-  method: "POST",
-  headers,
-}).then((response) => response.json());
+const batch: unknown = await (await sendGrid("/v3/mail/batch", 201)).json();
+const batchId = typeof batch === "object" && batch !== null ? Reflect.get(batch, "batch_id") : undefined;
 
-// 2. Schedule the email one hour from now with that batch ID.
-await fetch("https://api.sendgrid.com/v3/mail/send", {
-  method: "POST",
-  headers,
-  body: JSON.stringify({
-    personalizations: [{ to: [{ email: "ada@example.com" }] }],
-    from: { email: "orders@acme.com" },
-    subject: "Your trial ends tomorrow",
-    content: [{ type: "text/plain", value: "Your Acme trial ends tomorrow." }],
-    send_at: Math.floor(Date.now() / 1000) + 3600,
-    batch_id: batch.batch_id,
-  }),
+if (typeof batchId !== "string" || batchId === "") throw new Error("SendGrid returned no batch_id.");
+
+// 2. Schedule the email one hour from now with that batch ID (202 Accepted).
+await sendGrid("/v3/mail/send", 202, {
+  personalizations: [{ to: [{ email: "ada@example.com" }] }],
+  from: { email: "orders@acme.com" },
+  subject: "Your trial ends tomorrow",
+  content: [{ type: "text/plain", value: "Your Acme trial ends tomorrow." }],
+  send_at: Math.floor(Date.now() / 1000) + 3600,
+  batch_id: batchId,
 });
 
-// 3. Later, more than 10 minutes before send time: cancel (or "pause").
-await fetch("https://api.sendgrid.com/v3/user/scheduled_sends", {
-  method: "POST",
-  headers,
-  body: JSON.stringify({ batch_id: batch.batch_id, status: "cancel" }),
-});
+// 3. Later, more than 10 minutes before send time: cancel (or "pause"). 201 Created.
+await sendGrid("/v3/user/scheduled_sends", 201, { batch_id: batchId, status: "cancel" });
 ```
 
 Store the batch ID next to the job that scheduled it. The cancel or pause has to arrive at least 10 minutes before the send time, and at most 10 batches can be paused or cancelled at once. A paused batch that is still paused 72 hours after its `send_at` is discarded and marked Expired. Anything further out than 72 hours belongs in your own job queue.
@@ -199,7 +205,7 @@ Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-R
 
 SendGrid's Mail Send API has no idempotency key. If a request times out or returns a `5xx`, SendGrid may already have accepted the email, and a retry can deliver it twice. A `429` is different: SendGrid refused the request, so retrying it is safe.
 
-This helper always retries `429`, waiting for the reset time. It retries `5xx` and network errors only when you pass `retryUnknown: true`, which accepts a possible duplicate in exchange for not losing the email. Each attempt times out after 10 seconds, and any single wait is capped at 30 seconds:
+This helper always retries `429`, waiting until the reset time, because a request sent earlier is blocked again. If the reset is more than 2 minutes away, it throws instead, so a queue can reschedule the job. It retries `5xx` and network errors only when you pass `retryUnknown: true`, which accepts a possible duplicate in exchange for not losing the email. Each attempt times out after 10 seconds, and backoff waits are capped at 30 seconds:
 
 `send-with-retry.ts`:
 
@@ -210,12 +216,15 @@ type RetryOptions = { maxAttempts?: number; retryUnknown?: boolean };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function waitForReset(response: Response, attempt: number) {
-  const reset = Number(response.headers.get("x-ratelimit-reset"));
-  const untilReset = reset * 1000 - Date.now();
-  const waitMs = Number.isFinite(untilReset) && untilReset > 0 ? untilReset : 2 ** attempt * 500;
+const backoff = (attempt: number) => Math.min(2 ** attempt * 500, 30_000);
 
-  return Math.min(waitMs, 30_000);
+const maxRateLimitWaitMs = 120_000;
+
+function untilReset(response: Response, attempt: number) {
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
+  const waitMs = reset * 1000 - Date.now();
+
+  return Number.isFinite(waitMs) && waitMs > 0 ? waitMs : backoff(attempt);
 }
 
 export async function sendWithRetry(mail: SendGridMail, apiKey: string, options: RetryOptions = {}) {
@@ -235,7 +244,7 @@ export async function sendWithRetry(mail: SendGridMail, apiKey: string, options:
     } catch (error) {
       // The request may have reached SendGrid before it failed.
       if (!retryUnknown || attempt >= maxAttempts) throw error;
-      await sleep(Math.min(2 ** attempt * 500, 30_000));
+      await sleep(backoff(attempt));
       continue;
     }
 
@@ -249,7 +258,18 @@ export async function sendWithRetry(mail: SendGridMail, apiKey: string, options:
       throw new Error(`SendGrid ${response.status}: ${await response.text()}`);
     }
 
-    await sleep(response.status === 429 ? waitForReset(response, attempt) : Math.min(2 ** attempt * 500, 30_000));
+    if (response.status !== 429) {
+      await sleep(backoff(attempt));
+      continue;
+    }
+
+    const waitMs = untilReset(response, attempt);
+
+    if (waitMs > maxRateLimitWaitMs) {
+      throw new Error(`SendGrid rate limit resets in ${Math.ceil(waitMs / 1000)} s; retry the job later.`);
+    }
+
+    await sleep(waitMs);
   }
 }
 ```
@@ -270,6 +290,8 @@ import { createPublicKey, verify } from "node:crypto";
 type SendGridEvent = {
   email: string;
   event: string;
+  // On bounce events: "bounce" (permanent) or "blocked" (temporary, may be accepted later).
+  type?: string;
   timestamp: number;
   sg_event_id: string;
   sg_message_id?: string;
@@ -300,7 +322,9 @@ export async function handleSendGridWebhook(request: Request) {
   for (const event of events) {
     const messageId = event.sg_message_id?.split(".")[0];
 
-    if (event.event === "bounce" || event.event === "dropped" || event.event === "spamreport") {
+    if (event.event === "bounce" && event.type === "blocked") {
+      console.log("temporary block, keep the recipient", event.email, messageId, event.sg_event_id);
+    } else if (event.event === "bounce" || event.event === "spamreport") {
       console.log("suppress recipient", event.email, messageId, event.sg_event_id);
     }
   }
