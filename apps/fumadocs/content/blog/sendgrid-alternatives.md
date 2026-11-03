@@ -296,6 +296,7 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 
 - [Migrate from the SendGrid SDK](/docs/guides/migrate/sendgrid): keep SendGrid and replace direct Mail Send calls with Email SDK.
 - [SendGrid adapter](/docs/adapters/sendgrid): options and field mapping.
+- [SendGrid API guide](/blog/sendgrid-api-nodejs-typescript): API keys, Mail Send with `fetch`, sandbox mode, and signed webhooks, if you stay on SendGrid.
 - [Retries and fallback](/docs/concepts/fallbacks-and-retries): how delivery certainty decides when fallback runs.
 - [Mailgun alternatives](/blog/mailgun-alternatives): the same migration, starting from Mailgun.
 - [Resend alternatives](/blog/resend-alternatives): the same migration, starting from Resend.
