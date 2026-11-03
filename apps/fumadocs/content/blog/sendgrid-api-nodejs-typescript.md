@@ -150,24 +150,30 @@ async function sendGrid(path: string, expected: number, body?: unknown) {
   return response;
 }
 
-// 1. Create a batch ID (201 Created).
-const batch: unknown = await (await sendGrid("/v3/mail/batch", 201)).json();
-const batchId = typeof batch === "object" && batch !== null ? Reflect.get(batch, "batch_id") : undefined;
+// Create a batch ID (201 Created), then schedule the email with it (202 Accepted).
+// Save the returned batch ID with your job so a later request can cancel the send.
+export async function scheduleTrialReminder(to: string, sendAt: Date) {
+  const batch: unknown = await (await sendGrid("/v3/mail/batch", 201)).json();
+  const batchId = typeof batch === "object" && batch !== null ? Reflect.get(batch, "batch_id") : undefined;
 
-if (typeof batchId !== "string" || batchId === "") throw new Error("SendGrid returned no batch_id.");
+  if (typeof batchId !== "string" || batchId === "") throw new Error("SendGrid returned no batch_id.");
 
-// 2. Schedule the email one hour from now with that batch ID (202 Accepted).
-await sendGrid("/v3/mail/send", 202, {
-  personalizations: [{ to: [{ email: "ada@example.com" }] }],
-  from: { email: "orders@acme.com" },
-  subject: "Your trial ends tomorrow",
-  content: [{ type: "text/plain", value: "Your Acme trial ends tomorrow." }],
-  send_at: Math.floor(Date.now() / 1000) + 3600,
-  batch_id: batchId,
-});
+  await sendGrid("/v3/mail/send", 202, {
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: "orders@acme.com" },
+    subject: "Your trial ends tomorrow",
+    content: [{ type: "text/plain", value: "Your Acme trial ends tomorrow." }],
+    send_at: Math.floor(sendAt.getTime() / 1000),
+    batch_id: batchId,
+  });
 
-// 3. Later, more than 10 minutes before send time: cancel (or "pause"). 201 Created.
-await sendGrid("/v3/user/scheduled_sends", 201, { batch_id: batchId, status: "cancel" });
+  return batchId;
+}
+
+// Call later, more than 10 minutes before the send time. Use "pause" to hold it instead. 201 Created.
+export async function cancelScheduledSend(batchId: string) {
+  await sendGrid("/v3/user/scheduled_sends", 201, { batch_id: batchId, status: "cancel" });
+}
 ```
 
 Store the batch ID next to the job that scheduled it. The cancel or pause has to arrive at least 10 minutes before the send time, and at most 10 batches can be paused or cancelled at once. A paused batch that is still paused 72 hours after its `send_at` is discarded and marked Expired. Anything further out than 72 hours belongs in your own job queue.
@@ -257,6 +263,9 @@ export async function sendWithRetry(mail: SendGridMail, apiKey: string, options:
     if (!retryable || attempt >= maxAttempts) {
       throw new Error(`SendGrid ${response.status}: ${await response.text()}`);
     }
+
+    // Release the connection before waiting; the body of a 429 or 5xx isn't needed.
+    await response.body?.cancel();
 
     if (response.status !== 429) {
       await sleep(backoff(attempt));
