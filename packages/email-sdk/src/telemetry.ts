@@ -49,6 +49,23 @@ export type TelemetryEventName =
 
 export type TelemetrySource = "sdk" | "cli";
 
+/**
+ * Where this process's installation identifier came from. `stored` reuses an
+ * existing state file, `created` made and saved a new one, and `ephemeral` made
+ * one that could not be saved, so the next process gets a different identifier.
+ */
+export type InstallationIdSource = "stored" | "created" | "ephemeral";
+
+export type HostingPlatform =
+  | "vercel"
+  | "aws_lambda"
+  | "google_cloud_run"
+  | "railway"
+  | "fly"
+  | "render"
+  | "kubernetes"
+  | "docker";
+
 export type TelemetryProperties = Record<
   string,
   string | number | boolean | readonly string[] | undefined
@@ -119,6 +136,44 @@ export function detectCiVendor(env: Record<string, string | undefined>) {
   return undefined;
 }
 
+/**
+ * Names the hosting platform from marker presence only; no environment value
+ * is ever reported. Platform markers win over the generic Docker marker because
+ * several of these platforms also run their workloads in containers.
+ */
+export function detectHostingPlatform({
+  env,
+  hasDockerMarker,
+}: {
+  env: Record<string, string | undefined>;
+  hasDockerMarker: boolean;
+}): HostingPlatform | undefined {
+  if (env.VERCEL) return "vercel";
+
+  if (env.AWS_LAMBDA_FUNCTION_NAME) return "aws_lambda";
+
+  // Set by Cloud Run services and Cloud Run functions (formerly Cloud Functions).
+  if (env.K_SERVICE) return "google_cloud_run";
+
+  if (env.RAILWAY_PROJECT_ID) return "railway";
+
+  if (env.FLY_APP_NAME) return "fly";
+
+  if (env.RENDER) return "render";
+
+  if (env.KUBERNETES_SERVICE_HOST) return "kubernetes";
+
+  return hasDockerMarker ? "docker" : undefined;
+}
+
+function hasDockerMarker() {
+  try {
+    return existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
 const disabledTelemetry: Telemetry = {
   enabled: false,
   capture: () => Promise.resolve(),
@@ -151,9 +206,9 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const configDir = resolveConfigDir(env, options.configDir);
   const loaded = loadTelemetryState(configDir);
 
-  if (!loaded || loaded.disabled) return disabledTelemetry;
+  if (!loaded || loaded.state.disabled) return disabledTelemetry;
 
-  const state = loaded;
+  const { state, installationIdSource } = loaded;
 
   if (!state.noticeShown) {
     notify(TELEMETRY_NOTICE);
@@ -172,6 +227,8 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     ci_vendor: ciVendor,
     measurement_schema_version: 2,
     capture_mode: options.fetch ? "injected" : env.NODE_ENV === "test" ? "test" : "runtime",
+    installation_id_source: installationIdSource,
+    hosting_platform: detectHostingPlatform({ env, hasDockerMarker: hasDockerMarker() }),
   };
 
   const pending = new Set<Promise<void>>();
@@ -760,24 +817,33 @@ function readStoredState(configDir: string): TelemetryState | "missing" | "unrea
   return "unreadable";
 }
 
-function loadTelemetryState(configDir: string): TelemetryState | undefined {
+type LoadedTelemetryState = {
+  state: TelemetryState;
+  installationIdSource: InstallationIdSource;
+};
+
+function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined {
   const stored = readStoredState(configDir);
 
   if (stored === "unreadable") return undefined;
 
-  if (stored !== "missing") return stored;
+  if (stored !== "missing") return { state: stored, installationIdSource: "stored" };
 
   const state = { installationId: randomUUID(), noticeShown: false };
-  persistTelemetryState(configDir, state);
+  const saved = persistTelemetryState(configDir, state);
 
-  return state;
+  return { state, installationIdSource: saved ? "created" : "ephemeral" };
 }
 
+/** Returns false when the state file could not be written. */
 function persistTelemetryState(configDir: string, state: TelemetryState) {
   try {
     writeStateFile(configDir, state);
+
+    return true;
   } catch {
     // Read-only environments still get telemetry with a per-process identity.
+    return false;
   }
 }
 

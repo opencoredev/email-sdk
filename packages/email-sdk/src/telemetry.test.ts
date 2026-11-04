@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +16,7 @@ import {
   TELEMETRY_NOTICE,
   createTelemetry,
   detectCiVendor,
+  detectHostingPlatform,
   disableTelemetry,
   getTelemetry,
   getTelemetryStatus,
@@ -283,6 +292,57 @@ describe("telemetry capture", () => {
 
     expect(first.calls[0]?.body.distinct_id).toBe(second.calls[0]?.body.distinct_id);
   });
+
+  test("reports a saved new installation id as created, then as stored", async () => {
+    const configDir = tempConfigDir();
+    const first = fetchCapture();
+    const second = fetchCapture();
+
+    await createTelemetry({ env: {}, fetch: first.fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+    await createTelemetry({ env: {}, fetch: second.fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+
+    expect(first.calls[0]?.body.properties.installation_id_source).toBe("created");
+    expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
+  });
+
+  // Root ignores directory permissions, so the write would succeed.
+  test.skipIf(process.getuid?.() === 0)(
+    "reports an installation id that cannot be saved as ephemeral",
+    async () => {
+      const configDir = tempConfigDir();
+      const first = fetchCapture();
+      const second = fetchCapture();
+
+      mkdirSync(configDir, { recursive: true });
+      chmodSync(configDir, 0o500);
+
+      try {
+        await createTelemetry({
+          env: {},
+          fetch: first.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+        await createTelemetry({
+          env: {},
+          fetch: second.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+      } finally {
+        chmodSync(configDir, 0o700);
+      }
+
+      expect(first.calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+      expect(second.calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+      expect(first.calls[0]?.body.distinct_id).not.toBe(second.calls[0]?.body.distinct_id);
+      expect(readdirSync(configDir)).toEqual([]);
+    },
+  );
 
   test("flush waits for in-flight captures", async () => {
     const calls: CapturedRequest[] = [];
@@ -778,6 +838,44 @@ describe("detectCiVendor", () => {
 
     await telemetry.capture("cli command run", { command: "send" });
     expect(calls[0]?.body.properties).toMatchObject({ ci: true, ci_vendor: "github_actions" });
+  });
+});
+
+describe("detectHostingPlatform", () => {
+  test.each([
+    [{ VERCEL: "1" }, "vercel"],
+    [{ AWS_LAMBDA_FUNCTION_NAME: "send-email" }, "aws_lambda"],
+    [{ K_SERVICE: "mailer" }, "google_cloud_run"],
+    [{ RAILWAY_PROJECT_ID: "0f6c" }, "railway"],
+    [{ FLY_APP_NAME: "mailer" }, "fly"],
+    [{ RENDER: "true" }, "render"],
+    [{ KUBERNETES_SERVICE_HOST: "10.0.0.1" }, "kubernetes"],
+  ])("detects %o as %s", (env, platform) => {
+    expect(detectHostingPlatform({ env, hasDockerMarker: false })).toBe(platform);
+  });
+
+  test("falls back to docker only when no platform marker is set", () => {
+    expect(detectHostingPlatform({ env: {}, hasDockerMarker: true })).toBe("docker");
+    expect(
+      detectHostingPlatform({ env: { KUBERNETES_SERVICE_HOST: "10.0.0.1" }, hasDockerMarker: true }),
+    ).toBe("kubernetes");
+    expect(detectHostingPlatform({ env: {}, hasDockerMarker: false })).toBeUndefined();
+  });
+
+  test("stamps the platform name, never the marker value", async () => {
+    const { calls, fetchFn } = fetchCapture();
+
+    const telemetry = createTelemetry({
+      env: { AWS_LAMBDA_FUNCTION_NAME: "acme-private-function" },
+      fetch: fetchFn,
+      configDir: tempConfigDir(),
+      notify: () => {},
+    });
+
+    await telemetry.capture("email sent", { adapter: "resend", success: true });
+
+    expect(calls[0]?.body.properties.hosting_platform).toBe("aws_lambda");
+    expect(JSON.stringify(calls[0]?.body)).not.toContain("acme-private-function");
   });
 });
 
