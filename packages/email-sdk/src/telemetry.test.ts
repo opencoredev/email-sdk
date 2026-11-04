@@ -1,13 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { EmailProviderError } from "./errors.js";
 import {
   TELEMETRY_NOTICE,
+  createInitialStateFile,
   createTelemetry,
   detectCiVendor,
+  detectHostingPlatform,
   disableTelemetry,
   getTelemetry,
   getTelemetryStatus,
@@ -283,6 +294,142 @@ describe("telemetry capture", () => {
 
     expect(first.calls[0]?.body.distinct_id).toBe(second.calls[0]?.body.distinct_id);
   });
+
+  test("reports a saved new installation id as created, then as stored", async () => {
+    const configDir = tempConfigDir();
+    const first = fetchCapture();
+    const second = fetchCapture();
+
+    await createTelemetry({ env: {}, fetch: first.fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+    await createTelemetry({ env: {}, fetch: second.fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+
+    expect(first.calls[0]?.body.properties.installation_id_source).toBe("created");
+    expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
+  });
+
+  test("never replaces a state file another process created first", () => {
+    const configDir = tempConfigDir();
+    const path = join(configDir, "telemetry.json");
+
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path, '{"installationId": "first-process", "noticeShown": false}');
+
+    const written = createInitialStateFile(configDir, {
+      installationId: "second-process",
+      noticeShown: false,
+    });
+
+    expect(written).toBe("exists");
+    expect(readFileSync(path, "utf8")).toContain('"first-process"');
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
+  });
+
+  test("a dangling state-file symlink gets an ephemeral id and is left alone", async () => {
+    const configDir = tempConfigDir();
+    const target = join(tempConfigDir(), "missing-target.json");
+    const link = join(configDir, "telemetry.json");
+    const { calls, fetchFn } = fetchCapture();
+
+    mkdirSync(configDir, { recursive: true });
+    symlinkSync(target, link);
+
+    await createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+
+    expect(calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+    expect(readlinkSync(link)).toBe(target);
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
+  });
+
+  test("creates the state file when none exists", () => {
+    const configDir = tempConfigDir();
+
+    const written = createInitialStateFile(configDir, {
+      installationId: "only-process",
+      noticeShown: false,
+    });
+
+    expect(written).toBe("created");
+    expect(readFileSync(join(configDir, "telemetry.json"), "utf8")).toContain('"only-process"');
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
+  });
+
+  // Root ignores directory permissions and Windows ignores directory modes, so
+  // the write would succeed there.
+  const directoryModesBlockWrites = process.platform !== "win32" && process.getuid?.() !== 0;
+
+  test.skipIf(!directoryModesBlockWrites)(
+    "reports an id as created when only the notice-marker save succeeds",
+    async () => {
+      const configDir = tempConfigDir();
+      const first = fetchCapture();
+      const second = fetchCapture();
+
+      mkdirSync(configDir, { recursive: true });
+      chmodSync(configDir, 0o500);
+
+      try {
+        await createTelemetry({
+          env: {},
+          fetch: first.fetchFn,
+          configDir,
+          // Runs between the initial save and the notice-marker save.
+          notify: () => chmodSync(configDir, 0o700),
+        }).capture("email sent");
+        await createTelemetry({
+          env: {},
+          fetch: second.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+      } finally {
+        chmodSync(configDir, 0o700);
+      }
+
+      expect(first.calls[0]?.body.properties.installation_id_source).toBe("created");
+      expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
+      expect(second.calls[0]?.body.distinct_id).toBe(first.calls[0]?.body.distinct_id);
+    },
+  );
+
+  test.skipIf(!directoryModesBlockWrites)(
+    "reports an installation id that cannot be saved as ephemeral",
+    async () => {
+      const configDir = tempConfigDir();
+      const first = fetchCapture();
+      const second = fetchCapture();
+
+      mkdirSync(configDir, { recursive: true });
+      chmodSync(configDir, 0o500);
+
+      try {
+        await createTelemetry({
+          env: {},
+          fetch: first.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+        await createTelemetry({
+          env: {},
+          fetch: second.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+      } finally {
+        chmodSync(configDir, 0o700);
+      }
+
+      expect(first.calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+      expect(second.calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+      expect(first.calls[0]?.body.distinct_id).not.toBe(second.calls[0]?.body.distinct_id);
+      expect(readdirSync(configDir)).toEqual([]);
+    },
+  );
 
   test("flush waits for in-flight captures", async () => {
     const calls: CapturedRequest[] = [];
@@ -778,6 +925,48 @@ describe("detectCiVendor", () => {
 
     await telemetry.capture("cli command run", { command: "send" });
     expect(calls[0]?.body.properties).toMatchObject({ ci: true, ci_vendor: "github_actions" });
+  });
+});
+
+describe("detectHostingPlatform", () => {
+  test.each([
+    [{ VERCEL: "1" }, "vercel"],
+    [{ AWS_LAMBDA_FUNCTION_NAME: "send-email" }, "aws_lambda"],
+    [{ K_SERVICE: "mailer" }, "google_cloud_run"],
+    [{ RAILWAY_PROJECT_ID: "0f6c" }, "railway"],
+    [{ FLY_APP_NAME: "mailer" }, "fly"],
+    [{ RENDER: "true" }, "render"],
+    [{ KUBERNETES_SERVICE_HOST: "10.0.0.1" }, "kubernetes"],
+  ])("detects %o as %s", (env, platform) => {
+    expect(detectHostingPlatform({ env, hasDockerMarker: false })).toBe(platform);
+  });
+
+  test("falls back to docker only when no platform marker is set", () => {
+    expect(detectHostingPlatform({ env: {}, hasDockerMarker: true })).toBe("docker");
+    expect(
+      detectHostingPlatform({ env: { KUBERNETES_SERVICE_HOST: "10.0.0.1" }, hasDockerMarker: true }),
+    ).toBe("kubernetes");
+    expect(detectHostingPlatform({ env: {}, hasDockerMarker: false })).toBeUndefined();
+  });
+
+  test("treats an empty marker as unset", () => {
+    expect(detectHostingPlatform({ env: { VERCEL: "" }, hasDockerMarker: false })).toBeUndefined();
+  });
+
+  test("stamps the platform name, never the marker value", async () => {
+    const { calls, fetchFn } = fetchCapture();
+
+    const telemetry = createTelemetry({
+      env: { AWS_LAMBDA_FUNCTION_NAME: "acme-private-function" },
+      fetch: fetchFn,
+      configDir: tempConfigDir(),
+      notify: () => {},
+    });
+
+    await telemetry.capture("email sent", { adapter: "resend", success: true });
+
+    expect(calls[0]?.body.properties.hosting_platform).toBe("aws_lambda");
+    expect(JSON.stringify(calls[0]?.body)).not.toContain("acme-private-function");
   });
 });
 
