@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  readlinkSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -324,6 +325,24 @@ describe("telemetry capture", () => {
 
     expect(written).toBe("exists");
     expect(readFileSync(path, "utf8")).toContain('"first-process"');
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
+  });
+
+  test("a dangling state-file symlink gets an ephemeral id and is left alone", async () => {
+    const configDir = tempConfigDir();
+    const target = join(tempConfigDir(), "missing-target.json");
+    const link = join(configDir, "telemetry.json");
+    const { calls, fetchFn } = fetchCapture();
+
+    mkdirSync(configDir, { recursive: true });
+    symlinkSync(target, link);
+
+    await createTelemetry({ env: {}, fetch: fetchFn, configDir, notify: () => {} }).capture(
+      "email sent",
+    );
+
+    expect(calls[0]?.body.properties.installation_id_source).toBe("ephemeral");
+    expect(readlinkSync(link)).toBe(target);
     expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
   });
 

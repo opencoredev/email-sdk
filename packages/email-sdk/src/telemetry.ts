@@ -217,7 +217,8 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
     // This save can succeed where the first one failed, and the next process
     // then reads the identifier back, so it is no longer ephemeral.
-    const noticeSaved = persistTelemetryState(configDir, { ...state, noticeShown: true });
+    const noticeSaved =
+      loaded.mayWriteState && persistTelemetryState(configDir, { ...state, noticeShown: true });
 
     if (noticeSaved && installationIdSource === "ephemeral") {
       installationIdSource = "created";
@@ -829,6 +830,8 @@ function readStoredState(configDir: string): TelemetryState | "missing" | "unrea
 type LoadedTelemetryState = {
   state: TelemetryState;
   installationIdSource: InstallationIdSource;
+  /** False when writing the state file could replace another process's file. */
+  mayWriteState: boolean;
 };
 
 function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined {
@@ -836,26 +839,30 @@ function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined
 
   if (stored === "unreadable") return undefined;
 
-  if (stored !== "missing") return { state: stored, installationIdSource: "stored" };
+  if (stored !== "missing") {
+    return { state: stored, installationIdSource: "stored", mayWriteState: true };
+  }
 
   const state = { installationId: randomUUID(), noticeShown: false };
   const written = createInitialStateFile(configDir, state);
 
-  if (written === "created") return { state, installationIdSource: "created" };
+  if (written === "created") return { state, installationIdSource: "created", mayWriteState: true };
 
-  if (written === "failed") return { state, installationIdSource: "ephemeral" };
+  if (written === "failed") return { state, installationIdSource: "ephemeral", mayWriteState: true };
 
   // Another process created the file after it was read here: share its id.
   const winner = readStoredState(configDir);
 
   if (winner === "unreadable") return undefined;
 
-  if (winner !== "missing") return { state: winner, installationIdSource: "stored" };
+  if (winner !== "missing") {
+    return { state: winner, installationIdSource: "stored", mayWriteState: true };
+  }
 
   // The name exists but resolves to nothing, such as a dangling symlink.
-  const saved = persistTelemetryState(configDir, state);
-
-  return { state, installationIdSource: saved ? "created" : "ephemeral" };
+  // Writing here could replace a state file (or opt-out) another process just
+  // saved, so this process keeps its identity to itself.
+  return { state, installationIdSource: "ephemeral", mayWriteState: false };
 }
 
 /**
