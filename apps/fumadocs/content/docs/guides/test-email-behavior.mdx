@@ -3,16 +3,16 @@ title: Test email sending without sending real email
 description: "Test email sending in Node.js and TypeScript without sending real email: capture messages in memory, prove retries and fallback, or route SMTP to Mailpit."
 ---
 
-To test email sending in a Node.js or TypeScript app without sending real email, swap the provider adapter for `memoryAdapter()` from `@opencoredev/email-sdk/testing`. It makes no network calls and keeps every message your code sends, so a test can check the recipients, subject, and body. Use `failingAdapter()` to test retries and fallback, and point the [SMTP adapter](/docs/adapters/smtp) at a local catcher such as Mailpit when you need to see the rendered MIME message.
+To test email sending in a Node.js or TypeScript app without sending real email, swap the provider adapter for `memoryAdapter()` from `@opencoredev/email-sdk/testing`. It never calls a provider and keeps every message your code sends, so a test can check the recipients, subject, and body. Use `failingAdapter()` to test retries and fallback, and point the [SMTP adapter](/docs/adapters/smtp) at a local catcher such as Mailpit when you need to see the rendered MIME message.
 
 | What you want to prove | Use | Network |
 | --- | --- | --- |
 | Your code sends the right message | `memoryAdapter()` | None |
 | Retries and fallback behave | `failingAdapter()` + `memoryAdapter()` | None |
-| Hooks and plugins run in order | `capturePlugin()` | None |
+| Hooks and plugins run in order | `capturePlugin()` + `memoryAdapter()` | None |
 | The real MIME message renders | `smtp()` pointed at Mailpit | Local only |
 
-Delivery to real inboxes still needs a real send from your own provider account.
+"None" assumes telemetry is off: the client sends anonymous usage telemetry unless you pass `telemetry: false` or set `EMAIL_SDK_TELEMETRY=0` or `DO_NOT_TRACK=1` (see [Keep telemetry off](#keep-telemetry-off)). Delivery to real inboxes still needs a real send from your own provider account.
 
 ## Capture a successful send
 
@@ -86,7 +86,7 @@ Use `capturePlugin()` when a test needs ordered `beforeSend`, `retry`, `afterSen
 
 ## Inspect the real message with a local SMTP catcher
 
-The memory adapter stores the message object, not the MIME a provider would receive. To look at headers, encodings, and attachments as a mail client sees them, run a local catcher such as [Mailpit](https://mailpit.axllent.org/) and send through the SMTP adapter. Mailpit accepts mail on port 1025 and shows it in a web UI on port 8025; nothing leaves your machine.
+The memory adapter stores the message object, not the MIME a provider would receive. To look at headers, encodings, and attachments as a mail client sees them, run a local catcher such as [Mailpit](https://mailpit.axllent.org/) and send through the SMTP adapter. Mailpit accepts mail on port 1025 and shows it in a web UI on port 8025. With `telemetry: false`, nothing leaves your machine.
 
 ```ts title="src/email.dev.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -94,6 +94,7 @@ import { smtp } from "@opencoredev/email-sdk/smtp";
 
 export const email = createEmailClient({
   adapters: [smtp({ host: "127.0.0.1", port: 1025 })],
+  telemetry: false,
 });
 ```
 
@@ -107,7 +108,7 @@ The repository test preload sets `EMAIL_SDK_TELEMETRY=0`. Application tests can 
 
 ### Does `memoryAdapter()` send anything?
 
-No. Its `send` pushes the message and a result with an id like `mem_1` into `memory.raw.sent` and returns. Nothing goes over the network.
+No. Its `send` pushes the message and a result with an id like `mem_1` into `memory.raw.sent` and returns. It never calls a provider. The client's anonymous telemetry is separate; turn it off with `telemetry: false`.
 
 ### Does it work with Vitest or Jest?
 
