@@ -863,29 +863,51 @@ function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined
  * this, two processes starting on an empty config directory would both save
  * their own id and the later rename would silently replace the earlier one.
  * A hard link is atomic and fails with EEXIST when the file already exists.
+ * Never throws: telemetry setup must not break client creation.
  */
 export function createInitialStateFile(
   configDir: string,
   state: TelemetryState,
 ): "created" | "exists" | "failed" {
   const path = join(configDir, "telemetry.json");
+  const contents = `${JSON.stringify(state, null, 2)}\n`;
   const temporary = `${path}.${randomUUID()}.tmp`;
 
   try {
     mkdirSync(configDir, { recursive: true });
-    writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
+    writeFileSync(temporary, contents);
     linkSync(temporary, path);
 
     return "created";
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
-      return "exists";
-    }
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") return "exists";
 
-    // Filesystems without hard links fall back to the rename write.
-    return persistTelemetryState(configDir, state) ? "created" : "failed";
+    // Filesystems without hard links (EPERM, ENOTSUP, EXDEV) still get a
+    // single winner from an exclusive create. A crash mid-write there leaves
+    // an unreadable file, which keeps telemetry off rather than on.
+    return createStateFileExclusively(path, contents);
   } finally {
-    rmSync(temporary, { force: true });
+    removeQuietly(temporary);
+  }
+}
+
+function createStateFileExclusively(path: string, contents: string) {
+  try {
+    writeFileSync(path, contents, { flag: "wx" });
+
+    return "created";
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EEXIST"
+      ? "exists"
+      : "failed";
+  }
+}
+
+function removeQuietly(path: string) {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // A leftover temporary file is harmless; failing client creation is not.
   }
 }
 
