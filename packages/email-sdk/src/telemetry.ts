@@ -208,11 +208,19 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   if (!loaded || loaded.state.disabled) return disabledTelemetry;
 
-  const { state, installationIdSource } = loaded;
+  const { state } = loaded;
+  let { installationIdSource } = loaded;
 
   if (!state.noticeShown) {
     notify(TELEMETRY_NOTICE);
-    persistTelemetryState(configDir, { ...state, noticeShown: true });
+
+    // This save can succeed where the first one failed, and the next process
+    // then reads the identifier back, so it is no longer ephemeral.
+    const noticeSaved = persistTelemetryState(configDir, { ...state, noticeShown: true });
+
+    if (noticeSaved && installationIdSource === "ephemeral") {
+      installationIdSource = "created";
+    }
   }
 
   const ciVendor = detectCiVendor(env);

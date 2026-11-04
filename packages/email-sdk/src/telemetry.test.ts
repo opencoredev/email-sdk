@@ -309,8 +309,45 @@ describe("telemetry capture", () => {
     expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
   });
 
-  // Root ignores directory permissions, so the write would succeed.
-  test.skipIf(process.getuid?.() === 0)(
+  // Root ignores directory permissions and Windows ignores directory modes, so
+  // the write would succeed there.
+  const directoryModesBlockWrites = process.platform !== "win32" && process.getuid?.() !== 0;
+
+  test.skipIf(!directoryModesBlockWrites)(
+    "reports an id as created when only the notice-marker save succeeds",
+    async () => {
+      const configDir = tempConfigDir();
+      const first = fetchCapture();
+      const second = fetchCapture();
+
+      mkdirSync(configDir, { recursive: true });
+      chmodSync(configDir, 0o500);
+
+      try {
+        await createTelemetry({
+          env: {},
+          fetch: first.fetchFn,
+          configDir,
+          // Runs between the initial save and the notice-marker save.
+          notify: () => chmodSync(configDir, 0o700),
+        }).capture("email sent");
+        await createTelemetry({
+          env: {},
+          fetch: second.fetchFn,
+          configDir,
+          notify: () => {},
+        }).capture("email sent");
+      } finally {
+        chmodSync(configDir, 0o700);
+      }
+
+      expect(first.calls[0]?.body.properties.installation_id_source).toBe("created");
+      expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
+      expect(second.calls[0]?.body.distinct_id).toBe(first.calls[0]?.body.distinct_id);
+    },
+  );
+
+  test.skipIf(!directoryModesBlockWrites)(
     "reports an installation id that cannot be saved as ephemeral",
     async () => {
       const configDir = tempConfigDir();
