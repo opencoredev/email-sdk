@@ -103,7 +103,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-01",
+    updatedAt: "2026-11-04",
     readTime: "11 min read",
     image: "/og/blog/mailgun-alternatives.svg",
     imageAlt: "Mailgun alternatives card: sourced prices, log retention, and a fallback migration in TypeScript",
@@ -115,7 +115,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Mailgun API from Node.js and TypeScript with fetch: API keys, US and EU base URLs, attachments, tags, errors, rate limits, retries, and webhook signatures.",
     publishedAt: "2026-10-28",
-    updatedAt: "2026-11-02",
+    updatedAt: "2026-11-04",
     readTime: "14 min read",
     image: "/og/blog/mailgun-api-nodejs-typescript.svg",
     imageAlt: "Mailgun API guide card: fetch, regions, retries and webhooks in TypeScript",
