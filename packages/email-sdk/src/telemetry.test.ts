@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { EmailProviderError } from "./errors.js";
 import {
   TELEMETRY_NOTICE,
+  createInitialStateFile,
   createTelemetry,
   detectCiVendor,
   detectHostingPlatform,
@@ -307,6 +308,36 @@ describe("telemetry capture", () => {
 
     expect(first.calls[0]?.body.properties.installation_id_source).toBe("created");
     expect(second.calls[0]?.body.properties.installation_id_source).toBe("stored");
+  });
+
+  test("never replaces a state file another process created first", () => {
+    const configDir = tempConfigDir();
+    const path = join(configDir, "telemetry.json");
+
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path, '{"installationId": "first-process", "noticeShown": false}');
+
+    const written = createInitialStateFile(configDir, {
+      installationId: "second-process",
+      noticeShown: false,
+    });
+
+    expect(written).toBe("exists");
+    expect(readFileSync(path, "utf8")).toContain('"first-process"');
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
+  });
+
+  test("creates the state file when none exists", () => {
+    const configDir = tempConfigDir();
+
+    const written = createInitialStateFile(configDir, {
+      installationId: "only-process",
+      noticeShown: false,
+    });
+
+    expect(written).toBe("created");
+    expect(readFileSync(join(configDir, "telemetry.json"), "utf8")).toContain('"only-process"');
+    expect(readdirSync(configDir)).toEqual(["telemetry.json"]);
   });
 
   // Root ignores directory permissions and Windows ignores directory modes, so

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -838,9 +839,54 @@ function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined
   if (stored !== "missing") return { state: stored, installationIdSource: "stored" };
 
   const state = { installationId: randomUUID(), noticeShown: false };
+  const written = createInitialStateFile(configDir, state);
+
+  if (written === "created") return { state, installationIdSource: "created" };
+
+  if (written === "failed") return { state, installationIdSource: "ephemeral" };
+
+  // Another process created the file after it was read here: share its id.
+  const winner = readStoredState(configDir);
+
+  if (winner === "unreadable") return undefined;
+
+  if (winner !== "missing") return { state: winner, installationIdSource: "stored" };
+
+  // The name exists but resolves to nothing, such as a dangling symlink.
   const saved = persistTelemetryState(configDir, state);
 
   return { state, installationIdSource: saved ? "created" : "ephemeral" };
+}
+
+/**
+ * @internal Creates the state file only when no other process has. Without
+ * this, two processes starting on an empty config directory would both save
+ * their own id and the later rename would silently replace the earlier one.
+ * A hard link is atomic and fails with EEXIST when the file already exists.
+ */
+export function createInitialStateFile(
+  configDir: string,
+  state: TelemetryState,
+): "created" | "exists" | "failed" {
+  const path = join(configDir, "telemetry.json");
+  const temporary = `${path}.${randomUUID()}.tmp`;
+
+  try {
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
+    linkSync(temporary, path);
+
+    return "created";
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+      return "exists";
+    }
+
+    // Filesystems without hard links fall back to the rename write.
+    return persistTelemetryState(configDir, state) ? "created" : "failed";
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 /** Returns false when the state file could not be written. */
