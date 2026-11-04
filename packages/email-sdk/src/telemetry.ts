@@ -137,8 +137,8 @@ export function detectCiVendor(env: Record<string, string | undefined>) {
 }
 
 /**
- * Names the hosting platform from marker presence only; no environment value
- * is ever reported. Platform markers win over the generic Docker marker because
+ * Names the hosting platform whose marker variable is set to a non-empty value.
+ * An empty value counts as unset. No environment value is ever reported. Platform markers win over the generic Docker marker because
  * several of these platforms also run their workloads in containers.
  */
 export function detectHostingPlatform({

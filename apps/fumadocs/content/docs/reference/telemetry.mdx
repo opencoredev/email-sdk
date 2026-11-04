@@ -60,7 +60,7 @@ Every event carries the random installation identifier as `distinct_id`, plus tw
 | `installation_id_source` | `stored` | The identifier came from an existing state file. |
 | | `created` | This process created the identifier and saved it. |
 | | `ephemeral` | This process created the identifier but could not save it, usually because the home directory is read-only. The next process gets a new one. |
-| `hosting_platform` | `vercel`, `aws_lambda`, `google_cloud_run`, `railway`, `fly`, `render`, `kubernetes`, `docker` | Detected from the presence of each platform's standard environment variable, or `/.dockerenv`. The variable's value is never sent. Absent when nothing matches. |
+| `hosting_platform` | `vercel`, `aws_lambda`, `google_cloud_run`, `railway`, `fly`, `render`, `kubernetes`, `docker` | Detected when a platform's standard environment variable is set to a non-empty value, or when `/.dockerenv` exists. Only the platform name is sent, never the variable's value. Absent when nothing matches. |
 
 An installation is a config directory, not a person or a project. Serverless functions and fresh containers often start with an empty home directory, so a single deployed app can produce a new `created` or `ephemeral` identifier on every cold start. To count new installations, take each `distinct_id`'s first `email sent` event, exclude `installation_id_source = ephemeral` and `ci = true`, and break the result down by `hosting_platform`: identifiers from long-lived machines (no platform) are the closest to new users. Events from SDK versions before these properties existed have neither property.
 

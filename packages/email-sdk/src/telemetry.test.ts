@@ -899,6 +899,10 @@ describe("detectHostingPlatform", () => {
     expect(detectHostingPlatform({ env: {}, hasDockerMarker: false })).toBeUndefined();
   });
 
+  test("treats an empty marker as unset", () => {
+    expect(detectHostingPlatform({ env: { VERCEL: "" }, hasDockerMarker: false })).toBeUndefined();
+  });
+
   test("stamps the platform name, never the marker value", async () => {
     const { calls, fetchFn } = fetchCapture();
 
