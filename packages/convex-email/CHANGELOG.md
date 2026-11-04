@@ -1,5 +1,15 @@
 # @opencoredev/convex-email
 
+## 6.0.0
+
+### Patch Changes
+
+- c1a455b: Update Nodemailer to 10.2.1 for SMTP delivery and Zod to 4.6.7 for Convex input validation.
+- Updated dependencies [c13c2c0]
+- Updated dependencies [9f32ee0]
+- Updated dependencies [c1a455b]
+  - @opencoredev/email-sdk@3.1.0
+
 ## 5.0.0
 
 ### Major Changes

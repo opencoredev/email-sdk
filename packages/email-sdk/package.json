@@ -1,6 +1,6 @@
 {
   "name": "@opencoredev/email-sdk",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Email SDK for TypeScript: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 21 more providers plus SMTP, with validation, retries and fallback.",
   "keywords": [
     "bun",
