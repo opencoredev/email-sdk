@@ -436,4 +436,5 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1 and
 - [Mailgun vs Amazon SES](/compare/mailgun-vs-ses): unit price against an included operations layer.
 - [Mailgun alternatives](/blog/mailgun-alternatives): prices and log retention elsewhere, and a switch with Mailgun kept as the fallback.
 - [Brevo API guide](/blog/brevo-api-nodejs-typescript): the same walkthrough for Brevo, with Mailgun as its fallback.
+- [SendGrid API guide](/blog/sendgrid-api-nodejs-typescript): the same walkthrough for SendGrid's v3 Mail Send API, with signed event webhooks.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.
