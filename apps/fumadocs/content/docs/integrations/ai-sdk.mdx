@@ -1,6 +1,5 @@
 ---
-title: Let an AI agent send email safely
-sidebarTitle: AI SDK
+title: Send email safely from an AI SDK agent
 description: "Let an AI agent send email safely from a TypeScript app: one narrow sendEmail tool for the Vercel AI SDK, with user approval, a fixed sender, and no secrets in results."
 icon: Bot
 ---
@@ -12,8 +11,8 @@ To let an AI agent send email safely, give the model one narrow tool instead of 
 | The model sends without asking | `needsApproval: true` plus a `toolApproval` map; a denial makes zero provider calls |
 | The model spoofs the sender | `from` is set in your code; the input schema has no `from` field |
 | The model reaches other options | Only `to`, `subject`, `text`, and `html` are accepted; extra keys fail validation |
-| A retried tool call sends twice | Each approved call uses `email-tool:${toolCallId}` as its idempotency key |
-| Provider errors leak to the model | Failures become `Error("Email could not be sent.")` |
+| A retried tool call sends twice | Each approved call passes `email-tool:${toolCallId}` as its idempotency key; the provider drops the repeat only if its adapter supports idempotency |
+| Provider errors leak to the model | Send failures become `Error("Email could not be sent.")`; a cancelled call keeps its abort reason |
 
 Email SDK exposes this as an optional [`/ai`](/docs/reference/client) entry point for [AI SDK](https://ai-sdk.dev/).
 
@@ -78,8 +77,9 @@ import type { EmailClient } from "@opencoredev/email-sdk";
 import { createEmailTools } from "@opencoredev/email-sdk/ai";
 import { email } from "../email.js";
 
-// Bare addresses at acme.com only; display names are rejected.
-const allowed = /^[^\s<>@]+@acme\.com$/i;
+// Plain addresses at acme.com only. The strict local part rejects display
+// names, quotes, comments, and comma-separated lists.
+const allowed = /^[a-z0-9._+-]+@acme\.com$/i;
 
 const internalOnly: Pick<EmailClient, "send"> = {
   send(message, options) {
@@ -113,7 +113,7 @@ No. The input schema allows only `to`, `subject`, `text`, and `html`, and reject
 
 ### What does the model see after a send?
 
-`{ status: "sent", adapter, id? }` on success, and a generic `Email could not be sent.` error on failure. Provider responses, API keys, and raw errors stay on the server.
+`{ status: "sent", adapter, id? }` on success, and a generic `Email could not be sent.` error when the send fails. If the call is cancelled, the abort reason is rethrown instead. Provider responses, API keys, and raw errors stay on the server.
 
 ### How do I test the agent without sending real email?
 
