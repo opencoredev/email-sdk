@@ -73,7 +73,6 @@ Render the exact recipients, subject, and body before approval. A denial is term
 The tool does not restrict recipients: the model chooses `to`, and approval is the check. `createEmailTools()` only needs an object with a `send` method, so you can pass a wrapper that enforces your own rule before anything reaches a provider.
 
 ```ts title="src/agent/email-tools.ts"
-import type { EmailClient } from "@opencoredev/email-sdk";
 import { createEmailTools } from "@opencoredev/email-sdk/ai";
 import { email } from "../email.js";
 
@@ -81,7 +80,7 @@ import { email } from "../email.js";
 // names, quotes, comments, and comma-separated lists.
 const allowed = /^[a-z0-9._+-]+@acme\.com$/i;
 
-const internalOnly: Pick<EmailClient, "send"> = {
+const internalOnly: Pick<typeof email, "send"> = {
   send(message, options) {
     const recipients = [message.to].flat();
 
