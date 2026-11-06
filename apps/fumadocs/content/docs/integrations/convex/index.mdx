@@ -17,6 +17,7 @@ export const sendWelcomeEmail = mutation({
     if (!user) throw new Error("User not found.");
 
     return await email.send(ctx, {
+      from: "Acme <hello@acme.com>",
       to: user.email,
       subject: "Welcome to Acme",
       text: `Hi ${user.name}, your account is ready.`,
