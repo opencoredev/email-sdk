@@ -1,7 +1,46 @@
 ---
-title: Convex
-description: Durable, provider-portable transactional email for Convex applications.
+title: Send email from Convex with retries
+description: "Send email from a Convex app with automatic retries: queue from a mutation, back off exponentially, deduplicate with idempotency keys, and track status reactively."
 ---
+
+To send email from a Convex app with retries, install `@opencoredev/convex-email`, mount it in `convex/convex.config.ts`, and call `email.send(ctx, message)` from a mutation with an `idempotencyKey`. The component stores the message in the same transaction, sends it through an Email SDK adapter such as Resend after the mutation commits, and retries retryable failures with exponential backoff: 3 attempts by default, starting at 1 second and capped at 60 seconds between attempts.
+
+```ts title="convex/users.ts"
+import { v } from "convex/values";
+import { mutation } from "./_generated/server";
+import { email } from "./email";
+
+export const sendWelcomeEmail = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found.");
+
+    return await email.send(ctx, {
+      to: user.email,
+      subject: "Welcome to Acme",
+      text: `Hi ${user.name}, your account is ready.`,
+      idempotencyKey: `welcome:${userId}`,
+    });
+  },
+});
+```
+
+[Install and configure](/docs/integrations/convex/setup) shows the `convex/email.ts` client this imports.
+
+## How retries work
+
+| Setting or case | Behavior |
+| --- | --- |
+| Attempts | `maxAttempts` from the message, then the client, then `setConfig`; 3 when none is set. |
+| Delay | `retryBaseMs × 2^(attempt − 1)`, capped at 60 seconds. With the default 1,000 ms: 1 s, then 2 s. |
+| Which failures retry | Errors the Email SDK marks retryable: HTTP 408, 409, 425, 429 and 5xx, and connection errors such as `ECONNRESET` or `ETIMEDOUT`. A 400 or 401 fails at once. |
+| Duplicate sends | Reusing an `idempotencyKey` returns the original email id. Each retry passes the same key to the provider, so providers with native idempotency (such as Resend) drop a repeat. |
+| Fallback adapters | Used only when the first provider definitely did not send. After an HTTP error or timeout, delivery is unknown, so the component retries the same adapter instead of switching. |
+| Stuck sends | A cron runs every 5 minutes. A send stuck in `processing` for 10 minutes is retried if it has an `idempotencyKey` and attempts left, and marked failed without a key, because the provider may already have accepted it. |
+| After the last attempt | The email is `failed`. `retry(ctx, { emailId })` starts a fresh cycle. |
+
+## What the component owns
 
 `@opencoredev/convex-email` is a real Convex Component: it owns isolated tables, queues provider work outside your mutation, retries safe failures, deduplicates sends, stores an event timeline, and exposes reactive delivery status.
 
@@ -34,3 +73,18 @@ Email SDK owns message validation and provider adapters. The Convex component ow
   <Card title="Process webhooks" href="/docs/integrations/convex/webhooks" description="Verify provider events and store normalized delivery state." />
   <Card title="Test and recover" href="/docs/integrations/convex/testing-and-recovery" description="Redirect recipients, inspect failures, cancel work, and retry safely." />
 </Cards>
+
+## Questions
+
+### Does a Convex action retry email sends on its own?
+
+No. Convex retries mutations on conflicts but never retries actions, and a provider request has to run in an action. The component runs that action for you from a durable queue and schedules each retry with the Convex scheduler.
+
+### Can it send through Resend and fall back to SMTP?
+
+Yes. List both adapters on the client and set `fallbackAdapters`. The fallback only takes over when the first provider definitely didn't send; see [Fallbacks and retries](/docs/concepts/fallbacks-and-retries).
+
+### How do I test without sending real email?
+
+Turn on `testMode` with a `sandboxTo` mailbox, or use the in-memory adapter. See [Test and recover](/docs/integrations/convex/testing-and-recovery).
+
