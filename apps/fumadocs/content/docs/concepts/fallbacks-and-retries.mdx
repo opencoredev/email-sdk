@@ -57,7 +57,7 @@ Before the first request, the client checks the message against every adapter in
 | --- | --- | --- | --- |
 | `EmailValidationError` (bad message, unsupported field) | No | No, nothing is sent | No |
 | 408, 409, 425, 429 or 5xx from the provider | Yes, while attempts remain | Only if the adapter reports `not_sent` | Yes |
-| Other 4xx, such as 401 or 422 | No (the Microsoft Graph adapter refreshes its token and resends once after a 401) | Only if the adapter reports `not_sent` | Yes |
+| Other 4xx, such as 401 or 422 | No (with built-in client credentials, the Microsoft Graph adapter refreshes its token and resends once after a 401; with `getAccessToken` it doesn't) | Only if the adapter reports `not_sent` | Yes |
 | Network error after the request went out, such as a reset or timeout | Yes, while attempts remain | No (`unknown`) | Yes |
 | Failure before anything was sent, such as an SMTP DNS or TLS error or a Graph token error | Depends on the error | Yes (`not_sent`) | Yes |
 | `AbortSignal` aborted | No | No | No |
@@ -80,7 +80,7 @@ You can also opt in for one send instead of the whole client:
 ```ts title="src/send-critical.ts"
 await email.send(message, {
   fallback: {
-    adapters: ["backup"],
+    adapters: ["postmark"],
     onUnknownDelivery: "continue",
   },
 });
@@ -94,7 +94,7 @@ Per-send policy replaces the client fallback object and retry object.
 
 ```ts title="src/send.ts"
 await email.send(message, {
-  adapter: "primary",
+  adapter: "resend",
   retry: { maxAttempts: 1 },
   fallback: { adapters: [] },
 });
