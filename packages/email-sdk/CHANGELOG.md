@@ -1,5 +1,16 @@
 # @opencoredev/email-sdk
 
+## 3.1.0
+
+### Minor Changes
+
+- 9f32ee0: Telemetry events now report `installation_id_source` (`stored`, `created`, or `ephemeral`) and `hosting_platform` (detected from standard platform environment variables being set, never their values), so usage reports can tell long-lived installations apart from throwaway serverless and container identities.
+
+### Patch Changes
+
+- c13c2c0: Describe the package on npm by what it does: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 21 more providers plus SMTP.
+- c1a455b: Update Nodemailer to 10.2.1 for SMTP delivery and Zod to 4.6.7 for Convex input validation.
+
 ## 3.0.1
 
 ### Patch Changes
