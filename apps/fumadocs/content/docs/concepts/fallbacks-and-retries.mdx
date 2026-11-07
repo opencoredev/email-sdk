@@ -58,7 +58,8 @@ Before the first request, the client checks the message against every adapter in
 | `EmailValidationError` (bad message, unsupported field) | No | No, nothing is sent | No |
 | 408, 409, 425, 429 or 5xx from the provider | Yes, while attempts remain | Only if the adapter reports `not_sent` | Yes |
 | Other 4xx, such as 401 or 422 | No | Only if the adapter reports `not_sent` | Yes |
-| Network error, such as a reset, refused connection or timeout | Yes, while attempts remain | No (`unknown`) | Yes |
+| Network error after the request went out, such as a reset or timeout | Yes, while attempts remain | No (`unknown`) | Yes |
+| Failure before anything was sent, such as an SMTP DNS or TLS error or a Graph token error | Depends on the error | Yes (`not_sent`) | Yes |
 | `AbortSignal` aborted | No | No | No |
 
 The default delay between attempts starts at 100 ms and doubles each time, capped at 2 seconds. Override `retry.delay` or `retry.shouldRetry` when your application needs its own policy.

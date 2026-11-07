@@ -43,7 +43,7 @@ await email.send(message, {
 });
 ```
 
-A route of two scheduling adapters, such as Resend with SendGrid as the backup, keeps fallback on. Keep the delay within the shorter of the two limits.
+A route of two scheduling adapters, such as Resend with SendGrid as the backup, passes validation with fallback on. That only makes the route valid: a failed Resend request is delivery `unknown`, so SendGrid takes over only with `onUnknownDelivery: "continue"`, which risks two scheduled copies (see [Retries and provider fallback](/docs/concepts/fallbacks-and-retries)). Keep the delay within the shorter of the two limits.
 
 ## When to use your own scheduler
 
