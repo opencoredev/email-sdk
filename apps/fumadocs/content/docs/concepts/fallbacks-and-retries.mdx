@@ -1,28 +1,68 @@
 ---
-title: Retries and fallback
+title: Retries and provider fallback
 sidebarTitle: Retries & fallback
-description: Retry one provider, then decide when it is safe to try another.
+description: "Retry one email provider, then fall back to another, such as Resend to Postmark, without an accidental duplicate: what triggers fallback and how to opt in."
 ---
 
-Retries stay on the current adapter. Fallback starts only after that adapter reaches a terminal failure.
+To add email fallback between two providers in Node.js, register both adapters on one Email SDK client, name the primary in `defaultAdapter`, and list the backup in `fallback.adapters`. Retries always stay on the current provider; fallback starts only after that provider's last attempt fails. By default fallback continues only when the SDK can prove the first provider did not accept the message, because a timeout or a 5xx after the request went out could mean the email was already sent.
 
-## Configure a route
+## Fall back from Resend to Postmark
 
-`maxAttempts` counts total calls, so `1` means one call and no retry.
+The Resend and Postmark adapters can't prove that a failed HTTP request didn't send, so they report every HTTP error and network failure as delivery `unknown`. With the default `onUnknownDelivery: "stop"`, a failed Resend send throws an `EmailRouteError` and Postmark is never called. To make Postmark take over, opt in with `onUnknownDelivery: "continue"`:
 
 ```ts title="src/email.ts"
-const email = createEmailClient({
-  adapters: [primary, backup],
-  defaultAdapter: "primary",
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+export const email = createEmailClient({
+  adapters: [
+    resend({ apiKey: process.env.RESEND_API_KEY! }),
+    postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
+  ],
+  defaultAdapter: "resend",
   retry: { maxAttempts: 3 },
   fallback: {
-    adapters: ["backup"],
-    onUnknownDelivery: "stop",
+    adapters: ["postmark"],
+    onUnknownDelivery: "continue",
   },
 });
 ```
 
-The default retry policy makes one attempt. The default delay uses capped exponential backoff. Override `delay` or `shouldRetry` when your application has a specific policy.
+```ts title="src/send-receipt.ts"
+import { email } from "./email";
+
+const result = await email.send(
+  {
+    from: "Acme <billing@acme.com>",
+    to: "user@example.com",
+    subject: "Your receipt",
+    text: "Thanks for your order.",
+  },
+  { idempotencyKey: "receipt-order-1042" },
+);
+
+console.log(result.adapter, result.id); // "resend" or "postmark"
+```
+
+With this client a send makes up to 3 attempts on Resend, then up to 3 on Postmark. `continue` accepts a duplicate risk: if Resend accepted the message but the response was lost, Postmark sends a second copy. The idempotency key protects only the Resend retries, because Resend honors `Idempotency-Key` and Postmark has no idempotency support. Use `continue` for messages where a rare duplicate is better than no email, such as password resets, and keep the default for receipts or anything a customer would notice twice.
+
+Before the first request, the client checks the message against every adapter in the route. A message that the backup can't carry fails with `EmailValidationError` and nothing is sent: Postmark takes one tag and has no scheduled sending, and Resend rejects repeated header names. Check a pair on its compare page, such as [Resend vs Postmark](/compare/resend-vs-postmark).
+
+## What triggers a retry or a fallback
+
+`maxAttempts` counts total calls to one adapter, so `1` means one call and no retry. The client default is one attempt. Every adapter in the route gets the same `maxAttempts`.
+
+| Failure | Retried on the same adapter | Falls back by default | Falls back with `continue` |
+| --- | --- | --- | --- |
+| `EmailValidationError` (bad message, unsupported field) | No | No, nothing is sent | No |
+| 408, 409, 425, 429 or 5xx from the provider | Yes, while attempts remain | Only if the adapter reports `not_sent` | Yes |
+| Other 4xx, such as 401 or 422 | No (with built-in client credentials, the Microsoft Graph adapter refreshes its token and resends once after a 401; with `getAccessToken` it doesn't) | Only if the adapter reports `not_sent` | Yes |
+| Network error after the request went out, such as a reset or timeout | Yes, while attempts remain | No (`unknown`) | Yes |
+| Failure before anything was sent, such as an SMTP DNS or TLS error or a Graph token error | Depends on the error | Yes (`not_sent`) | Yes |
+| `AbortSignal` aborted | No | No | No |
+
+The default delay between attempts starts at 100 ms and doubles each time, capped at 2 seconds. Override `retry.delay` or `retry.shouldRetry` when your application needs its own policy.
 
 ## Delivery certainty
 
@@ -33,14 +73,14 @@ The default retry policy makes one attempt. The default delay uses capped expone
 | `not_sent` | The adapter can prove the provider did not accept the message. | Continue to the next configured adapter. |
 | `unknown` | Dispatch may have started, so delivery cannot be ruled out. | Stop to avoid an automatic duplicate. |
 
-Network timeouts and failures after dispatch begins are conservatively classified as `unknown` unless the adapter can prove otherwise.
+Adapters differ in what they can prove. The SMTP adapter reports `not_sent` when the server answers with an SMTP error code, and the Microsoft Graph adapter reports `not_sent` for 4xx responses, so a fallback behind either one works with the default policy. The Resend and Postmark adapters report `unknown` for every failure, as above.
 
-Opt into continuation only when the duplicate-delivery risk is acceptable.
+You can also opt in for one send instead of the whole client:
 
 ```ts title="src/send-critical.ts"
 await email.send(message, {
   fallback: {
-    adapters: ["backup"],
+    adapters: ["postmark"],
     onUnknownDelivery: "continue",
   },
 });
@@ -54,7 +94,7 @@ Per-send policy replaces the client fallback object and retry object.
 
 ```ts title="src/send.ts"
 await email.send(message, {
-  adapter: "primary",
+  adapter: "resend",
   retry: { maxAttempts: 1 },
   fallback: { adapters: [] },
 });
@@ -75,6 +115,40 @@ await pending; // throws EmailAbortError
 ## Route exhaustion
 
 When no route succeeds, the client throws `EmailRouteError`. Its `failures` array preserves adapter order and contains typed `EmailAdapterError` values.
+
+```ts title="src/send.ts"
+import { EmailRouteError } from "@opencoredev/email-sdk";
+
+try {
+  await email.send(message);
+} catch (error) {
+  if (error instanceof EmailRouteError) {
+    for (const failure of error.failures) {
+      console.error(failure.adapter, failure.status, failure.delivery);
+    }
+  }
+
+  throw error;
+}
+```
+
+## Questions
+
+### Does Email SDK switch providers on a 5xx by default?
+
+No. A 5xx can arrive after the provider accepted the message, so most HTTP adapters report it as delivery `unknown` and the default `onUnknownDelivery: "stop"` ends the route. Set `onUnknownDelivery: "continue"` to fall back anyway, and accept that a duplicate is possible.
+
+### Do retries happen before fallback?
+
+Yes. Each adapter in the route gets its own `maxAttempts`. Fallback starts only after the current adapter's last attempt fails and the failure allows it.
+
+### Can I fall back from an HTTP API to SMTP?
+
+Yes. Add the `smtp` adapter and list it in `fallback.adapters`. The same rule applies: a Resend failure is `unknown`, so SMTP takes over only with `continue`. See [Send email from Node.js](/blog/send-email-nodejs-typescript) for a full example.
+
+### How do I test fallback without sending email?
+
+Use the adapters from `@opencoredev/email-sdk/testing`: a `failingAdapter("primary", error)` whose error is an `EmailAdapterError` with `delivery: "not_sent"` (or `unknown`, to test the stop), and a `memoryAdapter("backup")`. Then assert what the backup's `raw.sent` holds. See [Test email sending without sending real email](/docs/guides/test-email-behavior).
 
 <Card title="Error reference" href="/docs/reference/errors" description="Match on closed error codes and typed fields." />
 <Card title="Production pipeline" href="/docs/guides/production-send-pipeline" description="Combine routing with idempotency, queues, and observability." />
