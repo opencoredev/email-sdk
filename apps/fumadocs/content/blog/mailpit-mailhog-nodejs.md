@@ -19,7 +19,7 @@ For a Node app, the parts that matter:
 | SMTP error injection | Jim | Chaos triggers |
 | HTML client check | No | Yes |
 
-Because the ports match, an app that sends to MailHog today will send to Mailpit with no code change. Test code that reads MailHog's `/api/v2` endpoints needs rewriting, since Mailpit's API is different. Jim is MailHog's chaos monkey (`-invite-jim`), and Chaos is Mailpit's version, covered [below](#test-smtp-errors-with-mailpit-chaos).
+Because the ports match, an app that sends to MailHog today will send to Mailpit with no code change. Test code that reads MailHog's `/api/v2` endpoints needs rewriting, since Mailpit's API is different. Jim is MailHog's chaos monkey (`-invite-jim`), and Chaos is Mailpit's version, covered in the Chaos section below.
 
 ## Run Mailpit
 
@@ -62,7 +62,7 @@ await transport.sendMail({
 });
 ```
 
-The message shows up in the web UI right away. You don't need `auth`. Mailpit accepts mail without it, and a test run on 2026-11-08 showed it also accepted a Nodemailer login with any username and password over plain text.
+The message shows up in the web UI right away. You don't need `auth`, because Mailpit accepts mail without it by default. If your app always sends credentials, see Mailpit's [SMTP settings](https://mailpit.axllent.org/docs/configuration/smtp/) for accepting any login.
 
 ## Send to Mailpit with Email SDK
 
@@ -97,7 +97,7 @@ Mailpit's [REST API](https://mailpit.axllent.org/docs/api-v1/) lets a test find 
 
 - `DELETE /api/v1/messages` with no body deletes every message, so each test starts empty.
 - `GET /api/v1/search?query=...` takes the same filters as the UI search box, such as `to:new-user@example.com subject:"Welcome"`.
-- `GET /api/v1/message/{ID}` returns the parsed message, with `Text`, `HTML`, `Attachments` and headers.
+- `GET /api/v1/message/{ID}` returns the parsed message: addresses, `Text`, `HTML` and the attachment list. For header checks, `GET /api/v1/message/{ID}/headers` returns every header.
 
 ```ts title="welcome.test.ts"
 import { beforeEach, expect, test } from "bun:test";
@@ -143,7 +143,7 @@ test("sign-up sends a welcome email", async () => {
 });
 ```
 
-SMTP delivery is finished when `send` resolves, so the message is already searchable and the test needs no sleep. In a real app, call the code that sends (your sign-up handler, say) instead of `email.send` directly. Tests that share one Mailpit should run one file at a time, or search on a unique recipient per test, because `DELETE /api/v1/messages` clears every message.
+SMTP delivery is finished when `send` resolves, so the message is already searchable and the test needs no sleep. In a real app, call the code that sends (your sign-up handler, say) instead of `email.send` directly. Tests that share one Mailpit must run one at a time, because `DELETE /api/v1/messages` clears every message, including one another test is about to look for.
 
 ## Test SMTP errors with Mailpit Chaos
 
