@@ -1,6 +1,6 @@
 # MailHog and Mailpit: Test Email Locally in Node.js
 
-To test email from a Node.js app without sending real email, run Mailpit in Docker (`docker run -p 1025:1025 -p 8025:8025 axllent/mailpit`), point your SMTP client at `localhost:1025`, and read what arrived at `http://localhost:8025` or through Mailpit's REST API. Mailpit is the maintained replacement for MailHog. It listens on the same two ports, so most MailHog setups switch by changing the image name.
+To test email from a Node.js app without sending real email, run Mailpit in Docker (`docker run -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit`), point your SMTP client at `localhost:1025`, and read what arrived at `http://localhost:8025` or through Mailpit's REST API. Mailpit is the maintained replacement for MailHog. It listens on the same two ports, so most MailHog setups switch by changing the image name.
 
 This guide covers running Mailpit, sending to it with Nodemailer and with Email SDK, checking captured messages in an automated test, and using Mailpit's Chaos feature to test how your code handles SMTP errors. Everything below was run on 2026-11-08 against `axllent/mailpit:v1.33.1`, Nodemailer 10.2 and `@opencoredev/email-sdk` 3.0.1, with `bun test`. No real email was sent.
 
@@ -24,19 +24,21 @@ Because the ports match, an app that sends to MailHog today will send to Mailpit
 ## Run Mailpit
 
 ```bash
-docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+docker run -d --name mailpit -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit
 ```
 
-Open `http://localhost:8025` to see the inbox. In a Compose file next to your app:
+The `127.0.0.1:` prefix keeps both ports on your machine. Mailpit's inbox and API have no login by default, so publishing them on every interface lets anyone on your network read the captured mail. Open `http://localhost:8025` to see the inbox. In a Compose file next to your app:
 
 ```yaml title="compose.yaml"
 services:
   mailpit:
     image: axllent/mailpit
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 ```
+
+If your app also runs as a Compose service, it reaches Mailpit at host `mailpit` instead of `127.0.0.1`, and you can drop the `1025` port mapping.
 
 Mailpit also ships as a single binary (`brew install mailpit` on macOS) if you'd rather not run Docker. Pin a version tag such as `axllent/mailpit:v1.33.1` in CI so a new release can't change your tests.
 
@@ -66,7 +68,7 @@ The message shows up in the web UI right away. You don't need `auth`, because Ma
 
 ## Send to Mailpit with Email SDK
 
-[Email SDK](/docs) sends through one client to 26 provider APIs and SMTP. In development, give it the SMTP adapter pointed at Mailpit. In production, give it your provider's adapter. The `send` calls stay the same.
+[Email SDK](/docs) sends through one client to 26 provider APIs and SMTP. In development, give it the SMTP adapter pointed at Mailpit. In production, give it your provider's adapter, and fail at startup if its key is missing so production mail never goes to a local catcher. The `send` calls stay the same.
 
 ```bash
 npm install @opencoredev/email-sdk
@@ -77,14 +79,19 @@ import { createEmailClient } from "@opencoredev/email-sdk";
 import { resend } from "@opencoredev/email-sdk/resend";
 import { smtp } from "@opencoredev/email-sdk/smtp";
 
-const apiKey = process.env.RESEND_API_KEY;
+function emailAdapter() {
+  if (process.env.NODE_ENV !== "production") {
+    return smtp({ host: "127.0.0.1", port: 1025 });
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("Set RESEND_API_KEY in production.");
+
+  return resend({ apiKey });
+}
 
 export const email = createEmailClient({
-  adapters: [
-    process.env.NODE_ENV === "production" && apiKey
-      ? resend({ apiKey })
-      : smtp({ host: "127.0.0.1", port: 1025 }),
-  ],
+  adapters: [emailAdapter()],
   telemetry: false,
 });
 ```
