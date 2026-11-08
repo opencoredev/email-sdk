@@ -15,11 +15,11 @@ For a Node app, the parts that matter:
 | SMTP port | 1025 | 1025 |
 | Web UI port | 8025 | 8025 |
 | Last release | v1.0.1, Aug 2020 | v1.33.1, Nov 2026 |
-| Search API | `/api/v2/search` | `/api/v1/search` with filters like `to:` and `subject:` |
-| Inject SMTP errors | Jim, its chaos monkey | Chaos triggers, set at runtime through the API |
-| HTML client compatibility check | No | Yes |
+| REST API | v2 | v1, with search filters |
+| SMTP error injection | Jim | Chaos triggers |
+| HTML client check | No | Yes |
 
-Because the ports match, an app that sends to MailHog today will send to Mailpit with no code change. Test code that reads MailHog's `/api/v2` endpoints needs rewriting, since Mailpit's API is different.
+Because the ports match, an app that sends to MailHog today will send to Mailpit with no code change. Test code that reads MailHog's `/api/v2` endpoints needs rewriting, since Mailpit's API is different. Jim is MailHog's chaos monkey (`-invite-jim`), and Chaos is Mailpit's version, covered [below](#test-smtp-errors-with-mailpit-chaos).
 
 ## Run Mailpit
 
@@ -219,12 +219,14 @@ test("a 550 reply falls back to the next adapter", async () => {
 
 ## Mailpit, Ethereal, a memory adapter or a provider sandbox?
 
-| Tool | What it proves | Runs where |
-| --- | --- | --- |
-| [`memoryAdapter()`](/docs/guides/test-email-behavior) | Your code sends the right message object | In the test process, no network |
-| Mailpit or MailHog | The MIME message, headers, attachments and HTML render as a mail client sees them | Local container or binary |
-| [Ethereal](https://ethereal.email) | Same, in a throwaway hosted inbox (`nodemailer.createTestAccount()`) | Ethereal's servers |
-| Provider sandbox (SendGrid sandbox mode, Mailgun `o:testmode`) | The provider accepts your request and API key | The provider's API |
+| Tool | What it checks |
+| --- | --- |
+| [Memory adapter](/docs/guides/test-email-behavior) | The message object your code builds |
+| Mailpit or MailHog | The real MIME message, in a local inbox |
+| [Ethereal](https://ethereal.email) | The real MIME message, in a hosted inbox |
+| Provider sandbox | That the provider accepts your request |
+
+`memoryAdapter()` runs in the test process with no network. Mailpit runs as a local container or binary. Ethereal is a free fake SMTP service aimed at Nodemailer users that never delivers messages, and `nodemailer.createTestAccount()` creates an inbox. Provider sandboxes, such as SendGrid's sandbox mode and Mailgun's `o:testmode`, call the real API.
 
 Most apps want two of these. Unit tests use the memory adapter because it's fast and needs nothing running. Integration tests and local development use Mailpit to look at the real message. A provider sandbox only checks the provider's side, and some providers bill test-mode messages (Mailgun does, see the [Mailgun API guide](/blog/mailgun-api-nodejs-typescript)). None of these prove inbox placement. That still needs a real send from your own account.
 
