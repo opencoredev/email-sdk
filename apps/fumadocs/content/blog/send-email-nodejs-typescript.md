@@ -200,7 +200,7 @@ test("records a welcome email without sending it", async () => {
 
 In an app, build the client from `memoryAdapter()` when `NODE_ENV` is `test`, the same way `email.ts` picks Resend or SMTP, so tests run your real send functions against it.
 
-With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` returns the message as JSON without connecting anywhere, and [Ethereal](https://ethereal.email) gives you a throwaway SMTP inbox to look at the rendered email. [Test email behavior](/docs/guides/test-email-behavior) covers failure cases with Email SDK.
+With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` returns the message as JSON without connecting anywhere, and [Ethereal](https://ethereal.email) gives you a throwaway SMTP inbox to look at the rendered email. [Test email behavior](/docs/guides/test-email-behavior) covers failure cases with Email SDK, and the [Mailpit and MailHog guide](/blog/mailpit-mailhog-nodejs) runs a local SMTP inbox for integration tests.
 
 ## Checklist before production
 
@@ -216,6 +216,7 @@ With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` ret
 - [Quickstart](/docs/getting-started/quickstart): install Email SDK and send a first email.
 - [Migrate from Nodemailer](/docs/guides/migrate/nodemailer): move existing Nodemailer code to Email SDK and keep SMTP.
 - [SMTP adapter reference](/docs/adapters/smtp): host, port, TLS and authentication options.
+- [MailHog and Mailpit](/blog/mailpit-mailhog-nodejs): a local SMTP inbox and REST API checks for email tests.
 - [Resend SMTP settings](/blog/resend-smtp-nodejs): Nodemailer pointed at Resend's SMTP server.
 - [Resend API guide](/blog/resend-api-nodejs-typescript) and [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): raw HTTP API walkthroughs.
 - [Compare email providers](/compare): field support and code for each provider pair.

@@ -98,7 +98,7 @@ export const email = createEmailClient({
 });
 ```
 
-With no `auth`, the adapter doesn't require TLS, so it can talk to a local catcher that has none. This repository runs the same setup in its own SMTP check.
+With no `auth`, the adapter doesn't require TLS, so it can talk to a local catcher that has none. This repository runs the same setup in its own SMTP check. The [Mailpit and MailHog guide](/blog/mailpit-mailhog-nodejs) covers reading captured messages through Mailpit's REST API and testing SMTP errors with its Chaos triggers.
 
 ## Keep telemetry off
 

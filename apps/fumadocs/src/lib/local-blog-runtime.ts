@@ -2,6 +2,7 @@ import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
+import mailpitMailhogMarkdown from "../../content/blog/mailpit-mailhog-nodejs.md?raw";
 import resendAlternativesMarkdown from "../../content/blog/resend-alternatives.md?raw";
 import resendApiMarkdown from "../../content/blog/resend-api-nodejs-typescript.md?raw";
 import resendPricingMarkdown from "../../content/blog/resend-pricing.md?raw";
@@ -27,6 +28,7 @@ const localBlogMarkdown = new Map([
   ["resend-alternatives", resendAlternativesMarkdown],
   ["brevo-api-nodejs-typescript", brevoApiMarkdown],
   ["sendgrid-api-nodejs-typescript", sendgridApiMarkdown],
+  ["mailpit-mailhog-nodejs", mailpitMailhogMarkdown],
 ]);
 
 const localBlogBodies = new Map(
