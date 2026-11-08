@@ -176,3 +176,5 @@ npx --package @opencoredev/email-sdk email-sdk send \
 ```
 
 Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send to prove the host, TLS mode, and credentials actually deliver.
+
+To test locally without sending real email, point the adapter at Mailpit; see [MailHog and Mailpit: test email locally in Node.js](/blog/mailpit-mailhog-nodejs).

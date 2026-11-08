@@ -78,6 +78,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [SendGrid alternatives for developers](https://email-sdk.dev/blog/sendgrid-alternatives)
 - [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
 - [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
+- [MailHog and Mailpit: test email locally in Node.js](https://email-sdk.dev/blog/mailpit-mailhog-nodejs)
 
 ## Telemetry
 

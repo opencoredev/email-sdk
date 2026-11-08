@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "mailpit-mailhog-nodejs",
+    title: "MailHog and Mailpit: Test Email Locally in Node.js",
+    description:
+      "Test email in Node.js with Mailpit, the maintained MailHog replacement: Docker setup, Nodemailer and Email SDK, REST API checks in tests, and SMTP error tests.",
+    publishedAt: "2026-11-08",
+    updatedAt: "2026-11-08",
+    readTime: "8 min read",
+    image: "/og/blog/mailpit-mailhog-nodejs.svg",
+    imageAlt: "MailHog and Mailpit card: a local SMTP inbox for Node.js tests on ports 1025 and 8025",
+    tags: ["Testing", "SMTP", "Node.js"],
+  },
+  {
     slug: "sendgrid-api-nodejs-typescript",
     title: "SendGrid API Guide for Node.js and TypeScript",
     description:
@@ -67,7 +79,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Send email from Node.js and TypeScript with SMTP and Nodemailer, a provider's HTTP API and fetch, or one client for any provider, and test it without sending.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-10-31",
+    updatedAt: "2026-11-08",
     readTime: "7 min read",
     image: "/og/blog/send-email-nodejs-typescript.svg",
     imageAlt: "Send email from Node.js card: SMTP, HTTP APIs, and one client for any provider",
