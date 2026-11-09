@@ -9,6 +9,8 @@ import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
+  arrayify,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
@@ -164,8 +166,10 @@ async function toNodemailerMessage(
     attachments,
     messageId: idempotencyKey ? `<${idempotencyKey}@email-sdk.local>` : undefined,
     envelope: {
-      from: formatAddress(message.from),
-      to: [...to, ...cc, ...bcc],
+      from: emailAddressOf(message.from),
+      to: [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)].map(
+        emailAddressOf,
+      ),
     },
   };
 }

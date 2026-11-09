@@ -1,0 +1,86 @@
+import type { EmailAddress } from "../types.js";
+import { isStringMember } from "./decode.js";
+
+type ScannedMailbox = {
+  /** Text outside the angle-addr: a display name, or the whole mailbox when it has no `<...>`. */
+  readonly outside: string;
+  /** Text inside the first `<...>` that sits outside quotes and comments. */
+  readonly angle: string | undefined;
+};
+
+/**
+ * Splits a mailbox such as `"Ada <team>" <ada@example.test> (work)` around its angle-addr, with
+ * each RFC 5322 comment replaced by a space so it still separates the tokens around it. Quoted
+ * strings and comments may hold `<`, `>`, `(`, `)`, and `,`, and a `[...]` domain literal may hold
+ * the colons of an IPv6 address, so the scan steps over them instead of matching inside them.
+ * Returns undefined when a quote, comment, domain literal, or angle-addr is never closed, when a
+ * comment is nested or holds a backslash (Nodemailer parses those differently), or when a `,`,
+ * `;`, or `:` outside them makes the string an address list or group.
+ */
+function scanMailbox(mailbox: string): ScannedMailbox | undefined {
+  let outside = "";
+  let angle: string | undefined;
+  let inAngle = false;
+  let quoted = false;
+  let inComment = false;
+  let inLiteral = false;
+
+  for (let index = 0; index < mailbox.length; index += 1) {
+    const character = mailbox.charAt(index);
+
+    if (inComment) {
+      if (character === "\\" || character === "(") return undefined;
+
+      if (character === ")") inComment = false;
+
+      continue;
+    }
+
+    let kept = character;
+
+    if (quoted) {
+      if (character === "\\") {
+        index += 1;
+        kept += mailbox.charAt(index);
+      } else if (character === '"') {
+        quoted = false;
+      }
+    } else if (inLiteral) {
+      if (character === "]") inLiteral = false;
+    } else if (character === "[") {
+      inLiteral = true;
+    } else if (character === "(") {
+      inComment = true;
+      kept = " ";
+    } else if (character === "," || character === ";" || character === ":") {
+      return undefined;
+    } else if (character === '"') {
+      quoted = true;
+    } else if (character === "<" && angle === undefined) {
+      inAngle = true;
+      angle = "";
+      continue;
+    } else if (character === ">" && inAngle) {
+      inAngle = false;
+      continue;
+    }
+
+    if (inAngle) angle += kept;
+    else outside += kept;
+  }
+
+  if (quoted || inAngle || inComment || inLiteral) return undefined;
+
+  return { outside, angle };
+}
+
+/** The bare address of a mailbox such as `Ada <ada@example.test>`. Strings are trimmed; case is kept. */
+export function mailboxAddress(address: EmailAddress): string {
+  if (!isStringMember(address)) return address.email;
+
+  const scanned = scanMailbox(address);
+
+  if (!scanned) return address.trim();
+
+  return (scanned.angle ?? scanned.outside).trim();
+}
