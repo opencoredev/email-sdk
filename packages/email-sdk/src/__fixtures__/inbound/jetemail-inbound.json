@@ -1,0 +1,32 @@
+{
+  "messageId": "CAOEWyCpfbcjqB-YFzTqZ7=h2g02qCq7WLWa4qZ35N7zvkxK2Mg@mail.gmail.com",
+  "uid": "9acc5494cd7d20629cec",
+  "date": "2026-04-23T19:49:41.015503484+00:00",
+  "subject": "Order Confirmation #1234",
+  "from": "customer@example.com",
+  "to": "support@yourdomain.com",
+  "cc": null,
+  "bcc": null,
+  "replyTo": null,
+  "textBody": "Hi, I'd like to check the status of my order...\r\n",
+  "htmlBody": "<div dir=\"ltr\">Hi</div>\r\n",
+  "attachments": [
+    {
+      "filename": "receipt.pdf",
+      "content_type": "application/pdf",
+      "size": 33,
+      "content": "JVBERi0xLjQKJeLjz9MKZmFrZSBwZGYgYnl0ZXMAAQIK",
+      "content_id": null,
+      "disposition": "attachment"
+    }
+  ],
+  "domain": "yourdomain.com",
+  "messageSize": 4586,
+  "remoteIp": "2a00:1450:4864:20::532",
+  "remoteHost": "mail-ed1-x532.google.com",
+  "headers": {
+    "Received-SPF": "pass",
+    "Authentication-Results": "smtp.jetsmtp.net; dkim=pass header.i=@example.com; spf=pass smtp.mailfrom=\"customer@example.com\"; dmarc=pass (p=NONE) header.from=example.com",
+    "Message-ID": "CAOEWyCpfbcjqB-YFzTqZ7=h2g02qCq7WLWa4qZ35N7zvkxK2Mg@mail.gmail.com"
+  }
+}

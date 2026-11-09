@@ -61,6 +61,17 @@ describe("provider payloads", () => {
     });
   });
 
+  test("Sequenzy sends the text body when html is an empty string", async () => {
+    const capture = jsonCapture({ success: true, jobId: "job_1" });
+
+    await sequenzy({ apiKey: "key", fetch: capture.fetch }).send(
+      { ...messageWithoutProviderSpecificFields, html: "", text: "Code 123456", cc: undefined, bcc: undefined, replyTo: undefined },
+      context,
+    );
+
+    expect(capture.calls[0]?.json.body).toBe("Code 123456");
+  });
+
   test("Sequenzy maps template slug sends and URL attachments", async () => {
     const capture = jsonCapture({ success: true, jobId: "job_123" });
 

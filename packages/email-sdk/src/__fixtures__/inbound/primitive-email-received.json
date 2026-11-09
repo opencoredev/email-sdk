@@ -1,0 +1,53 @@
+{
+  "id": "evt_0d4ce769",
+  "event": "email.received",
+  "version": "2025-12-14",
+  "delivery": {
+    "endpoint_id": "ep_01HZY",
+    "attempt": 1,
+    "attempted_at": "2026-01-01T00:00:05.000Z"
+  },
+  "email": {
+    "id": "em_01HZYABCDEF1234567890",
+    "received_at": "2026-01-01T00:00:00.000Z",
+    "smtp": {
+      "helo": "mail.example.com",
+      "mail_from": "bounce@example.com",
+      "rcpt_to": [
+        "support@your-org.primitive.email"
+      ]
+    },
+    "headers": {
+      "message_id": "<message-id@example.com>",
+      "subject": "Need help",
+      "from": "Alice <alice@example.com>"
+    },
+    "content": {
+      "raw": {
+        "included": true,
+        "encoding": "base64",
+        "size_bytes": 257,
+        "data": "RnJvbTogQWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg0KVG86IFN1cHBvcnQgPHN1cHBvcnRAeW91ci1vcmcucHJpbWl0aXZlLmVtYWlsPg0KQ2M6IEJvYiA8Ym9iQGV4YW1wbGUuY29tPg0KUmVwbHktVG86IEFsaWNlIFN1cHBvcnQgPHJlcGx5QGV4YW1wbGUuY29tPg0KU3ViamVjdDogTmVlZCBoZWxwDQpEYXRlOiBUaHUsIDAxIEphbiAyMDI2IDAwOjAwOjAwICswMDAwDQpNZXNzYWdlLUlEOiA8bWVzc2FnZS1pZEBleGFtcGxlLmNvbT4NCg0KSGVsbG8="
+      },
+      "download": {
+        "url": "https://api.primitive.dev/v1/emails/em_01HZYABCDEF1234567890/raw?token=download-token",
+        "expires_at": "2026-01-02T00:00:00.000Z"
+      }
+    },
+    "analysis": {
+      "spamassassin": {
+        "score": 0.1
+      }
+    },
+    "auth": {
+      "spf": "pass",
+      "dmarc": "pass",
+      "dkimSignatures": [
+        {
+          "domain": "example.com",
+          "result": "pass"
+        }
+      ]
+    }
+  }
+}

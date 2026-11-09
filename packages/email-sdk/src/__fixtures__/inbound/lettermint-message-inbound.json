@@ -1,0 +1,91 @@
+{
+  "id": "e3d4f5a6-b7c8-9012-d3e4-f5a6b7c89012",
+  "event": "message.inbound",
+  "timestamp": "2025-10-02T14:30:00.000Z",
+  "data": {
+    "route": "support-inbox",
+    "message_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "envelope": {
+      "remote_ip": "203.0.113.42",
+      "remote_hostname": "mail.example.com",
+      "helo": "smtp.example.com",
+      "mail_from": "customer@example.com"
+    },
+    "from": {
+      "email": "customer@example.com",
+      "name": "John Doe",
+      "subaddress": null
+    },
+    "to": [
+      {
+        "email": "support@acme.com",
+        "name": null,
+        "subaddress": null
+      }
+    ],
+    "cc": [],
+    "recipient": "support@acme.com",
+    "subaddress": null,
+    "reply_to": "customer@example.com",
+    "subject": "Question about my order",
+    "date": "2025-10-02T14:30:00.000Z",
+    "body": {
+      "text": "Hi, I have a question about my recent order...",
+      "html": "<p>Hi, I have a question about my recent order...</p>"
+    },
+    "tag": null,
+    "tags": [],
+    "headers": [
+      {
+        "name": "Message-ID",
+        "value": "<abc123@mail.example.com>"
+      },
+      {
+        "name": "X-Mailer",
+        "value": "Apple Mail (2.3445.104.11)"
+      }
+    ],
+    "authentication_results": {
+      "authserv_id": "lettermint.mx",
+      "header": "lettermint.mx; dkim=pass",
+      "dkim": {
+        "result": "pass",
+        "domain": "example.com",
+        "selector": "mail"
+      },
+      "dmarc": {
+        "result": "pass",
+        "domain": "example.com",
+        "policy": "none"
+      },
+      "spf": {
+        "result": "softfail",
+        "domain": "example.com"
+      }
+    },
+    "attachments": [
+      {
+        "filename": "receipt.pdf",
+        "content_type": "application/pdf",
+        "size": 33,
+        "content_id": null,
+        "content": "JVBERi0xLjQKJeLjz9MKZmFrZSBwZGYgYnl0ZXMAAQIK"
+      },
+      {
+        "filename": "big.bin",
+        "content_type": "application/octet-stream",
+        "size": 4,
+        "content_id": null,
+        "url": "https://storage.lettermint.co/inbound/att/1?signature=x",
+        "expires_at": "2025-10-30T14:30:00+00:00"
+      }
+    ],
+    "raw": {
+      "url": "https://storage.lettermint.co/inbound/raw/f47ac10b",
+      "expires_at": "2025-10-30T14:30:00+00:00"
+    },
+    "is_spam": false,
+    "spam_score": 1.2,
+    "spam_symbols": []
+  }
+}

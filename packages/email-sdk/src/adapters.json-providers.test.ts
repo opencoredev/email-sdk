@@ -113,6 +113,36 @@ describe("provider payloads", () => {
     }
   });
 
+  test("Mailchimp Transactional reports per-recipient rejections and fails when all are rejected", async () => {
+    const partial = await mailchimp({
+      apiKey: "key",
+      fetch: jsonCapture([
+        { email: "ada@example.com", status: "sent", _id: "mc_1" },
+        { email: "bob@example.com", status: "rejected", reject_reason: "hard-bounce", _id: "mc_2" },
+      ]).fetch,
+    }).send(messageWithoutReplyTo, context);
+
+    expect(partial.accepted).toEqual(["ada@example.com"]);
+    expect(partial.rejected).toEqual(["bob@example.com"]);
+
+    const allRejected = mailchimp({
+      apiKey: "key",
+      fetch: jsonCapture([{ email: "ada@example.com", status: "rejected", reject_reason: "hard-bounce", _id: "mc_3" }]).fetch,
+    }).send(messageWithoutReplyTo, context);
+
+    await expect(allRejected).rejects.toMatchObject({ adapter: "mailchimp", delivery: "not_sent", retryable: false, rejectedCount: 1 });
+    await expect(allRejected).rejects.toThrow("hard-bounce");
+  });
+
+  test("Plunk sends the text body when html is an empty string", async () => {
+    const capture = jsonCapture({ success: true, data: { emails: [{ contact: { id: "c" }, email: "e_1" }] } });
+    const textOnly = { ...messageWithoutProviderSpecificFields, html: "", text: "Code 123456", cc: undefined, bcc: undefined, replyTo: undefined };
+
+    await plunk({ apiKey: "key", fetch: capture.fetch }).send(textOnly, context);
+
+    expect(capture.calls[0]?.json.body).toBe("Code 123456");
+  });
+
   test("Mailtrap maps the current transactional API schema", async () => {
     const capture = jsonCapture({ message_ids: ["mt_123"] });
 
@@ -135,6 +165,15 @@ describe("provider payloads", () => {
       content: base64("hello"),
       type: "text/plain",
     });
+  });
+
+  test("Scaleway reads the message ID from the CreateEmail emails envelope", async () => {
+    const capture = jsonCapture({ emails: [{ id: "scw_email_1", message_id: "msg-1", rcpt_to: "ada@example.com" }] });
+
+    const response = await scaleway({ secretKey: "secret", projectId: "project", fetch: capture.fetch })
+      .send({ ...messageWithoutMetadata, tags: undefined }, context);
+
+    expect(response.id).toBe("scw_email_1");
   });
 
   test("Scaleway maps the REST API address, header, and attachment schema", async () => {

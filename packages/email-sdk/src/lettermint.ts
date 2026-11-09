@@ -35,22 +35,21 @@ export function lettermint(
     ...builtInAdapterDefinition("lettermint"),
     raw: { baseUrl },
     async send(message, context) {
-      const idempotencyHeaders = context.idempotencyKey
-        ? { "Idempotency-Key": context.idempotencyKey }
-        : undefined;
+      const headers = new Headers({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-lettermint-token": options.apiToken,
+        ...options.headers,
+      });
+
+      // set() replaces a static key in any casing; spreading a second object key would let
+      // fetch join both values into "static, per-send".
+      if (context.idempotencyKey) headers.set("Idempotency-Key", context.idempotencyKey);
 
       const response = await fetcher(`${baseUrl}/send`, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-lettermint-token": options.apiToken,
-          ...options.headers,
-          // Spread after options.headers so a per-send idempotency key stays authoritative
-          // and is never shadowed by a static Idempotency-Key passed at construction time.
-          ...idempotencyHeaders,
-        },
+        headers,
         body: JSON.stringify(await toLettermintPayload(message, options.route)),
       });
 

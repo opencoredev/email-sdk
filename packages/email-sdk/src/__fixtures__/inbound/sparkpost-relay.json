@@ -1,0 +1,58 @@
+[
+  {
+    "msys": {
+      "relay_message": {
+        "content": {
+          "email_rfc822": "UmVjZWl2ZWQ6IGZyb20gbXgyLmV4YW1wbGUubmV0IGJ5IG14LmFjbWUudGVzdDsgTW9uLCA2IE9jdCAyMDI1IDA5OjAwOjAyICswMDAwDQpSZWNlaXZlZDogZnJvbSBtYWlsLmV4YW1wbGUubmV0IGJ5IG14Mi5leGFtcGxlLm5ldDsgTW9uLCA2IE9jdCAyMDI1IDA5OjAwOjAxICswMDAwDQpBdXRoZW50aWNhdGlvbi1SZXN1bHRzOiBteC5hY21lLnRlc3Q7IHNwZj1wYXNzIHNtdHAubWFpbGZyb209ZXhhbXBsZS5uZXQ7DQogZGtpbT1wYXNzIGhlYWRlci5kPWV4YW1wbGUubmV0OyBkbWFyYz1wYXNzIGhlYWRlci5mcm9tPWV4YW1wbGUubmV0DQpGcm9tOiA9P1VURi04P0I/U205enc2a2dSMkZ5WThPdFlRPT0/PSA8am9zZUBleGFtcGxlLm5ldD4NClRvOiAiU3VwcG9ydCwgQWNtZSIgPHN1cHBvcnRAYWNtZS50ZXN0Piwgb3BzQGFjbWUudGVzdA0KQ2M6IFRlYW06IGFuYUBhY21lLnRlc3QsIChCb2IpIGJvYkBhY21lLnRlc3Q7DQpSZXBseS1UbzogPHJlcGxpZXNAZXhhbXBsZS5uZXQ+DQpTdWJqZWN0OiA9P1VURi04P1E/Q2FmPUMzPUE5X29yZGVyPz0gPT9VVEYtOD9RP189RTI9OUM9ODk/PSAjNDINCkRhdGU6IE1vbiwgNiBPY3QgMjAyNSAwOTowMDowMCArMDAwMA0KTWVzc2FnZS1JRDogPG1zZy00MkBleGFtcGxlLm5ldD4NCkluLVJlcGx5LVRvOiA8bXNnLTQxQGFjbWUudGVzdD4NClJlZmVyZW5jZXM6IDxtc2ctNDBAYWNtZS50ZXN0Pg0KICA8bXNnLTQxQGFjbWUudGVzdD4NClgtQ3VzdG9tOiBvbmUNClgtQ3VzdG9tOiB0d28NCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IG11bHRpcGFydC9taXhlZDsgYm91bmRhcnk9Im91dGVyLWIiDQoNClRoaXMgaXMgYSBtdWx0aS1wYXJ0IG1lc3NhZ2UgaW4gTUlNRSBmb3JtYXQuDQotLW91dGVyLWINCkNvbnRlbnQtVHlwZTogbXVsdGlwYXJ0L3JlbGF0ZWQ7IGJvdW5kYXJ5PSJyZWwtYiINCg0KLS1yZWwtYg0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvYWx0ZXJuYXRpdmU7IGJvdW5kYXJ5PWFsdC1iDQoNCi0tYWx0LWINCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD1pc28tODg1OS0xDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBxdW90ZWQtcHJpbnRhYmxlDQoNCk9sPUUxLCBoZXJlIGlzIGEgbG9uZyBsaW5lIHRoYXQgZ2V0cyBzb2Z0LXdyYXBwZWQgYnkgdGhlIHF1b3RlZC1wcmludGFibGUgZW5jPQ0Kb2RlciwgYW5kIGFuIGVxdWFscyBzaWduOiA9M0QuDQotLWFsdC1iDQpDb250ZW50LVR5cGU6IHRleHQvaHRtbDsgY2hhcnNldD0idXRmLTgiDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBiYXNlNjQNCg0KUEhBK1QyekRvU0E4YVcxbklITnlZejBpWTJsa09teHZaMjlBWVdOdFpTSStQQzl3UGc9PQ0KLS1hbHQtYi0tDQotLXJlbC1iDQpDb250ZW50LVR5cGU6IGltYWdlL3BuZw0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogYmFzZTY0DQpDb250ZW50LUlEOiA8bG9nb0BhY21lPg0KQ29udGVudC1EaXNwb3NpdGlvbjogaW5saW5lDQoNCmlWQk9SdzBLR2dvQUFBQU5TVWhFVWc9PQ0KLS1yZWwtYi0tDQotLW91dGVyLWINCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vcGRmOyBuYW1lPSJmYWxsYmFjay5wZGYiDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBiYXNlNjQNCkNvbnRlbnQtRGlzcG9zaXRpb246IGF0dGFjaG1lbnQ7DQogZmlsZW5hbWUqMCo9VVRGLTgnJ3IlQzMlQTlzdW0lQzMlQTklMjA7DQogZmlsZW5hbWUqMT1maW5hbC5wZGYNCg0KSlZCRVJpMHhMalFLSmVMano5TUtabUZyWlNCd1pHWWdZbmwwWlhNQUFRSUsNCi0tb3V0ZXItYg0KQ29udGVudC1UeXBlOiBtZXNzYWdlL3JmYzgyMg0KQ29udGVudC1EaXNwb3NpdGlvbjogYXR0YWNobWVudDsgZmlsZW5hbWU9ImZvcndhcmRlZC5lbWwiDQoNCkZyb206IGFAZXhhbXBsZS5vcmcNClN1YmplY3Q6IGlubmVyDQoNCmlubmVyIGJvZHkNCi0tb3V0ZXItYi0tDQplcGlsb2d1ZQ0K",
+          "email_rfc822_is_base64": true,
+          "headers": [
+            {
+              "Subject": "Café order"
+            }
+          ],
+          "html": "<p>x</p>",
+          "subject": "Café order",
+          "text": "x",
+          "to": [
+            "support@acme.test"
+          ]
+        },
+        "customer_id": "1337",
+        "friendly_from": "jose@example.net",
+        "msg_from": "bounce@example.net",
+        "rcpt_to": "support@acme.test",
+        "webhook_id": "4839201967643219"
+      }
+    }
+  },
+  {
+    "msys": {
+      "relay_message": {
+        "content": {
+          "html": "<p>HTML content of the email...</p>",
+          "text": "Plain text content of the email...",
+          "subject": "Help with my order",
+          "headers": [
+            {
+              "Message-ID": "<abc123@example.com>"
+            },
+            {
+              "Date": "Mon, 15 Jan 2024 10:30:00 +0000"
+            },
+            {
+              "In-Reply-To": "<original@example.com>"
+            }
+          ],
+          "to": [
+            "support@mail.example.com"
+          ]
+        },
+        "msg_from": "sender@example.com",
+        "rcpt_to": "support@mail.example.com",
+        "friendly_from": "John Sender <sender@example.com>",
+        "customer_id": "1234",
+        "webhook_id": "4839201967643219"
+      }
+    }
+  }
+]
