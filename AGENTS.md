@@ -119,7 +119,9 @@ authenticate without sending email. `bun run live:plan <base> <head>` selects
 the registered checks affected by a diff; `LIVE_ADAPTERS=all bun run live:plan`
 selects every live gate for a manual release rehearsal. `bun run live:run --
 <adapter list>` executes the selected checks with every `*_LIVE_SEND` flag
-removed from the child environment.
+removed from the child environment. CI sets `LIVE_ADAPTERS_EXCLUDE=graph` so
+`live:plan` never selects Graph there: CI has no Microsoft Graph credentials.
+Run `bun run live:graph` locally to check that adapter.
 
 ## Telemetry
 

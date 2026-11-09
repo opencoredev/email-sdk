@@ -26,9 +26,9 @@ Published records show the outcome (`pass`, `fail`, or `inconclusive`), UTC time
 
 ## What CI actually gates
 
-The [Depot CI workflow](https://github.com/opencoredev/email-sdk/blob/main/.depot/workflows/ci.yml) runs the deterministic `release:ci` checks on pull requests and `main`. Its separate `live-adapters` job runs only on `main` pushes or manual dispatch, selects the registered probes affected by the diff (manual dispatch selects all six), and fails if a selected probe cannot authenticate or its credential is missing.
+The [CI workflow](https://github.com/opencoredev/email-sdk/blob/main/.github/workflows/ci.yml) runs the deterministic `release:ci` checks on pull requests and `main`. Its separate `live-adapters` job runs only on `main` pushes or manual dispatch, selects the registered probes affected by the diff (manual dispatch selects all of them), and fails if a selected probe cannot authenticate or its credential is missing. CI never selects the Microsoft Graph probe, because it has no Microsoft Graph credentials; the Graph adapter's live check runs only locally.
 
-The [publishing workflow](https://github.com/opencoredev/email-sdk/blob/main/.github/workflows/release.yml) is a separate GitHub Actions workflow. It runs `bun run release:ci` and then the Changesets action. `release:ci` includes `verification:check`, which validates the evidence file structure, registry metadata, contract-test membership, and registry/evidence consistency; it makes no network requests and does not run provider probes. The publishing workflow has no `needs`, `workflow_run`, or status-check dependency on the Depot `live-adapters` job. **A failed live probe therefore does not block publishing** in these workflow files. Any additional gate would have to come from repository branch protection, which is not visible in the repository and is not claimed here.
+The [publishing workflow](https://github.com/opencoredev/email-sdk/blob/main/.github/workflows/release.yml) is a separate GitHub Actions workflow. It runs `bun run release:ci` and then the Changesets action. `release:ci` includes `verification:check`, which validates the evidence file structure, registry metadata, contract-test membership, and registry/evidence consistency; it makes no network requests and does not run provider probes. The publishing workflow has no `needs`, `workflow_run`, or status-check dependency on the CI `live-adapters` job. **A failed live probe therefore does not block publishing** in these workflow files. Any additional gate would have to come from repository branch protection, which is not visible in the repository and is not claimed here.
 
 ```bash
 bun run live:plan <base-sha> <head-sha>
@@ -46,6 +46,7 @@ bun run live:lettermint
 bun run live:lettr
 bun scripts/check-jetemail-account.ts
 bun scripts/check-primitive-account.ts
+bun run live:graph
 ```
 
 Effective credential precedence is **existing shell environment > `.env.local` > `.env`**. The scripts load `.env.local` first, then `.env`, without overriding existing values. Keep credential files out of Git and never paste keys into commands or chat.

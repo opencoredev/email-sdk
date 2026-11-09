@@ -14,11 +14,30 @@ export function selectLiveAdapters(files: string[]): string[] {
   );
 }
 
+// Space-separated checks to never select, for environments that lack their
+// credentials. CI sets it in .github/workflows/ci.yml.
+function excludedAdapters(value = ""): Set<string> {
+  const excluded = new Set(value.split(/\s+/).filter(Boolean));
+
+  for (const adapter of excluded) {
+    if (!liveAdapters.includes(adapter)) {
+      console.error(`Unknown live adapter in LIVE_ADAPTERS_EXCLUDE: ${adapter}`);
+      process.exit(1);
+    }
+  }
+
+  return excluded;
+}
+
 async function main() {
   const [base, head] = process.argv.slice(2);
+  const excluded = excludedAdapters(process.env.LIVE_ADAPTERS_EXCLUDE);
+
+  const print = (adapters: string[]) =>
+    console.log(adapters.filter((adapter) => !excluded.has(adapter)).join(" "));
 
   if (process.env.LIVE_ADAPTERS === "all" || !base || !head || /^0+$/.test(base)) {
-    console.log(liveAdapters.join(" "));
+    print(liveAdapters);
     process.exit(0);
   }
 
@@ -38,7 +57,7 @@ async function main() {
     .map((file) => file.trim())
     .filter(Boolean);
 
-  console.log(selectLiveAdapters(files).join(" "));
+  print(selectLiveAdapters(files));
 }
 
 const sharedAdapterFiles = new Set([
