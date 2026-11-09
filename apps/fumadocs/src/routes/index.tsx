@@ -58,6 +58,32 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
       { label: "GitHub", href: githubUrl },
       { label: "Sponsor", href: sponsorHref },
       { label: "Blog", href: "/blog", internal: true },
+      { label: "About", href: "/about", internal: true },
+      { label: "Contact", href: "/contact", internal: true },
+    ],
+  },
+  {
+    label: "Guides",
+    links: [
+      { label: "Send email from Node.js", href: "/blog/send-email-nodejs-typescript", internal: true },
+      { label: "Resend API guide", href: "/blog/resend-api-nodejs-typescript", internal: true },
+      { label: "SendGrid API guide", href: "/blog/sendgrid-api-nodejs-typescript", internal: true },
+      { label: "Send email from Next.js", href: "/blog/nextjs-server-action-send-email", internal: true },
+    ],
+  },
+  {
+    label: "Choosing a provider",
+    links: [
+      { label: "Resend pricing", href: "/blog/resend-pricing", internal: true },
+      { label: "SendGrid alternatives", href: "/blog/sendgrid-alternatives", internal: true },
+      { label: "Mailgun alternatives", href: "/blog/mailgun-alternatives", internal: true },
+    ],
+  },
+  {
+    label: "Legal",
+    links: [
+      { label: "Privacy", href: "/privacy", internal: true },
+      { label: "Terms", href: "/terms", internal: true },
     ],
   },
 ];

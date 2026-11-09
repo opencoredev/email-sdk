@@ -5,6 +5,8 @@ description: Replace direct Resend calls with a typed Email SDK client while kee
 
 Keep your Resend API key and verified sender. The migration changes the application boundary, not the provider account.
 
+For the raw API (keys, idempotency, rate limits, webhooks), see the [Resend API guide for Node.js and TypeScript](/blog/resend-api-nodejs-typescript).
+
 ## Replace construction
 
 ```ts title="before.ts"

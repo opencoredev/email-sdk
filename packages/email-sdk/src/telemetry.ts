@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -48,6 +49,23 @@ export type TelemetryEventName =
   | "cli command run";
 
 export type TelemetrySource = "sdk" | "cli";
+
+/**
+ * Where this process's installation identifier came from. `stored` reuses an
+ * existing state file, `created` made and saved a new one, and `ephemeral` made
+ * one that could not be saved, so the next process gets a different identifier.
+ */
+export type InstallationIdSource = "stored" | "created" | "ephemeral";
+
+export type HostingPlatform =
+  | "vercel"
+  | "aws_lambda"
+  | "google_cloud_run"
+  | "railway"
+  | "fly"
+  | "render"
+  | "kubernetes"
+  | "docker";
 
 export type TelemetryProperties = Record<
   string,
@@ -119,6 +137,44 @@ export function detectCiVendor(env: Record<string, string | undefined>) {
   return undefined;
 }
 
+/**
+ * Names the hosting platform whose marker variable is set to a non-empty value.
+ * An empty value counts as unset. No environment value is ever reported. Platform markers win over the generic Docker marker because
+ * several of these platforms also run their workloads in containers.
+ */
+export function detectHostingPlatform({
+  env,
+  hasDockerMarker,
+}: {
+  env: Record<string, string | undefined>;
+  hasDockerMarker: boolean;
+}): HostingPlatform | undefined {
+  if (env.VERCEL) return "vercel";
+
+  if (env.AWS_LAMBDA_FUNCTION_NAME) return "aws_lambda";
+
+  // Set by Cloud Run services and Cloud Run functions (formerly Cloud Functions).
+  if (env.K_SERVICE) return "google_cloud_run";
+
+  if (env.RAILWAY_PROJECT_ID) return "railway";
+
+  if (env.FLY_APP_NAME) return "fly";
+
+  if (env.RENDER) return "render";
+
+  if (env.KUBERNETES_SERVICE_HOST) return "kubernetes";
+
+  return hasDockerMarker ? "docker" : undefined;
+}
+
+function hasDockerMarker() {
+  try {
+    return existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
 const disabledTelemetry: Telemetry = {
   enabled: false,
   capture: () => Promise.resolve(),
@@ -151,13 +207,22 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const configDir = resolveConfigDir(env, options.configDir);
   const loaded = loadTelemetryState(configDir);
 
-  if (!loaded || loaded.disabled) return disabledTelemetry;
+  if (!loaded || loaded.state.disabled) return disabledTelemetry;
 
-  const state = loaded;
+  const { state } = loaded;
+  let { installationIdSource } = loaded;
 
   if (!state.noticeShown) {
     notify(TELEMETRY_NOTICE);
-    persistTelemetryState(configDir, { ...state, noticeShown: true });
+
+    // This save can succeed where the first one failed, and the next process
+    // then reads the identifier back, so it is no longer ephemeral.
+    const noticeSaved =
+      loaded.mayWriteState && persistTelemetryState(configDir, { ...state, noticeShown: true });
+
+    if (noticeSaved && installationIdSource === "ephemeral") {
+      installationIdSource = "created";
+    }
   }
 
   const ciVendor = detectCiVendor(env);
@@ -172,6 +237,8 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
     ci_vendor: ciVendor,
     measurement_schema_version: 2,
     capture_mode: options.fetch ? "injected" : env.NODE_ENV === "test" ? "test" : "runtime",
+    installation_id_source: installationIdSource,
+    hosting_platform: detectHostingPlatform({ env, hasDockerMarker: hasDockerMarker() }),
   };
 
   const pending = new Set<Promise<void>>();
@@ -760,24 +827,106 @@ function readStoredState(configDir: string): TelemetryState | "missing" | "unrea
   return "unreadable";
 }
 
-function loadTelemetryState(configDir: string): TelemetryState | undefined {
+type LoadedTelemetryState = {
+  state: TelemetryState;
+  installationIdSource: InstallationIdSource;
+  /** False when writing the state file could replace another process's file. */
+  mayWriteState: boolean;
+};
+
+function loadTelemetryState(configDir: string): LoadedTelemetryState | undefined {
   const stored = readStoredState(configDir);
 
   if (stored === "unreadable") return undefined;
 
-  if (stored !== "missing") return stored;
+  if (stored !== "missing") {
+    return { state: stored, installationIdSource: "stored", mayWriteState: true };
+  }
 
   const state = { installationId: randomUUID(), noticeShown: false };
-  persistTelemetryState(configDir, state);
+  const written = createInitialStateFile(configDir, state);
 
-  return state;
+  if (written === "created") return { state, installationIdSource: "created", mayWriteState: true };
+
+  if (written === "failed") return { state, installationIdSource: "ephemeral", mayWriteState: true };
+
+  // Another process created the file after it was read here: share its id.
+  const winner = readStoredState(configDir);
+
+  if (winner === "unreadable") return undefined;
+
+  if (winner !== "missing") {
+    return { state: winner, installationIdSource: "stored", mayWriteState: true };
+  }
+
+  // The name exists but resolves to nothing, such as a dangling symlink.
+  // Writing here could replace a state file (or opt-out) another process just
+  // saved, so this process keeps its identity to itself.
+  return { state, installationIdSource: "ephemeral", mayWriteState: false };
 }
 
+/**
+ * @internal Creates the state file only when no other process has. Without
+ * this, two processes starting on an empty config directory would both save
+ * their own id and the later rename would silently replace the earlier one.
+ * A hard link is atomic and fails with EEXIST when the file already exists.
+ * Never throws: telemetry setup must not break client creation.
+ */
+export function createInitialStateFile(
+  configDir: string,
+  state: TelemetryState,
+): "created" | "exists" | "failed" {
+  const path = join(configDir, "telemetry.json");
+  const contents = `${JSON.stringify(state, null, 2)}\n`;
+  const temporary = `${path}.${randomUUID()}.tmp`;
+
+  try {
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(temporary, contents);
+    linkSync(temporary, path);
+
+    return "created";
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") return "exists";
+
+    // Filesystems without hard links (EPERM, ENOTSUP, EXDEV) still get a
+    // single winner from an exclusive create. A crash mid-write there leaves
+    // an unreadable file, which keeps telemetry off rather than on.
+    return createStateFileExclusively(path, contents);
+  } finally {
+    removeQuietly(temporary);
+  }
+}
+
+function createStateFileExclusively(path: string, contents: string) {
+  try {
+    writeFileSync(path, contents, { flag: "wx" });
+
+    return "created";
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EEXIST"
+      ? "exists"
+      : "failed";
+  }
+}
+
+function removeQuietly(path: string) {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // A leftover temporary file is harmless; failing client creation is not.
+  }
+}
+
+/** Returns false when the state file could not be written. */
 function persistTelemetryState(configDir: string, state: TelemetryState) {
   try {
     writeStateFile(configDir, state);
+
+    return true;
   } catch {
     // Read-only environments still get telemetry with a per-process identity.
+    return false;
   }
 }
 

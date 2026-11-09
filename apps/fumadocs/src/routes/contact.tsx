@@ -3,20 +3,55 @@ import { HomeLayout } from "fumadocs-ui/layouts/home";
 import type { ReactNode } from "react";
 
 import { baseOptions } from "@/lib/layout.shared";
-import { buildPageMeta } from "@/lib/metadata";
 import { appName, gitConfig, siteUrl } from "@/lib/shared";
 
 const repoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
+const pageTitle = `Contact - ${appName}`;
+
+const pageDescription =
+  "Contact the Email SDK project: report bugs, ask questions, disclose security issues, or sponsor development through GitHub.";
+
+const canonicalUrl = `${siteUrl}/contact`;
+
 export const Route = createFileRoute("/contact")({
   head: () => ({
-    meta: buildPageMeta({
-      title: `Contact - ${appName}`,
-      description:
-        "Contact the Email SDK project: report bugs, ask questions, disclose security issues, or sponsor development through GitHub.",
-      url: `${siteUrl}/contact`,
-    }),
-    links: [{ rel: "canonical", href: `${siteUrl}/contact` }],
+    meta: [
+      { title: pageTitle },
+      { name: "description", content: pageDescription },
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: pageTitle },
+      { property: "og:description", content: pageDescription },
+      { property: "og:url", content: canonicalUrl },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: pageTitle },
+      { name: "twitter:description", content: pageDescription },
+      {
+        "script:ld+json": {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "ContactPage",
+              "@id": `${canonicalUrl}#webpage`,
+              url: canonicalUrl,
+              name: pageTitle,
+              description: pageDescription,
+              inLanguage: "en",
+              isPartOf: { "@id": `${siteUrl}/#website` },
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${canonicalUrl}#breadcrumb`,
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: appName, item: siteUrl },
+                { "@type": "ListItem", position: 2, name: "Contact", item: canonicalUrl },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    links: [{ rel: "canonical", href: canonicalUrl }],
   }),
   component: Contact,
 });

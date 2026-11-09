@@ -1,5 +1,6 @@
 import type { MetaDescriptor } from "@tanstack/react-router";
 
+import { currentBuildInfo } from "@/lib/build-info";
 import { providers } from "@/lib/providers";
 import { appDescription, appName, siteOgImageUrl, siteOgVideoUrl, siteUrl } from "@/lib/shared";
 import type { FileRoutesById } from "@/routeTree.gen";
@@ -56,6 +57,14 @@ export const siteMeta = [
   {
     property: "og:description",
     content: appDescription,
+  },
+  {
+    property: "og:site_name",
+    content: appName,
+  },
+  {
+    property: "og:locale",
+    content: "en_US",
   },
   {
     property: "og:image",
@@ -309,6 +318,8 @@ export const homeStructuredData = {
       description: appDescription,
       programmingLanguage: "TypeScript",
       runtimePlatform: ["Node.js 20+", "Bun 1.1+"],
+      softwareVersion: currentBuildInfo.packageVersion,
+      releaseNotes: "https://github.com/opencoredev/email-sdk/releases",
       softwareHelp: `${siteUrl}/docs`,
       codeRepository: "https://github.com/opencoredev/email-sdk",
       downloadUrl: "https://www.npmjs.com/package/@opencoredev/email-sdk",

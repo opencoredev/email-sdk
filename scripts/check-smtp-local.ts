@@ -252,6 +252,36 @@ async function checkSdkSend(smtpPort: number, apiBase: string): Promise<void> {
   }
 }
 
+async function checkCommentedAddresses(smtpPort: number, apiBase: string): Promise<void> {
+  const subject = "Commented addresses";
+
+  const email = createEmailClient({
+    adapters: [smtp({ host: "127.0.0.1", port: smtpPort, timeoutMs: 5_000 })],
+    telemetry: false,
+  });
+
+  await email.send({
+    from: "sender@example.test",
+    to: ["Ada <ada@example.test> (work)", "bob@example.test (work)"],
+    cc: '"Team <ops>" <ops@example.test>',
+    subject,
+    text: "Commented addresses",
+  });
+
+  const { message } = await findMessage(apiBase, subject);
+
+  expectEqual(
+    "sdk: to with comments",
+    message.To.map((entry) => entry.Address),
+    ["ada@example.test", "bob@example.test"],
+  );
+  expectEqual(
+    "sdk: cc with a quoted name holding <...>",
+    message.Cc.map((entry) => entry.Address),
+    ["ops@example.test"],
+  );
+}
+
 // Drop inherited SMTP_* settings (TLS, auth) so the CLI talks plain SMTP to
 // Mailpit. The child also runs with --no-env-file, because Bun would otherwise
 // reload them from the repo-root .env and .env.local.
@@ -368,6 +398,7 @@ async function main(): Promise<void> {
     apiBase = `http://127.0.0.1:${hostPort(8025)}`;
     await waitForReady(apiBase);
     await checkSdkSend(smtpPort, apiBase);
+    await checkCommentedAddresses(smtpPort, apiBase);
     await checkCliSend(smtpPort, apiBase);
   } finally {
     if (process.env.KEEP_MAILPIT === "1") {

@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install Email SDK for Node.js or Bun using ESM imports or CommonJS require.
+description: "Install Email SDK for Node.js 20+ or Bun 1.1+ with npm, pnpm, yarn or bun add, then send email from Bun or Node with ESM imports or CommonJS require."
 ---
 
 <Steps>
@@ -68,6 +68,34 @@ For a global Homebrew install, use `brew install opencoredev/tap/email-sdk` afte
 </Step>
 
 </Steps>
+
+## Send email from Bun
+
+Email SDK runs on Bun 1.1+ with no extra setup: install it with `bun add @opencoredev/email-sdk`, import an adapter, and run the file with `bun`. Bun loads `.env` files on its own, so the API key needs no dotenv import.
+
+```ts title="send.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Hello from Bun",
+  text: "Sent with Email SDK.",
+});
+
+console.log(result.adapter, result.id);
+```
+
+```bash
+bun run send.ts
+```
+
+Provider API adapters such as Resend send with `fetch`, which Bun provides. To check sends without delivering email, use the memory adapter with `bun test`; see [Test email sending](/docs/guides/test-email-behavior).
 
 <Card title="Quickstart" href="/docs/getting-started/quickstart" description="Create a client and send a validated message." />
 <Card title="Provider credentials" href="/docs/getting-started/credentials" description="Set the environment variables required by your adapter." />

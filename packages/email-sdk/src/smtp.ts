@@ -9,13 +9,14 @@ import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
+  arrayify,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
   mapAttachments,
   validateBuiltInAdapter,
   allRecipients,
-  emailAddressOf,
   headerList,
   type MessageRules,
 } from "./utils.js";
@@ -46,10 +47,14 @@ const smtpRules: MessageRules = (message) => {
   for (const address of [message.from, ...allRecipients(message)]) {
     const envelope = emailAddressOf(address);
 
-    const hasInvalidCharacter = [...envelope].some((character) => {
+    const literalStart = envelope.endsWith("]") ? envelope.lastIndexOf("@[") : -1;
+
+    const hasInvalidCharacter = [...envelope].some((character, index) => {
       const codePoint = character.codePointAt(0) ?? 0;
 
-      return codePoint <= 0x20 || codePoint >= 0x7f || character === "<" || character === ">";
+      if (character === ":" && literalStart !== -1 && index > literalStart) return false;
+
+      return codePoint <= 0x20 || codePoint >= 0x7f || '<>(),:;"\\'.includes(character);
     });
 
     if (!envelope || hasInvalidCharacter) {
@@ -201,8 +206,10 @@ async function toNodemailerMessage(
     attachments,
     messageId: idempotencyKey ? `<${idempotencyKey}@email-sdk.local>` : undefined,
     envelope: {
-      from: formatAddress(message.from),
-      to: [...to, ...cc, ...bcc],
+      from: emailAddressOf(message.from),
+      to: [...arrayify(message.to), ...arrayify(message.cc), ...arrayify(message.bcc)].map(
+        emailAddressOf,
+      ),
     },
   };
 }

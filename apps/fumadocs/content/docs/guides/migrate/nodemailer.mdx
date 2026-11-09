@@ -1,9 +1,21 @@
 ---
 title: Migrate from Nodemailer
-description: Replace a Nodemailer transporter with Email SDK's typed SMTP adapter.
+description: "A typed Nodemailer alternative for TypeScript: keep SMTP through Email SDK's smtp() adapter, then switch to Resend, SendGrid, or SES APIs without rewriting sends."
 ---
 
-Email SDK includes a typed SMTP transport backed by Nodemailer. It handles address fields, text/HTML bodies, headers, TLS upgrade, SMTP auth, RFC-safe subjects, transfer encoding, and MIME attachments.
+If you want a Nodemailer alternative with TypeScript types and provider APIs, you don't have to give up Nodemailer. Email SDK (`@opencoredev/email-sdk`) sends SMTP through Nodemailer and adds typed adapters for 26 provider HTTP APIs, including Resend, SendGrid, Postmark, Mailgun, and Amazon SES. Your code calls one `email.send()` with a typed message, so moving from SMTP to a provider API, or adding a backup provider, changes the client config and not every send.
+
+| | Nodemailer | Email SDK |
+| --- | --- | --- |
+| SMTP | Yes | Yes, through Nodemailer |
+| Provider HTTP APIs | Through its SES transport or third-party transports | 26 typed adapters |
+| TypeScript types | Built in since v10 (`@types/nodemailer` before) | Built in |
+| Fallback to another provider | Write it yourself | `fallback` option, with duplicate protection on by default |
+| Tests without sending | Ethereal or a stream transport | `memoryAdapter()` |
+
+Email SDK's SMTP transport handles address fields, text/HTML bodies, headers, TLS upgrade, SMTP auth, RFC-safe subjects, transfer encoding, and MIME attachments.
+
+Still choosing between SMTP and a provider's HTTP API? [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript) compares the options.
 
 ## Replace the transporter
 
@@ -62,5 +74,23 @@ npx --package @opencoredev/email-sdk email-sdk send \
   --text "Dry run only." \
   --dry-run
 ```
+
+## Questions
+
+### Does Email SDK replace Nodemailer?
+
+It wraps it for SMTP. Nodemailer is Email SDK's only runtime dependency, and the `smtp()` adapter hands it the message. The provider adapters skip SMTP and call each provider's HTTP API with `fetch`.
+
+### Can I fall back from SMTP to a provider API?
+
+Yes. Register `smtp()` and a provider adapter on one client and list the provider under `fallback.adapters`. A failure the SMTP adapter can prove was not sent, such as a rejected reply code or a TLS certificate error, moves on to the backup. A connection drop or timeout counts as unknown delivery, and the default `onUnknownDelivery: "stop"` throws instead of risking a duplicate. See [retries and fallback](/docs/concepts/fallbacks-and-retries).
+
+### Does it run on Bun?
+
+Yes. Email SDK runs server-side on Node.js 20+ and Bun 1.1+.
+
+### How do I test sends without an SMTP server?
+
+Swap the adapter for `memoryAdapter()` from `@opencoredev/email-sdk/testing`, or point `smtp()` at a local catcher such as Mailpit. See [Test email sending without sending real email](/docs/guides/test-email-behavior).
 
 <Card title="SMTP adapter" href="/docs/adapters/smtp" description="See TLS, auth, custom names, and transport limits." />
