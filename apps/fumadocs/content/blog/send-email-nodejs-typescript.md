@@ -214,6 +214,7 @@ With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` ret
 ## Related
 
 - [Quickstart](/docs/getting-started/quickstart): install Email SDK and send a first email.
+- [Send email from a Next.js server action](/blog/nextjs-server-action-send-email): a validated contact form with retries, a fallback and tests.
 - [Migrate from Nodemailer](/docs/guides/migrate/nodemailer): move existing Nodemailer code to Email SDK and keep SMTP.
 - [SMTP adapter reference](/docs/adapters/smtp): host, port, TLS and authentication options.
 - [MailHog and Mailpit](/blog/mailpit-mailhog-nodejs): a local SMTP inbox and REST API checks for email tests.

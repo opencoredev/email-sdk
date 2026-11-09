@@ -68,7 +68,7 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
       { label: "Send email from Node.js", href: "/blog/send-email-nodejs-typescript", internal: true },
       { label: "Resend API guide", href: "/blog/resend-api-nodejs-typescript", internal: true },
       { label: "SendGrid API guide", href: "/blog/sendgrid-api-nodejs-typescript", internal: true },
-      { label: "Test email with Mailpit", href: "/blog/mailpit-mailhog-nodejs", internal: true },
+      { label: "Send email from Next.js", href: "/blog/nextjs-server-action-send-email", internal: true },
     ],
   },
   {
