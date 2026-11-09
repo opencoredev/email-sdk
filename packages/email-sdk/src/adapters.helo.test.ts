@@ -4,6 +4,7 @@ import { helo } from "./helo.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailMessage } from "./types.js";
 import { base64, context, jsonCapture, message } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 const accepted = { status: "accepted", messageId: "helo_123", suppressions: [] };
 
@@ -132,6 +133,10 @@ describe("provider payloads", () => {
 
     await expect(sent).rejects.toBeInstanceOf(EmailAdapterError);
     await expect(sent).rejects.toMatchObject({ retryable: false, delivery: "unknown", status: 200 });
+  });
+
+  test("Helo reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth((options) => helo(options), base, accepted);
   });
 
   test("Helo treats a failed send as not sent and never retryable", async () => {

@@ -13,6 +13,9 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  arrayify,
+  emailAddressOf,
+  type MessageRules,
 } from "./utils.js";
 
 export type JetemailAdapterOptions = {
@@ -20,6 +23,20 @@ export type JetemailAdapterOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
+};
+
+const jetemailRules: MessageRules = (message) => {
+  if (!formatAddress(message.from).includes("<")) {
+    const from = emailAddressOf(message.from);
+    throw new EmailValidationError(
+      `jetemail requires a from address with a display name, for example "Acme <${from}>".`,
+    );
+  }
+
+  assertMaxItems("jetemail", "recipient", arrayify(message.to), 50);
+  assertMaxItems("jetemail", "cc", arrayify(message.cc), 50);
+  assertMaxItems("jetemail", "bcc", arrayify(message.bcc), 50);
+  assertMaxItems("jetemail", "replyTo", arrayify(message.replyTo), 50);
 };
 
 export function jetemail(
@@ -30,9 +47,10 @@ export function jetemail(
 
   return {
     name: "jetemail",
-    ...builtInAdapterDefinition("jetemail"),
+    ...builtInAdapterDefinition("jetemail", jetemailRules),
     raw: { baseUrl },
     async send(message, context) {
+      // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",

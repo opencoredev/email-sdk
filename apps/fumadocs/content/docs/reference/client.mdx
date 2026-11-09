@@ -149,5 +149,24 @@ await email.send(message);
 waitUntil(email.flush());
 ```
 
+## Performance
+
+The SDK's own work on a send is small next to the provider's network round trip. A client with no plugins or hooks skips the empty lifecycle steps, and telemetry data is only built when telemetry is on.
+
+The repository's overhead benchmark compares each send with a hand-built request to the same mock `fetch`, with telemetry off. One run on Bun 1.4.4 measured:
+
+| Case | SDK | Hand-built | SDK adds |
+| --- | --- | --- | --- |
+| Resend `send` | 1.59 µs | 0.83 µs | 0.76 µs |
+| Postmark `send` | 1.70 µs | 0.80 µs | 0.90 µs |
+| SendGrid `send` | 1.91 µs | 0.71 µs | 1.20 µs |
+| SES `send`, both sides cache the SigV4 key | 24.88 µs | 27.49 µs | within noise |
+| Resend `sendMany`, 20 messages | 35.97 µs | 18.18 µs | 17.79 µs |
+| New client with `resend()` | 0.28 µs | 0.02 µs | 0.25 µs |
+
+SES time is almost all SigV4 hashing. The adapter reads credentials from its options on every send, so refreshed STS credentials apply to the next request, and caches only the derived signing key for each secret, UTC day, region, and service.
+
+These are microbenchmark numbers from one machine. To measure your own, see the [benchmark README](https://github.com/opencoredev/email-sdk/blob/main/packages/email-sdk/bench/README.md).
+
 <Card title="Message reference" href="/docs/reference/message" description="Look up every normalized message field." />
 <Card title="Error reference" href="/docs/reference/errors" description="Handle the closed v1 error union." />

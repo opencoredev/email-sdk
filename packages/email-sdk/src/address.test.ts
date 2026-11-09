@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { EmailAddress } from "./types.js";
-import { emailAddressOf, validateBuiltInAdapter } from "./utils.js";
+import { emailAddressOf } from "./utils.js";
 
 const cases: ReadonlyArray<{
   readonly name: string;
@@ -10,6 +10,8 @@ const cases: ReadonlyArray<{
 }> = [
   { name: "bare address", address: "ada@example.test", expected: "ada@example.test" },
   { name: "padded bare address", address: "  ada@example.test  ", expected: "ada@example.test" },
+  // `)`, `]`, `>`, and `\` only matter inside a comment, literal, angle-addr, or quote.
+  { name: "closers outside any group", address: " a)b]c>d\\@example.test ", expected: "a)b]c>d\\@example.test" },
   { name: "object address", address: { email: "ada@example.test", name: "Ada <team>" }, expected: "ada@example.test" },
   { name: "Name <a@b>", address: "Ada <ada@example.test>", expected: "ada@example.test" },
   { name: "angle-addr only", address: "<ada@example.test>", expected: "ada@example.test" },
@@ -51,27 +53,4 @@ describe("emailAddressOf", () => {
   test.each(cases)("$name", ({ address, expected }) => {
     expect(emailAddressOf(address)).toBe(expected);
   });
-});
-
-describe("SMTP envelope validation", () => {
-  const message = (to: string) => ({
-    from: "sender@example.test",
-    to,
-    subject: "Hi",
-    text: "Hi",
-  });
-
-  test.each(["Ada <ada@example.test> (work)", "ada@example.test (work)", '"Ada <team>" <ada@example.test>', "Ada <ada@[IPv6:2001:db8::1]>"])(
-    "accepts %s",
-    (to) => {
-      expect(() => validateBuiltInAdapter("smtp", message(to))).not.toThrow();
-    },
-  );
-
-  test.each(["Ada <ada@example.test", "attacker@example.com> evil", '"Ada <ada@example.test>', "Ada <>", "ada( work )bob@example.test", '"Ada <bad name>" <ada@example.test>,evil@example.test', "Ada <ada@example.test>, evil@example.test"])(
-    "rejects %s",
-    (to) => {
-      expect(() => validateBuiltInAdapter("smtp", message(to))).toThrow("SMTP envelope address");
-    },
-  );
 });

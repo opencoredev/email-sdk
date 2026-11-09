@@ -9,6 +9,8 @@ import {
   assertMaxItems,
   assertSupportedMessageFields,
   attachmentToBase64,
+  arrayify,
+  type MessageRules,
 } from "./utils.js";
 
 export type SequenzyAdapterOptions = {
@@ -24,11 +26,17 @@ const reservedMetadataKeys = new Set([
   "sequenzySubscriberExternalId",
 ]);
 
+const sequenzyRules: MessageRules = (message) => {
+  assertMaxItems("sequenzy", "replyTo", arrayify(message.replyTo), 1);
+  assertMaxItems("sequenzy", "recipient", arrayify(message.to), 50);
+};
+
 export function sequenzy(
   options: SequenzyAdapterOptions,
 ): EmailAdapter<"sequenzy", { baseUrl: string }> {
   return jsonProvider({
     name: "sequenzy",
+    rules: sequenzyRules,
     baseUrl: options.baseUrl ?? "https://api.sequenzy.com/api/v1",
     endpoint: "/transactional/send",
     headers: {

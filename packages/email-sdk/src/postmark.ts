@@ -13,8 +13,10 @@ import {
   isRetryableStatus,
   readErrorBody,
   assertMaxItems,
+  mapAttachments,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  type MessageRules,
 } from "./utils.js";
 
 export type PostmarkAdapterOptions = {
@@ -25,6 +27,10 @@ export type PostmarkAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+const postmarkRules: MessageRules = (message) => {
+  assertMaxItems("postmark", "tag", message.tags ?? [], 1);
+};
+
 export function postmark(
   options: PostmarkAdapterOptions,
 ): EmailAdapter<"postmark", { baseUrl: string }> {
@@ -33,7 +39,7 @@ export function postmark(
 
   return {
     name: "postmark",
-    ...builtInAdapterDefinition("postmark"),
+    ...builtInAdapterDefinition("postmark", postmarkRules),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/email`, {
@@ -90,7 +96,7 @@ async function toPostmarkPayload(message: EmailMessage, messageStream?: string) 
       Name: header.name,
       Value: header.value,
     })),
-    Attachments: await Promise.all((message.attachments ?? []).map(toPostmarkAttachment)),
+    Attachments: await mapAttachments(message.attachments, toPostmarkAttachment),
     Metadata: message.metadata,
     MessageStream: messageStream,
     Tag: tag,

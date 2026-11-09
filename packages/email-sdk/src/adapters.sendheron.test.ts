@@ -8,6 +8,7 @@ import {
   jsonCapture,
   messageWithoutTagsOrMetadata,
 } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 describe("provider payloads", () => {
   test("SendHeron maps normalized fields and encodes attachments", async () => {
@@ -96,6 +97,15 @@ describe("provider payloads", () => {
 
     await expect(sent).rejects.toBeInstanceOf(EmailAdapterError);
     await expect(sent).rejects.toMatchObject({ retryable: false, delivery: "unknown", status: 201 });
+  });
+
+  test("SendHeron reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth(
+      (options) => sendheron(options),
+      { ...messageWithoutTagsOrMetadata, to: "ada@example.com" },
+      { id: "heron_123", status: "sent", errorMessage: null, providerMessageId: "prov_1" },
+      { status: 201 },
+    );
   });
 
   test("SendHeron treats a suppressed send as not sent and never retryable", async () => {

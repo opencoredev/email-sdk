@@ -11,6 +11,7 @@ import {
   messageWithoutProviderSpecificFields,
   messageWithoutTagsOrMetadata,
 } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 describe("provider payloads", () => {
   test("JetEmail maps normalized fields and encodes attachments", async () => {
@@ -53,6 +54,14 @@ describe("provider payloads", () => {
     }).send(messageWithoutTagsOrMetadata, context);
 
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
+  test("JetEmail reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth(
+      (options) => jetemail(options),
+      messageWithoutTagsOrMetadata,
+      { id: "jet_123", response: "Message queued as jet_123" },
+    );
   });
 
   test("JetEmail requires a from address with a display name", async () => {

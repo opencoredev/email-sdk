@@ -10,6 +10,9 @@ import {
   assertMaxItems,
   assertSupportedMessageFields,
   builtInAdapterDefinition,
+  allRecipients,
+  hasDisplayName,
+  type MessageRules,
 } from "./utils.js";
 
 export type CloudflareSendEmailAddress =
@@ -80,6 +83,16 @@ export type CloudflareAdapterRaw =
   | { baseUrl: string; accountId: string }
   | { binding: CloudflareSendEmailBinding };
 
+const cloudflareRules: MessageRules = (message) => {
+  const recipients = allRecipients(message);
+  assertMaxItems("cloudflare", "recipient", recipients, 50);
+  assertMaxItems("cloudflare", "replyTo", arrayify(message.replyTo), 1);
+
+  if (recipients.some(hasDisplayName)) {
+    throw new EmailValidationError("cloudflare recipient fields only support plain email addresses.");
+  }
+};
+
 export function cloudflare(
   options: CloudflareAdapterOptions,
 ): EmailAdapter<"cloudflare", CloudflareAdapterRaw> {
@@ -95,7 +108,7 @@ function fromBinding(
 ): EmailAdapter<"cloudflare", { binding: CloudflareSendEmailBinding }> {
   return {
     name: "cloudflare",
-    ...builtInAdapterDefinition("cloudflare"),
+    ...builtInAdapterDefinition("cloudflare", cloudflareRules),
     raw: { binding },
     async send(message) {
       assertCloudflareMessage(message);
@@ -169,6 +182,7 @@ function fromHttp(
   return {
     ...jsonProvider({
       name: "cloudflare",
+      rules: cloudflareRules,
       baseUrl,
       endpoint: `/accounts/${encodeURIComponent(options.accountId)}/email/sending/send`,
       headers: {
