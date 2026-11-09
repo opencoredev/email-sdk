@@ -14,6 +14,8 @@ These values come from the adapter's exported `capabilities` declaration. The [f
 
 The SMTP adapter uses Nodemailer for the SMTP protocol, TLS, authentication, MIME composition, transfer encoding, RFC-safe subject encoding, and attachments. Point it at PurelyMail, a self-hosted server, or any provider's SMTP endpoint, and register it more than once under different names for multiple routes.
 
+Comparing SMTP with a provider's HTTP API first? [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript) shows both side by side. Sending through Resend's SMTP server? [Resend SMTP settings](/blog/resend-smtp-nodejs) has the host, ports and TLS options.
+
 <ProviderBadge adapter="smtp" />
 
 ## Configure
@@ -174,3 +176,5 @@ npx --package @opencoredev/email-sdk email-sdk send \
 ```
 
 Each flag falls back to its env var: `--host`/`SMTP_HOST`, `--port`/`SMTP_PORT` (default 587), `--secure`/`SMTP_SECURE`, `--require-tls`/`SMTP_REQUIRE_TLS`, `--allow-insecure-auth`/`SMTP_ALLOW_INSECURE_AUTH`, `--user`/`SMTP_USER`, `--pass`/`SMTP_PASS`. Drop `--dry-run` for one real send to prove the host, TLS mode, and credentials actually deliver.
+
+To test locally without sending real email, point the adapter at Mailpit; see [MailHog and Mailpit: test email locally in Node.js](/blog/mailpit-mailhog-nodejs).

@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Create a Resend client and send your first email.
+description: "Send your first email from TypeScript or Node.js with Email SDK: set a Resend API key, create a client, send, and check messages without sending."
 ---
 
 Set a server-only Resend key:
@@ -57,6 +57,8 @@ EMAIL_SDK_TELEMETRY=0 npx --package @opencoredev/email-sdk email-sdk send \
   --text "Your account is ready." \
   --dry-run
 ```
+
+Sending from a Next.js form? See [Send email from a Next.js server action](/blog/nextjs-server-action-send-email).
 
 <Card title="Standalone starter" href="https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send" description="A runnable copy of this page for Node 20+ or Bun, with .env loading." />
 <Card title="Add retries and fallback" href="/docs/concepts/fallbacks-and-retries" description="Choose retry counts and unknown-delivery policy deliberately." />

@@ -5,6 +5,8 @@ description: Replace direct Mail Send payloads with normalized messages and expl
 
 Keep the SendGrid API key and verified sender. Email SDK calls the Mail Send API through the `sendgrid` adapter.
 
+For the raw API (keys, scopes, scheduling, Event Webhook signatures), see the [SendGrid API guide for Node.js and TypeScript](/blog/sendgrid-api-nodejs-typescript). Moving off SendGrid entirely? [SendGrid alternatives for developers](/blog/sendgrid-alternatives) compares providers and shows a cutover with SendGrid as the fallback.
+
 ## Create the client
 
 ```ts title="src/email.ts"

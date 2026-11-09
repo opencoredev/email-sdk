@@ -1,4 +1,16 @@
+import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?raw";
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
+import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
+import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
+import mailpitMailhogMarkdown from "../../content/blog/mailpit-mailhog-nodejs.md?raw";
+import nextjsServerActionMarkdown from "../../content/blog/nextjs-server-action-send-email.md?raw";
+import resendAlternativesMarkdown from "../../content/blog/resend-alternatives.md?raw";
+import resendApiMarkdown from "../../content/blog/resend-api-nodejs-typescript.md?raw";
+import resendPricingMarkdown from "../../content/blog/resend-pricing.md?raw";
+import resendSmtpMarkdown from "../../content/blog/resend-smtp-nodejs.md?raw";
+import sendEmailNodeMarkdown from "../../content/blog/send-email-nodejs-typescript.md?raw";
+import sendgridAlternativesMarkdown from "../../content/blog/sendgrid-alternatives.md?raw";
+import sendgridApiMarkdown from "../../content/blog/sendgrid-api-nodejs-typescript.md?raw";
 import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
@@ -7,6 +19,18 @@ import { localBlogPosts } from "./local-blog-posts";
 // mirror both read from here, so adding a post means adding one entry.
 const localBlogMarkdown = new Map([
   ["email-sdk-v1-safer-typescript-transactional-email", articleMarkdown],
+  ["mailgun-api-nodejs-typescript", mailgunApiMarkdown],
+  ["sendgrid-alternatives", sendgridAlternativesMarkdown],
+  ["mailgun-alternatives", mailgunAlternativesMarkdown],
+  ["resend-api-nodejs-typescript", resendApiMarkdown],
+  ["resend-pricing", resendPricingMarkdown],
+  ["send-email-nodejs-typescript", sendEmailNodeMarkdown],
+  ["resend-smtp-nodejs", resendSmtpMarkdown],
+  ["resend-alternatives", resendAlternativesMarkdown],
+  ["brevo-api-nodejs-typescript", brevoApiMarkdown],
+  ["sendgrid-api-nodejs-typescript", sendgridApiMarkdown],
+  ["mailpit-mailhog-nodejs", mailpitMailhogMarkdown],
+  ["nextjs-server-action-send-email", nextjsServerActionMarkdown],
 ]);
 
 const localBlogBodies = new Map(

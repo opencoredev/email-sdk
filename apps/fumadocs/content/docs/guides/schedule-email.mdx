@@ -1,9 +1,9 @@
 ---
 title: Schedule an email
-description: Use sendAt for a simple future send, and use an app-owned scheduler when you need more control.
+description: "Schedule email from TypeScript and Node.js with sendAt: which providers support scheduled sending and attachments, and how far ahead each accepts."
 ---
 
-For a simple send later today or this week, put `sendAt` on the message:
+To schedule an email with Email SDK, put `sendAt` on the message and send it through an adapter whose provider supports scheduled sending: Resend, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Lettr or SendHeron. The provider holds the email until that time. Every other adapter, including Postmark, Amazon SES and SMTP, rejects a message with `sendAt` before any request is made.
 
 ```ts title="src/send-later.ts"
 await email.send({
@@ -15,15 +15,27 @@ await email.send({
 });
 ```
 
-The provider holds the email until that time. Email SDK does not keep a timer, run a cron job, or stay alive in the background.
+`sendAt` takes a `Date` or an RFC 3339 timestamp with `Z` or an explicit offset, such as `"2026-11-09T09:00:00-05:00"`. Email SDK does not keep a timer, run a cron job, or stay alive in the background.
 
-## Supported adapters
+## Which providers support scheduled sending
 
-`sendAt` works with Resend, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional, and SparkPost. Other adapters reject the message before sending.
+| Adapter | Sent to the provider as | How far ahead | Attachments on a scheduled send |
+| --- | --- | --- | --- |
+| [Resend](/docs/adapters/resend) | `scheduled_at` | Up to 30 days | Yes |
+| [SendGrid](/docs/adapters/sendgrid) | `send_at` | Up to 72 hours | Yes |
+| [Mailgun](/docs/adapters/mailgun) | `o:deliverytime` | Up to 3 days on most plans, 7 with extended storage | Yes |
+| [MailerSend](/docs/adapters/mailersend) | `send_at` | Up to 72 hours | Yes |
+| [Brevo](/docs/adapters/brevo) | `scheduledAt` | Up to 72 hours | Yes |
+| [Mailchimp Transactional](/docs/adapters/mailchimp) | `send_at` | Not stated; scheduling needs a positive account balance | Yes |
+| [SparkPost](/docs/adapters/sparkpost) | `options.start_time` | Up to 3 days | Yes |
+| [Lettr](/docs/adapters/lettr) | `POST /emails/scheduled` | At least 5 minutes and at most 3 days ahead | Yes |
+| [SendHeron](/docs/adapters/sendheron) | `sendAt` | See the adapter page | No: the adapter rejects attachments with `sendAt` |
 
-Provider limits still apply. Several providers only accept schedules a few days ahead, so check the adapter page before using a long delay.
+The limits are the providers' rules, summarized from each adapter page. Email SDK doesn't check the delay itself, and it passes past times through: the provider either sends right away or rejects the request. Check the adapter page before relying on a long delay.
 
-If your client has a fallback that cannot schedule, disable that route for this send:
+## Scheduled sends and fallback
+
+Email SDK checks the whole route before sending. If a fallback adapter can't schedule, the send fails with `EmailValidationError` instead of handing the message to an adapter that would deliver it immediately. Turn fallback off for scheduled messages:
 
 ```ts
 await email.send(message, {
@@ -31,19 +43,33 @@ await email.send(message, {
 });
 ```
 
-Email SDK checks the whole route before sending, so it will not silently hand a scheduled message to an adapter that would send it immediately.
+A route of two scheduling adapters, such as Resend with SendGrid as the backup, passes validation with fallback on. That only makes the route valid: a failed Resend request is delivery `unknown`, so SendGrid takes over only with `onUnknownDelivery: "continue"`, which risks two scheduled copies (see [Retries and provider fallback](/docs/concepts/fallbacks-and-retries)). Keep the delay within the shorter of the two limits.
 
 ## When to use your own scheduler
 
 Keep the schedule in your database and let a queue, workflow, or cron worker call `email.send` when you need:
 
-- cancellation or rescheduling
+- cancellation or rescheduling through one API, whatever the provider
 - delays longer than the provider allows
 - a record of pending and completed work
 - retries that survive a server restart
 - the freedom to switch providers before the send happens
 
 A cron job is fine when it polls a durable outbox table. Do not rely on an in-memory timer because a deploy or crash will lose it.
+
+## Questions
+
+### Can Postmark or Amazon SES schedule email?
+
+Not through Email SDK. Neither adapter supports `sendAt`, so the send throws `EmailValidationError` before any request. Store the send time yourself and call `email.send` when it comes due.
+
+### Which email APIs support both scheduled sending and attachments?
+
+Resend, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional, SparkPost and Lettr accept both in one message through their Email SDK adapters. SendHeron supports each one, but not together. The [field support matrix](/docs/adapters/field-support) lists every field per adapter.
+
+### How do I cancel a scheduled email?
+
+Email SDK has no cancel call, so cancel through the provider's own API where it offers one. Resend can reschedule or cancel a scheduled email by its ID, which the adapter returns as `result.id` (see the [Resend API guide](/blog/resend-api-nodejs-typescript)). SendGrid can only cancel a send that carried a batch ID, and the `sendgrid` adapter doesn't set one, so call SendGrid directly for sends you may cancel ([SendGrid API guide](/blog/sendgrid-api-nodejs-typescript)). If you cancel often, keep the schedule in your own database instead.
 
 <Card title="Production send pipeline" href="/docs/guides/production-send-pipeline" description="Store delivery state and retries outside the core SDK." />
 <Card title="Delivery capabilities" href="/docs/adapters/capability-groups" description="Compare scheduling, idempotency, and personalized delivery support." />

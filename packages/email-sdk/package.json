@@ -1,15 +1,17 @@
 {
   "name": "@opencoredev/email-sdk",
   "version": "3.0.1",
-  "description": "A TypeScript email SDK for unified transactional sending.",
+  "description": "Email SDK for TypeScript: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 21 more providers plus SMTP, with validation, retries and fallback.",
   "keywords": [
     "bun",
     "email",
+    "email-api",
     "email-sdk",
     "helo",
     "iterable",
     "mailgun",
     "microsoft-graph",
+    "nodemailer-alternative",
     "postmark",
     "resend",
     "sendgrid",
@@ -289,12 +291,12 @@
     "prepack": "bun run build"
   },
   "devDependencies": {
-    "@react-email/render": "^2.1.0",
-    "@types/bun": "~1.3.14",
-    "@types/node": "^25.9.8",
+    "@react-email/render": "^2.1.1",
+    "@types/bun": "~1.4.4",
+    "@types/node": "^25.9.9",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
-    "ai": "^7.0.137",
+    "ai": "^7.0.153",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -323,6 +325,6 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "nodemailer": "^10.0.13"
+    "nodemailer": "^10.2.1"
   }
 }
