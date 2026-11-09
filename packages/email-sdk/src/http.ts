@@ -5,6 +5,7 @@ import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   builtInAdapterDefinition,
+  httpErrorDelivery,
   httpErrorMessage,
   isRetryableStatus,
   normalizeAdapterResult,
@@ -61,7 +62,7 @@ export function jsonProvider<
           provider: options.name,
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          delivery: "unknown",
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

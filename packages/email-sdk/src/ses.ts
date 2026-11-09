@@ -13,6 +13,7 @@ import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
 } from "./utils.js";
@@ -70,6 +71,7 @@ export function ses(
           adapter: "ses",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

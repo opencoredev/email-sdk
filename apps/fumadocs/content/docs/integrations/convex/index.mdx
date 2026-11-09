@@ -37,7 +37,7 @@ export const sendWelcomeEmail = mutation({
 | Delay | `retryBaseMs × 2^(attempt − 1)`, capped at 60 seconds. With the default 1,000 ms: 1 s, then 2 s. |
 | Which failures retry | Errors the Email SDK marks retryable: HTTP 408, 409, 425, 429 and 5xx, and connection errors such as `ECONNRESET` or `ETIMEDOUT`. A 400 or 401 fails at once. |
 | Duplicate sends | Reusing an `idempotencyKey` returns the existing email id while its record is kept. Each retry passes the same key to the provider, but deduplication depends on the provider: Resend keeps keys for 24 hours, and adapters without native idempotency can send twice. |
-| Fallback adapters | Used only when the first provider definitely did not send. An HTTP error or timeout leaves delivery unknown, which stops fallback; the component then retries the same route if the error is retryable and attempts remain, and marks the email failed otherwise. |
+| Fallback adapters | Used only when the first provider definitely did not send, such as a 401 or 422 rejection. A timeout, 408, 409, 429 or 5xx leaves delivery unknown, which stops fallback; the component then retries the same route if the error is retryable and attempts remain, and marks the email failed otherwise. |
 | Stuck sends | A cron runs every 5 minutes. A send stuck in `processing` for 10 minutes is retried if it has an `idempotencyKey` and attempts left, and marked failed without a key, because the provider may already have accepted it. |
 | After the last attempt | The email is `failed`. `retry(ctx, { emailId })` starts a fresh cycle. |
 

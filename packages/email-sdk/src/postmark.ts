@@ -8,6 +8,7 @@ import {
   formatAddresses,
   headersToArray,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   assertMaxItems,
@@ -52,6 +53,7 @@ export function postmark(
           adapter: "postmark",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

@@ -291,6 +291,18 @@ export function isRetryableStatus(status: number) {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
 }
 
+/**
+ * Delivery state of a failed HTTP send. A definite 4xx rejection means the provider refused the
+ * request, so trying another adapter cannot send the message twice. 408 (the request may have
+ * been processed), 409 (often an idempotency conflict with a send still in flight), 429, 5xx, and
+ * anything outside 4xx stay unknown so fallback keeps its at-most-once default.
+ */
+export function httpErrorDelivery(status: number): EmailAdapterError["delivery"] {
+  if (status === 408 || status === 409 || status === 429) return "unknown";
+
+  return status >= 400 && status < 500 ? "not_sent" : "unknown";
+}
+
 export function toProviderError(provider: string, cause: unknown) {
   if (cause instanceof EmailAbortError || cause instanceof EmailValidationError) {
     return cause;
