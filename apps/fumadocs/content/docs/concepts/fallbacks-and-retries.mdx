@@ -146,7 +146,7 @@ try {
 
 ### Does Email SDK switch providers on a 5xx by default?
 
-No. A 5xx can arrive after the provider accepted the message, so the HTTP adapters report it as delivery `unknown` and the default `onUnknownDelivery: "stop"` ends the route. A definite 4xx rejection such as a 401 or 422 does switch providers by default. Set `onUnknownDelivery: "continue"` to fall back after a 5xx too, and accept that a duplicate is possible.
+No. A 5xx can arrive after the provider accepted the message, so the HTTP adapters report it as delivery `unknown` and the default `onUnknownDelivery: "stop"` ends the route. The one exception is SendHeron, which records a 503 as a refusal, so its adapter reports `not_sent` and falls back. A definite 4xx rejection such as a 401 or 422 does switch providers by default. Set `onUnknownDelivery: "continue"` to fall back after a 5xx too, and accept that a duplicate is possible.
 
 ### Do retries happen before fallback?
 
