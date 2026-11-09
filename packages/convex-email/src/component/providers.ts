@@ -69,7 +69,18 @@ export type BuildEmailClientOptions = {
   recordAttempt?: (event: { adapter: string; attempt: number }) => Promise<void>;
 };
 
-function gateDispatch(
+/** Copies symbol markers (such as the SDK's test-adapter marker) from one send function to another. */
+function keepSendMarkers<T extends EmailAdapter["send"]>(from: EmailAdapter["send"], to: T): T {
+  for (const key of Object.getOwnPropertySymbols(from)) {
+    const descriptor = Object.getOwnPropertyDescriptor(from, key);
+
+    if (descriptor) Object.defineProperty(to, key, descriptor);
+  }
+
+  return to;
+}
+
+export function gateDispatch(
   adapter: EmailAdapter,
   recordAttempt: (event: { adapter: string; attempt: number }) => Promise<void>,
 ): EmailAdapter {
@@ -77,11 +88,11 @@ function gateDispatch(
     name: adapter.name,
     capabilities: adapter.capabilities,
     raw: adapter.raw,
-    async send(message, context) {
+    send: keepSendMarkers(adapter.send, async (message, context) => {
       await recordAttempt({ adapter: adapter.name, attempt: context.attempt });
 
       return await adapter.send(message, context);
-    },
+    }),
   };
 
   if (adapter.validate) {

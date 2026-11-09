@@ -3,7 +3,8 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient } from "./component/providers.js";
+import { buildEmailClient, gateDispatch } from "./component/providers.js";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import { modules } from "./testing.js";
 
 function createTest() {
@@ -48,6 +49,7 @@ describe("convex-email component", () => {
     globalThis.fetch = nativeFetch;
     delete process.env.LETTR_API_KEY;
     delete process.env.RESEND_API_KEY;
+    delete process.env.POSTMARK_SERVER_TOKEN;
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
@@ -700,6 +702,87 @@ describe("convex-email component", () => {
     expect(requests).toBe(1);
     expect(status).toMatchObject({ status: "failed", unknownDeliveryAdapter: "resend" });
     expect(status?.attemptedAdapters).not.toContain("memory");
+  });
+
+  test("pins the registered adapter name even when another adapter is aliased to the factory name", async () => {
+    const t = createTest();
+    const requests = { resend: 0, postmark: 0 };
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.POSTMARK_SERVER_TOKEN = "test-token";
+    globalThis.fetch = async (input) => {
+      const url = String(input instanceof Request ? input.url : input);
+
+      if (url.includes("postmarkapp.com")) {
+        requests.postmark += 1;
+
+        return Response.json({ MessageID: "pm-1", ErrorCode: 0, Message: "OK" });
+      }
+
+      requests.resend += 1;
+
+      return Response.json({ message: "Unavailable" }, { status: 503 });
+    };
+
+    // Resend is registered as "primary"; Postmark is registered under Resend's factory name.
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [
+        { kind: "resend", name: "primary" },
+        { kind: "postmark", name: "resend" },
+      ],
+      adapter: "primary",
+      fallbackAdapters: ["resend"],
+      idempotencyKey: "alias-pin",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(requests.resend).toBe(2);
+    expect(requests.postmark).toBe(0);
+    expect(status).toMatchObject({ status: "failed", unknownDeliveryAdapter: "primary" });
+  });
+
+  test("refuses a manual retry when an older unknown outcome names an ambiguous adapter", async () => {
+    const t = createTest();
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [
+        { kind: "resend", name: "primary" },
+        { kind: "postmark", name: "resend" },
+      ],
+      adapter: "primary",
+      fallbackAdapters: ["resend"],
+      maxAttempts: 1,
+    });
+
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("emails", emailId);
+
+      if (!id) throw new Error("Expected a component email id.");
+
+      await ctx.db.patch(id, {
+        status: "failed",
+        providerFailure: { adapter: "resend", retryable: true, delivery: "unknown" },
+      });
+    });
+
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(false);
+    expect(await t.query(api.lib.status, { emailId })).toMatchObject({ status: "failed" });
+  });
+
+  test("the dispatch gate keeps a renamed memory adapter marked as a test adapter", () => {
+    const marker = Symbol.for("@opencoredev/email-sdk/test-adapter-send");
+    const backup = { ...memoryAdapter(), name: "backup" };
+    const gated = gateDispatch(backup, async () => {});
+
+    expect(marker in backup.send).toBe(true);
+    expect(marker in gated.send).toBe(true);
   });
 
   test("setConfig replaces the stored config instead of merging", async () => {

@@ -167,9 +167,17 @@ export const retry = mutation({
     }
 
     // Failures recorded before unknownDeliveryAdapter existed still carry the unknown outcome in
-    // providerFailure, which this retry clears, so carry it over to the pin first.
-    if (email.providerFailure?.delivery === "unknown") {
-      await pinUnknownDelivery(ctx, email, email.providerFailure.adapter);
+    // providerFailure, which this retry clears, so carry it over to the pin first. That record can
+    // hold a provider's factory name rather than the registered one; refuse the retry when it
+    // can't be resolved to exactly one registered adapter.
+    if (email.providerFailure?.delivery === "unknown" && !email.unknownDeliveryAdapter) {
+      const pinned = registeredAdapterName(email, email.providerFailure.adapter);
+
+      if (!pinned) {
+        return false;
+      }
+
+      await pinUnknownDelivery(ctx, email, pinned);
     }
 
     const now = Date.now();
@@ -617,6 +625,17 @@ function applyConfigToMessage(args: ConvexEmailSendArgs, config: ConvexEmailConf
       convexEmailTestMode: true,
     },
   };
+}
+
+/** The one registered adapter a stored adapter name can refer to, by registered or factory name. */
+function registeredAdapterName(email: Doc<"emails">, adapter: string) {
+  const matches = new Set(
+    email.adapters
+      .filter((config) => (config.name ?? config.kind) === adapter || config.kind === adapter)
+      .map((config) => config.name ?? config.kind),
+  );
+
+  return matches.size === 1 ? [...matches][0] : undefined;
 }
 
 /**

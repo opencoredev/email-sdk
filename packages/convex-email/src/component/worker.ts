@@ -87,12 +87,10 @@ export const processEmail = internalAction({
 
       // Anything short of a proven not_sent may have delivered: an unknown provider failure, or an
       // error with no provider metadata after a request went out (such as markSent failing after
-      // the provider accepted the message).
-      const unknownDeliveryAdapter = providerFailure
-        ? providerFailure.delivery === "not_sent"
-          ? undefined
-          : providerFailure.adapter
-        : lastDispatchedAdapter;
+      // the provider accepted the message). Pin the registered name recorded at dispatch: a
+      // provider's error can carry its factory name, which may be another adapter's alias.
+      const unknownDeliveryAdapter =
+        providerFailure?.delivery === "not_sent" ? undefined : lastDispatchedAdapter;
 
       await ctx.runMutation(lib.markFailedOrRetry, {
         emailId: args.emailId,
