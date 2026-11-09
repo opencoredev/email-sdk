@@ -72,6 +72,8 @@ Before the first request, the client checks the message against every adapter in
 
 The default delay between attempts starts at 100 ms and doubles each time, capped at 2 seconds. Override `retry.delay` or `retry.shouldRetry` when your application needs its own policy.
 
+Retries can make a failure `unknown` even when the last attempt was a definite rejection. If an earlier attempt timed out or got a 5xx, the provider may have sent that one, so a 422 on the final attempt can't prove nothing went out. The route failure reports `unknown` and fallback stops under the default policy.
+
 ## Delivery certainty
 
 `EmailAdapterError.delivery` is either `not_sent` or `unknown`.

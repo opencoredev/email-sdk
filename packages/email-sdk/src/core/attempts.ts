@@ -78,6 +78,9 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   const maxAttempts = input.retry?.maxAttempts ?? 1;
   const shouldRetry = input.retry?.shouldRetry ?? isRetryableEmailError;
   const delayFor = input.retry?.delay ?? defaultDelay;
+  // Once any attempt may have reached the provider, no later rejection can prove the message
+  // was never sent, so the final failure must not report not_sent.
+  let earlierOutcomeUnknown = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
@@ -114,7 +117,14 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       if (!(normalized instanceof EmailAdapterError)) throw normalized;
       const canRetry = attempt < maxAttempts && shouldRetry(normalized, attempt);
 
-      if (!canRetry) throw new AttemptFailure(normalized, attempt);
+      if (!canRetry) {
+        throw new AttemptFailure(
+          earlierOutcomeUnknown ? withUnknownDelivery(normalized) : normalized,
+          attempt,
+        );
+      }
+
+      if (normalized.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, delayFor(attempt, normalized));
       await invokeHooks(input.hooks, "onRetry", {
@@ -137,5 +147,21 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   throw new EmailAdapterError("Email retry loop exited unexpectedly.", {
     adapter: input.adapter.name,
     delivery: "unknown",
+  });
+}
+
+/** Report a final failure as unknown when an earlier attempt may have sent the message. */
+export function withUnknownDelivery(error: EmailAdapterError) {
+  if (error.delivery === "unknown") return error;
+
+  return new EmailAdapterError(error.message, {
+    adapter: error.adapter,
+    status: error.status,
+    requestId: error.requestId,
+    retryable: error.retryable,
+    delivery: "unknown",
+    acceptedCount: error.acceptedCount,
+    rejectedCount: error.rejectedCount,
+    cause: error,
   });
 }

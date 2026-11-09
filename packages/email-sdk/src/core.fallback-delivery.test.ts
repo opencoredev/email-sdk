@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createEmailClient } from "./core.js";
-import { EmailRouteError } from "./errors.js";
+import { EmailAllRecipientsFailedError, EmailRouteError } from "./errors.js";
 import { resend } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
 import { memoryAdapter } from "./testing.js";
@@ -91,6 +91,16 @@ describe("default fallback policy with real HTTP adapters", () => {
       });
     }
 
+    test(`${name} retry ending in 422 after an ambiguous 503 still stops`, async () => {
+      const primary = scriptedFetch([{ status: 503 }, { status: 422 }]);
+      const { client, backup } = clientFor(create(primary.fetch), { maxAttempts: 2 });
+
+      const error = await rejectionOf(client.send(message), EmailRouteError);
+      expect(primary.calls()).toBe(2);
+      expect(error.failures[0]).toMatchObject({ adapter: name, status: 422, delivery: "unknown" });
+      expect(backup.raw.sent).toHaveLength(0);
+    });
+
     test(`${name} retry ending in 422 after a definite 401 falls back`, async () => {
       const primary = scriptedFetch([{ status: 401 }, { status: 422 }]);
       const { client, backup } = clientFor(create(primary.fetch), { maxAttempts: 2 });
@@ -117,5 +127,19 @@ describe("default fallback policy with real HTTP adapters", () => {
       adapter: "backup",
     });
     expect(backup.raw.sent).toHaveLength(2);
+  });
+
+  test("native personalized retry ending in 422 after an ambiguous 503 still stops", async () => {
+    const primary = scriptedFetch([{ status: 503 }, { status: 422 }]);
+    const { client, backup } = clientFor(PRIMARIES.sendgrid(primary.fetch), { maxAttempts: 2 });
+
+    const error = await rejectionOf(
+      client.sendPersonalized(personalizedInput),
+      EmailAllRecipientsFailedError,
+    );
+
+    expect(primary.calls()).toBe(2);
+    expect(error.failures[0]).toMatchObject({ status: 422, delivery: "unknown" });
+    expect(backup.raw.sent).toHaveLength(0);
   });
 });

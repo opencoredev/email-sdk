@@ -224,7 +224,8 @@ describe("createEmailClient v1", () => {
           })),
         ],
         retry: { maxAttempts: 2, delay: () => 0, shouldRetry: () => true },
-        fallback: { adapters: ["smtp"] },
+        // The first attempt's unknown outcome makes the route failure unknown, so this opts in.
+        fallback: { adapters: ["smtp"], onUnknownDelivery: "continue" },
       });
 
       await client.send({ ...message, to: ["a@example.com", "b@example.com"] });
