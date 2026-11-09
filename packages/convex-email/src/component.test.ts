@@ -47,6 +47,7 @@ describe("convex-email component", () => {
   afterEach(() => {
     globalThis.fetch = nativeFetch;
     delete process.env.LETTR_API_KEY;
+    delete process.env.RESEND_API_KEY;
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
@@ -460,6 +461,72 @@ describe("convex-email component", () => {
       "provider_attempt",
       "failed",
     ]);
+  });
+
+  test("falls back after a definite provider rejection", async () => {
+    const t = createTest();
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+
+      return Response.json({ message: "Invalid API key" }, { status: 401 });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }, { kind: "memory" }],
+      adapter: "resend",
+      fallbackAdapters: ["memory"],
+      idempotencyKey: "fallback-after-401",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(requests).toBe(1);
+    expect(status).toMatchObject({ status: "sent", attemptedAdapters: ["resend", "memory"] });
+    expect(status?.unknownDeliveryAdapter).toBeUndefined();
+  });
+
+  test("never falls back after an earlier queued attempt left delivery unknown", async () => {
+    const t = createTest();
+    const statuses = [503, 401];
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      const status = statuses[requests] ?? 401;
+      requests += 1;
+
+      return Response.json({ message: "Provider error" }, { status });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }, { kind: "memory" }],
+      adapter: "resend",
+      fallbackAdapters: ["memory"],
+      idempotencyKey: "no-fallback-after-503",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    // The 503 may have been accepted, so the 401 on the queued retry must not reach the backup.
+    expect(requests).toBe(2);
+    expect(status).toMatchObject({
+      status: "failed",
+      attemptCount: 2,
+      attemptedAdapters: ["resend"],
+      unknownDeliveryAdapter: "resend",
+    });
   });
 
   test("setConfig replaces the stored config instead of merging", async () => {

@@ -395,6 +395,13 @@ export const processDueEmails = internalMutation({
 
     for (const email of staleProcessing) {
       if (email.idempotencyKey) {
+        // The worker stopped mid-send, so the last adapter it reached may have sent the message.
+        const lastAdapter = email.attemptedAdapters.at(-1);
+
+        if (lastAdapter && !email.unknownDeliveryAdapter) {
+          await ctx.db.patch(email._id, { unknownDeliveryAdapter: lastAdapter });
+        }
+
         await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
           immediate: true,
         });
@@ -617,6 +624,13 @@ async function markEmailFailedOrRetry(
 
   const now = Date.now();
   const providerFailure = options.providerFailure;
+
+  // Each queued attempt builds a fresh client that starts again at the primary adapter, so the
+  // SDK can't see that an earlier attempt may have sent the message. Remember the first adapter
+  // whose outcome was unknown; the worker then sends only to it and never falls back.
+  if (providerFailure?.delivery === "unknown" && !email.unknownDeliveryAdapter) {
+    await ctx.db.patch(email._id, { unknownDeliveryAdapter: providerFailure.adapter });
+  }
 
   if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate

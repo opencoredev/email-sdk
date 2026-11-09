@@ -119,6 +119,13 @@ export type ConvexEmailDoc = {
   adapters: ConvexEmailAdapterConfig[];
   providerMessageId?: string;
   providerFailure?: ConvexEmailProviderFailure;
+  /**
+   * Set when a failed attempt left the outcome unknown (a timeout, 5xx or network error), so that
+   * provider may have sent the message. Every later attempt, including a manual retry, goes only to
+   * this adapter with the same idempotency key and never falls back, so recipients don't get a
+   * second copy from another provider.
+   */
+  unknownDeliveryAdapter?: string;
   idempotencyKey?: string;
   sendMetadata?: Record<string, string | number | boolean | null>;
   attemptCount: number;

@@ -40,10 +40,16 @@ export const processEmail = internalAction({
         throw new Error("Convex Email requires at least one adapter configuration.");
       }
 
+      // After an attempt whose outcome is unknown, retry only that adapter: another provider
+      // could deliver a second copy, and the idempotency key only deduplicates within one provider.
+      const pinnedAdapter = email.unknownDeliveryAdapter;
+      const adapter = pinnedAdapter ?? email.adapter;
+      const fallbackAdapters = pinnedAdapter ? [] : email.fallbackAdapters;
+
       const client = buildEmailClient({
         adapters: email.adapters,
-        defaultAdapter: email.adapter,
-        fallbackAdapters: email.fallbackAdapters,
+        defaultAdapter: adapter,
+        fallbackAdapters,
         async recordAttempt(event) {
           await ctx.runMutation(lib.recordProviderAttempt, {
             emailId: args.emailId,
@@ -57,8 +63,8 @@ export const processEmail = internalAction({
       const message = await hydrateAttachments(email.message);
 
       const response = await client.send(message, {
-        adapter: email.adapter,
-        fallback: { adapters: email.fallbackAdapters, onUnknownDelivery: "stop" },
+        adapter,
+        fallback: { adapters: fallbackAdapters, onUnknownDelivery: "stop" },
         idempotencyKey: email.idempotencyKey,
         metadata: email.sendMetadata,
       });

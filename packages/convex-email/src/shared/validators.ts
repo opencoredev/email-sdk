@@ -224,6 +224,7 @@ const emailRecordFields = {
   adapters: v.array(vAdapterConfig),
   providerMessageId: v.optional(v.string()),
   providerFailure: v.optional(vEmailProviderFailure),
+  unknownDeliveryAdapter: v.optional(v.string()),
   idempotencyKey: v.optional(v.string()),
   sendMetadata: v.optional(vEmailMetadata),
   attemptCount: v.number(),
