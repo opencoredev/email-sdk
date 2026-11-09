@@ -258,7 +258,7 @@ export const email = createEmailClient({
 });
 ```
 
-Read the last line carefully. The Resend adapter reports every failed request, HTTP error or network error, as delivery `"unknown"`, because a timeout can't prove Resend didn't accept the message. With the default, `onUnknownDelivery: "stop"`, the client throws after the Resend attempts and never calls Postmark. `"continue"`, as above, sends through Postmark anyway, so the recipient can get two copies when Resend did accept the first one. The idempotency key doesn't help across providers: Postmark has no idempotency key, and it never sees Resend's. For a contact form, a rare duplicate is better than a lost message. For receipts or password resets, decide per message. [Retries and provider fallback](/docs/concepts/fallbacks-and-retries) covers both settings.
+Read the last line carefully. A definite Resend rejection, such as a 401 or 422, is delivery `"not_sent"`, and Postmark takes over even with the default policy. A timeout, a network error, a 408, 409 or 429, or a 5xx is delivery `"unknown"`, because Resend may have accepted the message. For those, the default, `onUnknownDelivery: "stop"`, throws after the Resend attempts and never calls Postmark. `"continue"`, as above, sends through Postmark anyway, so the recipient can get two copies when Resend did accept the first one. The idempotency key doesn't help across providers: Postmark has no idempotency key, and it never sees Resend's. For a contact form, a rare duplicate is better than a lost message. For receipts or password resets, decide per message. [Retries and provider fallback](/docs/concepts/fallbacks-and-retries) covers both settings.
 
 ## Test it without sending email
 

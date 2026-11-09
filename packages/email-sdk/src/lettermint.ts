@@ -11,6 +11,7 @@ import {
   formatAddresses,
   headersToObject,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   type MessageRules,
@@ -64,6 +65,7 @@ export function lettermint(
           adapter: "lettermint",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

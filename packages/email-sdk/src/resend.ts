@@ -9,6 +9,7 @@ import {
   formatAddresses,
   headersToObject,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   assertSupportedMessageFields,
@@ -58,6 +59,7 @@ export function resend(
           adapter: "resend",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

@@ -4,6 +4,7 @@ import type { JsonValue } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
+  httpErrorDelivery,
   httpErrorMessage,
   isRetryableStatus,
   normalizeAdapterResult,
@@ -69,7 +70,7 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
           provider: options.name,
           status: response.status,
           retryable: isRetryableStatus(response.status),
-          delivery: "unknown",
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

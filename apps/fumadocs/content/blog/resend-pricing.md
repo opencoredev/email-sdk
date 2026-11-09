@@ -148,7 +148,7 @@ Run it with `NODE_ENV=test bun test`. No request reaches Resend, so the run cost
 
 ## A second provider for quota errors
 
-A quota `429` stops the email unless something else can send it. With Email SDK you can list a second provider as a fallback. Be exact about how it behaves: the Resend adapter reports every failed request, including a `429`, as delivery `"unknown"`, because it can't prove Resend never accepted the message. The default `onUnknownDelivery: "stop"` then throws instead of trying the fallback. To let a quota error move to the next provider, opt in and accept that an uncertain failure could produce a duplicate:
+A quota `429` stops the email unless something else can send it. With Email SDK you can list a second provider as a fallback. Be exact about how it behaves: a definite rejection such as a `401` or `422` falls back by default, but the Resend adapter reports a `429` as delivery `"unknown"`, the same as a timeout or a 5xx. The default `onUnknownDelivery: "stop"` then throws instead of trying the fallback. To let a quota error move to the next provider, opt in and accept that an uncertain failure could produce a duplicate:
 
 `email-with-fallback.ts`:
 

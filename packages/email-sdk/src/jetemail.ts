@@ -11,6 +11,7 @@ import {
   formatAddresses,
   headersToObject,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   arrayify,
@@ -74,6 +75,7 @@ export function jetemail(
           adapter: "jetemail",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 

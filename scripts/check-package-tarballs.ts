@@ -346,5 +346,42 @@ for (const adapter of adapters) {
     throw new Error("CommonJS adapter " + adapter.name + " is missing the built-in mark.");
   }
 }
+
+// Core reads an adapter's delivery classification through instanceof, so an
+// error thrown by a subpath adapter must be the root package's error class.
+// A definite 401 from Resend then falls back to the next adapter.
+const sdk = require(manifest.name);
+const { memoryAdapter } = require(manifest.name + "/testing");
+const rejecting = async () =>
+  new Response(JSON.stringify({ message: "invalid key" }), {
+    status: 401,
+    headers: { "content-type": "application/json" },
+  });
+
+(async () => {
+  const resendAdapter = require(manifest.name + "/resend").resend({ apiKey: "re_test", fetch: rejecting });
+  const thrown = await resendAdapter
+    .send({ from: "a@example.com", to: "b@example.com", subject: "s", text: "t" }, { adapter: "resend", operation: "send", attempt: 1 })
+    .catch((error) => error);
+
+  if (!(thrown instanceof sdk.EmailAdapterError) || thrown.delivery !== "not_sent") {
+    throw new Error("CommonJS subpath adapter error is not the root EmailAdapterError with delivery not_sent.");
+  }
+
+  const backup = memoryAdapter("backup");
+  const client = sdk.createEmailClient({
+    adapters: [resendAdapter, backup],
+    fallback: { adapters: ["backup"] },
+    telemetry: false,
+  });
+  const result = await client.send({ from: "a@example.com", to: "b@example.com", subject: "s", text: "t" });
+
+  if (result.adapter !== "backup" || backup.raw.sent.length !== 1) {
+    throw new Error("CommonJS client did not fall back after a definite 401 rejection.");
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 `;
 }

@@ -4,11 +4,11 @@ sidebarTitle: Retries & fallback
 description: "Retry one email provider, then fall back to another, such as Resend to Postmark, without an accidental duplicate: what triggers fallback and how to opt in."
 ---
 
-To add email fallback between two providers in Node.js, register both adapters on one Email SDK client, name the primary in `defaultAdapter`, and list the backup in `fallback.adapters`. Retries always stay on the current provider; fallback starts only after that provider's last attempt fails. By default fallback continues only when the SDK can prove the first provider did not accept the message, because a timeout or a 5xx after the request went out could mean the email was already sent.
+To add email fallback between two providers in Node.js, register both adapters on one Email SDK client, name the primary in `defaultAdapter`, and list the backup in `fallback.adapters`. Retries always stay on the current provider; fallback starts only after that provider's last attempt fails. By default fallback continues only when the SDK can prove the first provider did not accept the message: a definite rejection such as a 401 or 422 moves on to the backup, while a timeout or a 5xx stops, because it could mean the email was already sent.
 
 ## Fall back from Resend to Postmark
 
-The Resend and Postmark adapters can't prove that a failed HTTP request didn't send, so they report every HTTP error and network failure as delivery `unknown`. With the default `onUnknownDelivery: "stop"`, a failed Resend send throws an `EmailRouteError` and Postmark is never called. To make Postmark take over, opt in with `onUnknownDelivery: "continue"`:
+Register both adapters and list Postmark as the fallback:
 
 ```ts title="src/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
@@ -22,10 +22,7 @@ export const email = createEmailClient({
   ],
   defaultAdapter: "resend",
   retry: { maxAttempts: 3 },
-  fallback: {
-    adapters: ["postmark"],
-    onUnknownDelivery: "continue",
-  },
+  fallback: { adapters: ["postmark"] },
 });
 ```
 
@@ -45,7 +42,18 @@ const result = await email.send(
 console.log(result.adapter, result.id); // "resend" or "postmark"
 ```
 
-With this client a send makes up to 3 attempts on Resend, then up to 3 on Postmark. `continue` accepts a duplicate risk: if Resend accepted the message but the response was lost, Postmark sends a second copy. The idempotency key protects only the Resend retries, because Resend honors `Idempotency-Key` and Postmark has no idempotency support. Use `continue` for messages where a rare duplicate is better than no email, such as password resets, and keep the default for receipts or anything a customer would notice twice.
+With this client a send makes up to 3 attempts on Resend, then up to 3 on Postmark. Postmark takes over when Resend definitely rejected the request, such as a 401 for a revoked key, a 403 for an unverified sender domain, or a 422 for an invalid field. It does not take over after a timeout, a network error, a 408, a 409, a 429 or a 5xx, because Resend may have accepted the message. Those failures throw an `EmailRouteError`.
+
+To fall back after those too, set `onUnknownDelivery: "continue"`:
+
+```ts title="src/email.ts"
+fallback: {
+  adapters: ["postmark"],
+  onUnknownDelivery: "continue",
+},
+```
+
+`continue` accepts a duplicate risk: if Resend accepted the message but the response was lost, Postmark sends a second copy. The idempotency key protects only the Resend retries, because Resend honors `Idempotency-Key` and Postmark has no idempotency support. Use `continue` for messages where a rare duplicate is better than no email, such as password resets, and keep the default for receipts or anything a customer would notice twice.
 
 Before the first request, the client checks the message against every adapter in the route. A message that the backup can't carry fails with `EmailValidationError` and nothing is sent: Postmark takes one tag and has no scheduled sending, and Resend rejects repeated header names. Check a pair on its compare page, such as [Resend vs Postmark](/compare/resend-vs-postmark).
 
@@ -56,13 +64,15 @@ Before the first request, the client checks the message against every adapter in
 | Failure | Retried on the same adapter | Falls back by default | Falls back with `continue` |
 | --- | --- | --- | --- |
 | `EmailValidationError` (bad message, unsupported field) | No | No, nothing is sent | No |
-| 408, 409, 425, 429 or 5xx from the provider | Yes, while attempts remain | Only if the adapter reports `not_sent` | Yes |
-| Other 4xx, such as 401 or 422 | No (with built-in client credentials, the Microsoft Graph adapter refreshes its token and resends once after a 401; with `getAccessToken` it doesn't) | Only if the adapter reports `not_sent` | Yes |
+| 408, 409, 429 or 5xx from the provider | Yes, while attempts remain | No (`unknown`), except where an adapter documents otherwise | Yes |
+| Other 4xx, such as 400, 401, 403 or 422 | No, except 425 Too Early (with built-in client credentials, the Microsoft Graph adapter also refreshes its token and resends once after a 401; with `getAccessToken` it doesn't) | Yes (`not_sent`) | Yes |
 | Network error after the request went out, such as a reset or timeout | Yes, while attempts remain | No (`unknown`) | Yes |
 | Failure before anything was sent, such as an SMTP DNS or TLS error or a Graph token error | Depends on the error | Yes (`not_sent`) | Yes |
 | `AbortSignal` aborted | No | No | No |
 
 The default delay between attempts starts at 100 ms and doubles each time, capped at 2 seconds. Override `retry.delay` or `retry.shouldRetry` when your application needs its own policy.
+
+Retries can make a failure `unknown` even when the last attempt was a definite rejection. If an earlier attempt timed out or got a 5xx, the provider may have sent that one, so a 422 on the final attempt can't prove nothing went out. The route failure reports `unknown` and fallback stops under the default policy.
 
 ## Delivery certainty
 
@@ -73,7 +83,7 @@ The default delay between attempts starts at 100 ms and doubles each time, cappe
 | `not_sent` | The adapter can prove the provider did not accept the message. | Continue to the next configured adapter. |
 | `unknown` | Dispatch may have started, so delivery cannot be ruled out. | Stop to avoid an automatic duplicate. |
 
-Adapters differ in what they can prove. The SMTP adapter reports `not_sent` when the server answers with an SMTP error code, and the Microsoft Graph adapter reports `not_sent` for 4xx responses, so a fallback behind either one works with the default policy. The Resend and Postmark adapters report `unknown` for every failure, as above.
+Every HTTP adapter reports `not_sent` for a 4xx response other than 408, 409 and 429, and `unknown` for those three, for 5xx, and for timeouts and network errors. A few adapters know more about their provider: Helo also treats a 429 as `not_sent`, SendHeron treats every 4xx except 409 and a 503 as `not_sent`, and Lettr and Microsoft Graph treat every 4xx as `not_sent`. The SMTP adapter reports `not_sent` when the server answers with an SMTP error code. A 2xx response the adapter can't read as a success, such as `success: false` in the body, stays `unknown`.
 
 You can also opt in for one send instead of the whole client:
 
@@ -136,7 +146,7 @@ try {
 
 ### Does Email SDK switch providers on a 5xx by default?
 
-No. A 5xx can arrive after the provider accepted the message, so most HTTP adapters report it as delivery `unknown` and the default `onUnknownDelivery: "stop"` ends the route. Set `onUnknownDelivery: "continue"` to fall back anyway, and accept that a duplicate is possible.
+No. A 5xx can arrive after the provider accepted the message, so the HTTP adapters report it as delivery `unknown` and the default `onUnknownDelivery: "stop"` ends the route. The one exception is SendHeron, which records a 503 as a refusal, so its adapter reports `not_sent` and falls back. A definite 4xx rejection such as a 401 or 422 does switch providers by default. Set `onUnknownDelivery: "continue"` to fall back after a 5xx too, and accept that a duplicate is possible.
 
 ### Do retries happen before fallback?
 
@@ -144,7 +154,7 @@ Yes. Each adapter in the route gets its own `maxAttempts`. Fallback starts only 
 
 ### Can I fall back from an HTTP API to SMTP?
 
-Yes. Add the `smtp` adapter and list it in `fallback.adapters`. The same rule applies: a Resend failure is `unknown`, so SMTP takes over only with `continue`. See [Send email from Node.js](/blog/send-email-nodejs-typescript) for a full example.
+Yes. Add the `smtp` adapter and list it in `fallback.adapters`. The same rule applies: SMTP takes over after a definite Resend rejection such as a 401, and after a timeout or 5xx only with `continue`. See [Send email from Node.js](/blog/send-email-nodejs-typescript) for a full example.
 
 ### How do I test fallback without sending email?
 

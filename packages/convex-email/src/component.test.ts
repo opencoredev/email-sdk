@@ -3,7 +3,8 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient } from "./component/providers.js";
+import { buildEmailClient, gateDispatch } from "./component/providers.js";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import { modules } from "./testing.js";
 
 function createTest() {
@@ -47,6 +48,8 @@ describe("convex-email component", () => {
   afterEach(() => {
     globalThis.fetch = nativeFetch;
     delete process.env.LETTR_API_KEY;
+    delete process.env.RESEND_API_KEY;
+    delete process.env.POSTMARK_SERVER_TOKEN;
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;
     delete process.env.SMTP_SECURE;
@@ -460,6 +463,326 @@ describe("convex-email component", () => {
       "provider_attempt",
       "failed",
     ]);
+  });
+
+  test("falls back after a definite provider rejection", async () => {
+    const t = createTest();
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+
+      return Response.json({ message: "Invalid API key" }, { status: 401 });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }, { kind: "memory" }],
+      adapter: "resend",
+      fallbackAdapters: ["memory"],
+      idempotencyKey: "fallback-after-401",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(requests).toBe(1);
+    expect(status).toMatchObject({ status: "sent", attemptedAdapters: ["resend", "memory"] });
+    expect(status?.unknownDeliveryAdapter).toBeUndefined();
+  });
+
+  test("never falls back after an earlier queued attempt left delivery unknown", async () => {
+    const t = createTest();
+    const statuses = [503, 401];
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      const status = statuses[requests] ?? 401;
+      requests += 1;
+
+      return Response.json({ message: "Provider error" }, { status });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }, { kind: "memory" }],
+      adapter: "resend",
+      fallbackAdapters: ["memory"],
+      idempotencyKey: "no-fallback-after-503",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    // The 503 may have been accepted, so the 401 on the queued retry must not reach the backup.
+    expect(requests).toBe(2);
+    expect(status).toMatchObject({
+      status: "failed",
+      attemptCount: 2,
+      attemptedAdapters: ["resend"],
+      unknownDeliveryAdapter: "resend",
+    });
+  });
+
+  test("does not send when the attempt cannot be recorded", async () => {
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+
+      return Response.json({ id: "email_1" });
+    };
+
+    const client = buildEmailClient({
+      adapters: [{ kind: "resend" }],
+      defaultAdapter: "resend",
+      async recordAttempt() {
+        throw new Error("record failed");
+      },
+    });
+
+    await expect(client.send(message)).rejects.toThrow();
+    expect(requests).toBe(0);
+  });
+
+  test("stale recovery pins the adapter the current lease reached, not the oldest in history", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+
+    Date.now = () => startedAt;
+
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "resend" }, { kind: "memory" }],
+        adapter: "resend",
+        fallbackAdapters: ["memory"],
+        idempotencyKey: "stale-pin",
+        maxAttempts: 3,
+      });
+
+      // Lease 1 tried resend (rejected) and then memory, and failed with a proven not_sent.
+      await t.mutation(api.lib.markProcessing, { emailId });
+      await t.mutation(api.lib.recordProviderAttempt, {
+        emailId,
+        processingLease: 1,
+        adapter: "resend",
+        attempt: 1,
+      });
+      await t.mutation(api.lib.recordProviderAttempt, {
+        emailId,
+        processingLease: 1,
+        adapter: "memory",
+        attempt: 1,
+      });
+      await t.mutation(api.lib.markFailedOrRetry, {
+        emailId,
+        processingLease: 1,
+        error: "rejected",
+        retryable: true,
+      });
+
+      // Lease 2 reached resend and then the worker stopped.
+      await t.mutation(api.lib.markProcessing, { emailId });
+      await t.mutation(api.lib.recordProviderAttempt, {
+        emailId,
+        processingLease: 2,
+        adapter: "resend",
+        attempt: 1,
+      });
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+      await t.mutation(api.lib.processDueEmails, { limit: 25 });
+
+      const status = await t.query(api.lib.status, { emailId });
+
+      expect(status?.attemptedAdapters).toEqual(["resend", "memory"]);
+      expect(status?.unknownDeliveryAdapter).toBe("resend");
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("a manual retry after a stalled send without an idempotency key never falls back", async () => {
+    const t = createTest();
+    const originalNow = Date.now;
+    const startedAt = 1_000;
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+
+      return Response.json({ message: "Invalid API key" }, { status: 401 });
+    };
+
+    Date.now = () => startedAt;
+
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        ...message,
+        adapters: [{ kind: "resend" }, { kind: "memory" }],
+        adapter: "resend",
+        fallbackAdapters: ["memory"],
+        maxAttempts: 1,
+        retryBaseMs: 0,
+      });
+
+      await t.mutation(api.lib.markProcessing, { emailId });
+      await t.mutation(api.lib.recordProviderAttempt, {
+        emailId,
+        processingLease: 1,
+        adapter: "resend",
+        attempt: 1,
+      });
+      Date.now = () => startedAt + 10 * 60 * 1_000 + 1;
+      await t.mutation(api.lib.processDueEmails, { limit: 25 });
+
+      expect(await t.query(api.lib.status, { emailId })).toMatchObject({
+        status: "failed",
+        unknownDeliveryAdapter: "resend",
+      });
+
+      Date.now = originalNow;
+      expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+      await flushScheduled(t);
+
+      const status = await t.query(api.lib.status, { emailId });
+
+      // The enqueue's own scheduled run also wakes here, so Resend may see two requests; the
+      // memory fallback would have marked the email sent.
+      expect(requests).toBeGreaterThan(0);
+      expect(status).toMatchObject({ status: "failed", attemptedAdapters: ["resend"] });
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
+  test("a manual retry keeps an unknown outcome recorded before the pin field existed", async () => {
+    const t = createTest();
+    let requests = 0;
+    process.env.RESEND_API_KEY = "test-key";
+    globalThis.fetch = async () => {
+      requests += 1;
+
+      return Response.json({ message: "Invalid API key" }, { status: 401 });
+    };
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [{ kind: "resend" }, { kind: "memory" }],
+      adapter: "resend",
+      fallbackAdapters: ["memory"],
+      maxAttempts: 1,
+      retryBaseMs: 0,
+    });
+
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("emails", emailId);
+
+      if (!id) throw new Error("Expected a component email id.");
+
+      await ctx.db.patch(id, {
+        status: "failed",
+        providerFailure: { adapter: "resend", retryable: true, delivery: "unknown" },
+      });
+    });
+
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(requests).toBe(1);
+    expect(status).toMatchObject({ status: "failed", unknownDeliveryAdapter: "resend" });
+    expect(status?.attemptedAdapters).not.toContain("memory");
+  });
+
+  test("pins the registered adapter name even when another adapter is aliased to the factory name", async () => {
+    const t = createTest();
+    const requests = { resend: 0, postmark: 0 };
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.POSTMARK_SERVER_TOKEN = "test-token";
+    globalThis.fetch = async (input) => {
+      const url = String(input instanceof Request ? input.url : input);
+
+      if (url.includes("postmarkapp.com")) {
+        requests.postmark += 1;
+
+        return Response.json({ MessageID: "pm-1", ErrorCode: 0, Message: "OK" });
+      }
+
+      requests.resend += 1;
+
+      return Response.json({ message: "Unavailable" }, { status: 503 });
+    };
+
+    // Resend is registered as "primary"; Postmark is registered under Resend's factory name.
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [
+        { kind: "resend", name: "primary" },
+        { kind: "postmark", name: "resend" },
+      ],
+      adapter: "primary",
+      fallbackAdapters: ["resend"],
+      idempotencyKey: "alias-pin",
+      maxAttempts: 2,
+      retryBaseMs: 0,
+    });
+
+    await flushScheduled(t);
+    await flushScheduled(t);
+
+    const status = await t.query(api.lib.status, { emailId });
+
+    expect(requests.resend).toBe(2);
+    expect(requests.postmark).toBe(0);
+    expect(status).toMatchObject({ status: "failed", unknownDeliveryAdapter: "primary" });
+  });
+
+  test("refuses a manual retry when an older unknown outcome names an ambiguous adapter", async () => {
+    const t = createTest();
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      ...message,
+      adapters: [
+        { kind: "resend", name: "primary" },
+        { kind: "postmark", name: "resend" },
+      ],
+      adapter: "primary",
+      fallbackAdapters: ["resend"],
+      maxAttempts: 1,
+    });
+
+    await t.run(async (ctx) => {
+      const id = ctx.db.normalizeId("emails", emailId);
+
+      if (!id) throw new Error("Expected a component email id.");
+
+      await ctx.db.patch(id, {
+        status: "failed",
+        providerFailure: { adapter: "resend", retryable: true, delivery: "unknown" },
+      });
+    });
+
+    expect(await t.mutation(api.lib.retry, { emailId })).toBe(false);
+    expect(await t.query(api.lib.status, { emailId })).toMatchObject({ status: "failed" });
+  });
+
+  test("the dispatch gate keeps a renamed memory adapter marked as a test adapter", () => {
+    const marker = Symbol.for("@opencoredev/email-sdk/test-adapter-send");
+    const backup = { ...memoryAdapter(), name: "backup" };
+    const gated = gateDispatch(backup, async () => {});
+
+    expect(marker in backup.send).toBe(true);
+    expect(marker in gated.send).toBe(true);
   });
 
   test("setConfig replaces the stored config instead of merging", async () => {

@@ -12,6 +12,7 @@ import {
   formatAddresses,
   headersToArray,
   hasRecipientVariables,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   httpErrorMessage,
@@ -102,6 +103,7 @@ export function mailgun(
         adapter: "mailgun",
         status: response.status,
         retryable: isRetryableStatus(response.status),
+        delivery: httpErrorDelivery(response.status),
       });
     }
 

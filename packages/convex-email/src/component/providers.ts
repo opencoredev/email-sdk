@@ -62,11 +62,65 @@ export type BuildEmailClientOptions = {
   defaultAdapter?: string;
   fallbackAdapters?: string[];
   log?: (event: EmailObservabilityEvent) => void;
-  recordAttempt?: (event: { adapter: string; attempt: number }) => void | Promise<void>;
+  /**
+   * Runs before every provider request and must resolve for the request to go out. Hooks can't
+   * enforce that, because the SDK isolates hook errors, so each adapter's send is wrapped instead.
+   */
+  recordAttempt?: (event: { adapter: string; attempt: number }) => Promise<void>;
 };
 
+/** Copies symbol markers (such as the SDK's test-adapter marker) from one send function to another. */
+function keepSendMarkers<T extends EmailAdapter["send"]>(from: EmailAdapter["send"], to: T): T {
+  for (const key of Object.getOwnPropertySymbols(from)) {
+    const descriptor = Object.getOwnPropertyDescriptor(from, key);
+
+    if (descriptor) Object.defineProperty(to, key, descriptor);
+  }
+
+  return to;
+}
+
+export function gateDispatch(
+  adapter: EmailAdapter,
+  recordAttempt: (event: { adapter: string; attempt: number }) => Promise<void>,
+): EmailAdapter {
+  const gated: EmailAdapter = {
+    name: adapter.name,
+    capabilities: adapter.capabilities,
+    raw: adapter.raw,
+    send: keepSendMarkers(adapter.send, async (message, context) => {
+      await recordAttempt({ adapter: adapter.name, attempt: context.attempt });
+
+      return await adapter.send(message, context);
+    }),
+  };
+
+  if (adapter.validate) {
+    const validate = adapter.validate.bind(adapter);
+    gated.validate = (message, context) => validate(message, context);
+  }
+
+  if (adapter.sendPersonalized) {
+    const sendPersonalized = adapter.sendPersonalized.bind(adapter);
+    gated.sendPersonalized = async (input, context) => {
+      await recordAttempt({ adapter: adapter.name, attempt: context.attempt });
+
+      return await sendPersonalized(input, context);
+    };
+  }
+
+  return gated;
+}
+
 export function buildEmailClient(options: BuildEmailClientOptions) {
-  const adapters = options.adapters.map((adapter) => buildAdapter(adapter));
+  const { recordAttempt } = options;
+
+  const adapters = options.adapters.map((config) => {
+    const adapter = buildAdapter(config);
+
+    return recordAttempt ? gateDispatch(adapter, recordAttempt) : adapter;
+  });
+
   const defaultAdapter = options.defaultAdapter ?? adapters[0]?.name;
 
   return createEmailClient({
@@ -74,13 +128,6 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
     defaultAdapter,
     fallback: options.fallbackAdapters
       ? { adapters: options.fallbackAdapters, onUnknownDelivery: "stop" }
-      : undefined,
-    hooks: options.recordAttempt
-      ? {
-          async beforeSend(event) {
-            await options.recordAttempt?.({ adapter: event.adapter, attempt: event.attempt });
-          },
-        }
       : undefined,
     plugins: [
       defaultsPlugin({

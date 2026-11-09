@@ -52,13 +52,16 @@ test("contract test membership in the docs table matches packages/email-sdk/src 
   const onDisk = contractTestFilesOnDisk(["resend", "smtp", "brevo", "nonexistent"]);
   expect(onDisk.get("resend")).toEqual([
     "adapters.field-support.test.ts",
+    "adapters.http-delivery.test.ts",
     "adapters.resend-postmark-sendgrid.test.ts",
     "adapters.scheduling.test.ts",
+    "core.fallback-delivery.test.ts",
     "core.telemetry-volume.test.ts",
   ]);
   expect(onDisk.get("smtp")).toEqual(["smtp.test.ts"]);
   expect(onDisk.get("brevo")).toEqual([
     "adapters.field-support.test.ts",
+    "adapters.http-delivery.test.ts",
     "adapters.json-providers.test.ts",
     "adapters.scheduling.test.ts",
   ]);

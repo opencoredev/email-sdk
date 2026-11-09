@@ -34,31 +34,45 @@ export const processEmail = internalAction({
     }
 
     const processingLease = email.processingLease ?? 0;
+    // The adapter this run last sent a request to, set only after the attempt was recorded.
+    let lastDispatchedAdapter: string | undefined;
 
     try {
       if (email.adapters.length === 0) {
         throw new Error("Convex Email requires at least one adapter configuration.");
       }
 
+      // After an attempt whose outcome is unknown, retry only that adapter: another provider
+      // could deliver a second copy, and the idempotency key only deduplicates within one provider.
+      const pinnedAdapter = email.unknownDeliveryAdapter;
+      const adapter = pinnedAdapter ?? email.adapter;
+      const fallbackAdapters = pinnedAdapter ? [] : email.fallbackAdapters;
+
       const client = buildEmailClient({
         adapters: email.adapters,
-        defaultAdapter: email.adapter,
-        fallbackAdapters: email.fallbackAdapters,
+        defaultAdapter: adapter,
+        fallbackAdapters,
         async recordAttempt(event) {
-          await ctx.runMutation(lib.recordProviderAttempt, {
+          const recorded = await ctx.runMutation(lib.recordProviderAttempt, {
             emailId: args.emailId,
             processingLease,
             adapter: event.adapter,
             attempt: event.attempt,
           });
+
+          if (!recorded) {
+            throw new Error("Convex Email lost the processing lease before sending.");
+          }
+
+          lastDispatchedAdapter = event.adapter;
         },
       });
 
       const message = await hydrateAttachments(email.message);
 
       const response = await client.send(message, {
-        adapter: email.adapter,
-        fallback: { adapters: email.fallbackAdapters, onUnknownDelivery: "stop" },
+        adapter,
+        fallback: { adapters: fallbackAdapters, onUnknownDelivery: "stop" },
         idempotencyKey: email.idempotencyKey,
         metadata: email.sendMetadata,
       });
@@ -71,12 +85,20 @@ export const processEmail = internalAction({
     } catch (error) {
       const providerFailure = providerFailureMetadata(error);
 
+      // Anything short of a proven not_sent may have delivered: an unknown provider failure, or an
+      // error with no provider metadata after a request went out (such as markSent failing after
+      // the provider accepted the message). Pin the registered name recorded at dispatch: a
+      // provider's error can carry its factory name, which may be another adapter's alias.
+      const unknownDeliveryAdapter =
+        providerFailure?.delivery === "not_sent" ? undefined : lastDispatchedAdapter;
+
       await ctx.runMutation(lib.markFailedOrRetry, {
         emailId: args.emailId,
         processingLease,
         error: stringifyError(error),
         retryable: providerFailure?.retryable ?? isRetryableFailure(error),
         providerFailure,
+        unknownDeliveryAdapter,
       });
     }
 

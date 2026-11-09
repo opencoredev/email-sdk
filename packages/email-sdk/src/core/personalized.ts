@@ -17,7 +17,12 @@ import type {
   EmailSendResult,
 } from "../types.js";
 import { emailAddressOf, normalizeAdapterResult } from "../utils.js";
-import { attemptAdapter, defaultDelay, type MeasureAttempt } from "./attempts.js";
+import {
+  attemptAdapter,
+  defaultDelay,
+  withUnknownDelivery,
+  type MeasureAttempt,
+} from "./attempts.js";
 import {
   failureAttempt,
   isAbort,
@@ -44,6 +49,8 @@ export async function attemptNativePersonalized(
 ): Promise<PersonalizedAttempt> {
   const maxAttempts = sendOptions?.retry?.maxAttempts ?? clientRetry?.maxAttempts ?? 1;
   const retry = sendOptions?.retry ?? clientRetry;
+  // See attemptAdapter: after an attempt with an unknown outcome, nothing later proves not_sent.
+  let earlierOutcomeUnknown = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
@@ -86,7 +93,7 @@ export async function attemptNativePersonalized(
         `${adapter.name} rejected every personalized recipient.`,
         {
           adapter: adapter.name,
-          delivery: "not_sent",
+          delivery: earlierOutcomeUnknown ? "unknown" : "not_sent",
         },
       );
 
@@ -110,13 +117,16 @@ export async function attemptNativePersonalized(
         attempt < maxAttempts && (retry?.shouldRetry ?? isRetryableEmailError)(failure, attempt);
 
       if (!canRetry) {
+        const finalFailure = earlierOutcomeUnknown ? withUnknownDelivery(failure) : failure;
         await invokeSendFailureLifecycle(middleware, hooks, {
           ...event,
-          error: failure,
+          error: finalFailure,
         });
 
-        return { adapter: adapter.name, accepted: [], rejected: [], failures: [failure] };
+        return { adapter: adapter.name, accepted: [], rejected: [], failures: [finalFailure] };
       }
+
+      if (failure.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, (retry?.delay ?? defaultDelay)(attempt, failure));
       await invokeHooks(hooks, "onRetry", {

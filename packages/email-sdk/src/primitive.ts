@@ -11,6 +11,7 @@ import {
   formatAddress,
   formatAddresses,
   httpErrorMessage,
+  httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
   arrayify,
@@ -62,6 +63,7 @@ export function primitive(
           adapter: "primitive",
           status: response.status,
           retryable: isRetryableStatus(response.status),
+          delivery: httpErrorDelivery(response.status),
         });
       }
 
