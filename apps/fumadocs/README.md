@@ -66,7 +66,9 @@ static HTML at build time.
 - **`vercel.json`** — deploys the full Build Output (`apps/fumadocs/.vercel/output`,
   not just `.../static`) so the Nitro SSR function ships alongside the prerendered
   static files. Prerendered routes are served from disk; blog routes hit the
-  function.
+  function. Vercel ignores `headers`, `redirects` and `rewrites` in
+  `vercel.json` for Build Output API deploys, so those live in
+  `src/lib/vercel-routes.ts` and reach `config.json` through Nitro.
 
 ### How a Notra post is mapped
 
@@ -112,7 +114,7 @@ what ships and nothing is sanitized in the browser. Author with this in mind:
 ### Post images and CSP
 
 Images embedded in post bodies are served from Notra's CDN. The site's
-Content-Security-Policy (root `vercel.json`) allows `https://*.usenotra.com`
+Content-Security-Policy (`src/lib/vercel-routes.ts`) allows `https://*.usenotra.com`
 under `img-src`. If post images ever move to a different host, add it there or
 they will be blocked in the browser.
 

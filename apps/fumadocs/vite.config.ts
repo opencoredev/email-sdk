@@ -11,6 +11,7 @@ import { defineConfig, loadEnv } from "vite";
 import { devJsonImports } from "./scripts/dev-json-imports";
 
 import { comparePairs } from "./src/lib/compare";
+import { vercelRoutes } from "./src/lib/vercel-routes";
 import { docsVersions, getDocsVersionHref } from "./src/lib/versions";
 
 function collectContentPages(dir: string) {
@@ -77,6 +78,10 @@ export default defineConfig(({ mode }) => {
       routeRules: {
         "/docs/v/**": { headers: { "x-robots-tag": "noindex, follow" } },
       },
+      // Security headers, redirects and the ?mode=agent rewrite. Vercel ignores
+      // these in vercel.json for Build Output API deploys, so they go straight
+      // into the generated config.json, ahead of Nitro's own routes.
+      vercel: { config: { version: 3, routes: vercelRoutes } },
     },
     define: {
       "import.meta.env.VITE_OG_IMAGE_VERSION": JSON.stringify(ogImageVersion),
