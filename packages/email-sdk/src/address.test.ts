@@ -10,6 +10,8 @@ const cases: ReadonlyArray<{
 }> = [
   { name: "bare address", address: "ada@example.test", expected: "ada@example.test" },
   { name: "padded bare address", address: "  ada@example.test  ", expected: "ada@example.test" },
+  // `)`, `]`, `>`, and `\` only matter inside a comment, literal, angle-addr, or quote.
+  { name: "closers outside any group", address: " a)b]c>d\\@example.test ", expected: "a)b]c>d\\@example.test" },
   { name: "object address", address: { email: "ada@example.test", name: "Ada <team>" }, expected: "ada@example.test" },
   { name: "Name <a@b>", address: "Ada <ada@example.test>", expected: "ada@example.test" },
   { name: "angle-addr only", address: "<ada@example.test>", expected: "ada@example.test" },
