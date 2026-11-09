@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "nextjs-server-action-send-email",
+    title: "Send Email from a Next.js Server Action in TypeScript",
+    description:
+      "Send email from a Next.js server action: validate the form with zod, keep the API key server-only, stop duplicate sends, retry safely, and test without sending.",
+    publishedAt: "2026-11-09",
+    updatedAt: "2026-11-09",
+    readTime: "8 min read",
+    image: "/og/blog/nextjs-server-action-send-email.svg",
+    imageAlt: "Next.js server action email card: a validated form, retries with one idempotency key, and tests without sending",
+    tags: ["Next.js", "TypeScript", "Forms"],
+  },
+  {
     slug: "mailpit-mailhog-nodejs",
     title: "MailHog and Mailpit: Test Email Locally in Node.js",
     description:
@@ -79,7 +91,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Send email from Node.js and TypeScript with SMTP and Nodemailer, a provider's HTTP API and fetch, or one client for any provider, and test it without sending.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-11-08",
+    updatedAt: "2026-11-09",
     readTime: "7 min read",
     image: "/og/blog/send-email-nodejs-typescript.svg",
     imageAlt: "Send email from Node.js card: SMTP, HTTP APIs, and one client for any provider",
