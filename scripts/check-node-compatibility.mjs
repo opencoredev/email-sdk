@@ -45,7 +45,9 @@ try {
 
     await writeFile(
       join(scratch, "probe.cjs"),
-      `for (const specifier of ${JSON.stringify(subpaths)}) { const loaded = require(specifier); if (!loaded || typeof loaded !== "object") throw new Error(specifier + " did not load as CommonJS"); }\n`,
+      // Exports are lazy getters in Bun's CommonJS output, so read every one: a broken bundle
+      // can load fine and only throw when a consumer touches createEmailClient.
+      `for (const specifier of ${JSON.stringify(subpaths)}) { const loaded = require(specifier); if (!loaded || typeof loaded !== "object") throw new Error(specifier + " did not load as CommonJS"); for (const key of Object.keys(loaded)) void loaded[key]; }\nif (typeof require(${JSON.stringify(packageJson.name)}).createEmailClient !== "function") throw new Error("CommonJS root export missing");\n`,
     );
     await run("node", ["probe.cjs"], { cwd: scratch });
   }
