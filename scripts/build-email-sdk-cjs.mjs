@@ -43,8 +43,12 @@ const sharedErrors = {
 async function rewriteSharedErrors(outputPath) {
   const code = await readFile(outputPath, "utf8");
 
-  const rewritten = code.replace(/require\((["'])([^"']+)\1\)/g, (call, _quote, specifier) =>
-    sharedErrorSpecifiers.has(specifier) ? 'require("./errors.cjs")' : call,
+  // Bun emits each external as its own `var import_x = require("...");` line. Matching only that
+  // statement keeps string literals that merely contain "require(...)" untouched.
+  const rewritten = code.replace(
+    /^(var import_\w+ = )require\((["'])([^"']+)\2\);$/gm,
+    (statement, binding, _quote, specifier) =>
+      sharedErrorSpecifiers.has(specifier) ? `${binding}require("./errors.cjs");` : statement,
   );
 
   if (rewritten !== code) await writeFile(outputPath, rewritten);

@@ -43,13 +43,25 @@ try {
       return subpath === "." ? packageJson.name : `${packageJson.name}${subpath.slice(1)}`;
     });
 
+    // Exports are lazy getters in Bun's CommonJS output, so read every one: a broken bundle can
+    // load fine and only throw when a consumer touches createEmailClient. Each subpath must also
+    // expose the same export names as its ESM build, so a dropped export fails too.
     await writeFile(
-      join(scratch, "probe.cjs"),
-      // Exports are lazy getters in Bun's CommonJS output, so read every one: a broken bundle
-      // can load fine and only throw when a consumer touches createEmailClient.
-      `for (const specifier of ${JSON.stringify(subpaths)}) { const loaded = require(specifier); if (!loaded || typeof loaded !== "object") throw new Error(specifier + " did not load as CommonJS"); for (const key of Object.keys(loaded)) void loaded[key]; }\nif (typeof require(${JSON.stringify(packageJson.name)}).createEmailClient !== "function") throw new Error("CommonJS root export missing");\n`,
+      join(scratch, "probe.mjs"),
+      `import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+for (const specifier of ${JSON.stringify(subpaths)}) {
+  const loaded = require(specifier);
+  if (!loaded || typeof loaded !== "object") throw new Error(specifier + " did not load as CommonJS");
+  for (const key of Object.keys(loaded)) void loaded[key];
+  const cjsKeys = Object.keys(loaded).sort().join(",");
+  const esmKeys = Object.keys(await import(specifier)).filter((key) => key !== "default").sort().join(",");
+  if (cjsKeys !== esmKeys) throw new Error(specifier + " CommonJS exports [" + cjsKeys + "] differ from ESM [" + esmKeys + "]");
+}
+if (typeof require(${JSON.stringify(packageJson.name)}).createEmailClient !== "function") throw new Error("CommonJS root export missing");
+`,
     );
-    await run("node", ["probe.cjs"], { cwd: scratch });
+    await run("node", ["probe.mjs"], { cwd: scratch });
   }
 } finally {
   await rm(scratch, { recursive: true, force: true });
