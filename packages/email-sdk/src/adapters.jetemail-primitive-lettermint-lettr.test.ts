@@ -11,6 +11,7 @@ import {
   messageWithoutProviderSpecificFields,
   messageWithoutTagsOrMetadata,
 } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 describe("provider payloads", () => {
   test("JetEmail maps normalized fields and encodes attachments", async () => {
@@ -53,6 +54,14 @@ describe("provider payloads", () => {
     }).send(messageWithoutTagsOrMetadata, context);
 
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
+  test("JetEmail reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth(
+      (options) => jetemail(options),
+      messageWithoutTagsOrMetadata,
+      { id: "jet_123", response: "Message queued as jet_123" },
+    );
   });
 
   test("JetEmail requires a from address with a display name", async () => {
@@ -222,6 +231,19 @@ describe("provider payloads", () => {
 
     expect(capture.calls[0]?.json.route).toBe("transactional");
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+  });
+
+  test("Lettermint and Primitive replace a lowercase static idempotency key instead of joining it", async () => {
+    const lettermintCapture = jsonCapture({ message_id: "lm_123", status: "pending" });
+    const primitiveCapture = jsonCapture({ success: true, data: { id: "prim_123" } });
+
+    await lettermint({ apiToken: "lm_token", headers: { "idempotency-key": "static-key" }, fetch: lettermintCapture.fetch })
+      .send(messageWithoutProviderSpecificFields, context);
+    await primitive({ apiKey: "key", headers: { "idempotency-key": "static-key" }, fetch: primitiveCapture.fetch })
+      .send({ ...messageWithoutProviderSpecificFields, to: "ada@example.com", cc: undefined, bcc: undefined, replyTo: undefined }, context);
+
+    expect(lettermintCapture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
+    expect(primitiveCapture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
   test("Lettr maps normalized fields and encodes attachments", async () => {

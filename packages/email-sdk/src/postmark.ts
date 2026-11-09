@@ -2,8 +2,10 @@ import { EmailAdapterError } from "./errors.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
 import {
+  arrayify,
   builtInAdapterDefinition,
   attachmentToBase64,
+  emailAddressOf,
   formatAddress,
   formatAddresses,
   headersToArray,
@@ -12,8 +14,10 @@ import {
   isRetryableStatus,
   readErrorBody,
   assertMaxItems,
+  mapAttachments,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  type MessageRules,
 } from "./utils.js";
 
 export type PostmarkAdapterOptions = {
@@ -24,6 +28,10 @@ export type PostmarkAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+const postmarkRules: MessageRules = (message) => {
+  assertMaxItems("postmark", "tag", message.tags ?? [], 1);
+};
+
 export function postmark(
   options: PostmarkAdapterOptions,
 ): EmailAdapter<"postmark", { baseUrl: string }> {
@@ -32,7 +40,7 @@ export function postmark(
 
   return {
     name: "postmark",
-    ...builtInAdapterDefinition("postmark"),
+    ...builtInAdapterDefinition("postmark", postmarkRules),
     raw: { baseUrl },
     async send(message, context) {
       const response = await fetcher(`${baseUrl}/email`, {
@@ -58,12 +66,15 @@ export function postmark(
       }
 
       const body = await responseJson(response);
-      const to = jsonString(body, "To");
+
+      // A 200 means Postmark accepted the whole message. Its "To" field is one comma-joined
+      // string and omits Cc/Bcc, so list the submitted recipients instead.
+      const accepted = [message.to, message.cc, message.bcc].flatMap(list => arrayify(list).map(emailAddressOf));
 
       return {
         adapter: "postmark",
         id: jsonString(body, "MessageID"),
-        accepted: to ? [to] : undefined,
+        accepted,
         raw: body,
       };
     },
@@ -87,7 +98,7 @@ async function toPostmarkPayload(message: EmailMessage, messageStream?: string) 
       Name: header.name,
       Value: header.value,
     })),
-    Attachments: await Promise.all((message.attachments ?? []).map(toPostmarkAttachment)),
+    Attachments: await mapAttachments(message.attachments, toPostmarkAttachment),
     Metadata: message.metadata,
     MessageStream: messageStream,
     Tag: tag,

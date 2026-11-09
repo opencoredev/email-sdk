@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createEmailClient } from "./core.js";
 import { EmailValidationError } from "./errors.js";
 import { postmark } from "./postmark.js";
 import { resend } from "./resend.js";
@@ -9,7 +10,9 @@ import {
   jsonCapture,
   message,
   messageWithoutMetadata,
+  messageWithoutProviderSpecificFields,
 } from "../test-support/adapter-fixtures.js";
+import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
 describe("provider payloads", () => {
   test("Resend maps normalized fields and encodes attachments", async () => {
@@ -45,6 +48,14 @@ describe("provider payloads", () => {
     expect(capture.calls[0]?.headers.get("idempotency-key")).toBe("idem_123");
   });
 
+  test("Resend reads apiKey and headers on every send", async () => {
+    await expectPerSendAuth(
+      (options) => resend(options),
+      messageWithoutMetadata,
+      { id: "res_123" },
+    );
+  });
+
   test("Postmark maps metadata, headers, and attachments", async () => {
     const capture = jsonCapture({ MessageID: "postmark_123", To: "ada@example.com" });
 
@@ -55,6 +66,7 @@ describe("provider payloads", () => {
     }).send(message, context);
 
     expect(response.id).toBe("postmark_123");
+    expect(response.accepted).toEqual(["ada@example.com", "cc@example.com", "bcc@example.com"]);
     expect(capture.calls[0]?.json).toMatchObject({
       From: "Acme <hello@example.com>",
       To: "Ada <ada@example.com>",
@@ -157,5 +169,27 @@ describe("provider payloads", () => {
       ),
     ).rejects.toThrow(EmailValidationError);
     expect(capture.calls).toHaveLength(0);
+  });
+});
+
+describe("legacy header objects", () => {
+  test("send through the client to Resend instead of failing the capability check", async () => {
+    const capture = jsonCapture({ id: "res_legacy" });
+
+    const client = createEmailClient({
+      adapters: [resend({ apiKey: "key", fetch: capture.fetch })],
+      telemetry: false,
+    });
+
+    // JavaScript callers on the v0 shape still pass headers as a name-to-value object.
+    const legacyHeaders = { "X-Entity-Ref": "order_42" };
+
+    const result = await client.send({
+      ...messageWithoutProviderSpecificFields,
+      headers: legacyHeaders,
+    });
+
+    expect(result.id).toBe("res_legacy");
+    expect(capture.calls[0]?.json.headers).toEqual({ "X-Entity-Ref": "order_42" });
   });
 });

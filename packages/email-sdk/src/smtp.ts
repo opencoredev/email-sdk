@@ -3,7 +3,7 @@ import type { SendMailOptions, SentMessageInfo } from "nodemailer";
 import type Mail from "nodemailer/lib/mailer/index.js";
 import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 
-import { EmailAbortError, EmailAdapterError } from "./errors.js";
+import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
 import { isStringMember } from "./internal/decode.js";
 import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
@@ -14,7 +14,11 @@ import {
   formatAddress,
   formatAddresses,
   headersToArray,
+  mapAttachments,
   validateBuiltInAdapter,
+  allRecipients,
+  headerList,
+  type MessageRules,
 } from "./utils.js";
 
 export type SmtpAdapterOptions = {
@@ -37,6 +41,42 @@ export type SmtpAdapterOptions = {
   timeoutMs?: number;
 };
 
+const SMTP_HEADER_NAME = /^[!-9;-~]+$/;
+
+const smtpRules: MessageRules = (message) => {
+  for (const address of [message.from, ...allRecipients(message)]) {
+    const envelope = emailAddressOf(address);
+
+    const literalStart = envelope.endsWith("]") ? envelope.lastIndexOf("@[") : -1;
+
+    const hasInvalidCharacter = [...envelope].some((character, index) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+
+      if (character === ":" && literalStart !== -1 && index > literalStart) return false;
+
+      return codePoint <= 0x20 || codePoint >= 0x7f || '<>(),:;"\\'.includes(character);
+    });
+
+    if (!envelope || hasInvalidCharacter) {
+      throw new EmailValidationError(
+        `SMTP envelope address ${JSON.stringify(envelope)} contains invalid characters.`,
+      );
+    }
+  }
+
+  for (const header of headerList(message.headers)) {
+    if (header.name.toLowerCase() === "bcc") {
+      throw new EmailValidationError("SMTP does not allow Bcc in message headers.");
+    }
+
+    if (!SMTP_HEADER_NAME.test(header.name)) {
+      throw new EmailValidationError(
+        `SMTP header name ${JSON.stringify(header.name)} contains invalid characters.`,
+      );
+    }
+  }
+};
+
 export function smtp<const Name extends string = "smtp">(
   options: SmtpAdapterOptions & { name?: Name },
 ): EmailAdapter<Name, { host: string; port: number }> {
@@ -48,11 +88,11 @@ export function smtp<const Name extends string = "smtp">(
     name,
     capabilities: BUILT_IN_ADAPTER_CAPABILITIES.smtp,
     validate(message) {
-      validateBuiltInAdapter("smtp", message);
+      validateBuiltInAdapter("smtp", message, smtpRules);
     },
     raw: { host: options.host, port },
     async send(message, context) {
-      validateBuiltInAdapter("smtp", message);
+      validateBuiltInAdapter("smtp", message, smtpRules);
 
       let mail: SendMailOptions;
 
@@ -151,7 +191,7 @@ async function toNodemailerMessage(
   const to = formatAddresses(message.to);
   const cc = formatAddresses(message.cc);
   const bcc = formatAddresses(message.bcc);
-  const attachments = await Promise.all((message.attachments ?? []).map(toNodemailerAttachment));
+  const attachments = await mapAttachments(message.attachments, toNodemailerAttachment);
 
   return {
     from: formatAddress(message.from),

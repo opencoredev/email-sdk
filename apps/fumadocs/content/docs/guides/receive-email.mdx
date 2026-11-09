@@ -1,0 +1,213 @@
+---
+title: Receive email
+description: Verify and parse inbound email from Resend, Mailgun, SendGrid, SES, Cloudflare, Microsoft Graph, Postmark, and 10 more providers into one typed InboundEmail.
+---
+
+Point your provider's inbound webhook at a route, then hand the request to `handleInbound`. It checks the provider's signature, parses the payload, and returns one `InboundEmail` shape for every provider:
+
+```ts title="app/api/inbound/route.ts"
+import { InboundError, handleInbound } from "@opencoredev/email-sdk/inbound";
+
+export async function POST(request: Request) {
+  try {
+    const result = await handleInbound(request, {
+      provider: "mailgun",
+      secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY!,
+    });
+
+    if (result.type === "handshake") return result.response;
+
+    for (const email of result.emails) {
+      console.log(email.from?.address, email.subject, email.attachments.length);
+    }
+
+    return new Response("ok");
+  } catch (error) {
+    if (error instanceof InboundError) {
+      const status = {
+        signature_missing: 401,
+        signature_invalid: 401,
+        timestamp_expired: 401,
+        secret_missing: 500,
+        payload_invalid: 400,
+        unsupported: 200,
+        decryption_required: 500,
+        fetch_failed: 502,
+      }[error.reason];
+
+      return new Response(error.reason, { status });
+    }
+
+    throw error;
+  }
+}
+```
+
+`handleInbound` takes a web-standard `Request`, so the same code works in Next.js, Hono, Bun, Cloudflare Workers, and Convex HTTP actions. Import from `@opencoredev/email-sdk/inbound`. Nothing here loads unless you import it, so sending-only apps pay nothing.
+
+Return a 2xx quickly. Providers retry on errors and timeouts, so store the email (deduplicate on `email.id` or `email.messageId`) and process it in the background.
+
+## What you get back
+
+Every provider produces the same fields. Fields a provider does not send stay empty.
+
+```ts
+email.provider;      // "mailgun"
+email.from;          // { address: "ada@example.com", name: "Ada" }
+email.to;            // [{ address: "support@acme.com" }]
+email.subject;       // "Re: invoice #42"
+email.text;          // plain-text body
+email.html;          // HTML body
+email.headers.getAll("received"); // repeated headers stay in order
+email.inReplyTo;     // "msg-41@acme.com", for threading
+email.security;      // { spf: "pass", dkim: "pass", dmarc: "pass", spamScore: 0.3 }
+email.envelope;      // { from: "bounce@example.com", to: ["support@acme.com"] }
+
+for (const attachment of email.attachments) {
+  const bytes = await attachment.read(); // Uint8Array
+}
+```
+
+`attachment.read()` returns inline bytes directly and downloads them when the provider only sends a link (Resend, Brevo, Lettermint signed URLs). `email.raw` keeps the original payload. See the [inbound reference](/docs/reference/inbound) for every field.
+
+## Provider setup
+
+Each config takes the secret the provider gives you. Signed providers reject requests with a missing or wrong signature, and timestamped schemes also reject requests older than 5 minutes (`toleranceSeconds`).
+
+### Resend
+
+The `email.received` webhook carries metadata only. Pass `api` to fetch the body, headers, and attachments in the same call.
+
+```ts
+await handleInbound(request, {
+  provider: "resend",
+  secret: process.env.RESEND_WEBHOOK_SECRET!, // whsec_…
+  api: { apiKey: process.env.RESEND_API_KEY! },
+});
+```
+
+### Mailgun
+
+Create a route whose action is `forward("https://your.app/api/inbound")`. To receive the raw message instead of parsed fields, end the URL in `mime`, for example `/api/inbound/mime`. Both forms are parsed the same way.
+
+```ts
+await handleInbound(request, { provider: "mailgun", secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY! });
+```
+
+Mailgun signs only the timestamp and token, not the message. Store each `token` and reject repeats if replay matters to you.
+
+### SendGrid Inbound Parse
+
+Turn on signature verification in the Inbound Parse security policy and pass the public key it returns. Both the default and "Send Raw" modes work.
+
+```ts
+await handleInbound(request, { provider: "sendgrid", publicKey: process.env.SENDGRID_INBOUND_PUBLIC_KEY! });
+```
+
+Without a security policy, protect the URL with Basic auth and pass `auth: { basic: { username, password } }` instead.
+
+### Amazon SES
+
+Add a receipt rule with an SNS action (content up to 150 KB), or an S3 action with an SNS topic, and subscribe your HTTPS endpoint to the topic. `handleInbound` verifies the SNS signature, confirms the subscription the first time, and reads S3 objects when you pass credentials.
+
+```ts
+await handleInbound(request, {
+  provider: "ses",
+  topicArn: "arn:aws:sns:us-east-1:123456789012:inbound-mail",
+  s3: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    region: "us-east-1",
+  },
+});
+```
+
+`handleInbound` cannot read mail stored with SES receipt-rule message encryption, because only the S3 encryption client can decrypt it. Those requests fail with `decryption_required`. Return a 5xx for it, as in the route above, so SNS retries instead of dropping the message. To keep encryption on, decrypt the object yourself and pass the MIME to `sesEmailFromNotification`.
+
+`topicArn` is required. A valid SNS signature only proves that some AWS account's topic sent the message, so without it anyone could post mail to your endpoint. Pass `allowAnyTopic: true` only if you check the topic yourself. SNS messages older than one hour are rejected; change that with `toleranceSeconds`.
+
+### Cloudflare Email Workers
+
+Email Workers receive mail inside your Worker, so there is no request to verify:
+
+```ts title="src/worker.ts"
+import { parseCloudflareInbound } from "@opencoredev/email-sdk/inbound";
+
+export default {
+  async email(message, env, ctx) {
+    const email = await parseCloudflareInbound(message);
+    ctx.waitUntil(saveEmail(env, email)); // your storage code
+  },
+};
+```
+
+The raw stream can be read once. Parse before calling `message.forward()`, or keep `email.raw.bytes`. To fill `email.security` from the `Authentication-Results` header your zone adds, pass its authserv-id: `parseCloudflareInbound(message, { trustedAuthServIds: ["mx.example.com"] })`.
+
+### Microsoft Graph
+
+Create a subscription on `/users/{id}/mailFolders/inbox/messages` with `changeType: "created"` and a random `clientState`. `handleInbound` answers the validation request, checks `clientState`, and fetches each new message as MIME.
+
+```ts
+await handleInbound(request, {
+  provider: "graph",
+  clientState: process.env.GRAPH_CLIENT_STATE!,
+  api: { getAccessToken: () => getGraphToken() }, // Mail.Read
+});
+```
+
+Graph expects a reply within 3 seconds. For busy mailboxes, call `parseGraphNotifications` in the route and `fetchGraphInboundEmail` from a queue.
+
+### Postmark and Brevo
+
+Neither signs inbound requests. Put credentials in the webhook URL (`https://user:pass@your.app/api/inbound`) or configure a token on the Brevo webhook, then choose how `handleInbound` checks them:
+
+```ts
+await handleInbound(request, {
+  provider: "postmark",
+  auth: { basic: { username: "inbound", password: process.env.INBOUND_PASSWORD! } },
+});
+
+await handleInbound(request, {
+  provider: "brevo",
+  auth: { bearer: process.env.BREVO_WEBHOOK_TOKEN! },
+  apiKey: process.env.BREVO_API_KEY!, // lets attachment.read() download files
+});
+```
+
+`auth: { none: true }` turns the check off. Use it only behind another layer, such as an IP allowlist.
+
+### Other providers
+
+| Provider | Config |
+| --- | --- |
+| Mailchimp Transactional | `{ provider: "mailchimp", secret: webhookKey, url: "https://your.app/api/inbound" }`. `url` must match the URL saved in Mandrill exactly. Mandrill checks a new URL with a HEAD request, then an empty test POST; `handleInbound` answers both with a handshake. Export the route for HEAD too (`export { POST as HEAD }` in Next.js) to pass the first check. |
+| SparkPost | `{ provider: "sparkpost", secret: relayAuthToken }` |
+| Lettr | `{ provider: "lettr", secret: forwardingToken }` |
+| MailerSend | `{ provider: "mailersend", secret: routeSigningSecret }`. Saving a route sends a `webhook.test` request signed with MailerSend's public test secret; `handleInbound` answers it with a handshake and never returns it as an email. |
+| MailPace | `{ provider: "mailpace", publicKey: domainVerificationKey }` |
+| Lettermint | `{ provider: "lettermint", secret: "whsec_…" }` |
+| Primitive | `{ provider: "primitive", secret: webhookSecret }` |
+| JetEmail | `{ provider: "jetemail", secret: inboundWebhookSecret }` |
+
+Mailtrap's webhook only announces a new message. Verify it with `verifyMailtrapInbound`, then load the message with `fetchMailtrapInboundEmail(inboxId, messageId, { apiToken })`.
+
+Plunk, Sequenzy, Unosend, Loops, Iterable, Scaleway, ZeptoMail, Sendheron, Helo, and SMTP cannot receive mail through a supported API. The reference page explains why for each.
+
+## Without handleInbound
+
+Each provider also has separate `verify…Inbound` and `parse…Inbound` functions for when you already have the raw body:
+
+```ts
+import { parseSendGridInbound, verifySendGridInbound } from "@opencoredev/email-sdk/inbound";
+
+const headers = new Headers(request.headers); // copy before reading the body
+const body = new Uint8Array(await request.arrayBuffer());
+const payload = { body, headers };
+
+const check = await verifySendGridInbound(payload, { publicKey });
+if (!check.ok) return new Response(check.reason, { status: 401 });
+
+const email = parseSendGridInbound(payload);
+```
+
+Verify the exact bytes the provider sent. Parsing JSON and serializing it again changes them and breaks the signature. Copy the headers before reading the body: Bun can drop a multipart `Content-Type` from headers first read after the body.

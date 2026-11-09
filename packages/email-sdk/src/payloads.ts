@@ -16,12 +16,15 @@ export function simpleAddress(address: string) {
   return { email: address };
 }
 
+const NAMED_ADDRESS = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/;
+
 export function emailParts(address: string | { email: string; name?: string }) {
   if (!isStringMember(address)) {
     return address;
   }
 
-  const match = address.match(/^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/);
+  // Bare addresses are the common case, and NAMED_ADDRESS cannot match without "<".
+  const match = address.includes("<") ? NAMED_ADDRESS.exec(address) : null;
 
   if (!match) {
     return { email: address.trim() };

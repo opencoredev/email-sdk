@@ -14,6 +14,8 @@ import {
   httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
+  arrayify,
+  type MessageRules,
 } from "./utils.js";
 
 export type PrimitiveAdapterOptions = {
@@ -21,6 +23,10 @@ export type PrimitiveAdapterOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
+};
+
+const primitiveRules: MessageRules = (message) => {
+  assertMaxItems("primitive", "recipient", arrayify(message.to), 1);
 };
 
 export function primitive(
@@ -31,21 +37,18 @@ export function primitive(
 
   return {
     name: "primitive",
-    ...builtInAdapterDefinition("primitive"),
+    ...builtInAdapterDefinition("primitive", primitiveRules),
     raw: { baseUrl },
     async send(message, context) {
-      const idempotencyHeaders = context.idempotencyKey
-        ? { "Idempotency-Key": context.idempotencyKey }
-        : undefined;
-
-      const headers = {
+      const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",
         ...options.headers,
-        // Spread after options.headers so a per-send idempotency key stays authoritative
-        // and is never shadowed by a static Idempotency-Key passed at construction time.
-        ...idempotencyHeaders,
-      };
+      });
+
+      // set() replaces a static key in any casing; spreading a second object key would let
+      // fetch join both values into "static, per-send".
+      if (context.idempotencyKey) headers.set("Idempotency-Key", context.idempotencyKey);
 
       const response = await fetcher(`${baseUrl}/send-mail`, {
         method: "POST",

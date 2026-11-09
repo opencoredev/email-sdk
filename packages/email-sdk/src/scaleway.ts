@@ -1,5 +1,6 @@
 import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { jsonArray } from "./internal/decode.js";
 import { apiAddress, apiAddresses, base64Attachments, optionalApiAddresses } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -7,6 +8,9 @@ import {
   assertSupportedMessageFields,
   formatAddresses,
   headersToArray,
+  arrayify,
+  headerList,
+  type MessageRules,
 } from "./utils.js";
 
 export type ScalewayAdapterOptions = {
@@ -17,6 +21,18 @@ export type ScalewayAdapterOptions = {
   fetch?: typeof fetch;
 };
 
+const scalewayRules: MessageRules = (message) => {
+  if (arrayify(message.replyTo).length === 0) return;
+
+  const hasReplyHeader = headerList(message.headers).some(
+    (header) => header.name.toLowerCase() === "reply-to",
+  );
+
+  if (hasReplyHeader) {
+    throw new EmailValidationError("scaleway cannot set replyTo when headers already include Reply-To.");
+  }
+};
+
 export function scaleway(
   options: ScalewayAdapterOptions,
 ): EmailAdapter<"scaleway", { baseUrl: string }> {
@@ -24,6 +40,7 @@ export function scaleway(
 
   return jsonProvider({
     name: "scaleway",
+    rules: scalewayRules,
     baseUrl: options.baseUrl ?? "https://api.scaleway.com",
     endpoint: `/transactional-email/v1alpha1/regions/${region}/emails`,
     headers: {
@@ -54,7 +71,8 @@ export function scaleway(
     parseResponse(body) {
       return {
         adapter: "scaleway",
-        id: firstString(body, ["id", "email_id"]),
+        // CreateEmail returns { emails: [{ id, ... }] }, one entry per recipient.
+        id: firstString(body, ["id", "email_id"]) ?? firstString(jsonArray(body, "emails")[0], ["id", "message_id"]),
         raw: body,
       };
     },

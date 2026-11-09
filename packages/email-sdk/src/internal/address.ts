@@ -74,9 +74,15 @@ function scanMailbox(mailbox: string): ScannedMailbox | undefined {
   return { outside, angle };
 }
 
+/** Characters that move scanMailbox out of plain text: an angle-addr, comment, quote, literal, or list. */
+const SCAN_STATE_CHARACTER = /[<(",;:[]/;
+
 /** The bare address of a mailbox such as `Ada <ada@example.test>`. Strings are trimmed; case is kept. */
 export function mailboxAddress(address: EmailAddress): string {
   if (!isStringMember(address)) return address.email;
+
+  // Without these characters the scan never leaves plain text and returns the whole string.
+  if (!SCAN_STATE_CHARACTER.test(address)) return address.trim();
 
   const scanned = scanMailbox(address);
 

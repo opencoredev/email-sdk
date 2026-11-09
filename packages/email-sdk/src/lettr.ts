@@ -20,6 +20,7 @@ import {
   httpErrorMessage,
   isRetryableStatus,
   readErrorBody,
+  type MessageRules,
 } from "./utils.js";
 
 export type LettrAdapterOptions = {
@@ -57,10 +58,15 @@ const BLOCKED_HEADER_NAMES = new Set([
   "x-msys-api",
 ]);
 
+const lettrRules: MessageRules = (message) => {
+  assertMaxItems("lettr", "replyTo", arrayify(message.replyTo), 1);
+  assertMaxItems("lettr", "tag", message.tags ?? [], 1);
+};
+
 export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetcher = options.fetch ?? fetch;
-  const definition = builtInAdapterDefinition("lettr");
+  const definition = builtInAdapterDefinition("lettr", lettrRules);
 
   return {
     name: "lettr",

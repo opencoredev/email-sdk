@@ -1,4 +1,9 @@
-import { acceptanceCounts, attemptAdapter, type MeasureAttempt } from "./core/attempts.js";
+import {
+  acceptanceCounts,
+  attemptAdapter,
+  type AttemptPath,
+  type MeasureAttempt,
+} from "./core/attempts.js";
 import {
   failureAttempt,
   normalizeAdapterFailure,
@@ -27,6 +32,7 @@ import {
   mergeSendOptions,
   requireAdapter,
   resolveRoute,
+  type EmailRoute,
   validateCapabilities,
   validateFallback,
   validateRetry,
@@ -46,7 +52,12 @@ import {
   EmailRouteError,
   EmailValidationError,
 } from "./errors.js";
-import { getTelemetry, getTelemetrySource, normalizeAdapterName } from "./telemetry.js";
+import {
+  getTelemetry,
+  getTelemetrySource,
+  normalizeAdapterName,
+  type Telemetry,
+} from "./telemetry.js";
 import { isTestAdapter } from "./testing.js";
 import type {
   EmailAdapter,
@@ -54,6 +65,7 @@ import type {
   EmailClientOptions,
   EmailHooks,
   EmailMessage,
+  MaybePromise,
   EmailPersonalizedInput,
   EmailPersonalizedResult,
   EmailPlugin,
@@ -114,12 +126,26 @@ export function createEmailClient<
   validateRetry(options.retry);
   validateFallback(adapters, options.fallback);
 
-  const telemetry = options.telemetry === false ? undefined : getTelemetry();
+  // A telemetry instance that starts disabled never turns on again, so the client drops it and
+  // every send skips building telemetry facts.
+  const sharedTelemetry = options.telemetry === false ? undefined : getTelemetry();
+  const telemetry = sharedTelemetry?.enabled ? sharedTelemetry : undefined;
   const telemetrySource = getTelemetrySource();
   const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
 
-  const measureAttempt: MeasureAttempt = async (adapter, path, recipients, invoke) => {
-    if (!telemetry?.enabled) return await invoke();
+  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke) => {
+    if (!telemetry?.enabled) return invoke();
+
+    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke);
+  };
+
+  const measureAttemptTelemetry = async <T extends EmailSendResult>(
+    telemetry: Telemetry,
+    adapter: EmailAdapter,
+    path: AttemptPath,
+    recipients: number,
+    invoke: () => T | PromiseLike<T>,
+  ): Promise<T> => {
     const startedAt = Date.now();
     const adapterName = normalizeAdapterName(adapter.name);
 
@@ -172,7 +198,7 @@ export function createEmailClient<
 
       const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
       const unknownRecipients = notSent ? 0 : Math.max(0, recipients - accepted - rejected);
-      void telemetry?.capture("email adapter attempted", {
+      void telemetry.capture("email adapter attempted", {
         failure_kind: resolved
           ? undefined
           : classifyAttemptFailure(adapter.name, failure),
@@ -250,28 +276,62 @@ export function createEmailClient<
     source: telemetrySource,
   });
 
-  const validate = async (
+  const markValidatorError = (adapter: EmailAdapter, cause: unknown): never => {
+    if (!isBuiltInAdapter(adapter) && isObjectLike(cause)) callerErrors.add(cause);
+
+    throw cause;
+  };
+
+  /**
+   * Validates the message for every adapter on the route, in order. Built-in validators are
+   * synchronous, so this returns undefined without allocating a promise unless an adapter's
+   * validate() actually returns one; later adapters then wait for it.
+   */
+  const validateRoute = (
     message: EmailMessage,
-    sendOptions?: EmailSendOptions,
-    operation: "send" | "personalized" = "send",
-  ): Promise<EmailValidationResult> => {
+    route: EmailRoute,
+    operation: "send" | "personalized",
+    from = 0,
+  ): Promise<void> | undefined => {
+    if (from === 0) assertMessage(message);
+
+    for (let index = from; index < route.names.length; index += 1) {
+      const name = route.names[index] ?? route.primary;
+      const adapter = requireAdapter(adapters, name);
+      validateCapabilities(adapter, message, operation);
+      let pending: MaybePromise<void>;
+
+      try {
+        pending = adapter.validate?.(message, { adapter: name, operation });
+      } catch (error) {
+        return markValidatorError(adapter, error);
+      }
+
+      if (pending !== undefined) {
+        return Promise.resolve(pending).then(
+          () => validateRoute(message, route, operation, index + 1),
+          (cause: unknown) => markValidatorError(adapter, cause),
+        );
+      }
+    }
+
+    return undefined;
+  };
+
+  const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
     validateRetry(sendOptions?.retry);
     const route = resolveRoute(defaultAdapter, options.fallback, sendOptions);
     validateFallback(adapters, route.fallback);
-    assertMessage(message);
 
-    for (const name of route.names) {
-      const adapter = requireAdapter(adapters, name);
-      validateCapabilities(adapter, message, operation);
+    return route;
+  };
 
-      try {
-        await adapter.validate?.(message, { adapter: name, operation });
-      } catch (error) {
-        if (!isBuiltInAdapter(adapter) && isObjectLike(error)) callerErrors.add(error);
-
-        throw error;
-      }
-    }
+  const validate = async (
+    message: EmailMessage,
+    sendOptions?: EmailSendOptions,
+  ): Promise<EmailValidationResult> => {
+    const route = resolveCheckedRoute(sendOptions);
+    await validateRoute(message, route, "send");
 
     return { adapter: route.primary, warnings: [] };
   };
@@ -281,18 +341,23 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
-    const facts = messageFacts(message);
+    const facts = telemetry && messageFacts(message);
 
     try {
       throwIfAborted(sendOptions?.signal);
 
-      const prepared = await applyBeforeSendMiddleware(middleware, {
+      const preparing = applyBeforeSendMiddleware(middleware, {
         message,
         options: sendOptions,
       });
 
-      const route = resolveRoute(defaultAdapter, options.fallback, prepared.options);
-      await validate(prepared.message, prepared.options);
+      // The lifecycle helpers return a native promise only when there is work to wait for.
+      const prepared = preparing instanceof Promise ? await preparing : preparing;
+      const route = resolveCheckedRoute(prepared.options);
+      const validating = validateRoute(prepared.message, route, "send");
+
+      if (validating) await validating;
+      const retry = callerRetry(prepared.options?.retry ?? options.retry);
       const failures: EmailAdapterError[] = [];
 
       for (const [index, name] of route.names.entries()) {
@@ -303,21 +368,23 @@ export function createEmailClient<
             adapter,
             message: prepared.message,
             options: prepared.options,
-            retry: callerRetry(prepared.options?.retry ?? options.retry),
+            retry,
             hooks,
             middleware,
             measureAttempt,
           });
 
-          captureSendTelemetry({
-            telemetry,
-            source: telemetrySource,
-            startedAt,
-            facts,
-            adapter: result.adapter,
-            success: true,
-            messageCount: 1,
-          });
+          if (facts) {
+            captureSendTelemetry({
+              telemetry,
+              source: telemetrySource,
+              startedAt,
+              facts,
+              adapter: result.adapter,
+              success: true,
+              messageCount: 1,
+            });
+          }
 
           return result;
         } catch (error) {
@@ -355,16 +422,19 @@ export function createEmailClient<
       throw new EmailRouteError(failures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      captureSendFailure({
-        telemetry,
-        source: telemetrySource,
-        startedAt,
-        facts,
-        adapter: sendOptions?.adapter ?? defaultAdapter,
-        messageCount: 1,
-        error: normalized,
-        isSdkOwned,
-      });
+
+      if (facts) {
+        captureSendFailure({
+          telemetry,
+          source: telemetrySource,
+          startedAt,
+          facts,
+          adapter: sendOptions?.adapter ?? defaultAdapter,
+          messageCount: 1,
+          error: normalized,
+          isSdkOwned,
+        });
+      }
 
       throw normalized;
     }
@@ -383,17 +453,24 @@ export function createEmailClient<
     for (const [index, item] of items.entries()) {
       try {
         const result = await send(item.message, mergeSendOptions(sendOptions, item.options));
-        usedAdapters.add(normalizeAdapterName(result.adapter));
+
+        if (telemetry) usedAdapters.add(normalizeAdapterName(result.adapter));
         results.push({ ok: true, index, result });
       } catch (error) {
         const normalized = normalizeOwnedError(error);
-        const adapter = item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
-        usedAdapters.add(normalizeAdapterName(adapter));
+
+        if (telemetry) {
+          const adapter = item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
+          usedAdapters.add(normalizeAdapterName(adapter));
+        }
+
         failed += 1;
         firstErrorCode ??= normalized.code;
         results.push({ ok: false, index, error: normalized });
       }
     }
+
+    if (!telemetry) return results;
 
     const adapter =
       usedAdapters.size === 0
@@ -402,7 +479,7 @@ export function createEmailClient<
           ? [...usedAdapters][0]
           : "mixed";
 
-    void telemetry?.capture("email batch sent", {
+    void telemetry.capture("email batch sent", {
       message_count: items.length,
       measurement_schema_version: 2,
       measurement_scope: "batch_summary",
@@ -431,7 +508,7 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailPersonalizedResult> => {
     const startedAt = Date.now();
-    const facts = personalizedFacts(input);
+    const facts = telemetry && personalizedFacts(input);
     let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
     let deliveryPath = "personalized";
 
@@ -448,6 +525,7 @@ export function createEmailClient<
       const route = resolveRoute(defaultAdapter, options.fallback, prepared.options);
       attemptedAdapter = route.primary;
       validateFallback(adapters, route.fallback);
+      validateRetry(prepared.options?.retry);
 
       const expanded = input.recipients.map((recipient) => ({
         recipient,
@@ -455,7 +533,7 @@ export function createEmailClient<
       }));
 
       for (const { message } of expanded) {
-        await validate(message, prepared.options, "personalized");
+        await validateRoute(message, route, "personalized");
       }
 
       const routeFailures: EmailAdapterError[] = [];
@@ -495,16 +573,18 @@ export function createEmailClient<
             );
 
         if (result.accepted.length > 0) {
-          captureSendTelemetry({
-            telemetry,
-            source: telemetrySource,
-            startedAt,
-            facts,
-            adapter: result.adapter,
-            success: true,
-            messageCount: facts.recipients,
-            deliveryPath,
-          });
+          if (facts) {
+            captureSendTelemetry({
+              telemetry,
+              source: telemetrySource,
+              startedAt,
+              facts,
+              adapter: result.adapter,
+              success: true,
+              messageCount: facts.recipients,
+              deliveryPath,
+            });
+          }
 
           return result;
         }
@@ -523,17 +603,20 @@ export function createEmailClient<
       throw new EmailAllRecipientsFailedError(routeFailures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
-      captureSendFailure({
-        telemetry,
-        source: telemetrySource,
-        startedAt,
-        facts,
-        adapter: attemptedAdapter,
-        messageCount: facts.recipients,
-        error: normalized,
-        isSdkOwned,
-        deliveryPath,
-      });
+
+      if (facts) {
+        captureSendFailure({
+          telemetry,
+          source: telemetrySource,
+          startedAt,
+          facts,
+          adapter: attemptedAdapter,
+          messageCount: facts.recipients,
+          error: normalized,
+          isSdkOwned,
+          deliveryPath,
+        });
+      }
 
       throw normalized;
     }
@@ -555,7 +638,7 @@ export function createEmailClient<
       return requireAdapter(adapters, name);
     },
     flush() {
-      return telemetry?.flush() ?? Promise.resolve();
+      return sharedTelemetry?.flush() ?? Promise.resolve();
     },
     withAdapter(name: string) {
       requireAdapter(adapters, name);
