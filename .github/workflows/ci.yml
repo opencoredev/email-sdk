@@ -103,6 +103,9 @@ jobs:
         id: plan
         env:
           LIVE_ADAPTERS: ${{ github.event_name == 'workflow_dispatch' && 'all' || '' }}
+          # CI has no Microsoft Graph tenant or app credentials (no MS_GRAPH_* secrets),
+          # so never select the graph check here. Run `bun run live:graph` locally instead.
+          LIVE_ADAPTERS_EXCLUDE: graph
         run: |
           adapters="$(bun run live:plan '${{ github.event.before }}' '${{ github.sha }}')"
           echo "adapters=$adapters" >> "$GITHUB_OUTPUT"
