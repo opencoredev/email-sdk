@@ -58,14 +58,14 @@ const revalidatingCache = "public, max-age=3600, stale-while-revalidate=86400";
 
 const markdown = "text/markdown; charset=utf-8";
 
-const permanentRedirects: ReadonlyArray<readonly [from: string, to: string]> = [
-  ["/docs/auth", "/docs/authentication"],
+export const permanentRedirects: ReadonlyArray<readonly [from: string, to: string]> = [
+  ["/docs/auth", "/docs/getting-started/credentials"],
   ["/docs/quickstart", "/docs/getting-started/quickstart"],
   ["/docs/install", "/docs/getting-started/install"],
   ["/docs/installation", "/docs/getting-started/install"],
   ["/docs/errors", "/docs/reference/errors"],
   ["/docs/cli", "/docs/reference/cli"],
-  ["/docs/api", "/docs/reference"],
+  ["/docs/api", "/docs/reference/client"],
   ["/docs/providers", "/docs/adapters"],
   ["/docs/provider", "/docs/adapters"],
   ["/compare/postmark-vs-resend", "/compare/resend-vs-postmark"],
@@ -95,12 +95,11 @@ const agentMode: QueryCondition[] = [{ type: "query", key: "mode", value: "agent
 /** Header routes use `continue` so every matching rule adds its headers, in order. */
 const headerRoutes: VercelRoute[] = [
   { src: "^/.*$", headers: { ...securityHeaders, Link: discoveryLink }, continue: true },
-  { src: "^/$", headers: { Link: homeAlternatesLink }, continue: true },
-  {
-    src: "^/.*\\.md$",
-    headers: { "Content-Type": markdown, Vary: "Accept-Encoding", "Cache-Control": revalidatingCache },
-    continue: true,
-  },
+  // A later route's Link replaces the earlier one, so the homepage repeats the discovery links.
+  { src: "^/$", headers: { Link: `${discoveryLink}, ${homeAlternatesLink}` }, continue: true },
+  { src: "^/.*\\.md$", headers: { "Content-Type": markdown, Vary: "Accept-Encoding" }, continue: true },
+  // Blog Markdown mirrors render on request from Notra and set their own short cache.
+  { src: "^/(?!blog/).*\\.md$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   { src: "^/.*\\.txt$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   {
     src: exactPath("/feeds/docs.jsonl"),
