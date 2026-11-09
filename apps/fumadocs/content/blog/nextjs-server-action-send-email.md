@@ -156,7 +156,7 @@ export async function sendContactMessage(
 
 The action logs the real error on the server and returns a plain message to the browser. Whatever a server action returns is serialized and sent to the client, so don't return the error object: provider errors can include response bodies you didn't mean to show.
 
-An `EmailValidationError` means the message itself was rejected before any request went out, for example a field the provider can't carry. Anything else after the retries, such as an `EmailRouteError`, means the provider kept failing.
+An `EmailValidationError` means the message itself was rejected before any request went out, for example a field the provider can't carry. An `EmailRouteError` means every adapter attempt failed. Its `failures` list holds each attempt's error, and an error the SDK doesn't retry, such as a `401` for a bad key, fails after one attempt.
 
 ## Build the form
 
@@ -338,7 +338,7 @@ You can. The [Resend API guide](/blog/resend-api-nodejs-typescript) shows the ra
 
 ### How do I send a React email template?
 
-Render it to HTML on the server and pass `html` and `text` to `email.send`. Email SDK's `@opencoredev/email-sdk/react` entry point has a `renderEmail` helper that returns both; install `@react-email/render` alongside it.
+Render it to an HTML string in the server action with `render()` from `@react-email/render`, then pass it as `html` along with a plain-text `text` version (`toPlainText()` from the same package makes one). Don't import Email SDK's `@opencoredev/email-sdk/react` entry point from a server action: it includes client-side React components that use context, which a server action's build can't load.
 
 ## Related
 
