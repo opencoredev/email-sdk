@@ -26,11 +26,13 @@ export type VercelRoute = {
   continue?: boolean;
 };
 
+// Google's favicon service (www.google.com/s2/favicons) redirects to
+// t*.gstatic.com, and CSP checks the redirect target too.
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://us-assets.i.posthog.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://cdn.simpleicons.org https://www.google.com https://*.usenotra.com",
+  "img-src 'self' data: https://cdn.simpleicons.org https://www.google.com https://*.gstatic.com https://*.usenotra.com",
   "font-src 'self' data:",
   "connect-src 'self' https://vitals.vercel-insights.com https://*.vercel-insights.com https://us.i.posthog.com https://us-assets.i.posthog.com",
   "base-uri 'self'",
