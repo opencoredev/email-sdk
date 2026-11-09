@@ -4,6 +4,7 @@ import type {
   EmailMessage,
   EmailPlugin,
   EmailTag,
+  EmailNativeSendOptions,
   EmailSendOptions,
 } from "./types.js";
 
@@ -51,10 +52,10 @@ function withMessageDefaults(
 }
 
 function withSendOptionDefaults(
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
-): EmailSendOptions | undefined {
+): EmailNativeSendOptions | undefined {
   const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 

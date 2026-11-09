@@ -2,7 +2,7 @@ import { EmailValidationError } from "./errors.js";
 import { jsonProvider } from "./http.js";
 import { apiAddresses, formatAddress } from "./payloads.js";
 import { isFunctionMember } from "./internal/decode.js";
-import type { EmailAdapter, EmailMessage, EmailMetadataRecord } from "./types.js";
+import type { EmailAdapter, EmailMessage, EmailMetadataRecord, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
@@ -31,7 +31,7 @@ const iterableRules: MessageRules = (message) => {
 
 export function iterable(
   options: IterableAdapterOptions,
-): EmailAdapter<"iterable", { baseUrl: string }> {
+): EmailAdapter<"iterable", { baseUrl: string }, unknown, EmailNativePassthrough> {
   if (!Number.isFinite(options.campaignId)) {
     throw new EmailValidationError("iterable requires a numeric campaignId.");
   }

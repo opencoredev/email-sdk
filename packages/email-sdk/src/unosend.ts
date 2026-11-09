@@ -10,7 +10,7 @@ import {
   optionalSingleApiAddress,
   optionalStringAddresses,
 } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailMessage, EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -31,7 +31,7 @@ const unosendRules: MessageRules = (message) => {
 
 export function unosend(
   options: UnosendAdapterOptions,
-): EmailAdapter<"unosend", { baseUrl: string }> {
+): EmailAdapter<"unosend", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "unosend",
     rules: unosendRules,

@@ -24,6 +24,13 @@ export type { EmailErrorCode } from "./errors.js";
 
 export type {
   AdapterForName,
+  AdapterNativeOptions,
+  EmailNativeObject,
+  EmailNativeOptions,
+  EmailNativeOptionsMap,
+  EmailNativePassthrough,
+  EmailNativeSendOptions,
+  EmailNativeValue,
   EmailAddress,
   EmailMetadataRecord,
   EmailMetadataRegister,

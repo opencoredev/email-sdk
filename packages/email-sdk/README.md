@@ -195,6 +195,20 @@ await email.sendPersonalized(
 
 `sendMany` is ordered and settled. It returns one `{ ok, index, result | error }` item per input and does not run concurrently in v1.
 
+## Provider-native options (experimental)
+
+For features only one provider has, such as a stored Postmark template, SendGrid sandbox mode, or an SES configuration set chosen per send, pass `native`. Its keys are adapter names, and TypeScript infers the accepted keys and fields from the adapters you gave the client.
+
+```ts
+await email.send(message, {
+  native: {
+    postmark: { template: { alias: "welcome", model: { name: "Ada" } }, trackOpens: true },
+  },
+});
+```
+
+Each adapter in a fallback route receives only its own entry, so Postmark options never reach a backup adapter. Most HTTP adapters also accept `body` and `headers` in their entry for API fields the SDK doesn't model. The shape may change in a minor release. See [Use provider-native features](https://email-sdk.dev/docs/guides/provider-native-options).
+
 ## Plugins
 
 Plugins can register adapters, add middleware, compose hooks, and extend the returned client.
@@ -362,4 +376,5 @@ const email = createEmailClient({
 - Quickstart: https://email-sdk.dev/docs/getting-started/quickstart
 - Field support: https://email-sdk.dev/docs/adapters/field-support
 - Fallbacks and retries: https://email-sdk.dev/docs/concepts/fallbacks-and-retries
+- Provider-native options: https://email-sdk.dev/docs/guides/provider-native-options
 - v0 to v1 migration: https://email-sdk.dev/docs/guides/migrate/v0-to-v1

@@ -5,7 +5,7 @@ import type {
   EmailFallbackConfig,
   EmailMessage,
   EmailRetryConfig,
-  EmailSendOptions,
+  EmailNativeSendOptions,
 } from "../types.js";
 
 export function validateCapabilities(
@@ -50,7 +50,7 @@ export type EmailRoute = {
 export function resolveRoute(
   defaultAdapter: string,
   clientFallback: EmailFallbackConfig | undefined,
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
 ): EmailRoute {
   const primary = sendOptions?.adapter ?? defaultAdapter;
   const fallback = sendOptions?.fallback ?? clientFallback;
@@ -87,12 +87,17 @@ export function validateFallback(
 }
 
 export function mergeSendOptions(
-  base: EmailSendOptions | undefined,
-  override: EmailSendOptions | undefined,
-): EmailSendOptions | undefined {
+  base: EmailNativeSendOptions | undefined,
+  override: EmailNativeSendOptions | undefined,
+): EmailNativeSendOptions | undefined {
   if (!base) return override;
 
   if (!override) return base;
+
+  // Per-item native options replace the batch's entry for the same adapter and keep the rest.
+  if (base.native && override.native) {
+    return { ...base, ...override, native: { ...base.native, ...override.native } };
+  }
 
   return { ...base, ...override };
 }

@@ -1,7 +1,7 @@
 import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { base64Attachments, formatAddress, formatAddresses } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -21,7 +21,22 @@ const loopsRules: MessageRules = (message) => {
   assertMaxItems("loops", "recipient", arrayify(message.to), 1);
 };
 
-export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { baseUrl: string }> {
+/**
+ * Experimental. Loops-only send options, passed as `native: { loops: { ... } }`.
+ * https://loops.so/docs/api-reference/send-transactional-email
+ */
+export type LoopsNativeOptions = EmailNativePassthrough & {
+  /** Overrides the adapter's `transactionalId` for this send. */
+  transactionalId?: string;
+  /** Merged over the data variables the adapter builds from the message. */
+  dataVariables?: Readonly<Record<string, string | number>>;
+  /** Create a contact when none matches the recipient. Defaults to `false`. */
+  addToAudience?: boolean;
+};
+
+export function loops(
+  options: LoopsAdapterOptions,
+): EmailAdapter<"loops", { baseUrl: string }, unknown, LoopsNativeOptions> {
   if (!options.transactionalId) {
     throw new EmailValidationError("loops requires a transactionalId.");
   }
@@ -34,7 +49,7 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
     },
-    async buildPayload(message) {
+    async buildPayload(message, native: LoopsNativeOptions | undefined) {
       assertSupportedMessageFields("loops", message, SUPPORTED_MESSAGE_FIELDS.loops);
       const recipients = formatAddresses(message.to);
       const attachments = await base64Attachments(message);
@@ -44,15 +59,16 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
       }
 
       return {
-        transactionalId: options.transactionalId,
+        transactionalId: native?.transactionalId ?? options.transactionalId,
         email: recipients[0],
-        addToAudience: false,
+        addToAudience: native?.addToAudience ?? false,
         dataVariables: {
           subject: message.subject,
           html: message.html,
           text: message.text,
           from: formatAddress(message.from),
           ...message.metadata,
+          ...native?.dataVariables,
         },
         attachments: attachments?.map((attachment) => ({
           filename: attachment.filename,
