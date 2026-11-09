@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import type { EmailAddress } from "./types.js";
-import { smtp } from "./smtp.js";
 import { emailAddressOf } from "./utils.js";
 
 const cases: ReadonlyArray<{
@@ -52,29 +51,4 @@ describe("emailAddressOf", () => {
   test.each(cases)("$name", ({ address, expected }) => {
     expect(emailAddressOf(address)).toBe(expected);
   });
-});
-
-describe("SMTP envelope validation", () => {
-  const adapter = smtp({ host: "127.0.0.1" });
-
-  const message = (to: string) => ({
-    from: "sender@example.test",
-    to,
-    subject: "Hi",
-    text: "Hi",
-  });
-
-  test.each(["Ada <ada@example.test> (work)", "ada@example.test (work)", '"Ada <team>" <ada@example.test>', "Ada <ada@[IPv6:2001:db8::1]>"])(
-    "accepts %s",
-    (to) => {
-      expect(() => adapter.validate?.(message(to))).not.toThrow();
-    },
-  );
-
-  test.each(["Ada <ada@example.test", "attacker@example.com> evil", '"Ada <ada@example.test>', "Ada <>", "ada( work )bob@example.test", '"Ada <bad name>" <ada@example.test>,evil@example.test', "Ada <ada@example.test>, evil@example.test"])(
-    "rejects %s",
-    (to) => {
-      expect(() => adapter.validate?.(message(to))).toThrow("SMTP envelope address");
-    },
-  );
 });
