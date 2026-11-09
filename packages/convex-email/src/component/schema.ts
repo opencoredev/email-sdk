@@ -25,6 +25,8 @@ export default defineSchema({
     providerFailure: v.optional(vEmailProviderFailure),
     // The adapter whose failed attempt may still have sent the message; later attempts only use it.
     unknownDeliveryAdapter: v.optional(v.string()),
+    // The adapter the current processing lease last sent a request to; cleared on each new lease.
+    dispatchedAdapter: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),

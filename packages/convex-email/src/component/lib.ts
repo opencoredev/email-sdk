@@ -166,6 +166,12 @@ export const retry = mutation({
       return false;
     }
 
+    // Failures recorded before unknownDeliveryAdapter existed still carry the unknown outcome in
+    // providerFailure, which this retry clears, so carry it over to the pin first.
+    if (email.providerFailure?.delivery === "unknown") {
+      await pinUnknownDelivery(ctx, email, email.providerFailure.adapter);
+    }
+
     const now = Date.now();
     await ctx.db.patch(email._id, {
       status: "queued",
@@ -250,6 +256,7 @@ export const markProcessing = internalMutation({
       status: "processing",
       attemptCount,
       processingLease,
+      dispatchedAdapter: undefined,
       updatedAt: now,
       nextAttemptAt: undefined,
     });
@@ -260,7 +267,13 @@ export const markProcessing = internalMutation({
       adapter: email.adapter,
     });
 
-    return { ...email, status: "processing" as const, attemptCount, processingLease };
+    return {
+      ...email,
+      status: "processing" as const,
+      attemptCount,
+      processingLease,
+      dispatchedAdapter: undefined,
+    };
   },
 });
 
@@ -286,6 +299,7 @@ export const recordProviderAttempt = internalMutation({
 
     await ctx.db.patch(args.emailId, {
       attemptedAdapters,
+      dispatchedAdapter: args.adapter,
       updatedAt: now,
     });
     await insertEvent(ctx, {
@@ -362,6 +376,7 @@ export const markFailedOrRetry = internalMutation({
     await markEmailFailedOrRetry(ctx, email, args.error, {
       retryable: args.retryable,
       providerFailure: args.providerFailure,
+      unknownDeliveryAdapter: args.unknownDeliveryAdapter,
     });
 
     return true;
@@ -394,14 +409,10 @@ export const processDueEmails = internalMutation({
     }
 
     for (const email of staleProcessing) {
+      // The worker stopped mid-send, so the adapter this lease last reached may have sent it.
+      await pinUnknownDelivery(ctx, email, email.dispatchedAdapter);
+
       if (email.idempotencyKey) {
-        // The worker stopped mid-send, so the last adapter it reached may have sent the message.
-        const lastAdapter = email.attemptedAdapters.at(-1);
-
-        if (lastAdapter && !email.unknownDeliveryAdapter) {
-          await ctx.db.patch(email._id, { unknownDeliveryAdapter: lastAdapter });
-        }
-
         await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
           immediate: true,
         });
@@ -608,6 +619,23 @@ function applyConfigToMessage(args: ConvexEmailSendArgs, config: ConvexEmailConf
   };
 }
 
+/**
+ * Each queued attempt builds a fresh client that starts again at the primary adapter, so the SDK
+ * can't see that an earlier attempt may have sent the message. Remember the first adapter whose
+ * outcome was unknown; the worker then sends only to it and never falls back.
+ */
+async function pinUnknownDelivery(
+  ctx: MutationCtx,
+  email: Doc<"emails">,
+  adapter: string | undefined,
+) {
+  if (!adapter || email.unknownDeliveryAdapter) {
+    return;
+  }
+
+  await ctx.db.patch(email._id, { unknownDeliveryAdapter: adapter });
+}
+
 async function markEmailFailedOrRetry(
   ctx: MutationCtx,
   email: Doc<"emails">,
@@ -616,6 +644,7 @@ async function markEmailFailedOrRetry(
     immediate?: boolean;
     retryable?: boolean;
     providerFailure?: ConvexEmailProviderFailure;
+    unknownDeliveryAdapter?: string;
   } = {},
 ) {
   if (email.status === "sent" || email.status === "canceled") {
@@ -625,12 +654,7 @@ async function markEmailFailedOrRetry(
   const now = Date.now();
   const providerFailure = options.providerFailure;
 
-  // Each queued attempt builds a fresh client that starts again at the primary adapter, so the
-  // SDK can't see that an earlier attempt may have sent the message. Remember the first adapter
-  // whose outcome was unknown; the worker then sends only to it and never falls back.
-  if (providerFailure?.delivery === "unknown" && !email.unknownDeliveryAdapter) {
-    await ctx.db.patch(email._id, { unknownDeliveryAdapter: providerFailure.adapter });
-  }
+  await pinUnknownDelivery(ctx, email, options.unknownDeliveryAdapter);
 
   if ((options.retryable ?? true) && email.attemptCount < email.maxAttempts) {
     const delayMs = options.immediate

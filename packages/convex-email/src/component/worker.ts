@@ -34,6 +34,8 @@ export const processEmail = internalAction({
     }
 
     const processingLease = email.processingLease ?? 0;
+    // The adapter this run last sent a request to, set only after the attempt was recorded.
+    let lastDispatchedAdapter: string | undefined;
 
     try {
       if (email.adapters.length === 0) {
@@ -51,12 +53,18 @@ export const processEmail = internalAction({
         defaultAdapter: adapter,
         fallbackAdapters,
         async recordAttempt(event) {
-          await ctx.runMutation(lib.recordProviderAttempt, {
+          const recorded = await ctx.runMutation(lib.recordProviderAttempt, {
             emailId: args.emailId,
             processingLease,
             adapter: event.adapter,
             attempt: event.attempt,
           });
+
+          if (!recorded) {
+            throw new Error("Convex Email lost the processing lease before sending.");
+          }
+
+          lastDispatchedAdapter = event.adapter;
         },
       });
 
@@ -77,12 +85,22 @@ export const processEmail = internalAction({
     } catch (error) {
       const providerFailure = providerFailureMetadata(error);
 
+      // Anything short of a proven not_sent may have delivered: an unknown provider failure, or an
+      // error with no provider metadata after a request went out (such as markSent failing after
+      // the provider accepted the message).
+      const unknownDeliveryAdapter = providerFailure
+        ? providerFailure.delivery === "not_sent"
+          ? undefined
+          : providerFailure.adapter
+        : lastDispatchedAdapter;
+
       await ctx.runMutation(lib.markFailedOrRetry, {
         emailId: args.emailId,
         processingLease,
         error: stringifyError(error),
         retryable: providerFailure?.retryable ?? isRetryableFailure(error),
         providerFailure,
+        unknownDeliveryAdapter,
       });
     }
 

@@ -126,6 +126,8 @@ export type ConvexEmailDoc = {
    * second copy from another provider.
    */
   unknownDeliveryAdapter?: string;
+  /** The adapter the current processing attempt last sent a request to. */
+  dispatchedAdapter?: string;
   idempotencyKey?: string;
   sendMetadata?: Record<string, string | number | boolean | null>;
   attemptCount: number;

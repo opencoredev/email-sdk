@@ -44,6 +44,7 @@ export const markFailedOrRetryArgs = {
   error: v.string(),
   retryable: v.boolean(),
   providerFailure: v.optional(vEmailProviderFailure),
+  unknownDeliveryAdapter: v.optional(v.string()),
 };
 
 export const recordWebhookArgs = {
