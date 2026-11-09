@@ -156,7 +156,7 @@ export async function sendContactMessage(
 
 The action logs the real error on the server and returns a plain message to the browser. Whatever a server action returns is serialized and sent to the client, so don't return the error object: provider errors can include response bodies you didn't mean to show.
 
-An `EmailValidationError` means the message itself was rejected before any request went out, for example a field the provider can't carry. An `EmailRouteError` means every adapter attempt failed. Its `failures` list holds each attempt's error, and an error the SDK doesn't retry, such as a `401` for a bad key, fails after one attempt.
+An `EmailValidationError` means the message itself was rejected before any request went out, for example a field the provider can't carry. An `EmailRouteError` means every adapter it tried failed. Its `failures` list holds one final error per adapter, not one per retry, and an error the SDK doesn't retry, such as a `401` for a bad key, fails after one attempt.
 
 ## Build the form
 
