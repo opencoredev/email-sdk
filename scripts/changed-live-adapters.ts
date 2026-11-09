@@ -15,26 +15,32 @@ export function selectLiveAdapters(files: string[]): string[] {
 }
 
 // Space-separated checks to never select, for environments that lack their
-// credentials. CI sets it in .github/workflows/ci.yml.
-function excludedAdapters(value = ""): Set<string> {
+// credentials. CI sets LIVE_ADAPTERS_EXCLUDE in .github/workflows/ci.yml.
+// Throws on an unknown name so a typo can't quietly let a check back in.
+export function excludeLiveAdapters(adapters: string[], value = ""): string[] {
   const excluded = new Set(value.split(/\s+/).filter(Boolean));
 
   for (const adapter of excluded) {
-    if (!liveAdapters.includes(adapter)) {
-      console.error(`Unknown live adapter in LIVE_ADAPTERS_EXCLUDE: ${adapter}`);
-      process.exit(1);
-    }
+    if (!liveAdapters.includes(adapter))
+      throw new Error(`Unknown live adapter in LIVE_ADAPTERS_EXCLUDE: ${adapter}`);
   }
 
-  return excluded;
+  return adapters.filter((adapter) => !excluded.has(adapter));
 }
 
 async function main() {
   const [base, head] = process.argv.slice(2);
-  const excluded = excludedAdapters(process.env.LIVE_ADAPTERS_EXCLUDE);
+  const exclude = process.env.LIVE_ADAPTERS_EXCLUDE;
+
+  try {
+    excludeLiveAdapters([], exclude);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 
   const print = (adapters: string[]) =>
-    console.log(adapters.filter((adapter) => !excluded.has(adapter)).join(" "));
+    console.log(excludeLiveAdapters(adapters, exclude).join(" "));
 
   if (process.env.LIVE_ADAPTERS === "all" || !base || !head || /^0+$/.test(base)) {
     print(liveAdapters);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { runDoctor, type DoctorOptions } from "./doctor.js";
-import { selectLiveAdapters } from "../../../scripts/changed-live-adapters.js";
+import { excludeLiveAdapters, selectLiveAdapters } from "../../../scripts/changed-live-adapters.js";
 import { nonSendingEnvironment } from "../../../scripts/run-live-adapters.js";
 import type { JsonValue } from "../test-support/json.js";
 
@@ -39,6 +39,80 @@ describe("shared live gate wiring", () => {
       selectLiveAdapters(["packages/email-sdk/src/resend.ts", "scripts/check-lettr-account.ts"]),
     ).toEqual(["lettr", "resend"]);
     expect(selectLiveAdapters(["README.md"])).toEqual([]);
+  });
+  test("CI's exclusion drops Graph from diff-based and all-checks selection", () => {
+    const diff = selectLiveAdapters([
+      "packages/email-sdk/src/graph.ts",
+      "scripts/check-resend-account.ts",
+    ]);
+
+    expect(diff).toEqual(["graph", "resend"]);
+    expect(excludeLiveAdapters(diff, "graph")).toEqual(["resend"]);
+    expect(excludeLiveAdapters(all, "graph")).toEqual(all.filter((adapter) => adapter !== "graph"));
+    expect(excludeLiveAdapters(all, "  graph   lettr ")).toEqual(
+      all.filter((adapter) => adapter !== "graph" && adapter !== "lettr"),
+    );
+    expect(excludeLiveAdapters(all)).toEqual(all);
+    expect(excludeLiveAdapters(all, "")).toEqual(all);
+  });
+  test("exclusion rejects an unknown adapter name", () => {
+    expect(() => excludeLiveAdapters(all, "grpah")).toThrow(
+      "Unknown live adapter in LIVE_ADAPTERS_EXCLUDE: grpah",
+    );
+  });
+  test.each([
+    [{ LIVE_ADAPTERS: "all" }, []],
+    [{}, []],
+    [{}, ["0000000000000000000000000000000000000000", "HEAD"]],
+  ])(
+    "planner honors LIVE_ADAPTERS_EXCLUDE when selecting every check (%j %j)",
+    async (env, args) => {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          "--no-env-file",
+          new URL("../../../scripts/changed-live-adapters.ts", import.meta.url).pathname,
+          ...args,
+        ],
+        {
+          env: { ...env, LIVE_ADAPTERS_EXCLUDE: "graph", PATH: process.env.PATH ?? "" },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+
+      const [stdout, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        child.exited,
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stdout.trim().split(" ")).toEqual(all.filter((adapter) => adapter !== "graph"));
+    },
+  );
+  test("planner exits 1 on an unknown excluded name", async () => {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "--no-env-file",
+        new URL("../../../scripts/changed-live-adapters.ts", import.meta.url).pathname,
+      ],
+      {
+        env: { LIVE_ADAPTERS_EXCLUDE: "grpah", PATH: process.env.PATH ?? "" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr.trim()).toBe("Unknown live adapter in LIVE_ADAPTERS_EXCLUDE: grpah");
   });
   test("runner rejects unknown checks without starting a provider command", async () => {
     const child = Bun.spawn(
@@ -424,11 +498,14 @@ describe("doctor safe probes", () => {
       insufficient_permissions: await run({}, { fetch: async () => json({}, 403) }),
       inconclusive: await run({}, { fetch: async () => json({}, 400) }),
       rate_limited: await run({}, { fetch: async () => json({}, 429) }),
-      network_failure: await run({}, {
-        fetch: async () => {
-          throw new Error(credential);
+      network_failure: await run(
+        {},
+        {
+          fetch: async () => {
+            throw new Error(credential);
+          },
         },
-      }),
+      ),
       timeout: await run({}, { timeoutMs: 5, fetch: () => new Promise(() => {}) }),
       unsupported: await run({}, { adapter: "smtp" }),
     };
