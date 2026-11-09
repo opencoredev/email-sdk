@@ -8,10 +8,23 @@ import { baseOptions } from "@/lib/layout.shared";
 import { appName, siteUrl } from "@/lib/shared";
 import { providers } from "@/lib/providers";
 
-const pageTitle = `Compare transactional email providers - ${appName}`;
+const pageTitle = "Email API Comparison: Resend, SendGrid, Postmark, Mailgun";
 
 const pageDescription =
-  "Side-by-side comparisons of transactional email providers — Resend, Postmark, SendGrid, Mailgun, AWS SES, Brevo, and more — based on the message fields each API actually supports.";
+  "Compare Resend, SendGrid, Postmark, Mailgun, Amazon SES, Brevo and more side by side: which message fields each email API supports and what survives a switch.";
+
+// The four providers people most often weigh together; every pair among them
+// has its own page.
+const bigFourSlugs = new Set([
+  "resend-vs-sendgrid",
+  "resend-vs-postmark",
+  "resend-vs-mailgun",
+  "postmark-vs-sendgrid",
+  "postmark-vs-mailgun",
+  "sendgrid-vs-mailgun",
+]);
+
+const bigFourPairs = comparePairs.filter((pair) => bigFourSlugs.has(pair.slug));
 
 export const Route = createFileRoute("/compare/")({
   head: () => ({
@@ -87,6 +100,22 @@ function CompareIndex() {
             the field-support data the SDK uses to fail fast instead of silently dropping CC
             recipients, attachments, or metadata. Every provider below works behind the same typed{" "}
             <code>send()</code> call.
+          </p>
+          <p className="mt-4 text-base leading-7 text-fd-muted-foreground md:text-lg">
+            Choosing between Resend, SendGrid, Postmark, and Mailgun? Each pair has its own page:{" "}
+            {bigFourPairs.map((pair, index) => (
+              <span key={pair.slug}>
+                {index > 0 ? (index === bigFourPairs.length - 1 ? ", and " : ", ") : null}
+                <Link
+                  className="text-fd-primary underline-offset-4 hover:underline"
+                  to="/compare/$pair"
+                  params={{ pair: pair.slug }}
+                >
+                  {getComparePairTitle(pair)}
+                </Link>
+              </span>
+            ))}
+            .
           </p>
 
           <section className="mt-10 border-t border-fd-border pt-6">

@@ -14,6 +14,8 @@ These values come from the adapter's exported `capabilities` declaration. The [f
 
 The Brevo adapter calls the [Brevo transactional email API](https://developers.brevo.com/reference/sendtransacemail) with plain `fetch`. It authenticates with Brevo's `api-key` header (not a Bearer token), supports every common field, and maps `metadata` to Brevo's `params`, the same values Brevo templates substitute.
 
+New to the Brevo API itself? The [Brevo API guide for Node.js and TypeScript](/blog/brevo-api-nodejs-typescript) walks through raw requests, scheduling, batch sends, idempotency keys, rate limits, and webhooks before it gets to this adapter.
+
 <ProviderBadge adapter="brevo" />
 
 ## Configure

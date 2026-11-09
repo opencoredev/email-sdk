@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { SUPPORTED_MESSAGE_FIELDS } from "../../../../packages/email-sdk/src/utils";
-import { comparePairs, getProvider } from "./compare";
+import { comparePairs, getProvider, providerBlogGuides } from "./compare";
+import { localBlogPosts } from "./local-blog-posts";
 import fieldSupport from "./field-support.generated.json";
 
 describe("field-support snapshot", () => {
@@ -37,5 +38,17 @@ describe("compare pairs", () => {
   test("intros are not duplicated across pairs", () => {
     const intros = comparePairs.map((pair) => pair.intro);
     expect(new Set(intros).size).toBe(intros.length);
+  });
+});
+
+describe("provider blog guides", () => {
+  test("every guide points at a published local blog post", () => {
+    const slugs = new Set(localBlogPosts.map((post) => post.slug));
+
+    for (const guides of Object.values(providerBlogGuides)) {
+      for (const guide of guides ?? []) {
+        expect(slugs.has(guide.slug)).toBeTrue();
+      }
+    }
   });
 });

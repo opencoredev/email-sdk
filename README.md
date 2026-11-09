@@ -64,6 +64,23 @@ Full docs live at **[email-sdk.dev/docs](https://email-sdk.dev/docs)**. Good pla
 - [Fallbacks and retries](https://email-sdk.dev/docs/concepts/fallbacks-and-retries)
 - [Field support](https://email-sdk.dev/docs/adapters/field-support)
 
+## Guides
+
+Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
+
+- [How to send email from Node.js and TypeScript](https://email-sdk.dev/blog/send-email-nodejs-typescript)
+- [Resend API guide for Node.js and TypeScript](https://email-sdk.dev/blog/resend-api-nodejs-typescript)
+- [Resend pricing](https://email-sdk.dev/blog/resend-pricing)
+- [Resend SMTP settings for Node.js](https://email-sdk.dev/blog/resend-smtp-nodejs)
+- [Mailgun API guide for Node.js and TypeScript](https://email-sdk.dev/blog/mailgun-api-nodejs-typescript)
+- [Brevo API guide for Node.js and TypeScript](https://email-sdk.dev/blog/brevo-api-nodejs-typescript)
+- [SendGrid API guide for Node.js and TypeScript](https://email-sdk.dev/blog/sendgrid-api-nodejs-typescript)
+- [SendGrid alternatives for developers](https://email-sdk.dev/blog/sendgrid-alternatives)
+- [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
+- [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
+- [MailHog and Mailpit: test email locally in Node.js](https://email-sdk.dev/blog/mailpit-mailhog-nodejs)
+- [Send email from a Next.js server action](https://email-sdk.dev/blog/nextjs-server-action-send-email)
+
 ## Telemetry
 
 Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.

@@ -1,10 +1,20 @@
 ---
-title: AI SDK
-description: Add one narrow, approval-gated sendEmail tool to a Vercel AI SDK agent.
+title: Send email safely from an AI SDK agent
+description: "Let an AI agent send email safely from a TypeScript app: one narrow sendEmail tool for the Vercel AI SDK, with user approval, a fixed sender, and no secrets in results."
 icon: Bot
 ---
 
-Email SDK exposes an optional [`/ai`](/docs/reference/client) entry point for [AI SDK](https://ai-sdk.dev/). It binds the sender in application code, restricts model-visible input, requires approval, and returns a secret-safe result.
+To let an AI agent send email safely, give the model one narrow tool instead of your email client. With `createEmailTools()` from `@opencoredev/email-sdk/ai`, the model can only propose recipients, a subject, and a body. Your code fixes the sender and every delivery option, nothing is sent until a person approves the exact message, and the model gets back a status, never a provider response or API key.
+
+| Risk | What the tool does |
+| --- | --- |
+| The model sends without asking | `needsApproval: true` plus a `toolApproval` map; a denial makes zero provider calls |
+| The model spoofs the sender | `from` is set in your code; the input schema has no `from` field |
+| The model reaches other options | Only `to`, `subject`, `text`, and `html` are accepted; extra keys fail validation |
+| A retried tool call sends twice | Each approved call passes `email-tool:${toolCallId}` as its idempotency key; the provider drops the repeat only if its adapter supports idempotency |
+| Provider errors leak to the model | Send failures become `Error("Email could not be sent.")`; a cancelled call keeps its abort reason |
+
+Email SDK exposes this as an optional [`/ai`](/docs/reference/client) entry point for [AI SDK](https://ai-sdk.dev/).
 
 ## Install
 
@@ -57,5 +67,55 @@ Approved execution derives `email-tool:${toolCallId}` as the idempotency key and
 ## Approval UI
 
 Render the exact recipients, subject, and body before approval. A denial is terminal and must result in zero provider calls.
+
+## Limit who the agent can email
+
+The tool does not restrict recipients: the model chooses `to`, and approval is the check. `createEmailTools()` only needs an object with a `send` method, so you can pass a wrapper that enforces your own rule before anything reaches a provider.
+
+```ts title="src/agent/email-tools.ts"
+import { createEmailTools } from "@opencoredev/email-sdk/ai";
+import { email } from "../email.js";
+
+// Plain addresses at acme.com only. The strict local part rejects display
+// names, quotes, comments, and comma-separated lists.
+const allowed = /^[a-z0-9._+-]+@acme\.com$/i;
+
+const internalOnly: Pick<typeof email, "send"> = {
+  send(message, options) {
+    const recipients = [message.to].flat();
+
+    if (!recipients.every((to) => typeof to === "string" && allowed.test(to))) {
+      throw new Error("Recipient not allowed.");
+    }
+
+    return email.send(message, options);
+  },
+};
+
+export const emailTools = createEmailTools({
+  client: internalOnly,
+  from: "Acme <hello@acme.com>",
+});
+```
+
+The thrown error reaches the model as `Email could not be sent.`, like any other failure.
+
+## Questions
+
+### Can the model send email without approval?
+
+Not when you pass `toolApproval` (AI SDK 7) or rely on the tool's `needsApproval: true` (AI SDK 6). The first model call returns a `tool-approval-request`; the tool runs only after you append an approved `tool-approval-response`.
+
+### Can the model attach files, add BCC, or pick a provider?
+
+No. The input schema allows only `to`, `subject`, `text`, and `html`, and rejects any other key. Attachments, CC, BCC, headers, adapters, fallback, and scheduling stay in your code.
+
+### What does the model see after a send?
+
+`{ status: "sent", adapter, id? }` on success, and a generic `Email could not be sent.` error when the send fails. If the call is cancelled, the abort reason is rethrown instead. Provider responses, API keys, and raw errors stay on the server.
+
+### How do I test the agent without sending real email?
+
+Create the client with `memoryAdapter()` from `@opencoredev/email-sdk/testing` and pass it to `createEmailTools()`. Approved calls land in `memory.raw.sent` and no provider is called. See [Test email sending without sending real email](/docs/guides/test-email-behavior).
 
 <Card title="Chat SDK" href="/docs/integrations/chat-sdk" description="Use Email SDK from multi-platform chat handlers." />
