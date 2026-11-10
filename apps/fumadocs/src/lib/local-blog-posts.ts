@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "amazon-ses-pricing",
+    title: "Amazon SES Pricing in 2026: Plans and Real Costs",
+    description:
+      "Amazon SES pricing, checked November 2026: Essentials at $0.16 per 1,000, a la carte at $0.10, data and add-on fees, cost by volume, and SES vs Resend.",
+    publishedAt: "2026-11-10",
+    updatedAt: "2026-11-10",
+    readTime: "7 min read",
+    image: "/og/blog/amazon-ses-pricing.svg",
+    imageAlt: "Amazon SES pricing card: Essentials and a la carte rates per 1,000 emails, and cost by volume",
+    tags: ["Amazon SES", "Pricing", "Transactional email"],
+  },
+  {
     slug: "nextjs-server-action-send-email",
     title: "Send Email from a Next.js Server Action in TypeScript",
     description:

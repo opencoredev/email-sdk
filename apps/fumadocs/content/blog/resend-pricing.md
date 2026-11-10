@@ -178,4 +178,5 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [Resend SMTP settings](/blog/resend-smtp-nodejs): send through Resend from SMTP-only tools and Nodemailer.
 - [Resend alternatives](/blog/resend-alternatives): other providers' prices and field support, and a switch with Resend as the fallback.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): sourced prices for other providers.
+- [Amazon SES pricing](/blog/amazon-ses-pricing): SES plans, à la carte rates, and cost by volume.
 - [Resend adapter reference](/docs/adapters/resend): adapter options and CLI checks.

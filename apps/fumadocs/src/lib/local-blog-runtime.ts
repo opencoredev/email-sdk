@@ -1,3 +1,4 @@
+import amazonSesPricingMarkdown from "../../content/blog/amazon-ses-pricing.md?raw";
 import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?raw";
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
@@ -31,6 +32,7 @@ const localBlogMarkdown = new Map([
   ["sendgrid-api-nodejs-typescript", sendgridApiMarkdown],
   ["mailpit-mailhog-nodejs", mailpitMailhogMarkdown],
   ["nextjs-server-action-send-email", nextjsServerActionMarkdown],
+  ["amazon-ses-pricing", amazonSesPricingMarkdown],
 ]);
 
 const localBlogBodies = new Map(

@@ -320,6 +320,7 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 ## Related
 
 - [Resend pricing](/blog/resend-pricing): Resend's plans, the free tier's daily cap, and overage rates.
+- [Amazon SES pricing](/blog/amazon-ses-pricing): SES plans, à la carte rates, and what SES costs by volume.
 - [Resend API guide for Node.js and TypeScript](/blog/resend-api-nodejs-typescript): keys, idempotency, rate limits, and webhooks.
 - [Resend adapter](/docs/adapters/resend) and [Amazon SES adapter](/docs/adapters/ses): options and field mapping.
 - [Retries and fallback](/docs/concepts/fallbacks-and-retries): how delivery certainty decides when fallback runs.
