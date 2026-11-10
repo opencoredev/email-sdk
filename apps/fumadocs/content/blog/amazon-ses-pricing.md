@@ -67,7 +67,7 @@ The rate per 1,000 is rarely the whole bill. Check these before you budget:
 - **Other AWS services.** SES publishes bounces, complaints and deliveries through configuration-set event destinations such as SNS, EventBridge, Firehose or CloudWatch. Those services and any S3 storage for received mail bill separately.
 - **Regions.** Plans, dedicated IPs and Mail Manager endpoints are per region, so a second region repeats those fixed costs.
 
-SES also starts every account in the sandbox: you can send only to verified addresses and domains or the SES mailbox simulator, at most 200 messages per 24 hours and 1 per second, until AWS approves your [production access request](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html). Ask for it a few days before launch.
+SES also starts every account in the sandbox: you can send only to verified addresses and domains or the SES mailbox simulator, at most 200 messages per 24 hours and 1 per second (SES counts each recipient as one message), until AWS approves your [production access request](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html). Ask for it a few days before launch.
 
 ## Is SES the cheapest transactional email API?
 
