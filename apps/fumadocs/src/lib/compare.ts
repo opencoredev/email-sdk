@@ -121,7 +121,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-ses",
     a: "resend",
     b: "ses",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-10",
     search: {
       title: "Resend vs Amazon SES: Managed API or AWS Infrastructure?",
       description:
@@ -212,7 +212,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-ses",
     a: "postmark",
     b: "ses",
-    lastmod: "2026-10-31",
+    lastmod: "2026-11-10",
     search: {
       title: "Postmark vs Amazon SES: Managed Email or Raw AWS?",
       description:
@@ -242,7 +242,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-11-03",
+    lastmod: "2026-11-10",
     search: {
       title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
       description:
@@ -272,7 +272,7 @@ export const comparePairs: ComparePair[] = [
     slug: "mailgun-vs-ses",
     a: "mailgun",
     b: "ses",
-    lastmod: "2026-10-29",
+    lastmod: "2026-11-10",
     search: {
       title: "Mailgun vs Amazon SES: Price, Features and Fallback",
       description:
@@ -302,7 +302,7 @@ export const comparePairs: ComparePair[] = [
     slug: "mailersend-vs-ses",
     a: "mailersend",
     b: "ses",
-    lastmod: "2026-09-28",
+    lastmod: "2026-11-10",
     intro:
       "MailerSend and Amazon SES are the managed-service-versus-infrastructure trade in its purest form. SES keeps costs near the floor at scale — à-la-carte outbound at $0.10 per 1K sends — and sits inside the AWS ecosystem — IAM credentials, CloudWatch metrics, regional endpoints — in exchange for you owning deliverability: dedicated IPs, configuration sets, and bounce processing are all your job, and the console is unmistakably AWS. MailerSend, the transactional arm of the MailerLite family, wraps sending in a product instead: a template gallery with a drag-and-drop editor, a 500-send free tier, and a clean REST API, at a higher per-message price. In the unified message shape MailerSend covers the full common surface except per-message metadata, including native scheduled sending; SES supports neither scheduling nor metadata, so a MailerSend-to-SES fallback drops sendAt and Email SDK's field checks flag it before the send.",
   },
@@ -380,6 +380,13 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "resend-alternatives",
       title: "Resend alternatives guide",
       lead: "Moving off Resend?",
+    },
+  ],
+  ses: [
+    {
+      slug: "amazon-ses-pricing",
+      title: "Amazon SES pricing guide",
+      lead: "Estimating the bill?",
     },
   ],
   sendgrid: [
