@@ -67,7 +67,7 @@ The rate per 1,000 is rarely the whole bill. Check these before you budget:
 - **Other AWS services.** SES publishes bounces, complaints and deliveries through configuration-set event destinations such as SNS, EventBridge, Firehose or CloudWatch. Those services and any S3 storage for received mail bill separately.
 - **Regions.** Plans, dedicated IPs and Mail Manager endpoints are per region, so a second region repeats those fixed costs.
 
-SES also starts every account in the sandbox: you can send only to verified addresses, at most 200 messages per 24 hours and 1 per second, until AWS approves your [production access request](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html). Ask for it a few days before launch.
+SES also starts every account in the sandbox: you can send only to verified addresses and domains or the SES mailbox simulator, at most 200 messages per 24 hours and 1 per second, until AWS approves your [production access request](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html). Ask for it a few days before launch.
 
 ## Is SES the cheapest transactional email API?
 
@@ -134,7 +134,7 @@ Run it with `NODE_ENV=test bun test`. No request reaches AWS, so the run costs n
 
 ## A second provider when SES throttles
 
-When you pass your SES sending rate, the API answers `429`. The SES adapter reports a `429`, a timeout, a network error or a 5xx as delivery `"unknown"`, because SES may already have accepted the message. A definite rejection such as a `400` or `403` is `"not_sent"` and falls back by default. The default `onUnknownDelivery: "stop"` throws on an unknown failure instead of trying the fallback. To let a throttled password reset go out through another provider, opt in and accept that an uncertain failure could send it twice:
+When you pass your SES sending rate, the API answers `429`. The SES adapter reports a `429`, a network error or a 5xx as delivery `"unknown"`, because SES may already have accepted the message. A definite rejection such as a `400` or `403` is `"not_sent"` and falls back by default. The default `onUnknownDelivery: "stop"` throws on an unknown failure instead of trying the fallback. To let a throttled password reset go out through another provider, opt in and accept that an uncertain failure could send it twice:
 
 `email-with-fallback.ts`:
 
