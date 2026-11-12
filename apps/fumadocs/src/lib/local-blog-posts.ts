@@ -43,7 +43,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the SendGrid API from Node.js and TypeScript with fetch: API keys, v3 Mail Send, templates, scheduling, sandbox mode, rate limits, and signed webhooks.",
     publishedAt: "2026-11-03",
-    updatedAt: "2026-11-03",
+    updatedAt: "2026-11-12",
     readTime: "13 min read",
     image: "/og/blog/sendgrid-api-nodejs-typescript.svg",
     imageAlt: "SendGrid API guide card: API keys, Mail Send, sandbox mode, and signed webhooks in TypeScript",
@@ -55,7 +55,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Brevo API from Node.js and TypeScript with fetch: the api-key header, templates, scheduling, batch sends, idempotency keys, rate limits, and webhooks.",
     publishedAt: "2026-11-02",
-    updatedAt: "2026-11-03",
+    updatedAt: "2026-11-12",
     readTime: "14 min read",
     image: "/og/blog/brevo-api-nodejs-typescript.svg",
     imageAlt: "Brevo API guide card: fetch, batch sends, idempotency, and webhooks in TypeScript",
@@ -115,7 +115,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Resend API from Node.js and TypeScript with fetch: API keys, attachments, scheduling, idempotency keys, batch sends, rate limits, and webhook signatures.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-02",
+    updatedAt: "2026-11-12",
     readTime: "15 min read",
     image: "/og/blog/resend-api-nodejs-typescript.svg",
     imageAlt: "Resend API guide card: fetch, idempotency keys, retries and webhooks in TypeScript",
@@ -151,7 +151,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Mailgun API from Node.js and TypeScript with fetch: API keys, US and EU base URLs, attachments, tags, errors, rate limits, retries, and webhook signatures.",
     publishedAt: "2026-10-28",
-    updatedAt: "2026-11-04",
+    updatedAt: "2026-11-12",
     readTime: "14 min read",
     image: "/og/blog/mailgun-api-nodejs-typescript.svg",
     imageAlt: "Mailgun API guide card: fetch, regions, retries and webhooks in TypeScript",
