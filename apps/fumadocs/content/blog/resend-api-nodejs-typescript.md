@@ -365,7 +365,7 @@ Before the first request, the client checks the message against every adapter in
 await email.send(scheduledMessage, { fallback: { adapters: [] } });
 ```
 
-[Schedule an email](/docs/guides/schedule-email) lists every adapter that accepts `sendAt` and how far ahead each provider allows.
+[Schedule an email](/docs/guides/schedule-email) lists every adapter that accepts `sendAt` and the scheduling limits each provider documents.
 
 ### Verify webhooks with Email SDK
 
