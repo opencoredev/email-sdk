@@ -1,5 +1,52 @@
 # @opencoredev/email-sdk
 
+## 3.1.0
+
+### Minor Changes
+
+- e0ee155: Fallback now runs by default when the primary provider definitely rejected the request. HTTP adapters report a 4xx response other than 408, 409 and 429 (for example 400, 401, 403, 404 or 422) as `delivery: "not_sent"`, so a client with `fallback` configured tries the next adapter under the default `onUnknownDelivery: "stop"` instead of throwing `EmailRouteError`. Before this change, Resend, Postmark, SES, SendGrid, Mailgun and most other HTTP adapters reported every failure as `unknown`, so fallback only ran with `onUnknownDelivery: "continue"`. Timeouts, network errors, 408, 409, 429 and 5xx responses stay `unknown` and still stop the route. When retries are on and an earlier attempt ended `unknown`, the final failure is now reported `unknown` too, even if the last attempt was a definite rejection, because the earlier attempt may have sent the message. If you relied on a 4xx stopping the route, pass `fallback: { adapters: [] }` for those sends.
+
+  CommonJS builds now share one copy of the error classes (`dist/errors.cjs`) across every entrypoint. Before, an error thrown by an adapter loaded with `require("@opencoredev/email-sdk/resend")` failed `instanceof EmailAdapterError` in the root package, so CommonJS clients lost the adapter's delivery classification and never fell back.
+
+  `require("@opencoredev/email-sdk")` works again. In 3.0.x the CommonJS root entry loaded but threw `ReferenceError: import_core is not defined` as soon as you read `createEmailClient` or any other export, because Bun dropped the module bodies of the re-export-only entry. Subpath entries such as `@opencoredev/email-sdk/resend` were not affected. ESM imports were not affected.
+
+- bb81df3: Add `@opencoredev/email-sdk/inbound` for receiving email. `handleInbound(request, config)` verifies and parses inbound requests from Resend, Postmark, Mailgun, SendGrid Inbound Parse, Amazon SES (SNS and S3), Microsoft Graph, Mailchimp Transactional, SparkPost, Lettr, MailerSend, Brevo, MailPace, Lettermint, Primitive, and JetEmail, and `parseCloudflareInbound` reads Cloudflare Email Workers messages. Every provider returns the same typed `InboundEmail`: addresses, multi-value headers, attachments with `read()`, threading IDs, SPF/DKIM/DMARC/spam verdicts, envelope, and the original payload. Per-provider `verify…`, `parse…`, and `fetch…` functions, plus a dependency-free MIME parser (`parseMimeMessage`), are exported too. The root entrypoint is unchanged.
+- 9f32ee0: Telemetry events now report `installation_id_source` (`stored`, `created`, or `ephemeral`) and `hosting_platform` (detected from standard platform environment variables being set, never their values), so usage reports can tell long-lived installations apart from throwaway serverless and container identities.
+
+### Patch Changes
+
+- bb81df3: Fix several send adapter defects. Mailchimp Transactional now reports per-recipient `accepted`/`rejected` and throws a permanent `not_sent` error when every recipient is rejected, instead of returning success. Lettermint and Primitive no longer join a static `idempotency-key` header with the per-send key. Graph, Plunk, and Sequenzy send the text body when `html` is an empty string. Postmark lists every accepted recipient. Scaleway returns the message ID from its `emails` response.
+- dc1bda4: Update Nodemailer to 10.5.0.
+- 5ba46c0: Sending adds much less work on top of the provider's HTTP call. A client with no plugins or hooks no longer waits on empty middleware and hook lists, resolves the route once per send, and builds telemetry data only when telemetry is on. In the bundled benchmark (`bun bench/overhead.ts`, see `bench/README.md`), SDK overhead per Resend send dropped from about 1.7 µs to 0.8 µs, and per 20-message `sendMany` from about 37 µs to 18 µs.
+
+  SES no longer derives its SigV4 signing key on every send. It still reads `accessKeyId`, `secretAccessKey`, and `sessionToken` from the adapter options on every send, so refreshed STS credentials apply to the next request, and caches only the derived key for each secret, UTC day, region, and service. A signed SES send in the benchmark dropped from about 82 µs to 25 µs, the same as a hand-written signer that also caches its key. Inbound S3 fetches share the same signer and cache. Canonical headers and query parameters are now sorted by character code, as SigV4 requires, instead of by locale.
+
+  Each adapter now keeps its provider limits in its own module, so importing one adapter no longer bundles every provider's validation rules. The minified Resend entry shrinks from 11.4 KB to 8.3 KB.
+
+  Fixes:
+
+  - `send()` no longer fails with "{} is not iterable" when a JavaScript caller passes `headers` as a name-to-value object.
+  - `loops()` without a `transactionalId` and `graph()` with an invalid `tokenTimeoutMs` now throw `EmailValidationError` like the other adapter factories, instead of a plain `Error`. The messages are unchanged.
+
+- c13c2c0: Describe the package on npm by what it does: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 21 more providers plus SMTP.
+- ceceea2: String addresses now resolve to the right mailbox when the display name or a comment holds angle brackets. The SDK skips quoted strings (with escaped quotes) and RFC 5322 comments, then takes the first `<...>` outside them. This is the address used by SMTP envelope validation, recipient-variable lookups and batch results (including SendGrid and Mailgun batch sends), and the Lettr and SendHeron recipient fields. Adapters that send a name and email pair (SendGrid's `from` and `to` fields, for example) still parse addresses on their own and are unchanged. The SMTP adapter now also builds its envelope (`MAIL FROM` and `RCPT TO`) from these resolved addresses instead of letting Nodemailer re-parse the original strings, so the mailbox the SDK validates is the one it delivers to.
+
+  Changed results:
+
+  - `"Ada <team>" <ada@example.test>` and `"Ada \"<x>\" L" <ada@example.test>` resolve to `ada@example.test` instead of `team` or `x`.
+  - `Ada (<team>) <ada@example.test>` resolves to `ada@example.test` instead of `team`.
+  - `Ada <ada@example.test (work)>` and `<(work)ada@example.test>` drop the comment inside the angle-addr.
+  - `ada@example.test (work)` and `(work) ada@example.test` resolve to `ada@example.test`, so the SMTP adapter accepts them instead of rejecting the whole string.
+  - A comment between two tokens counts as a space, so `ada( work )bob@example.test` resolves to `ada bob@example.test` and SMTP validation rejects it.
+  - A `,`, `;`, or `:` outside quotes and comments marks an address list or group, which is returned as-is. `Ada <ada@example.test>, evil@example.test` used to resolve to `ada@example.test` while the SMTP adapter delivered to both mailboxes; SMTP validation now rejects it, along with group syntax such as `Team: Ada <ada@example.test>;`.
+  - Nested comments and comments with a backslash, such as `Ada (a (<team>) b) <ada@example.test>`, are returned as-is and rejected by SMTP validation, because Nodemailer would read a different mailbox out of them.
+  - Input with an unclosed quote or comment, such as `"Ada <ada@example.test>` or `Ada <ada@example.test> (work`, is returned as-is, so validation rejects it instead of picking an address out of it.
+  - SMTP envelope validation also rejects `(`, `)`, `,`, `:`, `;`, `"`, and `\` in the resolved address, so bare lists like `ada@example.test,bob@example.test` and quoted local parts like `"ada"@example.test` fail before connecting.
+
+  Bare addresses, IPv6 domain literals such as `ada@[IPv6:2001:db8::1]`, `Name <a@b>`, `Ada <ada@example.test> (work)`, and unclosed or stray angle brackets resolve as before.
+
+- c1a455b: Update Nodemailer to 10.2.1 for SMTP delivery and Zod to 4.6.7 for Convex input validation.
+
 ## 3.0.1
 
 ### Patch Changes
