@@ -367,7 +367,7 @@ Two Brevo features have no Email SDK field. The adapter doesn't send `templateId
 
 After the last attempt, the fallback decision depends on whether Brevo might have accepted the message. A definite rejection, such as a 401 or 422, proves Brevo refused the request, so the adapter reports `delivery: "not_sent"` and Mailgun takes over even with the default policy. A timeout, a network error, a 408, 409 or 429, or a 5xx can't prove that, so it is `delivery: "unknown"`. For those, the default `onUnknownDelivery: "stop"` throws an `EmailRouteError` and never calls Mailgun. The client above sets `onUnknownDelivery: "continue"`, which accepts a possible duplicate in exchange for not losing the email. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off.
 
-Before the first request, the client checks the message against every adapter in the route, so a field Mailgun can't carry fails with an `EmailValidationError` instead of being dropped halfway. A `sendAt` more than 72 hours out passes that check and is then refused by Brevo, so keep long delays in your own queue.
+Before the first request, the client checks the message against every adapter in the route, so a field Mailgun can't carry fails with an `EmailValidationError` instead of being dropped halfway. A `sendAt` more than 72 hours out passes that check and is then refused by Brevo, so keep long delays in your own queue. [Schedule an email](/docs/guides/schedule-email) lists every adapter that accepts `sendAt` and how far ahead each provider allows.
 
 ### Test without a network
 

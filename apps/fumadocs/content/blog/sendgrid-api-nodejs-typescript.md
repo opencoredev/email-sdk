@@ -418,7 +418,7 @@ The adapter posts to `https://api.sendgrid.com/v3/mail/send` ([`sendgrid.ts`](ht
 
 `result.id` is the ID from the provider named in `result.adapter`: SendGrid's `X-Message-Id` when SendGrid sends, or Postmark's `MessageID` when the fallback does. Store both fields so you match webhooks with the right provider.
 
-The adapter doesn't send `template_id`, `batch_id`, or `mail_settings`, so it renders your own `html` and `text`, and scheduled sends can't be cancelled through it. For those, call the API directly as shown above. SendGrid has no idempotency key, so the SDK's `idempotencyKey` send option has nothing to map to on this adapter.
+The adapter doesn't send `template_id`, `batch_id`, or `mail_settings`, so it renders your own `html` and `text`, and scheduled sends can't be cancelled through it. For those, call the API directly as shown above. [Schedule an email](/docs/guides/schedule-email) lists every adapter that accepts `sendAt` and how far ahead each provider allows. SendGrid has no idempotency key, so the SDK's `idempotencyKey` send option has nothing to map to on this adapter.
 
 ### How the fallback behaves
 
