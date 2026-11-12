@@ -98,8 +98,8 @@
   "devDependencies": {
     "@opencoredev/email-sdk": "workspace:*",
     "@types/bun": "~1.4.4",
-    "convex": "^1.48.0",
-    "convex-test": "0.0.65"
+    "convex": "^1.49.0",
+    "convex-test": "0.0.70"
   },
   "peerDependencies": {
     "@opencoredev/email-sdk": "^3.0.1",

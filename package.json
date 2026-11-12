@@ -59,7 +59,7 @@
     "@changesets/cli": "^2.31.1",
     "@email-sdk/config": "workspace:*",
     "@oxlint/plugins": "1.85.0",
-    "oxfmt": "^0.74.0",
+    "oxfmt": "^0.78.0",
     "oxlint": "1.85.0",
     "turbo": "^2.10.13",
     "typescript": "^6.0.3"
