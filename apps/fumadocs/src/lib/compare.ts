@@ -98,7 +98,14 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-postmark",
     a: "resend",
     b: "postmark",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-14",
+    search: {
+      title: "Resend vs Postmark: Which Transactional Email API?",
+      description:
+        "Resend vs Postmark for transactional email: a short verdict, side-by-side field support, fallback rules in both directions, and one TypeScript send call.",
+      verdict:
+        "Pick Postmark for transactional mail on its own message stream, 45 days of message history and per-message metadata. Pick Resend for a modern API with React Email templates, scheduled sending and native idempotency keys: a retry that reuses the same key within 24 hours doesn't send twice. Email SDK's field checks pass a Resend-to-Postmark fallback for messages with no sendAt and at most one tag (Postmark accepts one), and Postmark-to-Resend for messages without metadata or repeated header names. Falling back when delivery is unknown also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
+    },
     intro:
       "Resend and Postmark are both developer-first transactional email APIs, but they grew up in different eras. Postmark has spent over a decade earning a reputation for fast, reliable inbox delivery and strict separation of transactional and broadcast streams, which makes it a favorite for password resets, receipts, and other must-arrive mail. Resend is the newer entrant, built by the team behind React Email, and wins on developer experience: a modern dashboard, first-class React templates, and quick domain setup. In the message model the practical differences show up at the edges — Resend supports scheduled sending natively while Postmark does not, and Postmark exposes structured metadata on each message while Resend leans on tags. Both handle CC, BCC, reply-to, custom headers, and attachments without fuss.",
   },

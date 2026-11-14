@@ -54,13 +54,13 @@ describe("comparison Markdown mirrors", () => {
   });
 
   test("keeps the template copy for pairs without search copy", () => {
-    const pair = getComparePair("resend-vs-postmark");
+    const pair = getComparePair("resend-vs-mailersend");
 
-    if (!pair) throw new Error("resend-vs-postmark should exist");
+    if (!pair) throw new Error("resend-vs-mailersend should exist");
 
     expect(pair.search).toBeUndefined();
     expect(buildComparePageTitle(pair)).toBe(
-      "Resend vs Postmark: transactional email API comparison",
+      "Resend vs MailerSend: transactional email API comparison",
     );
     expect(buildCompareFaq(pair)[0]?.question).toStartWith("Can I switch from Resend");
     expect(renderCompareMarkdown(pair)).not.toContain("Short answer");
