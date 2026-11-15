@@ -37,7 +37,7 @@ This table applies the listed starting prices and overage rates, with no add-ons
 | 50,000 | $87 | $35 | $90 |
 | 100,000 | $177 | $75 | $90 |
 
-Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. Between 50,000 and 100,000, move up to the selector's 100,000-email Foundation plan instead of paying overage: $35 plus 50,000 extra emails at $1.30 would be $100, against $75. Scale costs more at that volume. You pay for its 30 days of logs, included dedicated IP and phone support. Above 100,000, compare the selector's larger plans against overage before you choose.
+Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. Above about 80,800 a month, the selector's 100,000-email Foundation plan ($75) costs less than the 50,000 plan plus overage at $1.30. At 100,000 that overage path would be $100. Scale costs more at that volume. You pay for its 30 days of logs, included dedicated IP and phone support. Above 100,000, compare the selector's larger plans against overage before you choose.
 
 ## The limits that matter more than price
 
