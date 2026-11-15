@@ -37,7 +37,7 @@ This table applies the listed starting prices and overage rates, with no add-ons
 | 50,000 | $87 | $35 | $90 |
 | 100,000 | $177 | $100 | $90 |
 
-Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. At 100,000 a month, Scale's $90 beats Foundation's $35 plus 50,000 extra emails at $1.30. Above 100,000, compare the selector's larger plans against overage before you choose.
+Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. Scale overtakes Foundation at about 92,300 a month, where $35 plus 42.3 thousand extra emails at $1.30 also comes to $90. Above 100,000, compare the selector's larger plans against overage before you choose.
 
 ## The limits that matter more than price
 
@@ -147,7 +147,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 
 **How much does Mailgun cost per 1,000 emails?** Basic includes 10,000 emails for $15, then extra emails cost from $1.80 per 1,000. Foundation's overage starts at $1.30 and Scale's at $1.10.
 
-**Which Mailgun plan should I pick?** Basic up to about 21,000 emails a month, Foundation from there to 100,000, and Scale at 100,000 and above. Pick Foundation sooner if you need more than a day of logs or a second sending domain.
+**Which Mailgun plan should I pick?** At the listed starting rates: Basic up to about 21,000 emails a month, Foundation from there to about 92,000, and Scale above that. Pick Foundation sooner if you need more than a day of logs or a second sending domain.
 
 **Does Mailgun charge for test emails?** Yes, test-mode messages are billed. Use a memory adapter or a local SMTP inbox such as [Mailpit](/blog/mailpit-mailhog-nodejs) in tests instead.
 
