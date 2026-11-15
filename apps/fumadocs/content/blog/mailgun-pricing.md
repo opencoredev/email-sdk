@@ -6,26 +6,25 @@ This page covers what each plan includes, which plan is cheapest at your volume,
 
 ## Mailgun plans
 
-| Plan | Price | Included | Extra emails |
-| --- | --- | --- | --- |
-| Free | $0 | 100 a day | not available |
-| Basic | from $15/mo | 10,000 a month | from $1.80 per 1,000 |
-| Foundation | from $35/mo | 50,000 a month | from $1.30 per 1,000 |
-| Scale | from $90/mo | 100,000 a month | from $1.10 per 1,000 |
+| Plan | Per month | Extra per 1,000 |
+| --- | --- | --- |
+| Free | $0, 100 a day | none |
+| Basic | $15 for 10,000 | $1.80 |
+| Foundation | $35 for 50,000 | $1.30 |
+| Scale | $90 for 100,000 | $1.10 |
+
+Prices and overage rates are Mailgun's "from" figures.
 
 Mailgun's volume selector also offers Foundation and Scale at larger volumes (250,000 up to 2.5 million a month). Pick your volume there to see those prices, because a bigger plan is often cheaper than paying overage on a smaller one. Foundation and Scale are free for the first month. Mailgun bills overage at the start of each month for the month before.
 
 What changes between the plans, beyond volume:
 
-| | Free | Basic | Foundation | Scale |
-| --- | --- | --- | --- | --- |
-| Log retention | 1 day | 1 day | 5 days | 30 days |
-| Sending domains | 1 | 1 | 1,000 | 1,000 |
-| Inbound routes | 1 | 5 | full | full |
-| Users | 1 | not listed | unlimited | unlimited |
-| Dedicated IP | no | no | from 50,000 | 1 included |
+- **Free:** 1 day of logs, 1 sending domain, 1 inbound route, 1 user, 1 API key.
+- **Basic:** 1 day of logs, 1 sending domain, 5 inbound routes, 1 API key.
+- **Foundation:** 5 days of logs, 1,000 sending domains, full inbound routing, unlimited users, and a dedicated IP from 50,000 emails a month.
+- **Scale:** 30 days of logs, 1,000 sending domains, unlimited users, and one dedicated IP included.
 
-Free and Basic come with one API key each. Scale adds live phone and chat support, SAML SSO, send time optimization, dedicated IP pools and 5,000 email validations. An extra dedicated IP is $59 a month. Email validation beyond what a plan includes costs from $1.20 per 100 on Basic and Foundation and from $0.80 per 100 on Scale.
+ Scale adds live phone and chat support, SAML SSO, send time optimization, dedicated IP pools and 5,000 email validations. An extra dedicated IP is $59 a month. Email validation beyond what a plan includes costs from $1.20 per 100 on Basic and Foundation and from $0.80 per 100 on Scale.
 
 ## Which plan is cheapest at your volume
 
@@ -54,14 +53,14 @@ For an app that sends receipts, resets and invites, a few plan limits affect you
 
 Here is the same monthly volume on each provider's own pricing page, all checked November 2026: [Mailgun](https://www.mailgun.com/pricing/), [Resend](https://resend.com/pricing), [Postmark](https://postmarkapp.com/pricing) and [Amazon SES](https://aws.amazon.com/ses/pricing/) (à la carte, 32 KB messages, no add-ons):
 
-| Emails per month | Mailgun | Resend | Postmark | Amazon SES |
-| --- | --- | --- | --- | --- |
-| 3,000, at most 100 a day | $0 (Free) | $0 (Free) | $15 (Basic) | $0.31 |
-| 10,000 | $15 (Basic) | $20 (Pro) | $15 (Basic) | $1.04 |
-| 50,000 | $35 (Foundation) | $20 (Pro) | see slider | $5.19 |
-| 100,000 | $90 (Scale) | $35 (Pro) | see slider | $10.38 |
+- **3,000 a month, at most 100 a day:** Mailgun Free and Resend Free are $0. Postmark Basic is $15 (Postmark's free plan stops at 100 a month). SES is $0.31.
+- **10,000 a month:** Mailgun Basic and Postmark Basic are $15. Resend Pro is $20. SES is $1.04.
+- **50,000 a month:** Mailgun Foundation is $35. Resend Pro is $20. SES is $5.19.
+- **100,000 a month:** Mailgun Scale is $90. Resend Pro is $35. SES is $10.38.
 
-Mailgun's and Resend's free plans share the same 100-a-day cap, but Resend Free also stops at 3,000 a month, and Postmark's free plan stops at 100 a month. Postmark keeps 45 days of message history on every paid plan, against Mailgun's one day on Basic. Resend keeps 30 days. SES is cheapest by far, and it leaves bounce handling, event delivery and logging to your own AWS setup. [Amazon SES pricing](/blog/amazon-ses-pricing) covers its plans, and [Resend pricing](/blog/resend-pricing) has every Resend tier.
+Postmark prices higher volumes on its pricing page slider, so check it for your number.
+
+Mailgun's and Resend's free plans share the same 100-a-day cap, and Resend Free also stops at 3,000 a month. Postmark keeps 45 days of message history on every paid plan, against Mailgun's one day on Basic. Resend keeps 30 days. SES is cheapest by far, and it leaves bounce handling, event delivery and logging to your own AWS setup. [Amazon SES pricing](/blog/amazon-ses-pricing) covers its plans, and [Resend pricing](/blog/resend-pricing) has every Resend tier.
 
 [Mailgun alternatives](/blog/mailgun-alternatives) compares retention and fields across more providers and walks through a switch with Mailgun kept as the fallback.
 
