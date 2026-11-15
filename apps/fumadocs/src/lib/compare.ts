@@ -143,7 +143,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailgun",
     a: "resend",
     b: "mailgun",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-15",
     search: {
       title: "Resend vs Mailgun: Which Email API Should Developers Use?",
       description:
@@ -204,7 +204,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-15",
     search: {
       title: "Postmark vs Mailgun: Which Email API for Developers?",
       description:
@@ -234,7 +234,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-11-03",
+    lastmod: "2026-11-15",
     search: {
       title: "SendGrid vs Mailgun: Which Email API to Choose?",
       description:
@@ -279,7 +279,7 @@ export const comparePairs: ComparePair[] = [
     slug: "mailgun-vs-ses",
     a: "mailgun",
     b: "ses",
-    lastmod: "2026-11-10",
+    lastmod: "2026-11-15",
     search: {
       title: "Mailgun vs Amazon SES: Price, Features and Fallback",
       description:
@@ -365,6 +365,11 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "mailgun-alternatives",
       title: "Mailgun alternatives guide",
       lead: "Moving off Mailgun?",
+    },
+    {
+      slug: "mailgun-pricing",
+      title: "Mailgun pricing guide",
+      lead: "Estimating the bill?",
     },
   ],
   resend: [

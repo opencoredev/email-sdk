@@ -2,12 +2,24 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "mailgun-pricing",
+    title: "Mailgun Pricing in 2026: Plans, Overage and Real Costs",
+    description:
+      "Mailgun pricing, checked November 2026: Free, Basic, Foundation and Scale plans, overage per 1,000, the cheapest plan by volume, and Mailgun vs Resend and SES.",
+    publishedAt: "2026-11-15",
+    updatedAt: "2026-11-15",
+    readTime: "7 min read",
+    image: "/og/blog/mailgun-pricing.svg",
+    imageAlt: "Mailgun pricing card: Basic, Foundation and Scale plans with overage per 1,000 emails",
+    tags: ["Mailgun", "Pricing", "Transactional email"],
+  },
+  {
     slug: "amazon-ses-pricing",
     title: "Amazon SES Pricing in 2026: Plans and Real Costs",
     description:
       "Amazon SES pricing, checked November 2026: Essentials at $0.16 per 1,000, a la carte at $0.10, data and add-on fees, cost by volume, and SES vs Resend.",
     publishedAt: "2026-11-10",
-    updatedAt: "2026-11-10",
+    updatedAt: "2026-11-15",
     readTime: "7 min read",
     image: "/og/blog/amazon-ses-pricing.svg",
     imageAlt: "Amazon SES pricing card: Essentials and a la carte rates per 1,000 emails, and cost by volume",
@@ -139,7 +151,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-04",
+    updatedAt: "2026-11-15",
     readTime: "11 min read",
     image: "/og/blog/mailgun-alternatives.svg",
     imageAlt: "Mailgun alternatives card: sourced prices, log retention, and a fallback migration in TypeScript",
@@ -151,7 +163,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Mailgun API from Node.js and TypeScript with fetch: API keys, US and EU base URLs, attachments, tags, errors, rate limits, retries, and webhook signatures.",
     publishedAt: "2026-10-28",
-    updatedAt: "2026-11-12",
+    updatedAt: "2026-11-15",
     readTime: "14 min read",
     image: "/og/blog/mailgun-api-nodejs-typescript.svg",
     imageAlt: "Mailgun API guide card: fetch, regions, retries and webhooks in TypeScript",
