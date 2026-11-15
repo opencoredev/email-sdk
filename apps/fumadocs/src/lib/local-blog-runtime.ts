@@ -2,6 +2,7 @@ import amazonSesPricingMarkdown from "../../content/blog/amazon-ses-pricing.md?r
 import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?raw";
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
+import mailgunPricingMarkdown from "../../content/blog/mailgun-pricing.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
 import mailpitMailhogMarkdown from "../../content/blog/mailpit-mailhog-nodejs.md?raw";
 import nextjsServerActionMarkdown from "../../content/blog/nextjs-server-action-send-email.md?raw";
@@ -33,6 +34,7 @@ const localBlogMarkdown = new Map([
   ["mailpit-mailhog-nodejs", mailpitMailhogMarkdown],
   ["nextjs-server-action-send-email", nextjsServerActionMarkdown],
   ["amazon-ses-pricing", amazonSesPricingMarkdown],
+  ["mailgun-pricing", mailgunPricingMarkdown],
 ]);
 
 const localBlogBodies = new Map(

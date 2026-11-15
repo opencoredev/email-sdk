@@ -307,6 +307,7 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 
 - [Mailgun adapter](/docs/adapters/mailgun): options, EU region, field mapping, and native batch sends.
 - [Mailgun API guide for Node.js and TypeScript](/blog/mailgun-api-nodejs-typescript): raw requests, regions, rate limits, and webhooks.
+- [Mailgun pricing](/blog/mailgun-pricing): every Mailgun plan and overage rate, and the cheapest plan by volume.
 - [Retries and fallback](/docs/concepts/fallbacks-and-retries): how delivery certainty decides when fallback runs.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): the same migration, starting from SendGrid.
 - [SendGrid API guide for Node.js and TypeScript](/blog/sendgrid-api-nodejs-typescript): API keys, Mail Send requests, scheduling, and event webhooks.

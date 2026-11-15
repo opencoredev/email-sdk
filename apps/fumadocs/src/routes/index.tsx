@@ -76,7 +76,7 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
     links: [
       { label: "Resend pricing", href: "/blog/resend-pricing", internal: true },
       { label: "SendGrid alternatives", href: "/blog/sendgrid-alternatives", internal: true },
-      { label: "Mailgun alternatives", href: "/blog/mailgun-alternatives", internal: true },
+      { label: "Mailgun pricing", href: "/blog/mailgun-pricing", internal: true },
       { label: "Amazon SES pricing", href: "/blog/amazon-ses-pricing", internal: true },
     ],
   },

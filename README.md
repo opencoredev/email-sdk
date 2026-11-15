@@ -72,6 +72,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Resend API guide for Node.js and TypeScript](https://email-sdk.dev/blog/resend-api-nodejs-typescript)
 - [Resend pricing](https://email-sdk.dev/blog/resend-pricing)
 - [Amazon SES pricing](https://email-sdk.dev/blog/amazon-ses-pricing)
+- [Mailgun pricing](https://email-sdk.dev/blog/mailgun-pricing)
 - [Resend SMTP settings for Node.js](https://email-sdk.dev/blog/resend-smtp-nodejs)
 - [Mailgun API guide for Node.js and TypeScript](https://email-sdk.dev/blog/mailgun-api-nodejs-typescript)
 - [Brevo API guide for Node.js and TypeScript](https://email-sdk.dev/blog/brevo-api-nodejs-typescript)
