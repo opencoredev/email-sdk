@@ -28,16 +28,16 @@ What changes between the plans, beyond volume:
 
 ## Which plan is cheapest at your volume
 
-This table applies the listed starting prices and overage rates, with no add-ons:
+This table applies the listed starting prices and overage rates, with no add-ons. The 100,000 Foundation price is the 100,000-email Foundation plan from Mailgun's volume selector:
 
 | Emails per month | Basic | Foundation | Scale |
 | --- | --- | --- | --- |
 | 10,000 | $15 | $35 | $90 |
 | 25,000 | $42 | $35 | $90 |
 | 50,000 | $87 | $35 | $90 |
-| 100,000 | $177 | $100 | $90 |
+| 100,000 | $177 | $75 | $90 |
 
-Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. Scale overtakes Foundation at about 92,300 a month, where $35 plus 42.3 thousand extra emails at $1.30 also comes to $90. Above 100,000, compare the selector's larger plans against overage before you choose.
+Basic overtakes Foundation at about 21,100 emails a month: $15 plus 11.1 thousand extra emails at $1.80 comes to $35. If you send more than that, Foundation is cheaper, and it also brings 5 days of logs. Between 50,000 and 100,000, move up to the selector's 100,000-email Foundation plan instead of paying overage: $35 plus 50,000 extra emails at $1.30 would be $100, against $75. Scale costs more at that volume. You pay for its 30 days of logs, included dedicated IP and phone support. Above 100,000, compare the selector's larger plans against overage before you choose.
 
 ## The limits that matter more than price
 
@@ -56,7 +56,7 @@ Here is the same monthly volume on each provider's own pricing page, all checked
 - **3,000 a month, at most 100 a day:** Mailgun Free and Resend Free are $0. Postmark Basic is $15 (Postmark's free plan stops at 100 a month). SES is $0.31.
 - **10,000 a month:** Mailgun Basic and Postmark Basic are $15. Resend Pro is $20. SES is $1.04.
 - **50,000 a month:** Mailgun Foundation is $35. Resend Pro is $20. SES is $5.19.
-- **100,000 a month:** Mailgun Scale is $90. Resend Pro is $35. SES is $10.38.
+- **100,000 a month:** Mailgun Foundation is $75. Resend Pro is $35. SES is $10.38.
 
 Postmark prices higher volumes on its pricing page slider, so check it for your number.
 
@@ -137,7 +137,7 @@ export const email = createEmailClient({
 });
 ```
 
-Resend rejects repeated header names, which Mailgun accepts, so a message that repeats a header fails validation before either provider is called. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [Mailgun adapter reference](/docs/adapters/mailgun) lists every option.
+Resend takes neither `metadata` (Mailgun's `v:` variables) nor repeated header names, both of which Mailgun accepts. The client checks every adapter on the route before sending, so a message that uses either fails validation before any provider is called. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [Mailgun adapter reference](/docs/adapters/mailgun) lists every option.
 
 The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, and the test ran with `bun test`. No real email was sent.
 
@@ -147,7 +147,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 
 **How much does Mailgun cost per 1,000 emails?** Basic includes 10,000 emails for $15, then extra emails cost from $1.80 per 1,000. Foundation's overage starts at $1.30 and Scale's at $1.10.
 
-**Which Mailgun plan should I pick?** At the listed starting rates: Basic up to about 21,000 emails a month, Foundation from there to about 92,000, and Scale above that. Pick Foundation sooner if you need more than a day of logs or a second sending domain.
+**Which Mailgun plan should I pick?** Basic up to about 21,000 emails a month, then the Foundation volume in Mailgun's selector that covers your sending. Pick Foundation sooner if you need more than a day of logs or a second sending domain, and Scale if you need 30 days of logs, an included dedicated IP or phone support.
 
 **Does Mailgun charge for test emails?** Yes, test-mode messages are billed. Use a memory adapter or a local SMTP inbox such as [Mailpit](/blog/mailpit-mailhog-nodejs) in tests instead.
 
