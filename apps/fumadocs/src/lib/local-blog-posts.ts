@@ -2,6 +2,18 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "sendgrid-pricing",
+    title: "SendGrid Pricing in 2026: Plans, Overage and Free Trial",
+    description:
+      "SendGrid pricing, checked November 2026: the 60-day trial, Essentials and Pro plans, overage per 1,000, the cheapest plan by volume, and SendGrid vs SES.",
+    publishedAt: "2026-11-16",
+    updatedAt: "2026-11-16",
+    readTime: "8 min read",
+    image: "/og/blog/sendgrid-pricing.svg",
+    imageAlt: "SendGrid pricing card: free trial, Essentials and Pro plans with overage per 1,000 emails",
+    tags: ["SendGrid", "Pricing", "Transactional email"],
+  },
+  {
     slug: "mailgun-pricing",
     title: "Mailgun Pricing in 2026: Plans, Overage and Real Costs",
     description:
@@ -19,7 +31,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Amazon SES pricing, checked November 2026: Essentials at $0.16 per 1,000, a la carte at $0.10, data and add-on fees, cost by volume, and SES vs Resend.",
     publishedAt: "2026-11-10",
-    updatedAt: "2026-11-15",
+    updatedAt: "2026-11-16",
     readTime: "7 min read",
     image: "/og/blog/amazon-ses-pricing.svg",
     imageAlt: "Amazon SES pricing card: Essentials and a la carte rates per 1,000 emails, and cost by volume",
@@ -55,7 +67,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the SendGrid API from Node.js and TypeScript with fetch: API keys, v3 Mail Send, templates, scheduling, sandbox mode, rate limits, and signed webhooks.",
     publishedAt: "2026-11-03",
-    updatedAt: "2026-11-12",
+    updatedAt: "2026-11-16",
     readTime: "13 min read",
     image: "/og/blog/sendgrid-api-nodejs-typescript.svg",
     imageAlt: "SendGrid API guide card: API keys, Mail Send, sandbox mode, and signed webhooks in TypeScript",
@@ -139,7 +151,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-03",
+    updatedAt: "2026-11-16",
     readTime: "11 min read",
     image: "/og/blog/sendgrid-alternatives.svg",
     imageAlt: "SendGrid alternatives card: sourced prices, field support, and a fallback migration in TypeScript",

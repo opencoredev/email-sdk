@@ -78,6 +78,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Brevo API guide for Node.js and TypeScript](https://email-sdk.dev/blog/brevo-api-nodejs-typescript)
 - [SendGrid API guide for Node.js and TypeScript](https://email-sdk.dev/blog/sendgrid-api-nodejs-typescript)
 - [SendGrid alternatives for developers](https://email-sdk.dev/blog/sendgrid-alternatives)
+- [SendGrid pricing](https://email-sdk.dev/blog/sendgrid-pricing)
 - [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
 - [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
 - [MailHog and Mailpit: test email locally in Node.js](https://email-sdk.dev/blog/mailpit-mailhog-nodejs)
