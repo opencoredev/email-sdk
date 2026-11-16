@@ -24,7 +24,7 @@ The number after each plan name is how many emails a month it includes. Twilio l
 
 Twilio [retired the free Email API plan on May 27, 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan). Existing free accounts kept sending for a 60-day transition, then needed a paid plan to keep sending email. New accounts now start on the free trial, which sends 100 emails a day for 60 days with no credit card. Plan to move to a paid plan before the trial ends, because a password reset that can't go out is an outage for your users.
 
-If you only need a few thousand emails a month, other providers still have a free tier: Resend Free sends 3,000 a month (at most 100 a day) and Mailgun Free sends 100 a day. [SendGrid alternatives](/blog/sendgrid-alternatives) compares them, with a migration that keeps SendGrid as the fallback.
+If you only need a few thousand emails a month, other providers still have a free tier: [Resend Free](https://resend.com/pricing) sends 3,000 a month (at most 100 a day) and [Mailgun Free](https://www.mailgun.com/pricing/) sends 100 a day, both checked November 2026. [SendGrid alternatives](/blog/sendgrid-alternatives) compares them, with a migration that keeps SendGrid as the fallback.
 
 ## Which plan is cheapest at your volume
 
@@ -55,7 +55,7 @@ SendGrid counts every recipient as one email, so a message to three addresses us
 At 100,000 emails a month, Pro costs $55 more than Essentials. Here is what that buys, from the pricing page's feature table:
 
 - **Dedicated IP.** Pro and Premier include one dedicated IP with automated warm-up, and you can buy more. Essentials sends from shared IP pools.
-- **Email activity history.** The trial and Essentials keep 3 days of searchable email activity. Pro keeps 7 days. Longer history is a paid add-on on every plan.
+- **Email activity history.** The trial and Essentials keep 3 days of searchable email activity. Pro keeps 7 days. Longer history is a paid add-on on Essentials, Pro and Premier (Twilio excludes Premier plans at 100 million emails and above), not on the trial.
 - **Event Webhooks.** The trial includes 1, Essentials 2, Pro and Premier 5.
 - **Teammates and subusers.** The trial and Essentials include 1 teammate. Pro includes 1,000 teammates, subuser management and single sign-on.
 - **Email validation.** Pro includes 2,500 address validations and Premier 5,000. Essentials includes none.
@@ -143,7 +143,7 @@ export const email = createEmailClient({
 });
 ```
 
-SES takes neither `metadata` (SendGrid's `custom_args`) nor `sendAt`, both of which SendGrid accepts. The client checks every adapter on the route before sending, so a message that uses either fails validation before SendGrid is called. Verify the `from` domain in SES before you rely on the fallback, and move the account out of the SES sandbox, or SES only delivers to verified addresses. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [SendGrid adapter reference](/docs/adapters/sendgrid) lists every option.
+SES takes neither `metadata` (SendGrid's `custom_args`) nor `sendAt`, both of which SendGrid accepts. The client checks every adapter on the route before sending, so a message that uses either fails validation before SendGrid is called. Verify the `from` domain in SES before you rely on the fallback, and move the account out of the SES sandbox: sandbox sending is limited to verified addresses and domains, plus the SES mailbox simulator ([SES sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html), checked November 2026). [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [SendGrid adapter reference](/docs/adapters/sendgrid) lists every option.
 
 The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, and the test ran with `bun test`. No real email was sent.
 
