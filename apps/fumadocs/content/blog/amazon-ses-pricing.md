@@ -176,6 +176,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [Resend vs Amazon SES](/compare/resend-vs-ses), [SendGrid vs Amazon SES](/compare/sendgrid-vs-ses), [Mailgun vs Amazon SES](/compare/mailgun-vs-ses) and [Postmark vs Amazon SES](/compare/postmark-vs-ses): field support next to other providers.
 - [Resend pricing](/blog/resend-pricing): Resend's plans, the free tier's daily cap, and overage rates.
 - [Mailgun pricing](/blog/mailgun-pricing): Mailgun's plans, overage rates and log retention.
+- [SendGrid pricing](/blog/sendgrid-pricing): SendGrid's trial, Essentials and Pro plans, and overage rates.
 - [Resend alternatives](/blog/resend-alternatives): move from Resend to SES with Resend as the fallback.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): sourced prices for other providers.
 - [Amazon SES adapter reference](/docs/adapters/ses): adapter options and field mapping.

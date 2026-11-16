@@ -75,7 +75,7 @@ const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] =
     label: "Choosing a provider",
     links: [
       { label: "Resend pricing", href: "/blog/resend-pricing", internal: true },
-      { label: "SendGrid alternatives", href: "/blog/sendgrid-alternatives", internal: true },
+      { label: "SendGrid pricing", href: "/blog/sendgrid-pricing", internal: true },
       { label: "Mailgun pricing", href: "/blog/mailgun-pricing", internal: true },
       { label: "Amazon SES pricing", href: "/blog/amazon-ses-pricing", internal: true },
     ],

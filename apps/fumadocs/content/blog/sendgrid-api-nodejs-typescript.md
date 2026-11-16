@@ -471,6 +471,7 @@ All code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1. Th
 
 - [SendGrid adapter reference](/docs/adapters/sendgrid): every adapter option, capability, and CLI check.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): moving off SendGrid with SendGrid kept as the fallback.
+- [SendGrid pricing](/blog/sendgrid-pricing): every Email API plan, overage rate and the cheapest plan by volume.
 - [Postmark vs SendGrid](/compare/postmark-vs-sendgrid), [Resend vs SendGrid](/compare/resend-vs-sendgrid), and [SendGrid vs Mailgun](/compare/sendgrid-vs-mailgun): SendGrid's message fields next to other providers.
 - [Mailgun API guide](/blog/mailgun-api-nodejs-typescript), [Resend API guide](/blog/resend-api-nodejs-typescript), and [Brevo API guide](/blog/brevo-api-nodejs-typescript): the same walkthrough for other providers.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.

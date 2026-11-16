@@ -113,7 +113,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-sendgrid",
     a: "resend",
     b: "sendgrid",
-    lastmod: "2026-11-03",
+    lastmod: "2026-11-16",
     search: {
       title: "Resend vs SendGrid: Which Email API Should You Pick?",
       description:
@@ -189,7 +189,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
-    lastmod: "2026-11-03",
+    lastmod: "2026-11-16",
     search: {
       title: "Postmark vs SendGrid: Which Transactional Email API?",
       description:
@@ -234,7 +234,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-mailgun",
     a: "sendgrid",
     b: "mailgun",
-    lastmod: "2026-11-15",
+    lastmod: "2026-11-16",
     search: {
       title: "SendGrid vs Mailgun: Which Email API to Choose?",
       description:
@@ -249,7 +249,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-11-10",
+    lastmod: "2026-11-16",
     search: {
       title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
       description:
@@ -264,7 +264,7 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-brevo",
     a: "sendgrid",
     b: "brevo",
-    lastmod: "2026-11-03",
+    lastmod: "2026-11-16",
     search: {
       title: "SendGrid vs Brevo (Sendinblue): Which Email API?",
       description:
@@ -411,6 +411,11 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "sendgrid-alternatives",
       title: "SendGrid alternatives guide",
       lead: "Moving off SendGrid?",
+    },
+    {
+      slug: "sendgrid-pricing",
+      title: "SendGrid pricing guide",
+      lead: "Estimating the bill?",
     },
   ],
 };

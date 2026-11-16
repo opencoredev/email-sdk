@@ -13,6 +13,7 @@ import resendSmtpMarkdown from "../../content/blog/resend-smtp-nodejs.md?raw";
 import sendEmailNodeMarkdown from "../../content/blog/send-email-nodejs-typescript.md?raw";
 import sendgridAlternativesMarkdown from "../../content/blog/sendgrid-alternatives.md?raw";
 import sendgridApiMarkdown from "../../content/blog/sendgrid-api-nodejs-typescript.md?raw";
+import sendgridPricingMarkdown from "../../content/blog/sendgrid-pricing.md?raw";
 import { renderMarkdownToSafeHtml } from "../../scripts/notra-content";
 
 import { localBlogPosts } from "./local-blog-posts";
@@ -35,6 +36,7 @@ const localBlogMarkdown = new Map([
   ["nextjs-server-action-send-email", nextjsServerActionMarkdown],
   ["amazon-ses-pricing", amazonSesPricingMarkdown],
   ["mailgun-pricing", mailgunPricingMarkdown],
+  ["sendgrid-pricing", sendgridPricingMarkdown],
 ]);
 
 const localBlogBodies = new Map(
