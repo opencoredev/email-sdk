@@ -2,12 +2,24 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "email-api-pricing",
+    title: "Email API Pricing Compared: Cheapest Options in 2026",
+    description:
+      "Email API pricing compared, checked November 2026: Amazon SES, Resend, SendGrid, Mailgun and Postmark from 3,000 to 1 million emails a month, plus free tiers.",
+    publishedAt: "2026-11-17",
+    updatedAt: "2026-11-17",
+    readTime: "8 min read",
+    image: "/og/blog/email-api-pricing.svg",
+    imageAlt: "Email API pricing card: monthly cost of SES, Resend, SendGrid, Mailgun and Postmark by volume",
+    tags: ["Pricing", "Transactional email", "Amazon SES"],
+  },
+  {
     slug: "sendgrid-pricing",
     title: "SendGrid Pricing in 2026: Plans, Overage and Free Trial",
     description:
       "SendGrid pricing, checked November 2026: the 60-day trial, Essentials and Pro plans, overage per 1,000, the cheapest plan by volume, and SendGrid vs SES.",
     publishedAt: "2026-11-16",
-    updatedAt: "2026-11-16",
+    updatedAt: "2026-11-17",
     readTime: "8 min read",
     image: "/og/blog/sendgrid-pricing.svg",
     imageAlt: "SendGrid pricing card: free trial, Essentials and Pro plans with overage per 1,000 emails",
@@ -19,7 +31,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Mailgun pricing, checked November 2026: Free, Basic, Foundation and Scale plans, overage per 1,000, the cheapest plan by volume, and Mailgun vs Resend and SES.",
     publishedAt: "2026-11-15",
-    updatedAt: "2026-11-15",
+    updatedAt: "2026-11-17",
     readTime: "7 min read",
     image: "/og/blog/mailgun-pricing.svg",
     imageAlt: "Mailgun pricing card: Basic, Foundation and Scale plans with overage per 1,000 emails",
@@ -31,7 +43,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Amazon SES pricing, checked November 2026: Essentials at $0.16 per 1,000, a la carte at $0.10, data and add-on fees, cost by volume, and SES vs Resend.",
     publishedAt: "2026-11-10",
-    updatedAt: "2026-11-16",
+    updatedAt: "2026-11-17",
     readTime: "7 min read",
     image: "/og/blog/amazon-ses-pricing.svg",
     imageAlt: "Amazon SES pricing card: Essentials and a la carte rates per 1,000 emails, and cost by volume",
@@ -115,7 +127,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-11-01",
+    updatedAt: "2026-11-17",
     readTime: "8 min read",
     image: "/og/blog/resend-pricing.svg",
     imageAlt: "Resend pricing card: free tier, Pro and Scale plans, and overage rates",
