@@ -6,16 +6,42 @@ This page compares those five providers on monthly cost from 3,000 to 1 million 
 
 ## Monthly cost at each volume
 
-Each cell is the cheapest published option for that provider at that volume, with no add-ons, taxes or credits. SES assumes 32 KB messages, the size AWS uses in its own examples, so each total includes $0.12 per GB of message data.
+Each cell is the cheapest published option for that provider at that volume, with no add-ons, taxes or credits.
 
-| Emails per month | SES à la carte | SES Essentials | Resend | SendGrid | Mailgun | Postmark |
-| --- | --- | --- | --- | --- | --- | --- |
-| 3,000 (100 a day) | $0.31 | $0.49 | $0 | $0 for 60 days, then $19.95 | $0 | $15 |
-| 10,000 | $1.04 | $1.64 | $20 | $19.95 | $15 | $15 |
-| 50,000 | $5.19 | $8.19 | $20 | $19.95 | $35 | $55 |
-| 100,000 | $10.38 | $16.38 | $35 | $34.95 | $75 | $115 |
-| 500,000 | $51.92 | $81.92 | $350 | $386.95 | $400 | $455 |
-| 1,000,000 | $103.84 | $163.84 | $650 | $733 | $700 | $775 |
+Amazon SES, with 32 KB messages (the size AWS uses in its own examples), so each total includes $0.12 per GB of message data:
+
+| Emails per month | À la carte | Essentials |
+| --- | --- | --- |
+| 3,000 | $0.31 | $0.49 |
+| 10,000 | $1.04 | $1.64 |
+| 50,000 | $5.19 | $8.19 |
+| 100,000 | $10.38 | $16.38 |
+| 500,000 | $51.92 | $81.92 |
+| 1,000,000 | $103.84 | $163.84 |
+
+Resend and SendGrid:
+
+| Emails per month | Resend | SendGrid |
+| --- | --- | --- |
+| 3,000 | $0 | $19.95 |
+| 10,000 | $20 | $19.95 |
+| 50,000 | $20 | $19.95 |
+| 100,000 | $35 | $34.95 |
+| 500,000 | $350 | $386.95 |
+| 1,000,000 | $650 | $733 |
+
+Mailgun and Postmark:
+
+| Emails per month | Mailgun | Postmark |
+| --- | --- | --- |
+| 3,000 | $0 | $15 |
+| 10,000 | $15 | $15 |
+| 50,000 | $35 | $55 |
+| 100,000 | $75 | $115 |
+| 500,000 | $400 | $455 |
+| 1,000,000 | $700 | $775 |
+
+The 3,000 row assumes at most 100 a day, the daily cap on Resend Free and Mailgun Free. SendGrid's 60-day trial also sends 100 a day for $0, then needs a paid plan.
 
 Where the cheapest option isn't a plain plan price:
 
