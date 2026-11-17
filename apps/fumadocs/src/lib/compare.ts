@@ -113,14 +113,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-sendgrid",
     a: "resend",
     b: "sendgrid",
-    lastmod: "2026-11-16",
-    search: {
-      title: "Resend vs SendGrid: Which Email API Should You Pick?",
-      description:
-        "Resend vs SendGrid for transactional email: a short verdict, side-by-side message field support, and the same TypeScript code to send through either API.",
-      verdict:
-        "Pick Resend for a small, modern API with React Email templates and a fast first send. Pick SendGrid when you also send marketing email from the same account, need subusers or dedicated IP management, or attach metadata to each message. Both support CC, BCC, custom headers, attachments, tags and scheduled sending, so Email SDK's field checks pass a Resend-to-SendGrid fallback for any message, and SendGrid-to-Resend for messages without metadata. Falling back after a failed request also needs onUnknownDelivery: \"continue\", which can send a duplicate.",
-    },
+    lastmod: "2026-11-17",
     intro:
       "SendGrid (now part of Twilio) is the incumbent of transactional email: it has been around since 2009, handles enormous volume, and its v3 Mail Send API covers nearly every feature a sender could ask for — including per-message metadata and scheduled sends. That maturity comes with a sprawling dashboard, IP-reputation management you may need to do yourself on shared pools, and a pricing ladder that can surprise you as volume grows. Resend is the opposite trade: a small, sharp API with excellent defaults, React Email templates, and a fast path from signup to first send, at the cost of fewer enterprise controls. On the message shape itself the two are nearly equivalent; SendGrid's extra metadata field support is the only structural difference the SDK has to reconcile.",
   },

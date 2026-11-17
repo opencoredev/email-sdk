@@ -159,6 +159,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 
 ## Related
 
+- [Email API pricing compared](/blog/email-api-pricing): SES, Resend, SendGrid, Mailgun and Postmark at the same monthly volumes, and their free tiers.
 - [SendGrid API guide for Node.js and TypeScript](/blog/sendgrid-api-nodejs-typescript): API keys, Mail Send with `fetch`, scheduling, sandbox mode and signed webhooks.
 - [SendGrid alternatives](/blog/sendgrid-alternatives): prices and fields elsewhere, and a switch with SendGrid kept as the fallback.
 - [Amazon SES pricing](/blog/amazon-ses-pricing), [Resend pricing](/blog/resend-pricing) and [Mailgun pricing](/blog/mailgun-pricing): the same breakdown for those providers.

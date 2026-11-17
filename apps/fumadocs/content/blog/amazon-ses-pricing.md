@@ -173,6 +173,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 
 ## Related
 
+- [Email API pricing compared](/blog/email-api-pricing): SES, Resend, SendGrid, Mailgun and Postmark at the same monthly volumes, and their free tiers.
 - [Resend vs Amazon SES](/compare/resend-vs-ses), [SendGrid vs Amazon SES](/compare/sendgrid-vs-ses), [Mailgun vs Amazon SES](/compare/mailgun-vs-ses) and [Postmark vs Amazon SES](/compare/postmark-vs-ses): field support next to other providers.
 - [Resend pricing](/blog/resend-pricing): Resend's plans, the free tier's daily cap, and overage rates.
 - [Mailgun pricing](/blog/mailgun-pricing): Mailgun's plans, overage rates and log retention.

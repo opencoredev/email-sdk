@@ -1,5 +1,6 @@
 import amazonSesPricingMarkdown from "../../content/blog/amazon-ses-pricing.md?raw";
 import brevoApiMarkdown from "../../content/blog/brevo-api-nodejs-typescript.md?raw";
+import emailApiPricingMarkdown from "../../content/blog/email-api-pricing.md?raw";
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunPricingMarkdown from "../../content/blog/mailgun-pricing.md?raw";
@@ -37,6 +38,7 @@ const localBlogMarkdown = new Map([
   ["amazon-ses-pricing", amazonSesPricingMarkdown],
   ["mailgun-pricing", mailgunPricingMarkdown],
   ["sendgrid-pricing", sendgridPricingMarkdown],
+  ["email-api-pricing", emailApiPricingMarkdown],
 ]);
 
 const localBlogBodies = new Map(
