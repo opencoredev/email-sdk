@@ -143,6 +143,8 @@ export default {
 
 The raw stream can be read once. Parse before calling `message.forward()`, or keep `email.raw.bytes`. To fill `email.security` from the `Authentication-Results` header your zone adds, pass its authserv-id: `parseCloudflareInbound(message, { trustedAuthServIds: ["mx.example.com"] })`.
 
+To send replies or alerts from the same Worker, pass its `send_email` binding to the [Cloudflare Email Sending adapter](/docs/adapters/cloudflare).
+
 ### Microsoft Graph
 
 Create a subscription on `/users/{id}/mailFolders/inbox/messages` with `changeType: "created"` and a random `clientState`. `handleInbound` answers the validation request, checks `clientState`, and fetches each new message as MIME.
