@@ -26,6 +26,8 @@ Estimating the bill? [SendGrid pricing](/blog/sendgrid-pricing) lists every Emai
 
 Create an API key with Mail Send permission in the [SendGrid dashboard](https://app.sendgrid.com/settings/api_keys) and verify the sender identity or domain you use in `from`.
 
+A SendGrid API key starts with `SG.`, and SendGrid shows it only once, when you create it. Store the whole value, `SG.` included, as `SENDGRID_API_KEY`. A value without that prefix is usually a copy-paste mistake or the key ID instead of the key. The [SendGrid API guide](/blog/sendgrid-api-nodejs-typescript) covers key scopes and rotation.
+
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
 import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
