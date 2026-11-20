@@ -28,7 +28,7 @@ Moving off Resend? [Resend alternatives](/blog/resend-alternatives) compares pri
 
 Grab an API key from the [Resend dashboard](https://resend.com/api-keys) and verify the domain you plan to send from.
 
-A Resend API key starts with `re_`, and Resend shows it only once, when you create it. Store the whole value, `re_` included, as `RESEND_API_KEY`. A value without that prefix is usually a copy-paste mistake or the key's ID instead of the key. For an app that only sends, create a `sending_access` key scoped to your domain. The [Resend API guide](/blog/resend-api-nodejs-typescript#authenticate-with-an-api-key) covers key permissions.
+A Resend API key starts with `re_`, and Resend shows it only once, when you create it. Store the whole value, `re_` included, as `RESEND_API_KEY`. A value without that prefix is usually a copy-paste mistake or the key's ID instead of the key. For an app that only sends, create a `sending_access` key scoped to your domain. The [Resend API guide](/blog/resend-api-nodejs-typescript) covers key permissions.
 
 ```ts title="lib/email.ts"
 import { createEmailClient } from "@opencoredev/email-sdk";
