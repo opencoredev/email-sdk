@@ -1,0 +1,14 @@
+{
+  "title": "Error codes",
+  "icon": "CircleAlert",
+  "pages": [
+    "index",
+    "validation-error",
+    "adapter-not-found",
+    "adapter-error",
+    "route-error",
+    "all-recipients-failed",
+    "middleware-error",
+    "aborted"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "title": "UI",
+  "icon": "MailAtSign",
+  "pagesIndex": "index",
+  "pages": ["components", "account", "product", "commerce"]
+}

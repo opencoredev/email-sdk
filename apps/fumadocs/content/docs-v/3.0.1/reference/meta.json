@@ -1,0 +1,16 @@
+{
+  "title": "Reference",
+  "icon": "LibraryBig",
+  "pages": [
+    "client",
+    "message",
+    "adapter-contract",
+    "plugin-api",
+    "webhooks",
+    "community-registry",
+    "compatibility",
+    "telemetry",
+    "cli",
+    "errors"
+  ]
+}
