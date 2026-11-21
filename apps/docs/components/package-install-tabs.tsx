@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Check, Clipboard } from "./icon";
 
@@ -56,7 +56,7 @@ function isPackageManager(value: string | null): value is PackageManager {
 export function PackageInstallTabs({
   packageName = "@opencoredev/email-sdk",
 }: PackageInstallTabsProps) {
-  const installTabsId = useId();
+  const installTabsId = `install-tabs-${packageName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "pkg"}`;
   const [selected, setSelected] = useState<PackageManager>("npm");
   const [copyState, setCopyState] = useState<CopyState>("idle");
 
@@ -140,13 +140,13 @@ export function PackageInstallTabs({
         id={panelId}
         role="tabpanel"
       >
-        <pre className="overflow-x-auto px-4 py-3.5 pr-12 text-[0.8125rem] leading-6">
+        <div className="overflow-x-auto px-4 py-3.5 pr-12 font-mono text-[0.8125rem] leading-6">
           <code className="whitespace-pre">
             <span className="text-fd-primary">{selectedCommand.executable}</span>{" "}
             <span className="text-fd-foreground">{selectedCommand.verb}</span>{" "}
             <span className="text-fd-accent-foreground">{selectedCommand.packageName}</span>
           </code>
-        </pre>
+        </div>
         <button
           aria-label={
             copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy code"

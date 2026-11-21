@@ -36,7 +36,7 @@ Without `NOTRA_API_KEY` (read from `apps/docs/.env.local`), the Notra fetch is s
 
 Start it as a tracked background process, wait for the `Local` line Blume prints, and stop only the process you started.
 
-If `dev` dies with `EMFILE: too many open files, watch`, the host has run out of inotify instances, which other worktrees share. Don't change sysctl settings. Instead, serve the production build, which needs no watchers: `bun run build`, then `bun run preview -- --host "$HOST" --port <free port>`. You get no hot reload, so rebuild after each edit.
+If `dev` dies with `EMFILE: too many open files, watch`, the host has run out of inotify instances, which other worktrees share. Don't change sysctl settings. Instead, serve the built static output, which needs no watchers: `bun run build`, then `bun run preview -- --host "$HOST" --port <free port>` (serves `.vercel/output/static` and static redirects; server-only routes like `/mcp` and `Accept: text/markdown` negotiation require `bun run dev` or a Vercel preview deployment). You get no hot reload, so rebuild after each edit.
 
 ## Drive and verify
 

@@ -6,11 +6,11 @@
     "dev": "blume dev",
     "prebuild": "bun run registry:check && bun run adapter-faq:check && bun run compare:check && bun scripts/fetch-notra-posts.ts && bun scripts/generate-feeds.ts && bun run og:generate",
     "build": "blume build && bun scripts/patch-vercel-config.ts",
-    "preview": "blume preview",
+    "preview": "bun scripts/preview-static.ts",
     "validate": "blume validate --strict",
     "audit": "blume audit",
-    "check": "blume check --strict",
-    "types:check": "tsc --noEmit",
+    "check": "bun scripts/ensure-sdk-built.ts && blume check --strict",
+    "types:check": "bun scripts/ensure-sdk-built.ts && tsc --noEmit",
     "posts:fetch": "bun scripts/fetch-notra-posts.ts",
     "og:generate": "bun scripts/og/generate-og-image.ts && bun scripts/og/generate-compare-og.ts",
     "field-support:generate": "bun scripts/generate-field-support.ts",
@@ -21,7 +21,7 @@
     "test": "bun test",
     "compare:generate": "bun scripts/generate-compare-pages.ts",
     "compare:check": "bun scripts/generate-compare-pages.ts --check",
-    "check-types": "tsc --noEmit"
+    "check-types": "bun scripts/ensure-sdk-built.ts && tsc --noEmit"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.4.0",
