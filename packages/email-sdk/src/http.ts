@@ -39,6 +39,56 @@ export type JsonProviderOptions<
   ) => LegacyEmailSendResult;
 };
 
+export function snapshotMessageTags(message: EmailMessage): EmailMessage {
+  if (!isNonArrayObject(message)) return message;
+
+  try {
+    const rawTags = message.tags;
+
+    const tags = Array.isArray(rawTags)
+      ? rawTags.map((tag) =>
+          isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+        )
+      : rawTags;
+
+    // SAFETY: A shadow-target Proxy preserves #private fields and WeakMap identity on `message`
+    // while overriding `tags` safely even when `message` is frozen or non-configurable.
+    return new Proxy(Object.create(null) as EmailMessage, {
+      get(_target, prop) {
+        if (prop === "tags") return tags;
+
+        // SAFETY: forwarding directly on `message` binds getters to the original EmailMessage receiver.
+        return message[prop as keyof EmailMessage];
+      },
+      has(_target, prop) {
+        return prop === "tags" ? true : prop in message;
+      },
+      ownKeys() {
+        return Reflect.ownKeys(message);
+      },
+      getOwnPropertyDescriptor(_target, prop) {
+        if (prop === "tags") {
+          return { configurable: true, enumerable: true, writable: true, value: tags };
+        }
+
+        const desc = Object.getOwnPropertyDescriptor(message, prop);
+
+        if (!desc) return undefined;
+
+        return {
+          configurable: true,
+          enumerable: desc.enumerable ?? false,
+          writable: true,
+          value: undefined,
+        };
+      },
+    });
+  } catch (error) {
+    if (error instanceof EmailValidationError) throw error;
+    throw new EmailValidationError("Email message could not be read.", error);
+  }
+}
+
 export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
   options: JsonProviderOptions<Name, TPayload>,
 ): EmailAdapter<Name, { baseUrl: string }> {
@@ -53,31 +103,7 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
     },
     raw: { baseUrl: options.baseUrl },
     async send(message, context) {
-      let safeMessage = message;
-
-      try {
-        if (isNonArrayObject(message)) {
-          const rawTags = message.tags;
-
-          const tags = Array.isArray(rawTags)
-            ? rawTags.map((tag) =>
-                isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
-              )
-            : rawTags;
-
-          safeMessage = new Proxy(message, {
-            get(target, prop) {
-              if (prop === "tags") return tags;
-
-              // SAFETY: forwarding property reads directly on target binds getters to the original EmailMessage receiver (preserving #private fields and WeakMaps).
-              return target[prop as keyof EmailMessage];
-            },
-          });
-        }
-      } catch (error) {
-        if (error instanceof EmailValidationError) throw error;
-        throw new EmailValidationError("Email message could not be read.", error);
-      }
+      const safeMessage = snapshotMessageTags(message);
 
       validateBuiltInMessage(options.name, safeMessage, rules);
       const fetcher = options.fetch ?? fetch;

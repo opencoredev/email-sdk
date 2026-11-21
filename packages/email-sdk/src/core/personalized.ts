@@ -89,11 +89,15 @@ export async function attemptNativePersonalized(
         return { ...personalized, failures: [] };
       }
 
-      const unreported = personalized.rejected.length === 0 && input.recipients.length > 0;
+      const rejectedSet = new Set(personalized.rejected.map((addr) => addr.toLowerCase()));
+
+      const unreported = input.recipients.some(
+        (recipient) => !rejectedSet.has(emailAddressOf(recipient.to).toLowerCase()),
+      );
 
       const failure = new EmailAdapterError(
         unreported
-          ? `${adapter.name} returned neither accepted nor rejected recipients.`
+          ? `${adapter.name} left one or more personalized recipients unreported.`
           : `${adapter.name} rejected every personalized recipient.`,
         {
           adapter: adapter.name,

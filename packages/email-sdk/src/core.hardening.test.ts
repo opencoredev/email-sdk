@@ -2237,6 +2237,90 @@ describe("audit hardening regressions", () => {
       expect(emptyNativeErr).toMatchObject({ code: "all_recipients_failed" });
       expect(fallbackMem.raw.sent).toHaveLength(0);
 
+      // 44. R24: frozen messages work on jsonProvider and resend, resend single-reads tags, partial rejected sendPersonalized fails closed, defaultsPlugin beforeSend single-reads own getters
+      unoBody = "";
+
+      await unoAdapter.send(
+        Object.freeze({
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "frozen-msg",
+          text: "hello",
+          tags: [{ name: "env", value: "prod" }],
+        }),
+        { attempt: 1 },
+      );
+
+      expect(unoBody).toContain('"tags":[{"name":"env","value":"prod"}]');
+
+      const partialFallbackMem = memoryAdapter("partial-fb");
+
+      const partialNativeClient = createEmailClient({
+        adapters: [
+          {
+            name: "partial-native",
+            capabilities: personalizedOnly.capabilities,
+            send: async () => ({ adapter: "partial-native", id: "x" }),
+            sendPersonalized: async () => ({
+              adapter: "partial-native",
+              accepted: [],
+              rejected: ["u1@example.com"],
+            }),
+          },
+          partialFallbackMem,
+        ],
+        fallback: { adapters: ["partial-fb"] },
+        telemetry: false,
+      });
+
+      const partialErr = await partialNativeClient
+        .sendPersonalized({
+          message: { from: "a@example.com", subject: "hi", text: "ok" },
+          recipients: [{ to: "u1@example.com" }, { to: "u2@example.com" }],
+        })
+        .catch((error) => error);
+
+      expect(partialErr).toMatchObject({ code: "all_recipients_failed" });
+      expect(partialFallbackMem.raw.sent).toHaveLength(0);
+
+      let ownSubjectReads = 0;
+      let ownHeadersReads = 0;
+      let ownTagsReads = 0;
+
+      const defaultsBefore = defaultsPlugin({
+        headers: [{ name: "X-Default", value: "1" }],
+        tags: [{ name: "d", value: "1" }],
+      }).middleware?.[0]?.beforeSend;
+
+      const ownGetterMsg = {
+        from: "a@example.com",
+        to: "b@example.com",
+        text: "body",
+        get subject() {
+          ownSubjectReads += 1;
+
+          return "sub";
+        },
+        get headers() {
+          ownHeadersReads += 1;
+
+          return { "X-User": "2" };
+        },
+        get tags() {
+          ownTagsReads += 1;
+
+          return [{ name: "u", value: "2" }];
+        },
+      };
+
+      const defaultsCtx = { message: ownGetterMsg, options: undefined };
+
+      await defaultsBefore?.(defaultsCtx);
+
+      expect(ownSubjectReads).toBe(1);
+      expect(ownHeadersReads).toBe(1);
+      expect(ownTagsReads).toBe(1);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

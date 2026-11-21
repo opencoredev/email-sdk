@@ -231,4 +231,42 @@ describe("legacy header objects", () => {
     expect(result.id).toBe("res_legacy");
     expect(capture.calls[0]?.json.headers).toEqual({ "X-Entity-Ref": "order_42" });
   });
+
+  test("direct resend.send() single-reads tags and accepts frozen messages", async () => {
+    const capture = jsonCapture({ id: "res_tags" });
+    const adapter = resend({ apiKey: "key", fetch: capture.fetch });
+
+    let tagReads = 0;
+
+    await adapter.send(
+      {
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "resend-tags",
+        text: "hello",
+        get tags() {
+          tagReads += 1;
+
+          return [{ name: "env", value: "prod" }];
+        },
+      },
+      context,
+    );
+
+    expect(tagReads).toBe(1);
+    expect(capture.calls[0]?.json.tags).toEqual([{ name: "env", value: "prod" }]);
+
+    await adapter.send(
+      Object.freeze({
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "resend-frozen",
+        text: "hello",
+        tags: [{ name: "env", value: "prod" }],
+      }),
+      context,
+    );
+
+    expect(capture.calls[1]?.json.tags).toEqual([{ name: "env", value: "prod" }]);
+  });
 });

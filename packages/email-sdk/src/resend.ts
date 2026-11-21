@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageTags } from "./http.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -46,11 +47,13 @@ export function resend(
         headers.set("Idempotency-Key", context.idempotencyKey);
       }
 
+      const safeMessage = snapshotMessageTags(message);
+
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toResendPayload(message)),
+        body: JSON.stringify(await toResendPayload(safeMessage)),
       });
 
       if (!response.ok) {

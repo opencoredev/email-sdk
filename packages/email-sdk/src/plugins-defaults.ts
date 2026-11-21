@@ -154,13 +154,44 @@ function cloneReplyTo(
   return cloneAddressEntry(replyTo);
 }
 
+const KNOWN_MESSAGE_KEYS: ReadonlySet<PropertyKey> = new Set([
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "subject",
+  "html",
+  "text",
+  "attachments",
+  "sendAt",
+  "replyTo",
+  "headers",
+  "tags",
+  "metadata",
+]);
+
 function withMessageDefaults(
   message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailMessage {
-  // SAFETY: Copying known EmailMessage fields preserves class-instance prototype getters while keeping the html-or-text shape.
+  const extras: Partial<EmailMessage> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (KNOWN_MESSAGE_KEYS.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(extras, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Copying known EmailMessage fields once preserves prototype getters and avoids double-reading own getters.
   return {
-    ...message,
+    ...extras,
     from: message.from,
     to: message.to,
     cc: message.cc,
