@@ -13,17 +13,22 @@ function listLength<T>(value: OneOrMany<T> | undefined) {
   return Array.isArray(value) ? value.length : 1;
 }
 
-/** to + cc + bcc, counted without copying the lists. */
-export function recipientCount(message: EmailMessage) {
+/**
+ * to + cc + bcc, counted without copying the lists. Telemetry runs before validation, so a
+ * missing message from an untyped caller counts as zero and validation reports it.
+ */
+export function recipientCount(message: EmailMessage | null | undefined) {
+  if (!message) return 0;
+
   return listLength(message.to) + listLength(message.cc) + listLength(message.bcc);
 }
 
-export function messageFacts(message: EmailMessage) {
+export function messageFacts(message: EmailMessage | null | undefined) {
   return {
     recipients: recipientCount(message),
-    has_attachments: (message.attachments?.length ?? 0) > 0,
+    has_attachments: (message?.attachments?.length ?? 0) > 0,
     used_recipient_variables: false,
-    used_send_at: message.sendAt !== undefined,
+    used_send_at: message?.sendAt !== undefined,
   };
 }
 

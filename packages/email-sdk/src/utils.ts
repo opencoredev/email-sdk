@@ -121,7 +121,17 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
   return [...headers];
 }
 
+/** Keeps the declared object type when the runtime value is a real object, unlike `isObjectLike`. */
+function isObjectMember<T extends object>(value: T | null | undefined): value is T {
+  return isObjectLike(value);
+}
+
 export function assertMessage(message: EmailMessage) {
+  // JavaScript callers bypass the type, and a TypeError here would surface as an adapter error.
+  if (!isObjectMember(message)) {
+    throw new EmailValidationError("Email message must be an object.");
+  }
+
   if (!message.from) {
     throw new EmailValidationError("Email message requires a from address.");
   }
@@ -138,7 +148,20 @@ export function assertMessage(message: EmailMessage) {
     throw new EmailValidationError("Email message requires either html or text content.");
   }
 
-  for (const attachment of message.attachments ?? []) {
+  // null stays an empty list, as it always was; only other non-array values are rejected.
+  if (
+    message.attachments !== undefined &&
+    message.attachments !== null &&
+    !Array.isArray(message.attachments)
+  ) {
+    throw new EmailValidationError("Email message attachments must be an array.");
+  }
+
+  for (const [index, attachment] of (message.attachments ?? []).entries()) {
+    if (!isObjectMember(attachment)) {
+      throw new EmailValidationError(`Email message attachments[${index}] must be an object.`);
+    }
+
     const hasContent = attachment.content !== undefined;
     const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
 

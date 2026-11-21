@@ -175,6 +175,51 @@ describe("createEmailClient v1", () => {
     ).rejects.toThrow("must be an RFC 3339 timestamp");
   });
 
+  test("rejects empty attachment entries and non-object messages with EmailValidationError", async () => {
+    let sends = 0;
+
+    const client = createEmailClient({
+      adapters: [
+        {
+          ...adapter("primary"),
+          send: async () => {
+            sends += 1;
+
+            return { id: "primary_1" };
+          },
+        },
+      ],
+    });
+
+    for (const entry of [null, undefined, "report.pdf"]) {
+      // SAFETY: deliberately invalid runtime input from untyped JavaScript callers.
+      const sending = client.send({ ...message, attachments: [entry as never] });
+
+      await expect(sending).rejects.toBeInstanceOf(EmailValidationError);
+      await expect(sending).rejects.toThrow("Email message attachments[0] must be an object.");
+    }
+
+    // SAFETY: deliberately non-array attachments from an untyped JavaScript caller.
+    const notArray = client.send({ ...message, attachments: { filename: "a.txt" } as never });
+
+    await expect(notArray).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(notArray).rejects.toThrow("Email message attachments must be an array.");
+
+    // SAFETY: JSON records often carry attachments: null; it has always meant no attachments.
+    await expect(client.send({ ...message, attachments: null as never })).resolves.toMatchObject({
+      id: "primary_1",
+    });
+    expect(sends).toBe(1);
+    sends = 0;
+
+    // SAFETY: deliberately missing message from an untyped JavaScript caller.
+    const missing = client.validate(undefined as never);
+
+    await expect(missing).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(missing).rejects.toThrow("Email message must be an object.");
+    expect(sends).toBe(0);
+  });
+
   test("wraps middleware exceptions but isolates hook exceptions", async () => {
     const middlewareClient = createEmailClient({
       adapters: [adapter("primary")],
