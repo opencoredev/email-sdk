@@ -44,6 +44,19 @@ const configSchema = z.looseObject({
   ),
 });
 
+function linkHeaderKey(entry: string): string {
+  const urlMatch = /^<([^>]+)>/i.exec(entry);
+  const relMatch = /;\s*rel=(?:"([^"]+)"|([^;\s]+))/i.exec(entry);
+
+  if (urlMatch) {
+    const rel = (relMatch?.[1] ?? relMatch?.[2] ?? "").toLowerCase();
+
+    return `${urlMatch[1]?.toLowerCase() ?? ""}|${rel}`;
+  }
+
+  return entry.toLowerCase();
+}
+
 function mergeLinkHeaders(primary: string, existing: string): string {
   const seen = new Set<string>();
   const parts: string[] = [];
@@ -53,7 +66,7 @@ function mergeLinkHeaders(primary: string, existing: string): string {
 
     if (!entry) continue;
 
-    const key = entry.toLowerCase();
+    const key = linkHeaderKey(entry);
 
     if (seen.has(key)) continue;
 
@@ -89,7 +102,9 @@ if (curatedIndexMd !== undefined) {
 }
 
 const indexTokenCount =
-  curatedIndexMd !== undefined ? String(Math.ceil(Buffer.byteLength(curatedIndexMd) / 4)) : undefined;
+  curatedIndexMd !== undefined
+    ? String(Math.ceil(Buffer.byteLength(curatedIndexMd) / 4))
+    : undefined;
 
 // Trim archived version link sections from llms.txt while preserving any later non-archived sections.
 if (existsSync(builtLlmsTxtPath)) {
@@ -101,20 +116,23 @@ if (existsSync(builtLlmsTxtPath)) {
     const nextNonArchivedOffset = afterArchived.search(/^## (?!v\d+\.\d+\.\d+ \(archived\)$).+$/m);
 
     const trailing =
-      nextNonArchivedOffset === -1 ? "" : `\n${afterArchived.slice(nextNonArchivedOffset).trimStart()}`;
+      nextNonArchivedOffset === -1
+        ? ""
+        : `\n${afterArchived.slice(nextNonArchivedOffset).trimStart()}`;
 
     const summaryLines = archivedDocsVersions.map(
       (version) => `- [${version.id}](${siteUrl}/${version.id}/docs): archived documentation`,
     );
 
-    const trimmed = [
-      llms.slice(0, archivedHeadingIndex).trimEnd(),
-      "",
-      "## Archived versions",
-      "",
-      ...summaryLines,
-      "",
-    ].join("\n") + trailing;
+    const trimmed =
+      [
+        llms.slice(0, archivedHeadingIndex).trimEnd(),
+        "",
+        "## Archived versions",
+        "",
+        ...summaryLines,
+        "",
+      ].join("\n") + trailing;
 
     writeFileSync(builtLlmsTxtPath, trimmed);
   }
@@ -138,15 +156,19 @@ const syncedRoutes = config.routes.map((route) => {
     };
   }
 
-  if (route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers)) {
-    const key = "link" in route.headers ? "link" : "Link";
-    const existing = route.headers[key] ?? "";
+  if (
+    route.src === "^/$" &&
+    route.headers &&
+    ("link" in route.headers || "Link" in route.headers)
+  ) {
+    const existing = route.headers.Link ?? route.headers.link ?? "";
+    const { link: _lowercaseLink, Link: _titleLink, ...restHeaders } = route.headers;
 
     return {
       ...route,
       headers: {
-        ...route.headers,
-        [key]: mergeLinkHeaders(homeLinkMerged, existing),
+        ...restHeaders,
+        Link: mergeLinkHeaders(homeLinkMerged, existing),
       },
     };
   }
@@ -174,7 +196,8 @@ if (filesystemIndex === -1) {
 }
 
 const hasHomeLinkRoute = syncedRoutes.some(
-  (route) => route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers),
+  (route) =>
+    route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers),
 );
 
 const routes = [

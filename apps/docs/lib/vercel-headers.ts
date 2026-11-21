@@ -52,7 +52,7 @@ const revalidatingCache = "public, max-age=3600, stale-while-revalidate=86400";
 /** Added at the top: every response gets the security and discovery headers. */
 export const headerRoutes: VercelRoute[] = [
   { src: "^/.*$", headers: { ...securityHeaders, Link: discoveryLink }, continue: true },
-  { src: "^/(?!blog/).*\\.md$", headers: { "Cache-Control": revalidatingCache }, continue: true },
+  { src: "^/.*\\.md$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   { src: "^/.*\\.txt$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   {
     src: "^/feeds/docs\\.jsonl$",
