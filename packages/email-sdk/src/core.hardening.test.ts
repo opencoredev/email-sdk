@@ -2326,4 +2326,188 @@ describe("audit hardening regressions", () => {
       resetTelemetry();
     }
   });
+
+  test("R25: jsonProvider snapshots once without Proxy, defaultsPlugin wraps throwing getters & single-reads nested fields, sendMany preserves item.message cause", async () => {
+    const { jsonProvider } = await import("./http.js");
+    const { defaultsPlugin } = await import("./plugins-defaults.js");
+
+    // 1. jsonProvider snapshots message once into a plain object (no TOCTOU or fake descriptors).
+    let toReads = 0;
+    let payloadTo: unknown;
+    let subjectDescValue: unknown;
+
+    const provider = jsonProvider({
+      name: "unosend",
+      baseUrl: "https://example.test",
+      endpoint: "/emails",
+      headers: () => ({}),
+      fetch: async () =>
+        new Response(JSON.stringify({ id: "u_1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      buildPayload: (msg) => {
+        payloadTo = msg.to;
+        subjectDescValue = Object.getOwnPropertyDescriptor(msg, "subject")?.value;
+
+        return { to: msg.to, subject: msg.subject };
+      },
+    });
+
+    await provider.send(
+      {
+        from: "a@example.com",
+        get to() {
+          toReads += 1;
+
+          return toReads === 1 ? "good@example.com" : "evil@example.com";
+        },
+        subject: "single-read",
+        text: "hello",
+      },
+      { attempt: 1 },
+    );
+
+    expect(toReads).toBe(1);
+    expect(payloadTo).toBe("good@example.com");
+    expect(subjectDescValue).toBe("single-read");
+
+    // 2. defaultsPlugin.beforeSend wraps throwing message getters in EmailValidationError with cause
+    // and single-reads nested header, tag, and sendOptions getters.
+    const plugin = defaultsPlugin({
+      headers: [{ name: "X-Default", value: "1" }],
+      tags: [{ name: "env", value: "prod" }],
+      replyTo: "reply@example.com",
+      sendMetadata: { trace: "abc" },
+      idempotencyKeyPrefix: "pfx_",
+    });
+
+    const beforeSend = plugin.middleware?.[0]?.beforeSend;
+
+    expect(beforeSend).toBeDefined();
+
+    for (const field of ["headers", "tags", "replyTo", "subject"] as const) {
+      const boom = new Error(`boom-${field}`);
+
+      const badMsg = {
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "ok",
+        text: "hi",
+      };
+
+      Object.defineProperty(badMsg, field, {
+        enumerable: true,
+        configurable: true,
+        get() {
+          throw boom;
+        },
+      });
+
+      let caught: unknown;
+
+      try {
+        await beforeSend?.({ message: badMsg, options: undefined });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(EmailValidationError);
+
+      if (caught instanceof EmailValidationError) {
+        expect(caught.cause).toBe(boom);
+      }
+    }
+
+    let hdrNameReads = 0;
+    let hdrValReads = 0;
+    let tagNameReads = 0;
+    let tagValReads = 0;
+    let optMetaReads = 0;
+    let optIdemReads = 0;
+    let optAdapterReads = 0;
+
+    const prepared = await beforeSend?.({
+      message: {
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "nested-reads",
+        text: "hi",
+        headers: [
+          {
+            get name() {
+              hdrNameReads += 1;
+
+              return "X-Custom";
+            },
+            get value() {
+              hdrValReads += 1;
+
+              return "v1";
+            },
+          },
+        ],
+        tags: [
+          {
+            get name() {
+              tagNameReads += 1;
+
+              return "k1";
+            },
+            get value() {
+              tagValReads += 1;
+
+              return "v1";
+            },
+          },
+        ],
+      },
+      options: {
+        get metadata() {
+          optMetaReads += 1;
+
+          return { req: "1" };
+        },
+        get idempotencyKey() {
+          optIdemReads += 1;
+
+          return "key1";
+        },
+        get adapter() {
+          optAdapterReads += 1;
+
+          return "memory";
+        },
+      },
+    });
+
+    expect(hdrNameReads).toBe(1);
+    expect(hdrValReads).toBe(1);
+    expect(tagNameReads).toBe(1);
+    expect(tagValReads).toBe(1);
+    expect(optMetaReads).toBe(1);
+    expect(optIdemReads).toBe(1);
+    expect(optAdapterReads).toBe(1);
+    expect(prepared?.options?.idempotencyKey).toBe("pfx_key1");
+
+    // 3. sendMany preserves cause when item.message getter throws.
+    const itemBoom = new Error("boom-item-message");
+    const client = createEmailClient({ adapters: [memoryAdapter()], telemetry: false });
+
+    const batchItem = {
+      get message() {
+        throw itemBoom;
+      },
+    };
+
+    const settled = await client.sendMany([batchItem]);
+    const first = settled[0];
+
+    expect(first?.ok).toBe(false);
+
+    if (first && !first.ok) {
+      expect(first.error).toBeInstanceOf(EmailValidationError);
+      expect(first.error.cause).toBe(itemBoom);
+    }
+  });
 });

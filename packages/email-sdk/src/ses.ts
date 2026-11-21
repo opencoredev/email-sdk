@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { createSigningKeyCache, signAwsRequest } from "./internal/aws-sigv4.js";
 import { jsonString } from "./internal/decode.js";
 import {
@@ -51,10 +52,11 @@ export function ses(
     ...builtInAdapterDefinition("ses", sesRules),
     raw: { baseUrl, region: options.region },
     async send(message, context) {
+      const safeMessage = snapshotMessageForSend(message);
       const fetcher = options.fetch ?? fetch;
       // Built per send so an invalid baseUrl still fails the send, not the adapter factory.
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
-      const body = JSON.stringify(await toSesPayload(message, options));
+      const body = JSON.stringify(await toSesPayload(safeMessage, options));
 
       // Credentials are read on every send so refreshed STS credentials take effect.
       const headers = await signAwsRequest(signingKeys, {

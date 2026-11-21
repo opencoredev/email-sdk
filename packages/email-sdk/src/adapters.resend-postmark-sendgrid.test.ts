@@ -269,4 +269,60 @@ describe("legacy header objects", () => {
 
     expect(capture.calls[1]?.json.tags).toEqual([{ name: "env", value: "prod" }]);
   });
+
+  test("direct resend.send() validates tags and snapshots flipping getters once", async () => {
+    const capture = jsonCapture({ id: "res_valid" });
+    const adapter = resend({ apiKey: "key", fetch: capture.fetch });
+
+    const stringTagsMessage = {
+      from: "a@example.com",
+      to: "b@example.com",
+      subject: "bad-tags",
+      text: "hello",
+    };
+
+    Object.defineProperty(stringTagsMessage, "tags", {
+      enumerable: true,
+      configurable: true,
+      value: "bad",
+    });
+
+    await expect(adapter.send(stringTagsMessage, context)).rejects.toThrow(EmailValidationError);
+
+    const nullTagMessage = {
+      from: "a@example.com",
+      to: "b@example.com",
+      subject: "null-tag",
+      text: "hello",
+    };
+
+    Object.defineProperty(nullTagMessage, "tags", {
+      enumerable: true,
+      configurable: true,
+      value: [null],
+    });
+
+    await expect(adapter.send(nullTagMessage, context)).rejects.toThrow(EmailValidationError);
+
+    expect(capture.calls).toHaveLength(0);
+
+    let toReads = 0;
+
+    await adapter.send(
+      {
+        from: "a@example.com",
+        get to() {
+          toReads += 1;
+
+          return toReads === 1 ? "good@example.com" : "evil@example.com";
+        },
+        subject: "flipping-to",
+        text: "hello",
+      },
+      context,
+    );
+
+    expect(toReads).toBe(1);
+    expect(capture.calls[0]?.json.to).toEqual(["good@example.com"]);
+  });
 });

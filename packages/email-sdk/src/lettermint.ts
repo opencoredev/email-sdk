@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -41,6 +42,8 @@ export function lettermint(
     ...builtInAdapterDefinition("lettermint", lettermintRules),
     raw: { baseUrl },
     async send(message, context) {
+      const safeMessage = snapshotMessageForSend(message);
+
       const headers = new Headers({
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -56,7 +59,7 @@ export function lettermint(
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toLettermintPayload(message, options.route)),
+        body: JSON.stringify(await toLettermintPayload(safeMessage, options.route)),
       });
 
       if (!response.ok) {

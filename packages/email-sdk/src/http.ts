@@ -1,6 +1,7 @@
 import { EmailProviderError, EmailValidationError } from "./errors.js";
 import { isNonArrayObject, jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
+import { snapshotMessage } from "./internal/snapshot.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
@@ -39,50 +40,11 @@ export type JsonProviderOptions<
   ) => LegacyEmailSendResult;
 };
 
-export function snapshotMessageTags(message: EmailMessage): EmailMessage {
+export function snapshotMessageForSend(message: EmailMessage): EmailMessage {
   if (!isNonArrayObject(message)) return message;
 
   try {
-    const rawTags = message.tags;
-
-    const tags = Array.isArray(rawTags)
-      ? rawTags.map((tag) =>
-          isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
-        )
-      : rawTags;
-
-    // SAFETY: A shadow-target Proxy preserves #private fields and WeakMap identity on `message`
-    // while overriding `tags` safely even when `message` is frozen or non-configurable.
-    return new Proxy(Object.create(null) as EmailMessage, {
-      get(_target, prop) {
-        if (prop === "tags") return tags;
-
-        // SAFETY: forwarding directly on `message` binds getters to the original EmailMessage receiver.
-        return message[prop as keyof EmailMessage];
-      },
-      has(_target, prop) {
-        return prop === "tags" ? true : prop in message;
-      },
-      ownKeys() {
-        return Reflect.ownKeys(message);
-      },
-      getOwnPropertyDescriptor(_target, prop) {
-        if (prop === "tags") {
-          return { configurable: true, enumerable: true, writable: true, value: tags };
-        }
-
-        const desc = Object.getOwnPropertyDescriptor(message, prop);
-
-        if (!desc) return undefined;
-
-        return {
-          configurable: true,
-          enumerable: desc.enumerable ?? false,
-          writable: true,
-          value: undefined,
-        };
-      },
-    });
+    return snapshotMessage(message);
   } catch (error) {
     if (error instanceof EmailValidationError) throw error;
     throw new EmailValidationError("Email message could not be read.", error);
@@ -103,7 +65,7 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
     },
     raw: { baseUrl: options.baseUrl },
     async send(message, context) {
-      const safeMessage = snapshotMessageTags(message);
+      const safeMessage = snapshotMessageForSend(message);
 
       validateBuiltInMessage(options.name, safeMessage, rules);
       const fetcher = options.fetch ?? fetch;

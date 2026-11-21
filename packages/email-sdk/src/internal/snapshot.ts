@@ -1,0 +1,209 @@
+import type { EmailAddress, EmailAttachment, EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.js";
+import {
+  cloneMetadataRecord,
+  isDateLike,
+  isNonArrayObject,
+  isStringMember,
+} from "./decode.js";
+
+export const MESSAGE_FIELDS = [
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "replyTo",
+  "subject",
+  "html",
+  "text",
+  "headers",
+  "attachments",
+  "tags",
+  "metadata",
+  "sendAt",
+] as const;
+
+export function snapshotAddressItem(address: EmailAddress): EmailAddress {
+  if (isStringMember(address) || !isNonArrayObject(address)) return address;
+
+  const email = address.email;
+  const name = address.name;
+
+  return name === undefined ? { email } : { email, name };
+}
+
+function isAddressList(value: OneOrMany<EmailAddress>): value is readonly EmailAddress[] {
+  return Array.isArray(value);
+}
+
+export function snapshotAddressField(value: OneOrMany<EmailAddress>): OneOrMany<EmailAddress> {
+  if (isAddressList(value)) {
+    return [...value].map(snapshotAddressItem);
+  }
+
+  return snapshotAddressItem(value);
+}
+
+function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
+  if (!isNonArrayObject(attachment)) return attachment;
+
+  const copy: Partial<EmailAttachment> = {};
+
+  for (const key of [
+    "filename",
+    "content",
+    "path",
+    "contentType",
+    "contentId",
+    "disposition",
+    "contentEncoding",
+  ] as const) {
+    const val = attachment[key];
+
+    if (val === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value: val,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every defined EmailAttachment property was copied from `attachment`.
+  return copy as EmailAttachment;
+}
+
+function snapshotHeaders(value: EmailMessage["headers"]): EmailMessage["headers"] {
+  if (Array.isArray(value)) {
+    return [...value].map((header) =>
+      isNonArrayObject(header) ? { name: header.name, value: header.value } : header,
+    );
+  }
+
+  // SAFETY: Legacy object headers are cloned via cloneMetadataRecord while keeping runtime shape.
+  return (isNonArrayObject(value) ? cloneMetadataRecord(value) : value) as EmailMessage["headers"];
+}
+
+function snapshotTags(value: EmailMessage["tags"]): EmailMessage["tags"] {
+  if (Array.isArray(value)) {
+    return [...value].map((tag) =>
+      isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+    );
+  }
+
+  return value;
+}
+
+export function snapshotMessageField(
+  key: (typeof MESSAGE_FIELDS)[number],
+  message: EmailMessage | EmailPersonalizedInput["message"],
+): EmailMessage[(typeof MESSAGE_FIELDS)[number]] {
+  if (key === "from") {
+    const from = message.from;
+
+    return from === undefined ? undefined : snapshotAddressItem(from);
+  }
+
+  if (key === "to" && "to" in message) {
+    const to = message.to;
+
+    return to === undefined ? undefined : snapshotAddressField(to);
+  }
+
+  if (key === "cc" && "cc" in message) {
+    const cc = message.cc;
+
+    return cc === undefined ? undefined : snapshotAddressField(cc);
+  }
+
+  if (key === "bcc" && "bcc" in message) {
+    const bcc = message.bcc;
+
+    return bcc === undefined ? undefined : snapshotAddressField(bcc);
+  }
+
+  if (key === "replyTo") {
+    const replyTo = message.replyTo;
+
+    return replyTo === undefined ? undefined : snapshotAddressField(replyTo);
+  }
+
+  if (key === "headers") {
+    const headers = message.headers;
+
+    return headers === undefined ? undefined : snapshotHeaders(headers);
+  }
+
+  if (key === "tags") {
+    const tags = message.tags;
+
+    return tags === undefined ? undefined : snapshotTags(tags);
+  }
+
+  if (key === "attachments") {
+    const attachments = message.attachments;
+
+    if (attachments === undefined) return undefined;
+
+    return Array.isArray(attachments) ? [...attachments].map(snapshotAttachmentItem) : attachments;
+  }
+
+  if (key === "metadata") {
+    const metadata = message.metadata;
+
+    if (metadata === undefined) return undefined;
+
+    return isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
+  }
+
+  if (key === "subject") return message.subject;
+
+  if (key === "html") return message.html;
+
+  if (key === "text") return message.text;
+
+  if (key === "sendAt") {
+    const sendAt = message.sendAt;
+
+    return isDateLike(sendAt) ? new Date(Date.prototype.getTime.call(sendAt)) : sendAt;
+  }
+
+  return undefined;
+}
+
+const MESSAGE_FIELD_SET: ReadonlySet<PropertyKey> = new Set(MESSAGE_FIELDS);
+
+/**
+ * Read each message field once so validation and adapters see identical values
+ * even on class instances with getters, and nested objects/arrays are isolated.
+ */
+export function snapshotMessage(message: EmailMessage): EmailMessage {
+  const copy: Partial<EmailMessage> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (MESSAGE_FIELD_SET.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(copy, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  for (const key of MESSAGE_FIELDS) {
+    const value = snapshotMessageField(key, message);
+
+    if (value === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every EmailMessage field was copied from `message`.
+  return copy as EmailMessage;
+}

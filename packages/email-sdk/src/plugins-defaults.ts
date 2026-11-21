@@ -120,13 +120,22 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
     middleware: [
       {
         beforeSend(event) {
-          const message = withMessageDefaults(event.message, safeOptions);
-          const sendOptions = withSendOptionDefaults(event.options, message, safeOptions);
+          try {
+            if (!isNonArrayObject(event) || !isNonArrayObject(event.message)) {
+              throw new EmailValidationError("Email message must be an object.");
+            }
 
-          return {
-            message,
-            options: sendOptions,
-          };
+            const message = withMessageDefaults(event.message, safeOptions);
+            const sendOptions = withSendOptionDefaults(event.options, message, safeOptions);
+
+            return {
+              message,
+              options: sendOptions,
+            };
+          } catch (error) {
+            if (error instanceof EmailValidationError) throw error;
+            throw new EmailValidationError("Email message or send options could not be read.", error);
+          }
         },
       },
     ],
@@ -208,11 +217,37 @@ function withMessageDefaults(
   } as EmailMessage;
 }
 
+const KNOWN_SEND_OPTION_KEYS: ReadonlySet<PropertyKey> = new Set([
+  "metadata",
+  "idempotencyKey",
+]);
+
 function withSendOptionDefaults(
   sendOptions: EmailSendOptions | undefined,
   _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailSendOptions | undefined {
+  if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
+    throw new EmailValidationError("Email send options must be an object.");
+  }
+
+  const extras: Partial<EmailSendOptions> = {};
+
+  if (sendOptions) {
+    for (const key of Reflect.ownKeys(sendOptions)) {
+      if (KNOWN_SEND_OPTION_KEYS.has(key)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(sendOptions, key);
+
+      if (!descriptor?.enumerable) continue;
+      Object.defineProperty(extras, key, {
+        value: descriptor.get ? descriptor.get.call(sendOptions) : descriptor.value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
+
   const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 
@@ -221,7 +256,7 @@ function withSendOptionDefaults(
   }
 
   return {
-    ...sendOptions,
+    ...extras,
     metadata,
     idempotencyKey,
   };
@@ -242,27 +277,38 @@ function mergeHeaders(
   }
 
   if (value === undefined) {
-    return defaults.map((header) => ({ ...header, name: header.name, value: header.value }));
+    return defaults.map((header) => ({ name: header.name, value: header.value }));
   }
 
+  let own: readonly EmailHeader[];
+
   if (Array.isArray(value)) {
-    if (
-      value.some(
-        (header) =>
-          !isNonArrayObject(header) || !isStringMember(header.name) || header.name.length === 0,
-      )
-    ) {
-      return value;
+    const items: EmailHeader[] = [];
+
+    for (const header of value) {
+      if (!isNonArrayObject(header)) {
+        return value;
+      }
+
+      const name = header.name;
+
+      if (!isStringMember(name) || name.length === 0) {
+        return value;
+      }
+
+      items.push({ name, value: header.value });
     }
-  } else if (!isNonArrayObject(value)) {
+
+    own = items;
+  } else if (isNonArrayObject(value)) {
+    // headerList also reads the legacy name-to-value object that JavaScript callers send.
+    own = headerList(value);
+  } else {
     return value;
   }
 
-  // headerList also reads the legacy name-to-value object that JavaScript callers send.
-  const own = headerList(value);
-
   if (own.length === 0) {
-    return defaults.map((header) => ({ ...header, name: header.name, value: header.value }));
+    return defaults.map((header) => ({ name: header.name, value: header.value }));
   }
 
   const overridden = new Set(own.map((header) => header.name.toLowerCase()));
@@ -270,8 +316,8 @@ function mergeHeaders(
   return [
     ...defaults
       .filter((header) => !overridden.has(header.name.toLowerCase()))
-      .map((header) => ({ ...header, name: header.name, value: header.value })),
-    ...own.map((header) => ({ ...header, name: header.name, value: header.value })),
+      .map((header) => ({ name: header.name, value: header.value })),
+    ...own,
   ];
 }
 
@@ -284,20 +330,30 @@ function mergeTags(
   }
 
   if (value === undefined) {
-    return defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value }));
+    return defaults.map((tag) => ({ name: tag.name, value: tag.value }));
   }
 
-  if (!Array.isArray(value) || value.some((tag) => !isNonArrayObject(tag))) {
+  if (!Array.isArray(value)) {
     return value;
   }
 
-  if (!value.length) {
-    return defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value }));
+  const own: EmailTag[] = [];
+
+  for (const tag of value) {
+    if (!isNonArrayObject(tag)) {
+      return value;
+    }
+
+    own.push({ name: tag.name, value: tag.value });
+  }
+
+  if (!own.length) {
+    return defaults.map((tag) => ({ name: tag.name, value: tag.value }));
   }
 
   return [
-    ...defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value })),
-    ...value.map((tag) => ({ ...tag, name: tag.name, value: tag.value })),
+    ...defaults.map((tag) => ({ name: tag.name, value: tag.value })),
+    ...own,
   ];
 }
 
