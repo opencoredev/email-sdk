@@ -112,7 +112,7 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
     };
   } catch (error) {
     if (error instanceof EmailValidationError) throw error;
-    throw new EmailValidationError("defaultsPlugin options could not be read.", { cause: error });
+    throw new EmailValidationError("defaultsPlugin options could not be read.", error);
   }
 
   return {
@@ -217,7 +217,8 @@ function mergeHeaders(
   if (Array.isArray(value)) {
     if (
       value.some(
-        (header) => !isNonArrayObject(header) || !isStringMember(header.name) || header.name.length === 0,
+        (header) =>
+          !isNonArrayObject(header) || !isStringMember(header.name) || header.name.length === 0,
       )
     ) {
       return value;

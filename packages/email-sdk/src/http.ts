@@ -1,5 +1,5 @@
-import { EmailProviderError } from "./errors.js";
-import { jsonString, readJsonBody } from "./internal/decode.js";
+import { EmailProviderError, EmailValidationError } from "./errors.js";
+import { isNonArrayObject, jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
@@ -16,7 +16,10 @@ import {
   type MessageRules,
 } from "./utils.js";
 
-export type JsonProviderOptions<Name extends BuiltInAdapterName, TPayload> = AdapterRulesOption<Name> & {
+export type JsonProviderOptions<
+  Name extends BuiltInAdapterName,
+  TPayload,
+> = AdapterRulesOption<Name> & {
   name: Name;
   baseUrl: string;
   endpoint: string;
@@ -50,9 +53,24 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
     },
     raw: { baseUrl: options.baseUrl },
     async send(message, context) {
-      validateBuiltInMessage(options.name, message, rules);
+      let safeMessage = message;
+
+      try {
+        if (isNonArrayObject(message) && Array.isArray(message.tags)) {
+          const tags = message.tags.map((tag) =>
+            isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+          );
+
+          safeMessage = { ...message, tags };
+        }
+      } catch (error) {
+        if (error instanceof EmailValidationError) throw error;
+        throw new EmailValidationError("Email message could not be read.", error);
+      }
+
+      validateBuiltInMessage(options.name, safeMessage, rules);
       const fetcher = options.fetch ?? fetch;
-      const payload = await options.buildPayload(message);
+      const payload = await options.buildPayload(safeMessage);
 
       const response = await fetcher(url, {
         method: "POST",
@@ -76,7 +94,7 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
 
       const body = await readJsonBody(response);
 
-      const result = options.parseResponse?.(body, message, response) ?? {
+      const result = options.parseResponse?.(body, safeMessage, response) ?? {
         adapter: options.name,
         raw: body,
       };

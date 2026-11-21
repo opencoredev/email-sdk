@@ -573,9 +573,7 @@ export function createEmailClient<
     try {
       for (const adapter of resolvePluginAdapters(plugin, context)) {
         if (!isNonArrayObject(adapter) || !isStringMember(adapter.name)) {
-          throw new EmailValidationError(
-            `Plugin "${pluginId}" returned an invalid email adapter.`,
-          );
+          throw new EmailValidationError(`Plugin "${pluginId}" returned an invalid email adapter.`);
         }
 
         if (adapters.get(adapter.name) !== adapter) context.addAdapter(adapter);
@@ -614,7 +612,8 @@ export function createEmailClient<
     validateRetry(clientRetry);
     clientFallback = snapshotFallbackConfig(rawFallback);
     validateFallback(adapters, clientFallback);
-    clientHooks = rawHooks !== undefined ? snapshotHooks(rawHooks, "createEmailClient hooks") : undefined;
+    clientHooks =
+      rawHooks !== undefined ? snapshotHooks(rawHooks, "createEmailClient hooks") : undefined;
   } catch (error) {
     if (error instanceof EmailSdkError) throw error;
 
@@ -857,9 +856,7 @@ export function createEmailClient<
     }
   };
 
-  const snapshotSendOptions = (
-    raw: EmailSendOptions | undefined,
-  ): EmailSendOptions | undefined => {
+  const snapshotSendOptions = (raw: EmailSendOptions | undefined): EmailSendOptions | undefined => {
     if (raw === undefined) return undefined;
 
     if (!isNonArrayObject(raw)) {
@@ -967,7 +964,12 @@ export function createEmailClient<
       // Middleware such as defaultsPlugin can add or mutate recipients, attachments, or sendAt,
       // including in place, so recompute telemetry facts from the prepared message.
       if (facts) facts = messageFacts(prepared.message);
-      const route = readBoundary(() => resolveCheckedRoute(safePreparedOptions), "Email send options");
+
+      const route = readBoundary(
+        () => resolveCheckedRoute(safePreparedOptions),
+        "Email send options",
+      );
+
       attemptedAdapter = route.primary;
       const validating = validateRoute(prepared.message, route, "send", safePreparedOptions);
 
@@ -1213,23 +1215,49 @@ export function createEmailClient<
         const msg = readItemMessage(item);
 
         if (item && msg) {
-          let safeMsg = msg;
+          let safeMsg: EmailMessage | undefined;
+          let snapshotError: unknown;
 
           try {
             safeMsg = snapshotMessage(msg);
-          } catch {
-            // Throwing getters are surfaced consistently by send() inside settle().
+          } catch (error) {
+            snapshotError = error;
           }
 
-          if (telemetry) {
-            try {
-              totalRecipients += recipientCount(safeMsg);
-            } catch {
-              // Throwing getters on malformed messages are surfaced as item failures below.
+          if (snapshotError !== undefined) {
+            const normalized = normalizeOwnedError(
+              snapshotError instanceof EmailValidationError
+                ? snapshotError
+                : new EmailValidationError("Email message could not be read.", snapshotError),
+            );
+
+            if (telemetry) {
+              let itemAdapter: string | undefined;
+
+              try {
+                itemAdapter =
+                  item.options !== undefined && isNonArrayObject(item.options)
+                    ? item.options.adapter
+                    : undefined;
+              } catch {
+                itemAdapter = undefined;
+              }
+
+              usedAdapters.add(
+                normalizeAdapterName(itemAdapter ?? sendOptions?.adapter ?? defaultAdapter),
+              );
             }
-          }
 
-          await settle(index, safeMsg, item);
+            failed += 1;
+            firstErrorCode ??= normalized.code;
+            results[index] = { ok: false, index, error: normalized };
+          } else if (safeMsg) {
+            if (telemetry) {
+              totalRecipients += recipientCount(safeMsg);
+            }
+
+            await settle(index, safeMsg, item);
+          }
         } else {
           const error = new EmailValidationError("sendMany item is missing a message.");
           failed += 1;
@@ -1378,7 +1406,12 @@ export function createEmailClient<
           : safeInput;
 
       if (facts) facts = personalizedFacts(preparedInput);
-      const route = readBoundary(() => resolveCheckedRoute(safePreparedOptions), "Email send options");
+
+      const route = readBoundary(
+        () => resolveCheckedRoute(safePreparedOptions),
+        "Email send options",
+      );
+
       attemptedAdapter = route.primary;
 
       const expanded = readBoundary(

@@ -450,7 +450,10 @@ describe("audit hardening regressions", () => {
 
     const adapter = {
       ...base,
-      send: async (message: Parameters<typeof base.send>[0], ctx: Parameters<typeof base.send>[1]) => {
+      send: async (
+        message: Parameters<typeof base.send>[0],
+        ctx: Parameters<typeof base.send>[1],
+      ) => {
         seenKeys.push(ctx.idempotencyKey);
 
         return base.send(message, ctx);
@@ -1816,7 +1819,11 @@ describe("audit hardening regressions", () => {
       // 34. R19: message own getter is read once (no spread double-read), nested addresses snapshotted, class-instance metadata consistent across validate/send
       let ownToReads = 0;
       const singleReadAdapter = memoryAdapter("sra");
-      const singleReadClient = createEmailClient({ adapters: [singleReadAdapter], telemetry: false });
+
+      const singleReadClient = createEmailClient({
+        adapters: [singleReadAdapter],
+        telemetry: false,
+      });
 
       await singleReadClient.send({
         from: "a@example.com",
@@ -2002,6 +2009,97 @@ describe("audit hardening regressions", () => {
       if (badChunkErr instanceof InboundError) {
         expect(badChunkErr.reason).toBe("payload_invalid");
       }
+
+      // 41. R21: defaultsPlugin preserves raw cause, sendMany never falls back to raw msg on snapshot throw
+      const origBoom = new Error("headers-boom");
+      let defaultsErr: unknown;
+
+      try {
+        defaultsPlugin({
+          get headers() {
+            throw origBoom;
+          },
+        });
+      } catch (error) {
+        defaultsErr = error;
+      }
+
+      expect(defaultsErr).toBeInstanceOf(EmailValidationError);
+
+      if (defaultsErr instanceof EmailValidationError) {
+        expect(defaultsErr.cause).toBe(origBoom);
+      }
+
+      let flakySubjectReads = 0;
+      const flakyAdapter = memoryAdapter();
+
+      const flakyClient = createEmailClient({
+        adapters: [flakyAdapter],
+      });
+
+      const flakyMsg = {
+        from: "a@example.com",
+        to: "b@example.com",
+        text: "hi",
+        get subject() {
+          flakySubjectReads += 1;
+
+          if (flakySubjectReads === 1) throw new Error("first-read-boom");
+
+          return "second-read-ok";
+        },
+      };
+
+      const flakyManyRes = await flakyClient.sendMany([{ message: flakyMsg }]);
+
+      expect(flakyManyRes[0]?.ok).toBe(false);
+      expect(flakySubjectReads).toBe(1);
+      expect(flakyAdapter.raw.sent).toHaveLength(0);
+
+      let unoTagNameReads = 0;
+      let unoTagValueReads = 0;
+      let unoBody = "";
+      const { unosend } = await import("./unosend.js");
+
+      const unoAdapter = unosend({
+        apiKey: "uno-key",
+        fetch: async (_input, init) => {
+          unoBody = String(init?.body ?? "");
+
+          return new Response(JSON.stringify({ success: true, data: { id: "u1" } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      });
+
+      await unoAdapter.send(
+        {
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "hello",
+          text: "body",
+          tags: [
+            {
+              get name() {
+                unoTagNameReads += 1;
+
+                return unoTagNameReads === 1 ? "env" : "mutated";
+              },
+              get value() {
+                unoTagValueReads += 1;
+
+                return unoTagValueReads === 1 ? "prod" : "mutated";
+              },
+            },
+          ],
+        },
+        { attempt: 1 },
+      );
+
+      expect(unoTagNameReads).toBe(1);
+      expect(unoTagValueReads).toBe(1);
+      expect(unoBody).toContain('"tags":[{"name":"env","value":"prod"}]');
 
       expect(exceptions).toHaveLength(0);
     } finally {
