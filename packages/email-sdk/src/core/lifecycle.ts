@@ -15,7 +15,7 @@ import type {
   EmailSendOptions,
   MaybePromise,
 } from "../types.js";
-import { isNonArrayObject } from "../internal/decode.js";
+import { isFunction, isNonArrayObject } from "../internal/decode.js";
 import { addAdapter, cloneNestedSendOptions } from "./routing.js";
 
 export function createPluginContext(
@@ -34,17 +34,28 @@ export function createPluginContext(
 export function resolvePluginAdapters(
   plugin: EmailPlugin,
   context: EmailPluginContext,
+  pluginId?: string,
 ): EmailAdapter[] {
   const configured = plugin.adapters;
 
-  if (!configured) return [];
+  if (configured === undefined) return [];
 
-  const adapters = Array.isArray(configured) ? configured : configured.call(plugin, context);
+  let adapters: unknown;
+
+  if (Array.isArray(configured)) {
+    adapters = configured;
+  } else if (isFunction(configured)) {
+    adapters = configured.call(plugin, context);
+  } else {
+    throw new EmailValidationError(
+      `Email plugin "${pluginId ?? plugin.id}" adapters must be an array or function.`,
+    );
+  }
 
   // JavaScript callers can pass an async factory; its promise is the only non-array result.
   if (!Array.isArray(adapters)) {
     throw new EmailValidationError(
-      `Email plugin "${plugin.id}" returned async adapters. createEmailClient requires synchronous plugin adapters.`,
+      `Email plugin "${pluginId ?? plugin.id}" returned async adapters. createEmailClient requires synchronous plugin adapters.`,
     );
   }
 
@@ -62,7 +73,9 @@ export function applyClientExtension<TClient extends object, TExtension extends 
     );
   }
 
-  for (const key of Object.keys(extension)) {
+  const entries = Object.entries(extension);
+
+  for (const [key] of entries) {
     if (Object.hasOwn(client, key)) {
       throw new EmailValidationError(
         `Email plugin "${pluginId}" tried to extend the client with reserved key "${key}".`,
@@ -70,7 +83,14 @@ export function applyClientExtension<TClient extends object, TExtension extends 
     }
   }
 
-  Object.assign(client, extension);
+  for (const [key, value] of entries) {
+    Object.defineProperty(client, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
 }
 
 // The lifecycle helpers below return synchronously when there is nothing to run, so a client

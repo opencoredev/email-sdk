@@ -50,6 +50,7 @@ function isCallable<T>(value: T): boolean {
   if (isPrimitive(value)) return false;
 
   try {
+    Object.getPrototypeOf(value);
     Function.prototype.toString.call(value);
 
     return true;
@@ -95,6 +96,8 @@ const mapSizeGetter = Object.getOwnPropertyDescriptor(Map.prototype, "size")?.ge
 const setSizeGetter = Object.getOwnPropertyDescriptor(Set.prototype, "size")?.get;
 
 const regExpSourceGetter = Object.getOwnPropertyDescriptor(RegExp.prototype, "source")?.get;
+
+const regExpFlagsGetter = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags")?.get;
 
 const urlHrefGetter = isFunction(globalThis.URL)
   ? Object.getOwnPropertyDescriptor(URL.prototype, "href")?.get
@@ -309,7 +312,64 @@ function cloneDateValue<T>(value: T): Date | undefined {
   }
 }
 
-/** Recursively clone plain objects, arrays, and Dates inside a metadata record. */
+function cloneArrayBufferView(view: ArrayBufferView): ArrayBufferView {
+  const copied = new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice();
+
+  if (view instanceof DataView) return new DataView(copied.buffer);
+
+  if (view instanceof Int8Array) return new Int8Array(copied.buffer);
+
+  if (view instanceof Uint8ClampedArray) return new Uint8ClampedArray(copied.buffer);
+
+  if (view instanceof Int16Array) return new Int16Array(copied.buffer);
+
+  if (view instanceof Uint16Array) return new Uint16Array(copied.buffer);
+
+  if (view instanceof Int32Array) return new Int32Array(copied.buffer);
+
+  if (view instanceof Uint32Array) return new Uint32Array(copied.buffer);
+
+  if (view instanceof Float32Array) return new Float32Array(copied.buffer);
+
+  if (view instanceof Float64Array) return new Float64Array(copied.buffer);
+
+  if (view instanceof BigInt64Array) return new BigInt64Array(copied.buffer);
+
+  if (view instanceof BigUint64Array) return new BigUint64Array(copied.buffer);
+
+  return copied;
+}
+
+function cloneBinaryBufferValue<T>(value: T): ArrayBufferLike | undefined {
+  if (hasGetterBrand(arrayBufferByteLength, value)) {
+    return ArrayBuffer.prototype.slice.call(value, 0);
+  }
+
+  if (
+    sharedArrayBufferByteLength &&
+    hasGetterBrand(sharedArrayBufferByteLength, value) &&
+    isFunction(globalThis.SharedArrayBuffer)
+  ) {
+    return SharedArrayBuffer.prototype.slice.call(value, 0);
+  }
+
+  return undefined;
+}
+
+function cloneRegExpValue<T>(value: T): RegExp | undefined {
+  if (!regExpSourceGetter || !hasGetterBrand(regExpSourceGetter, value)) return undefined;
+
+  const source = String(regExpSourceGetter.call(value));
+  const flags = regExpFlagsGetter ? String(regExpFlagsGetter.call(value)) : "";
+  const copy = new RegExp(source, flags);
+  const desc = Object.getOwnPropertyDescriptor(value, "lastIndex");
+
+  if (desc && isNumber(desc.value)) copy.lastIndex = desc.value;
+
+  return copy;
+}
+
+/** Recursively clone plain objects, arrays, Dates, Maps, Sets, and binary views inside a metadata record. */
 export function cloneMetadataRecord<T>(metadata: T): T {
   const seen = new Map();
 
@@ -337,6 +397,54 @@ export function cloneMetadataRecord<T>(metadata: T): T {
 
       // SAFETY: Cloning each element of an array produces an array matching V.
       return arr as V;
+    }
+
+    if (ArrayBuffer.isView(value)) {
+      // SAFETY: Input is an ArrayBufferView; returning a copied view of the same kind preserves V.
+      return cloneArrayBufferView(value) as V;
+    }
+
+    const clonedBuffer = cloneBinaryBufferValue(value);
+
+    if (clonedBuffer !== undefined) {
+      // SAFETY: Input passed ArrayBuffer/SharedArrayBuffer brand check; slicing bytes isolates it.
+      return clonedBuffer as V;
+    }
+
+    if (hasGetterBrand(mapSizeGetter, value)) {
+      const copy = new Map();
+      seen.set(value, copy);
+
+      for (const [entryKey, entryValue] of Map.prototype.entries.call(value)) {
+        copy.set(clone(entryKey), clone(entryValue));
+      }
+
+      // SAFETY: Input passed Map brand check; returning a cloned Map preserves V.
+      return copy as V;
+    }
+
+    if (hasGetterBrand(setSizeGetter, value)) {
+      const copy = new Set();
+      seen.set(value, copy);
+
+      for (const entryValue of Set.prototype.values.call(value)) {
+        copy.add(clone(entryValue));
+      }
+
+      // SAFETY: Input passed Set brand check; returning a cloned Set preserves V.
+      return copy as V;
+    }
+
+    const clonedRegExp = cloneRegExpValue(value);
+
+    if (clonedRegExp !== undefined) {
+      // SAFETY: Input passed RegExp brand check; returning a cloned RegExp preserves V.
+      return clonedRegExp as V;
+    }
+
+    if (hasGetterBrand(urlHrefGetter, value) && urlHrefGetter) {
+      // SAFETY: Input passed URL brand check; returning a cloned URL preserves V.
+      return new URL(String(urlHrefGetter.call(value))) as V;
     }
 
     const proto = Object.getPrototypeOf(value);

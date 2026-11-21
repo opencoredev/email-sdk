@@ -60,18 +60,15 @@ export async function attemptNativePersonalized(
   for (let attempt = 1; ; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
 
-    const hookMetadata = sendOptions?.metadata
-      ? cloneMetadataRecord(sendOptions.metadata)
-      : undefined;
+    const freshEvent = () =>
+      hookEvent(
+        adapter.name,
+        snapshotMessage(hookMessage),
+        attempt,
+        sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
+      );
 
-    const event = hookEvent(
-      adapter.name,
-      snapshotMessage(hookMessage),
-      attempt,
-      hookMetadata,
-    );
-
-    await invokeHooks(hooks, "beforeSend", event);
+    await invokeHooks(hooks, "beforeSend", freshEvent());
 
     try {
       const attemptInput = snapshotPersonalizedInputForSend(input);
@@ -101,8 +98,13 @@ export async function attemptNativePersonalized(
       throwIfAborted(sendOptions?.signal);
 
       if (personalized.accepted.length > 0) {
-        await invokeAfterSendMiddleware(middleware, { ...event, response: personalized });
-        await invokeHooks(hooks, "afterSend", { ...event, response: personalized });
+        if (middleware.length > 0) {
+          await invokeAfterSendMiddleware(middleware, { ...freshEvent(), response: personalized });
+        }
+
+        if (hooks.length > 0) {
+          await invokeHooks(hooks, "afterSend", { ...freshEvent(), response: personalized });
+        }
 
         return { ...personalized, failures: [] };
       }
@@ -124,7 +126,7 @@ export async function attemptNativePersonalized(
       );
 
       await invokeSendFailureLifecycle(middleware, hooks, {
-        ...event,
+        ...freshEvent(),
         error: failure,
       });
 
@@ -145,7 +147,7 @@ export async function attemptNativePersonalized(
       if (!canRetry) {
         const finalFailure = earlierOutcomeUnknown ? withUnknownDelivery(failure) : failure;
         await invokeSendFailureLifecycle(middleware, hooks, {
-          ...event,
+          ...freshEvent(),
           error: finalFailure,
         });
 
@@ -156,7 +158,7 @@ export async function attemptNativePersonalized(
 
       const delayMs = Math.max(0, (retry?.delay ?? defaultDelay)(attempt, failure));
       await invokeHooks(hooks, "onRetry", {
-        ...event,
+        ...freshEvent(),
         error: failure,
         nextAttempt: attempt + 1,
         delayMs,

@@ -2883,5 +2883,203 @@ describe("audit hardening regressions", () => {
     expect(seenFirstBytes).toEqual([104, 104, 104]);
     expect(seenMetaTags).toEqual(["orig", "orig", "orig"]);
     expect(seenFbSubjects).toEqual(["s"]);
+
+    // R29: revoked function Proxy, non-function adapters with .call(), single-read plugin.id,
+    // applyClientExtension ownKeys TOCTOU, Map/Set/Uint8Array metadata isolation, same-attempt hook & validate isolation
+    const { proxy: revokedFn, revoke: revokeFn } = Proxy.revocable(() => ({}), {});
+    revokeFn();
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing revoked function Proxy in plugin.extendClient.
+        plugins: [{ id: "rev-fn-ext", extendClient: revokedFn as never }],
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing revoked function Proxy in hooks.beforeSend.
+        hooks: { beforeSend: revokedFn as never },
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    const throwingBindFn = new Proxy(() => ({}), {
+      get(_target, prop) {
+        if (prop === "bind") throw new Error("bind boom");
+
+        return undefined;
+      },
+    });
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing hostile Proxy whose .bind getter throws.
+        plugins: [{ id: "throw-bind", extendClient: throwingBindFn as never }],
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        plugins: [
+          {
+            id: "fake-call-adapters",
+            // SAFETY: Testing non-function object exposing a .call() method.
+            adapters: { call: () => [memoryAdapter("smuggled")] } as never,
+          },
+        ],
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    let pluginIdReads = 0;
+
+    createEmailClient({
+      adapters: [adapter],
+      plugins: [
+        {
+          get id() {
+            pluginIdReads += 1;
+
+            return "read-once-id";
+          },
+        },
+      ],
+      telemetry: false,
+    });
+
+    expect(pluginIdReads).toBe(1);
+
+    let extKeysPass = 0;
+
+    const toctouExt = new Proxy(
+      {},
+      {
+        ownKeys() {
+          extKeysPass += 1;
+
+          return extKeysPass === 1 ? ["safeHelper"] : ["send"];
+        },
+        getOwnPropertyDescriptor(_target, prop) {
+          if (prop === "safeHelper" || prop === "send") {
+            return { enumerable: true, configurable: true, value: () => "hijacked" };
+          }
+
+          return undefined;
+        },
+        get(_target, prop) {
+          if (prop === "safeHelper" || prop === "send") return () => "hijacked";
+
+          return undefined;
+        },
+      },
+    );
+
+    const extClient = createEmailClient({
+      adapters: [adapter],
+      plugins: [{ id: "toctou-ext", extendClient: () => toctouExt }],
+      telemetry: false,
+    });
+
+    expect(extKeysPass).toBe(1);
+    const sentViaExt = await extClient.send(baseMsg);
+    expect(sentViaExt.adapter).toBe("m");
+
+    const origMap = new Map<string, string>([["k", "v0"]]);
+    const origSet = new Set<string>(["s0"]);
+    const origView = new Uint8Array([1, 2, 3]);
+    const origBuf = new Uint8Array([4, 5]).buffer;
+    const seenMapVals: string[] = [];
+    const seenSetSizes: number[] = [];
+    const seenViewZero: number[] = [];
+    const seenBufZero: number[] = [];
+    const seenAfterSubjects: string[] = [];
+    const seenRetrySubjects: string[] = [];
+    const seenValidateSubjects: string[] = [];
+
+    const containerIsoClient = createEmailClient({
+      adapters: [
+        {
+          name: "ciso",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          validate(m) {
+            seenValidateSubjects.push(m.subject);
+            m.subject = "mutated-by-validate";
+          },
+          async send(m, ctx) {
+            // SAFETY: Test passes Map, Set, Uint8Array, and ArrayBuffer inside metadata.
+            const meta = ctx.metadata as {
+              map: Map<string, string>;
+              set: Set<string>;
+              view: Uint8Array;
+              buf: ArrayBuffer;
+            };
+
+            seenMapVals.push(meta.map.get("k") ?? "");
+            seenSetSizes.push(meta.set.size);
+            seenViewZero.push(meta.view[0] ?? -1);
+            seenBufZero.push(new Uint8Array(meta.buf)[0] ?? -1);
+            meta.map.set("k", "mutated");
+            meta.set.add("extra");
+            meta.view[0] = 99;
+            new Uint8Array(meta.buf)[0] = 88;
+
+            if (ctx.attempt === 1) {
+              throw new EmailAdapterError("retry-me", {
+                adapter: "ciso",
+                retryable: true,
+                delivery: "not_sent",
+              });
+            }
+
+            return { adapter: "ciso", id: m.subject };
+          },
+        },
+      ],
+      retry: { maxAttempts: 2, delay: () => 0 },
+      hooks: {
+        beforeSend(ev) {
+          ev.message.subject = "mutated-in-before-send";
+          // SAFETY: Test passes Map inside metadata.
+          (ev.metadata as { map: Map<string, string> }).map.set("k", "hook-mut");
+        },
+        onRetry(ev) {
+          seenRetrySubjects.push(ev.message.subject);
+        },
+        afterSend(ev) {
+          seenAfterSubjects.push(ev.message.subject);
+        },
+      },
+      telemetry: false,
+    });
+
+    const containerRes = await containerIsoClient.send(baseMsg, {
+      // SAFETY: Testing runtime Map/Set/TypedArray/ArrayBuffer cloning in metadata.
+      metadata: { map: origMap, set: origSet, view: origView, buf: origBuf } as never,
+    });
+
+    expect(containerRes.id).toBe("s");
+    expect(origMap.get("k")).toBe("v0");
+    expect(origSet.size).toBe(1);
+    expect(origView[0]).toBe(1);
+    expect(new Uint8Array(origBuf)[0]).toBe(4);
+    expect(seenMapVals).toEqual(["v0", "v0"]);
+    expect(seenSetSizes).toEqual([1, 1]);
+    expect(seenViewZero).toEqual([1, 1]);
+    expect(seenBufZero).toEqual([4, 4]);
+    expect(seenValidateSubjects).toEqual(["s"]);
+    expect(seenRetrySubjects).toEqual(["s"]);
+    expect(seenAfterSubjects).toEqual(["s"]);
   });
 });

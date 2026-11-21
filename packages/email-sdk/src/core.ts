@@ -234,14 +234,20 @@ export function createEmailClient<
     let pluginId: string;
     let rawPluginHooks: EmailHooks | undefined;
     let rawPluginMiddleware: readonly EmailSendMiddleware[] | undefined;
-    let extendClient: EmailPlugin["extendClient"];
+    let boundExtendClient: EmailPlugin["extendClient"];
 
     try {
-      if (!isNonArrayObject(plugin) || !isStringMember(plugin.id) || !plugin.id.trim()) {
+      if (!isNonArrayObject(plugin)) {
         throw new EmailValidationError("Each email plugin must be an object with a non-empty id.");
       }
 
-      pluginId = plugin.id;
+      const rawId = plugin.id;
+
+      if (!isStringMember(rawId) || !rawId.trim()) {
+        throw new EmailValidationError("Each email plugin must be an object with a non-empty id.");
+      }
+
+      pluginId = rawId;
       rawPluginHooks = plugin.hooks;
       rawPluginMiddleware = plugin.middleware;
 
@@ -295,10 +301,14 @@ export function createEmailClient<
         rawPluginMiddleware = copiedMiddleware;
       }
 
-      extendClient = plugin.extendClient;
+      const extendClient = plugin.extendClient;
 
-      if (extendClient !== undefined && !isFunction(extendClient)) {
-        throw new EmailValidationError(`Plugin "${pluginId}" extendClient must be a function.`);
+      if (extendClient !== undefined) {
+        if (!isFunction(extendClient)) {
+          throw new EmailValidationError(`Plugin "${pluginId}" extendClient must be a function.`);
+        }
+
+        boundExtendClient = extendClient.bind(plugin);
       }
     } catch (error) {
       if (error instanceof EmailSdkError) throw error;
@@ -315,7 +325,7 @@ export function createEmailClient<
     const context = createPluginContext(adapters, requestedDefault);
 
     try {
-      for (const adapter of resolvePluginAdapters(plugin, context)) {
+      for (const adapter of resolvePluginAdapters(plugin, context, pluginId)) {
         if (!isNonArrayObject(adapter) || !isStringMember(adapter.name)) {
           throw new EmailValidationError(`Plugin "${pluginId}" returned an invalid email adapter.`);
         }
@@ -334,8 +344,8 @@ export function createEmailClient<
 
     if (rawPluginMiddleware) middleware.push(...rawPluginMiddleware);
 
-    if (extendClient) {
-      extensionPlugins.push({ id: pluginId, extendClient: extendClient.bind(plugin) });
+    if (boundExtendClient) {
+      extensionPlugins.push({ id: pluginId, extendClient: boundExtendClient });
     }
   }
 
@@ -574,7 +584,7 @@ export function createEmailClient<
       let pending: MaybePromise<void>;
 
       try {
-        pending = adapter.validate?.(message, { adapter: name, operation });
+        pending = adapter.validate?.(snapshotMessage(message), { adapter: name, operation });
       } catch (error) {
         return markValidatorError(adapter, error);
       }

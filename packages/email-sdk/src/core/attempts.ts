@@ -94,18 +94,15 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
 
-    const hookMetadata = input.options?.metadata
-      ? cloneMetadataRecord(input.options.metadata)
-      : undefined;
+    const freshEvent = () =>
+      hookEvent(
+        input.adapter.name,
+        snapshotMessage(input.message),
+        attempt,
+        input.options?.metadata ? cloneMetadataRecord(input.options.metadata) : undefined,
+      );
 
-    const event = hookEvent(
-      input.adapter.name,
-      snapshotMessage(input.message),
-      attempt,
-      hookMetadata,
-    );
-
-    const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
+    const beforeSend = invokeHooks(input.hooks, "beforeSend", freshEvent());
 
     if (beforeSend) await beforeSend;
 
@@ -158,7 +155,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
 
       const delayMs = Math.max(0, delayFor(attempt, normalized));
       await invokeHooks(input.hooks, "onRetry", {
-        ...event,
+        ...freshEvent(),
         error: normalized,
         nextAttempt: attempt + 1,
         delayMs,
@@ -167,9 +164,13 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       continue;
     }
 
-    if (input.middleware.length > 0 || input.hooks.length > 0) {
-      const afterEvent: EmailAfterSendEvent = { ...event, response: result };
+    if (input.middleware.length > 0) {
+      const afterEvent: EmailAfterSendEvent = { ...freshEvent(), response: result };
       await invokeAfterSendMiddleware(input.middleware, afterEvent);
+    }
+
+    if (input.hooks.length > 0) {
+      const afterEvent: EmailAfterSendEvent = { ...freshEvent(), response: result };
       await invokeHooks(input.hooks, "afterSend", afterEvent);
     }
 
