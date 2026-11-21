@@ -88,7 +88,7 @@ async function toResendPayload(message: EmailMessage) {
     reply_to: formatAddresses(message.replyTo),
     headers: headersToObject(message.headers),
     attachments: await mapAttachments(message.attachments, toResendAttachment),
-    tags: message.tags,
+    tags: message.tags?.map((tag) => ({ name: tag.name, value: tag.value })),
     scheduled_at: sendAtIso(message),
   };
 }

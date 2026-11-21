@@ -1874,6 +1874,135 @@ describe("audit hardening regressions", () => {
         defaultsPlugin({ tags: [null] }),
       ).toThrow(EmailValidationError);
 
+      // 38. R20: malformed rejected array in native sendPersonalized fails closed with unknown delivery (0 backup sends)
+      const badRejBackup = memoryAdapter("bad-rej-backup");
+
+      const badRejClient = createEmailClient({
+        adapters: [
+          {
+            name: "bad-rej-native",
+            capabilities: {
+              repeatedHeaders: true,
+              idempotency: "native",
+              scheduling: true,
+              personalized: "native",
+            },
+            async send() {
+              throw new Error("unused");
+            },
+            async sendPersonalized() {
+              return {
+                adapter: "bad-rej-native",
+                accepted: [],
+                // @ts-expect-error -- runtime non-string rejected item
+                rejected: [undefined],
+              };
+            },
+          },
+          badRejBackup,
+        ],
+        fallback: { adapters: ["bad-rej-backup"] },
+        telemetry: false,
+      });
+
+      await expect(
+        badRejClient.sendPersonalized({
+          message: { from: "a@example.com", subject: "s", text: "t" },
+          recipients: [{ to: "b@example.com", variables: {} }],
+        }),
+      ).rejects.toThrow();
+
+      expect(badRejBackup.raw.sent).toHaveLength(0);
+
+      // 39. R20: defaultsPlugin reads header/replyTo getters once; mutable Date sendAt cloned; class-instance recipient variables preserved
+      let defHdrReads = 0;
+
+      expect(() =>
+        defaultsPlugin({
+          headers: [
+            {
+              get name() {
+                defHdrReads += 1;
+
+                // SAFETY: Testing stateful getter returning invalid type on repeat read.
+                return (defHdrReads <= 2 ? "X-Ok" : 123) as string;
+              },
+              value: "v",
+            },
+          ],
+        }),
+      ).not.toThrow();
+
+      expect(defHdrReads).toBe(1);
+
+      class ClassVars {
+        get name() {
+          return "Ada";
+        }
+      }
+
+      const varsAdapter = memoryAdapter("vars");
+      const varsClient = createEmailClient({ adapters: [varsAdapter], telemetry: false });
+
+      await varsClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "Hi %recipient.name%", text: "ok" },
+        // @ts-expect-error -- testing class-instance recipient variables
+        recipients: [{ to: "b@example.com", variables: new ClassVars() }],
+      });
+
+      expect(varsAdapter.raw.sent[0]?.message.subject).toBe("Hi Ada");
+
+      // 40. R20: handleInbound rejects drained-then-unlocked Request and non-binary stream chunks with InboundError(payload_invalid)
+      const drainedReq = new Request("https://x.test/inbound", {
+        method: "POST",
+        body: JSON.stringify({ From: "a@b.com" }),
+        headers: { "content-type": "application/json" },
+      });
+
+      const rdr = drainedReq.body?.getReader();
+
+      if (rdr) {
+        while (!(await rdr.read()).done) {
+          // drain
+        }
+
+        rdr.releaseLock();
+      }
+
+      const drainedErr = await handleInbound(drainedReq, {
+        provider: "postmark",
+        auth: { user: "u", password: "p" },
+      }).catch((error) => error);
+
+      expect(drainedErr).toBeInstanceOf(InboundError);
+
+      if (drainedErr instanceof InboundError) {
+        expect(drainedErr.reason).toBe("payload_invalid");
+      }
+
+      const badChunkReq = new Request("https://x.test/inbound", {
+        method: "POST",
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue("not-bytes");
+            controller.close();
+          },
+        }),
+        // @ts-expect-error -- Node/Bun streaming request duplex option
+        duplex: "half",
+      });
+
+      const badChunkErr = await handleInbound(badChunkReq, {
+        provider: "postmark",
+        auth: { none: true },
+      }).catch((error) => error);
+
+      expect(badChunkErr).toBeInstanceOf(InboundError);
+
+      if (badChunkErr instanceof InboundError) {
+        expect(badChunkErr.reason).toBe("payload_invalid");
+      }
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

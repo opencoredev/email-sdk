@@ -54,18 +54,22 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
       }
 
       safeHeaders = [...headers].map((header) => {
-        if (
-          !isNonArrayObject(header) ||
-          !isStringMember(header.name) ||
-          header.name.length === 0 ||
-          !isStringMember(header.value)
-        ) {
+        if (!isNonArrayObject(header)) {
           throw new EmailValidationError(
             "defaultsPlugin headers must contain objects with non-empty string name and string value.",
           );
         }
 
-        return { name: header.name, value: header.value };
+        const name = header.name;
+        const value = header.value;
+
+        if (!isStringMember(name) || name.length === 0 || !isStringMember(value)) {
+          throw new EmailValidationError(
+            "defaultsPlugin headers must contain objects with non-empty string name and string value.",
+          );
+        }
+
+        return { name, value };
       });
     }
 
@@ -77,17 +81,22 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
       }
 
       safeTags = [...tags].map((tag) => {
-        if (
-          !isNonArrayObject(tag) ||
-          !isStringMember(tag.name) ||
-          !isStringMember(tag.value)
-        ) {
+        if (!isNonArrayObject(tag)) {
           throw new EmailValidationError(
             "defaultsPlugin tags must contain objects with string name and string value.",
           );
         }
 
-        return { name: tag.name, value: tag.value };
+        const name = tag.name;
+        const value = tag.value;
+
+        if (!isStringMember(name) || !isStringMember(value)) {
+          throw new EmailValidationError(
+            "defaultsPlugin tags must contain objects with string name and string value.",
+          );
+        }
+
+        return { name, value };
       });
     }
 
@@ -103,7 +112,7 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
     };
   } catch (error) {
     if (error instanceof EmailValidationError) throw error;
-    throw new EmailValidationError("defaultsPlugin options could not be read.");
+    throw new EmailValidationError("defaultsPlugin options could not be read.", { cause: error });
   }
 
   return {
@@ -124,22 +133,25 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
   };
 }
 
+function cloneAddressEntry(entry: EmailAddress): EmailAddress {
+  if (isStringMember(entry) || !isNonArrayObject(entry)) return entry;
+
+  const email = entry.email;
+  const name = entry.name;
+
+  return name === undefined ? { email } : { email, name };
+}
+
 function cloneReplyTo(
   replyTo: EmailDefaultsPluginOptions["replyTo"],
 ): EmailDefaultsPluginOptions["replyTo"] {
   if (replyTo === undefined || isStringMember(replyTo)) return replyTo;
 
   if (Array.isArray(replyTo)) {
-    return replyTo.map((entry) =>
-      isStringMember(entry) || !isNonArrayObject(entry)
-        ? entry
-        : { ...entry, email: entry.email, name: entry.name },
-    );
+    return [...replyTo].map(cloneAddressEntry);
   }
 
-  if (!isNonArrayObject(replyTo)) return replyTo;
-
-  return { ...replyTo, email: replyTo.email, name: replyTo.name };
+  return cloneAddressEntry(replyTo);
 }
 
 function withMessageDefaults(

@@ -61,21 +61,86 @@ function readOptionalString(
   return isString(value) && value.length > 0 ? value : undefined;
 }
 
+type StrictStringListResult =
+  | { readonly ok: true; readonly value: readonly string[] | undefined }
+  | { readonly ok: false };
+
+function readStrictStringList(
+  result: LegacyEmailSendResult,
+  key: "accepted" | "rejected",
+): StrictStringListResult {
+  let raw: unknown;
+
+  try {
+    raw = result[key];
+  } catch {
+    return { ok: false };
+  }
+
+  if (raw === undefined) return { ok: true, value: undefined };
+
+  if (!Array.isArray(raw)) return { ok: false };
+
+  try {
+    const entries = [...raw];
+
+    return entries.every((entry) => isString(entry))
+      ? { ok: true, value: entries }
+      : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
 function readOptionalStringList(
   result: LegacyEmailSendResult,
   key: "accepted" | "rejected",
 ): readonly string[] | undefined {
-  const value = readResultField(result, key);
+  const parsed = readStrictStringList(result, key);
 
-  if (!Array.isArray(value)) return undefined;
+  return parsed.ok ? parsed.value : undefined;
+}
 
-  try {
-    const entries = [...value];
-
-    return entries.every((entry) => isString(entry)) ? entries : undefined;
-  } catch {
-    return undefined;
+export function normalizePersonalizedAdapterResult<Name extends string>(
+  adapter: Name,
+  result: LegacyEmailSendResult,
+): EmailSendResult<Name> & { readonly accepted: readonly string[]; readonly rejected: readonly string[] } {
+  if (!isObjectLike(result) || Array.isArray(result)) {
+    throw new EmailAdapterError(`${adapter} resolved without a valid result object.`, {
+      adapter,
+      delivery: "unknown",
+      retryable: false,
+    });
   }
+
+  const accepted = readStrictStringList(result, "accepted");
+
+  if (!accepted.ok || !Array.isArray(accepted.value)) {
+    throw new EmailAdapterError(
+      `${adapter}.sendPersonalized resolved without an accepted recipient list.`,
+      { adapter, delivery: "unknown", retryable: false },
+    );
+  }
+
+  const rejected = readStrictStringList(result, "rejected");
+
+  if (!rejected.ok) {
+    throw new EmailAdapterError(
+      `${adapter}.sendPersonalized resolved with an invalid rejected recipient list.`,
+      { adapter, delivery: "unknown", retryable: false },
+    );
+  }
+
+  return {
+    // SAFETY: an adapter reports its own name; legacy adapters report it as `provider`.
+    adapter: (readOptionalString(result, "adapter") ??
+      readOptionalString(result, "provider") ??
+      adapter) as Name,
+    id: readOptionalString(result, "id") ?? readOptionalString(result, "messageId"),
+    accepted: accepted.value,
+    rejected: rejected.value ?? [],
+    raw: readResultField(result, "raw"),
+  };
 }
 
 export function normalizeAdapterResult<Name extends string>(

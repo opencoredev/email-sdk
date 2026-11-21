@@ -90,6 +90,7 @@ import type {
 } from "./types.js";
 import {
   cloneMetadataRecord,
+  isDateLike,
   isFunction,
   isNonArrayObject,
   isObjectLike,
@@ -253,7 +254,11 @@ function snapshotMessageField(
 
   if (key === "text") return message.text;
 
-  if (key === "sendAt") return message.sendAt;
+  if (key === "sendAt") {
+    const sendAt = message.sendAt;
+
+    return isDateLike(sendAt) ? new Date(Date.prototype.getTime.call(sendAt)) : sendAt;
+  }
 
   return undefined;
 }
@@ -895,7 +900,16 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
-    let facts: ReturnType<typeof messageFacts> | undefined;
+
+    let facts: ReturnType<typeof messageFacts> | undefined = telemetry
+      ? {
+          recipients: 0,
+          has_attachments: false,
+          used_recipient_variables: false,
+          used_send_at: false,
+        }
+      : undefined;
+
     let attemptedAdapter = defaultAdapter;
 
     try {
@@ -1175,9 +1189,10 @@ export function createEmailClient<
       item: (typeof items)[number] | undefined,
     ): EmailMessage | undefined => {
       try {
-        return item !== undefined && isNonArrayObject(item) && isNonArrayObject(item.message)
-          ? item.message
-          : undefined;
+        if (item === undefined || !isNonArrayObject(item)) return undefined;
+        const msg = item.message;
+
+        return isNonArrayObject(msg) ? msg : undefined;
       } catch {
         return undefined;
       }
@@ -1198,15 +1213,23 @@ export function createEmailClient<
         const msg = readItemMessage(item);
 
         if (item && msg) {
+          let safeMsg = msg;
+
+          try {
+            safeMsg = snapshotMessage(msg);
+          } catch {
+            // Throwing getters are surfaced consistently by send() inside settle().
+          }
+
           if (telemetry) {
             try {
-              totalRecipients += recipientCount(msg);
+              totalRecipients += recipientCount(safeMsg);
             } catch {
               // Throwing getters on malformed messages are surfaced as item failures below.
             }
           }
 
-          await settle(index, msg, item);
+          await settle(index, safeMsg, item);
         } else {
           const error = new EmailValidationError("sendMany item is missing a message.");
           failed += 1;
@@ -1249,7 +1272,17 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailPersonalizedResult> => {
     const startedAt = Date.now();
-    let facts: ReturnType<typeof personalizedFacts> | undefined;
+
+    let facts: ReturnType<typeof personalizedFacts> | undefined = telemetry
+      ? {
+          recipients: 0,
+          personalized_recipient_count: 0,
+          has_attachments: false,
+          used_recipient_variables: false,
+          used_send_at: false,
+        }
+      : undefined;
+
     let attemptedAdapter = defaultAdapter;
     let deliveryPath = "personalized";
 
@@ -1280,7 +1313,7 @@ export function createEmailClient<
 
               const variables =
                 rawVars !== undefined && isNonArrayObject(rawVars)
-                  ? Object.fromEntries(Object.entries(rawVars))
+                  ? cloneMetadataRecord(rawVars)
                   : rawVars;
 
               // SAFETY: `to` was snapshotted from `recipient.to` preserving the EmailAddress shape.

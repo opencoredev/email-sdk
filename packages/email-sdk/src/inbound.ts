@@ -278,6 +278,13 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
 
   if (Number.isFinite(declared) && declared > maxBodyBytes) throw bodyTooLarge(provider, maxBodyBytes);
 
+  if (request.bodyUsed) {
+    throw new InboundError("Inbound request body could not be read.", {
+      reason: "payload_invalid",
+      provider,
+    });
+  }
+
   if (!request.body) return new Uint8Array(0);
 
   // Content-Length can be absent (chunked) or wrong, so the stream is counted as it arrives.
@@ -312,7 +319,23 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
     const { done, value } = chunk;
 
     if (done) break;
-    total += value.byteLength;
+
+    if (!ArrayBuffer.isView(value)) {
+      void reader.cancel().catch(() => undefined);
+      throw new InboundError("Inbound request body could not be read.", {
+        reason: "payload_invalid",
+        provider,
+      });
+    }
+
+    const view: ArrayBufferView = value;
+
+    const bytes =
+      view instanceof Uint8Array
+        ? view
+        : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+
+    total += bytes.byteLength;
 
     if (total > maxBodyBytes) {
       // Do not await cancel(): on a cloned Request whose sibling branch is unread,
@@ -321,7 +344,7 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
       throw bodyTooLarge(provider, maxBodyBytes);
     }
 
-    chunks.push(value);
+    chunks.push(bytes);
   }
 
   const body = new Uint8Array(total);

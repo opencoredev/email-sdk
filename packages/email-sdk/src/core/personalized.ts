@@ -17,7 +17,7 @@ import type {
   EmailSendOptions,
   EmailSendResult,
 } from "../types.js";
-import { emailAddressOf, isValidAddress, normalizeAdapterResult } from "../utils.js";
+import { emailAddressOf, isValidAddress, normalizePersonalizedAdapterResult } from "../utils.js";
 import {
   attemptAdapter,
   defaultDelay,
@@ -152,20 +152,7 @@ function personalizedResult(
   adapterName: string,
   result: EmailPersonalizedResult,
 ): EmailPersonalizedResult {
-  const normalized = normalizeAdapterResult(adapterName, result);
-
-  if (!Array.isArray(normalized.accepted)) {
-    throw new EmailAdapterError(
-      `${adapterName}.sendPersonalized resolved without an accepted recipient list.`,
-      { adapter: adapterName, delivery: "unknown", retryable: false },
-    );
-  }
-
-  return {
-    ...normalized,
-    accepted: normalized.accepted,
-    rejected: normalized.rejected ?? [],
-  };
+  return normalizePersonalizedAdapterResult(adapterName, result);
 }
 
 export type ExpandedRecipient = {

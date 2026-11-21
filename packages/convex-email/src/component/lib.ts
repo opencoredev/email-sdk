@@ -439,7 +439,7 @@ export const processDueEmails = internalMutation({
       // The worker stopped mid-send, so the adapter this lease last reached may have sent it.
       await pinUnknownDelivery(ctx, email, email.dispatchedAdapter);
 
-      if (email.idempotencyKey) {
+      if (email.idempotencyKey?.trim()) {
         await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
           immediate: true,
         });
@@ -526,7 +526,7 @@ type EnqueueEmailOptions = {
 
 async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
   const { email: args, sender, ownerId } = options;
-  const idempotencyKey = args.idempotencyKey;
+  const idempotencyKey = args.idempotencyKey?.trim() ? args.idempotencyKey : undefined;
 
   if (idempotencyKey) {
     const existing = ownerId
