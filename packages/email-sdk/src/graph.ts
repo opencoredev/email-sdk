@@ -1,5 +1,5 @@
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
-import { isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
+import { isJsonNumber, isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersArray, emailParts } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
@@ -302,12 +302,25 @@ async function requestAccessToken(
 
   return {
     accessToken,
-    // Some Microsoft identity endpoints send expires_in as a numeric string.
-    refreshAt:
-      Date.now() +
-      Number(jsonField(responseBody, "expires_in") ?? 3_600) * 1_000 -
-      TOKEN_REFRESH_SKEW_MS,
+    refreshAt: Date.now() + tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000 - TOKEN_REFRESH_SKEW_MS,
   };
+}
+
+const DEFAULT_TOKEN_LIFETIME_SECONDS = 3_600;
+
+/**
+ * Some Microsoft identity endpoints send expires_in as a numeric string. Anything else that is
+ * not a positive finite number (missing, null, "", "soon") falls back to one hour; otherwise NaN
+ * or 0 would make every cached token look expired and every send would exchange a new one.
+ */
+function tokenLifetimeSeconds(expiresIn: JsonValue | undefined): number {
+  const seconds = isJsonNumber(expiresIn)
+    ? expiresIn
+    : isJsonString(expiresIn) && expiresIn.trim() !== ""
+      ? Number(expiresIn)
+      : Number.NaN;
+
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_TOKEN_LIFETIME_SECONDS;
 }
 
 async function toGraphPayload(message: EmailMessage, saveToSentItems?: boolean) {
