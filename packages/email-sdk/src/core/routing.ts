@@ -10,6 +10,7 @@ import {
   isNonArrayObject,
   isStringMember,
 } from "../internal/decode.js";
+import { copyBoundedArray } from "../internal/snapshot.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -115,13 +116,17 @@ export function resolveRoute(
     throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
   }
 
-  if (!fallback?.adapters?.length) return { primary, fallback, names: [primary] };
+  if (!fallback?.adapters) return { primary, fallback, names: [primary] };
+
+  const fallbackAdapters = copyBoundedArray(fallback.adapters, "fallback.adapters");
+
+  if (!fallbackAdapters.length) return { primary, fallback, names: [primary] };
 
   return {
     primary,
     fallback,
     // A Set keeps first occurrences in order, so a repeated name is attempted once.
-    names: [...new Set([primary, ...fallback.adapters])],
+    names: [...new Set([primary, ...fallbackAdapters])],
   };
 }
 
@@ -142,12 +147,27 @@ export function snapshotRetryConfig(retry: EmailRetryConfig | undefined): EmailR
 
   if ("delay" in retry) {
     const delay = retry.delay;
-    snapshot.delay = isFunction(delay) ? delay.bind(retry) : delay;
+
+    if (isFunction(delay)) {
+      // SAFETY: `delay` is a verified EmailRetryConfig delay function; binding preserves its type.
+      snapshot.delay = Function.prototype.bind.call(delay, retry) as EmailRetryConfig["delay"];
+    } else {
+      snapshot.delay = delay;
+    }
   }
 
   if ("shouldRetry" in retry) {
     const shouldRetry = retry.shouldRetry;
-    snapshot.shouldRetry = isFunction(shouldRetry) ? shouldRetry.bind(retry) : shouldRetry;
+
+    if (isFunction(shouldRetry)) {
+      // SAFETY: `shouldRetry` is a verified EmailRetryConfig predicate; binding preserves its type.
+      snapshot.shouldRetry = Function.prototype.bind.call(
+        shouldRetry,
+        retry,
+      ) as EmailRetryConfig["shouldRetry"];
+    } else {
+      snapshot.shouldRetry = shouldRetry;
+    }
   }
 
   return snapshot;
@@ -165,7 +185,9 @@ export function snapshotFallbackConfig<Name extends string = string>(
   const rawAdapters = "adapters" in fallback ? fallback.adapters : undefined;
 
   // SAFETY: Preserves caller's runtime non-array/missing adapters for validateFallback to reject.
-  const adapters = Array.isArray(rawAdapters) ? [...rawAdapters] : (rawAdapters as readonly Name[]);
+  const adapters = Array.isArray(rawAdapters)
+    ? copyBoundedArray(rawAdapters, "fallback.adapters")
+    : (rawAdapters as readonly Name[]);
 
   const snapshot: EmailFallbackConfig<Name> = { adapters };
 

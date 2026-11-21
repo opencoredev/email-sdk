@@ -74,7 +74,7 @@ type EmailSendOptions<Name extends string> = {
 
 `idempotency` controls what `idempotencyKey` requires. With `"strict"`, the default, a route that includes an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` before any request, so a key is never dropped silently. `"best-effort"` sends anyway and forwards the key to adapters that use it.
 
-Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes it unchanged to hooks, plugins, and adapter contexts.
+Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes an isolated deep clone to each hook, plugin, and adapter attempt (preserving primitives, plain objects, arrays, `Date`, `Map`, `Set`, typed arrays, `ArrayBuffer`, `RegExp`, `URL`, class prototypes, and enumerable symbol keys) so mutations inside one callback cannot leak into retries, fallbacks, or the caller's object.
 
 By default `EmailSendMetadata` is `EmailMetadataRecord`: strings, numbers, booleans, `null`, `undefined`, `Date`, and arrays or plain objects of those. To give it your own shape, augment `EmailMetadataRegister` once in your app:
 

@@ -314,28 +314,33 @@ function cloneDateValue<T>(value: T): Date | undefined {
 
 function cloneArrayBufferView(view: ArrayBufferView): ArrayBufferView {
   const copied = new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice();
+  const tag = tagOf(view);
 
-  if (view instanceof DataView) return new DataView(copied.buffer);
+  if (tag === "[object DataView]") return new DataView(copied.buffer);
 
-  if (view instanceof Int8Array) return new Int8Array(copied.buffer);
+  if (tag === "[object Int8Array]") return new Int8Array(copied.buffer);
 
-  if (view instanceof Uint8ClampedArray) return new Uint8ClampedArray(copied.buffer);
+  if (tag === "[object Uint8ClampedArray]") return new Uint8ClampedArray(copied.buffer);
 
-  if (view instanceof Int16Array) return new Int16Array(copied.buffer);
+  if (tag === "[object Int16Array]") return new Int16Array(copied.buffer);
 
-  if (view instanceof Uint16Array) return new Uint16Array(copied.buffer);
+  if (tag === "[object Uint16Array]") return new Uint16Array(copied.buffer);
 
-  if (view instanceof Int32Array) return new Int32Array(copied.buffer);
+  if (tag === "[object Int32Array]") return new Int32Array(copied.buffer);
 
-  if (view instanceof Uint32Array) return new Uint32Array(copied.buffer);
+  if (tag === "[object Uint32Array]") return new Uint32Array(copied.buffer);
 
-  if (view instanceof Float32Array) return new Float32Array(copied.buffer);
+  if (tag === "[object Float16Array]" && isFunction(globalThis.Float16Array)) {
+    return new globalThis.Float16Array(copied.buffer);
+  }
 
-  if (view instanceof Float64Array) return new Float64Array(copied.buffer);
+  if (tag === "[object Float32Array]") return new Float32Array(copied.buffer);
 
-  if (view instanceof BigInt64Array) return new BigInt64Array(copied.buffer);
+  if (tag === "[object Float64Array]") return new Float64Array(copied.buffer);
 
-  if (view instanceof BigUint64Array) return new BigUint64Array(copied.buffer);
+  if (tag === "[object BigInt64Array]") return new BigInt64Array(copied.buffer);
+
+  if (tag === "[object BigUint64Array]") return new BigUint64Array(copied.buffer);
 
   return copied;
 }
@@ -450,8 +455,8 @@ export function cloneMetadataRecord<T>(metadata: T): T {
     const proto = Object.getPrototypeOf(value);
 
     if (!isBuiltInValueObject(value)) {
-      // SAFETY: Creating a fresh plain object with matching prototype preserves V.
-      const copy = (proto === null ? Object.create(null) : {}) as V;
+      // SAFETY: Creating a fresh object with the same prototype preserves class methods and instanceof.
+      const copy = Object.create(proto) as V;
       seen.set(value, copy);
 
       // SAFETY: Non-primitive objects are valid Object.entries targets.
@@ -464,10 +469,35 @@ export function cloneMetadataRecord<T>(metadata: T): T {
         });
       }
 
-      // Preserve prototype getters on class-instance metadata while still isolating mutations.
+      for (const sym of Object.getOwnPropertySymbols(value)) {
+        if (!Object.prototype.propertyIsEnumerable.call(value, sym)) continue;
+
+        const desc = Object.getOwnPropertyDescriptor(value, sym);
+
+        if (!desc) continue;
+
+        const entry = desc.get ? desc.get.call(value) : desc.value;
+
+        Object.defineProperty(copy, sym, {
+          value: clone(entry),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      // Preserve prototype getters (including private-field getters and null-prototype parents)
+      // while still isolating mutations. Stop at Object.prototype (including cross-realm).
       let cursor = proto;
 
-      while (cursor !== null && Object.getPrototypeOf(cursor) !== null) {
+      while (
+        cursor !== null &&
+        cursor !== Object.prototype &&
+        !(
+          Object.getPrototypeOf(cursor) === null &&
+          Object.prototype.hasOwnProperty.call(cursor, "__proto__")
+        )
+      ) {
         for (const key of Object.getOwnPropertyNames(cursor)) {
           if (key === "constructor" || Object.prototype.hasOwnProperty.call(copy, key)) continue;
 

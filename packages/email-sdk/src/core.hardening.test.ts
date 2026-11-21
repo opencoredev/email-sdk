@@ -2698,7 +2698,10 @@ describe("audit hardening regressions", () => {
     // SAFETY: Testing runtime object with custom Symbol.toStringTag as metadata.
     await client.send({ ...baseMsg, metadata: taggedMeta as never });
     expect(metaReads).toBe(1);
-    expect(adapter.raw.sent.at(-1)?.message.metadata).toEqual({ secret: "v1" });
+    expect(adapter.raw.sent.at(-1)?.message.metadata).toEqual({
+      [Symbol.toStringTag]: "FakeTag",
+      secret: "v1",
+    });
 
     // 3. Empty legacy header name and CR/LF header names are rejected.
     await expect(
@@ -2907,22 +2910,28 @@ describe("audit hardening regressions", () => {
       }),
     ).toThrow(EmailValidationError);
 
+    let bindGetterCalled = false;
+
     const throwingBindFn = new Proxy(() => ({}), {
       get(_target, prop) {
-        if (prop === "bind") throw new Error("bind boom");
+        if (prop === "bind") {
+          bindGetterCalled = true;
+          throw new Error("bind boom");
+        }
 
         return undefined;
       },
     });
 
-    expect(() =>
-      createEmailClient({
-        adapters: [adapter],
-        // SAFETY: Testing hostile Proxy whose .bind getter throws.
-        plugins: [{ id: "throw-bind", extendClient: throwingBindFn as never }],
-        telemetry: false,
-      }),
-    ).toThrow(EmailValidationError);
+    const clientWithHostileBind = createEmailClient({
+      adapters: [adapter],
+      // SAFETY: Testing hostile Proxy whose .bind getter throws; Function.prototype.bind.call bypasses it safely.
+      plugins: [{ id: "throw-bind", extendClient: throwingBindFn as never }],
+      telemetry: false,
+    });
+
+    expect(bindGetterCalled).toBe(false);
+    expect(clientWithHostileBind.adapters.size).toBe(1);
 
     expect(() =>
       createEmailClient({
@@ -3081,5 +3090,249 @@ describe("audit hardening regressions", () => {
     expect(seenValidateSubjects).toEqual(["s"]);
     expect(seenRetrySubjects).toEqual(["s"]);
     expect(seenAfterSubjects).toEqual(["s"]);
+
+    // R30: forged huge-length array Proxy rejected fast across message/client/fallback fields,
+    // own .bind override ignored, class prototype methods & symbol metadata preserved,
+    // cross-realm DataView/TypedArray & Float16Array preserved, null-proto parent getters preserved,
+    // and sendPersonalized isolates onError middleware from onError hooks.
+    const forgedHuge = new Proxy([], {
+      get(target, prop) {
+        if (prop === "length") return 2 ** 32 - 1;
+
+        if (prop === "0") return "z@example.com";
+
+        return prop === Symbol.iterator ? target[Symbol.iterator] : undefined;
+      },
+    });
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing forged huge-length plugins Proxy.
+        plugins: forgedHuge as never,
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing forged huge-length fallback.adapters Proxy.
+        fallback: { adapters: forgedHuge as never },
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    await expect(
+      client.send({
+        ...baseMsg,
+        // SAFETY: Testing forged huge-length cc Proxy.
+        cc: forgedHuge as never,
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+
+    await expect(
+      client.send({
+        ...baseMsg,
+        // SAFETY: Testing forged huge-length headers Proxy.
+        headers: forgedHuge as never,
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+
+    await expect(
+      client.send({
+        ...baseMsg,
+        // SAFETY: Testing forged huge-length tags Proxy.
+        tags: forgedHuge as never,
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+
+    await expect(
+      client.send({
+        ...baseMsg,
+        // SAFETY: Testing forged huge-length attachments Proxy.
+        attachments: forgedHuge as never,
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+
+    await expect(
+      client.sendPersonalized({
+        message: { from: "a@example.com", subject: "s", text: "t" },
+        // SAFETY: Testing forged huge-length recipients Proxy.
+        recipients: forgedHuge as never,
+      }),
+    ).rejects.toBeInstanceOf(EmailValidationError);
+
+    // Own .bind override on extendClient / middleware does not break binding
+    const customBindExt = Object.assign(() => ({ customHelper: () => "ok" }), {
+      bind: () => 42,
+    });
+
+    const customBindMw = Object.assign(async () => undefined, {
+      bind: () => 42,
+    });
+
+    const ownBindClient = createEmailClient({
+      adapters: [adapter],
+      plugins: [
+        {
+          id: "own-bind",
+          // SAFETY: Testing function with shadowed own .bind property.
+          extendClient: customBindExt as never,
+          // SAFETY: Testing middleware function with shadowed own .bind property.
+          middleware: [{ beforeSend: customBindMw as never }],
+        },
+      ],
+      telemetry: false,
+    });
+
+    const ownBindRes = await ownBindClient.send(baseMsg);
+    expect(ownBindRes.adapter).toBe("m");
+
+    // Falsy non-undefined extendClient return value is rejected
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing null return from extendClient.
+        plugins: [{ id: "null-ext", extendClient: () => null as never }],
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    // Class prototype methods, symbol keys, null-proto parent getters, and cross-realm typed arrays survive metadata cloning
+    const tenantSym = Symbol("tenant");
+
+    class TenantContext {
+      readonly id: string;
+      [tenantSym]: string;
+
+      constructor(id: string) {
+        this.id = id;
+        this[tenantSym] = `sym-${id}`;
+      }
+
+      getTenantId() {
+        return this.id;
+      }
+    }
+
+    const nullParent = Object.create(null, {
+      secretLabel: {
+        get: () => "from-null-parent",
+        enumerable: true,
+      },
+    });
+
+    const nullChild = Object.create(nullParent);
+    const { runInNewContext } = await import("node:vm");
+    const foreignDv = runInNewContext("new DataView(new ArrayBuffer(4))");
+    const foreignI32 = runInNewContext("new Int32Array([42])");
+
+    let observedTenantMethod = "";
+    let observedTenantInstance = false;
+    let observedSym = "";
+    let observedNullParent = "";
+    let observedDv = false;
+    let observedI32Val = 0;
+
+    const richMetaClient = createEmailClient({
+      adapters: [
+        {
+          name: "rich",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(_m, ctx) {
+            // SAFETY: Test passes TenantContext, nullChild, DataView, and Int32Array in metadata.
+            const meta = ctx.metadata as {
+              tenant: TenantContext;
+              child: { secretLabel: string };
+              dv: DataView;
+              i32: Int32Array;
+            };
+
+            observedTenantInstance = meta.tenant instanceof TenantContext;
+            observedTenantMethod = meta.tenant.getTenantId();
+            observedSym = meta.tenant[tenantSym];
+            observedNullParent = meta.child.secretLabel;
+            observedDv = meta.dv instanceof DataView;
+            observedI32Val = meta.i32 instanceof Int32Array ? (meta.i32[0] ?? 0) : -1;
+
+            return { adapter: "rich", id: "ok" };
+          },
+        },
+      ],
+      telemetry: false,
+    });
+
+    await richMetaClient.send(baseMsg, {
+      // SAFETY: Testing runtime metadata cloning for class instances, symbols, null-proto parents, and cross-realm views.
+      metadata: {
+        tenant: new TenantContext("t-42"),
+        child: nullChild,
+        dv: foreignDv,
+        i32: foreignI32,
+      } as never,
+    });
+
+    expect(observedTenantInstance).toBe(true);
+    expect(observedTenantMethod).toBe("t-42");
+    expect(observedSym).toBe("sym-t-42");
+    expect(observedNullParent).toBe("from-null-parent");
+    expect(observedDv).toBe(true);
+    expect(observedI32Val).toBe(42);
+
+    // sendPersonalized isolates onError middleware mutations from onError hooks
+    const seenPersErrorSubjects: string[] = [];
+
+    const persIsoClient = createEmailClient({
+      adapters: [
+        {
+          name: "pers-fail",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "native",
+          },
+          async send() {
+            throw new EmailAdapterError("fail", { adapter: "pers-fail", delivery: "not_sent" });
+          },
+          async sendPersonalized() {
+            throw new EmailAdapterError("fail", { adapter: "pers-fail", delivery: "not_sent" });
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "mw-err-mut",
+          middleware: [
+            {
+              onError(ev) {
+                ev.message.subject = "MUTATED_BY_MW";
+              },
+            },
+          ],
+        },
+      ],
+      hooks: {
+        onError(ev) {
+          seenPersErrorSubjects.push(ev.message.subject);
+        },
+      },
+      telemetry: false,
+    });
+
+    await expect(
+      persIsoClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "orig-pers", text: "hi" },
+        recipients: [{ to: "b@example.com" }],
+      }),
+    ).rejects.toThrow();
+
+    expect(seenPersErrorSubjects).toEqual(["orig-pers"]);
   });
 });

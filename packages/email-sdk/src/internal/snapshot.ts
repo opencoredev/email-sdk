@@ -24,6 +24,30 @@ export const MESSAGE_FIELDS = [
   "sendAt",
 ] as const;
 
+export const MAX_BOUNDED_ARRAY_LENGTH = 1_000_000;
+
+/** Copy an array with an explicit length cap so forged huge-length array Proxies fail fast instead of exhausting memory. */
+export function copyBoundedArray<T>(
+  value: readonly T[],
+  label: string,
+  max = MAX_BOUNDED_ARRAY_LENGTH,
+): T[] {
+  const length = value.length;
+
+  if (!Number.isSafeInteger(length) || length < 0 || length > max) {
+    throw new EmailValidationError(`${label} exceeds maximum supported length.`);
+  }
+
+  const out: T[] = [];
+
+  for (let index = 0; index < length; index += 1) {
+    // SAFETY: Index is strictly less than the verified array length.
+    out.push(value[index] as T);
+  }
+
+  return out;
+}
+
 export function snapshotAddressItem(address: EmailAddress): EmailAddress {
   if (isStringMember(address) || !isNonArrayObject(address)) return address;
 
@@ -39,7 +63,7 @@ function isAddressList(value: OneOrMany<EmailAddress>): value is readonly EmailA
 
 export function snapshotAddressField(value: OneOrMany<EmailAddress>): OneOrMany<EmailAddress> {
   if (isAddressList(value)) {
-    return [...value].map(snapshotAddressItem);
+    return copyBoundedArray(value, "Email address list").map(snapshotAddressItem);
   }
 
   return snapshotAddressItem(value);
@@ -84,7 +108,7 @@ function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
 
 function snapshotHeaders(value: EmailMessage["headers"]): EmailMessage["headers"] {
   if (Array.isArray(value)) {
-    return [...value].map((header) =>
+    return copyBoundedArray(value, "Email headers").map((header) =>
       isNonArrayObject(header) ? { name: header.name, value: header.value } : header,
     );
   }
@@ -95,7 +119,7 @@ function snapshotHeaders(value: EmailMessage["headers"]): EmailMessage["headers"
 
 function snapshotTags(value: EmailMessage["tags"]): EmailMessage["tags"] {
   if (Array.isArray(value)) {
-    return [...value].map((tag) =>
+    return copyBoundedArray(value, "Email tags").map((tag) =>
       isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
     );
   }
@@ -154,7 +178,9 @@ export function snapshotMessageField(
 
     if (attachments === undefined) return undefined;
 
-    return Array.isArray(attachments) ? [...attachments].map(snapshotAttachmentItem) : attachments;
+    return Array.isArray(attachments)
+      ? copyBoundedArray(attachments, "Email attachments").map(snapshotAttachmentItem)
+      : attachments;
   }
 
   if (key === "metadata") {
@@ -298,7 +324,7 @@ export function snapshotPersonalizedInputForSend(
     const rawRecipients = input.recipients;
 
     const recipients = Array.isArray(rawRecipients)
-      ? [...rawRecipients].map((recipient) => {
+      ? copyBoundedArray(rawRecipients, "sendPersonalized recipients").map((recipient) => {
           if (!isNonArrayObject(recipient)) return recipient;
 
           const to = snapshotAddressItem(recipient.to);

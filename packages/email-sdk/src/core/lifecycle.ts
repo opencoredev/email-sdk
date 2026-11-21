@@ -45,7 +45,7 @@ export function resolvePluginAdapters(
   if (Array.isArray(configured)) {
     adapters = configured;
   } else if (isFunction(configured)) {
-    adapters = configured.call(plugin, context);
+    adapters = Function.prototype.call.call(configured, plugin, context);
   } else {
     throw new EmailValidationError(
       `Email plugin "${pluginId ?? plugin.id}" adapters must be an array or function.`,

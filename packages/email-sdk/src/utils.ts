@@ -21,7 +21,7 @@ import {
   readJson,
 } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
-import { snapshotMessageForSend } from "./internal/snapshot.js";
+import { copyBoundedArray, snapshotMessageForSend } from "./internal/snapshot.js";
 import type {
   EmailAddress,
   EmailAdapter,
@@ -83,7 +83,7 @@ function readStrictStringList(
   if (!Array.isArray(raw)) return { ok: false };
 
   try {
-    const entries = [...raw];
+    const entries = copyBoundedArray(raw, `Adapter result ${key}`);
 
     return entries.every((entry) => isString(entry))
       ? { ok: true, value: entries }
@@ -174,7 +174,7 @@ export function arrayify<T>(value: OneOrMany<T> | undefined): T[] {
     return [];
   }
 
-  return isList(value) ? [...value] : [value];
+  return isList(value) ? copyBoundedArray(value, "Email address list") : [value];
 }
 
 function isList<T>(value: OneOrMany<T>): value is readonly T[] {

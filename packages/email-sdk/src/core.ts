@@ -94,6 +94,7 @@ import {
 } from "./internal/decode.js";
 import { ReadonlyMapView } from "./internal/readonly-map.js";
 import {
+  copyBoundedArray,
   snapshotMessage,
   snapshotPersonalizedInputForSend,
 } from "./internal/snapshot.js";
@@ -114,7 +115,7 @@ function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
         throw new EmailValidationError(`${label}.beforeSend must be a function.`);
       }
 
-      copy.beforeSend = (event) => fn.call(raw, event);
+      copy.beforeSend = (event) => Function.prototype.call.call(fn, raw, event);
     }
   }
 
@@ -126,7 +127,7 @@ function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
         throw new EmailValidationError(`${label}.afterSend must be a function.`);
       }
 
-      copy.afterSend = (event) => fn.call(raw, event);
+      copy.afterSend = (event) => Function.prototype.call.call(fn, raw, event);
     }
   }
 
@@ -138,7 +139,7 @@ function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
         throw new EmailValidationError(`${label}.onError must be a function.`);
       }
 
-      copy.onError = (event) => fn.call(raw, event);
+      copy.onError = (event) => Function.prototype.call.call(fn, raw, event);
     }
   }
 
@@ -150,7 +151,7 @@ function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
         throw new EmailValidationError(`${label}.onRetry must be a function.`);
       }
 
-      copy.onRetry = (event) => fn.call(raw, event);
+      copy.onRetry = (event) => Function.prototype.call.call(fn, raw, event);
     }
   }
 
@@ -211,7 +212,9 @@ export function createEmailClient<
   const extensionPlugins: Array<Pick<EmailPlugin, "id" | "extendClient">> = [];
 
   try {
-    for (const adapter of rawAdapters ?? []) addAdapter(adapters, adapter);
+    const adapterList = rawAdapters ? copyBoundedArray(rawAdapters, "createEmailClient adapters") : [];
+
+    for (const adapter of adapterList) addAdapter(adapters, adapter);
   } catch (error) {
     if (error instanceof EmailSdkError) throw error;
 
@@ -223,7 +226,7 @@ export function createEmailClient<
   let pluginList: readonly EmailPlugin[];
 
   try {
-    pluginList = [...(rawPlugins ?? [])];
+    pluginList = rawPlugins ? copyBoundedArray(rawPlugins, "createEmailClient plugins") : [];
   } catch (error) {
     if (error instanceof EmailSdkError) throw error;
 
@@ -289,11 +292,29 @@ export function createEmailClient<
 
           const item: EmailSendMiddleware = {};
 
-          if (beforeSend) item.beforeSend = beforeSend.bind(entry);
+          if (beforeSend) {
+            // SAFETY: `beforeSend` is verified callable; binding via Function.prototype preserves its type.
+            item.beforeSend = Function.prototype.bind.call(
+              beforeSend,
+              entry,
+            ) as EmailSendMiddleware["beforeSend"];
+          }
 
-          if (afterSend) item.afterSend = afterSend.bind(entry);
+          if (afterSend) {
+            // SAFETY: `afterSend` is verified callable; binding via Function.prototype preserves its type.
+            item.afterSend = Function.prototype.bind.call(
+              afterSend,
+              entry,
+            ) as EmailSendMiddleware["afterSend"];
+          }
 
-          if (onError) item.onError = onError.bind(entry);
+          if (onError) {
+            // SAFETY: `onError` is verified callable; binding via Function.prototype preserves its type.
+            item.onError = Function.prototype.bind.call(
+              onError,
+              entry,
+            ) as EmailSendMiddleware["onError"];
+          }
 
           copiedMiddleware.push(item);
         }
@@ -308,7 +329,11 @@ export function createEmailClient<
           throw new EmailValidationError(`Plugin "${pluginId}" extendClient must be a function.`);
         }
 
-        boundExtendClient = extendClient.bind(plugin);
+        // SAFETY: `extendClient` is verified callable; binding via Function.prototype preserves its type.
+        boundExtendClient = Function.prototype.bind.call(
+          extendClient,
+          plugin,
+        ) as EmailPlugin["extendClient"];
       }
     } catch (error) {
       if (error instanceof EmailSdkError) throw error;
@@ -1375,7 +1400,7 @@ export function createEmailClient<
   for (const plugin of extensionPlugins) {
     const extension = plugin.extendClient?.(createPluginContext(adapters, defaultAdapter));
 
-    if (extension) {
+    if (extension !== undefined) {
       readBoundary(
         () => applyClientExtension(client, plugin.id, extension),
         `Plugin "${plugin.id}" extension`,
