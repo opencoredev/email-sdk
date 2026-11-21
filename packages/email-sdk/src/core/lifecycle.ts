@@ -94,10 +94,29 @@ async function runBeforeSendMiddleware(
 
       if (result?.message) message = result.message;
 
-      if (result?.options) {
-        options = isNonArrayObject(result.options)
-          ? { ...options, ...result.options, ...cloneNestedSendOptions(result.options) }
-          : Object.assign({}, options, result.options);
+      if (result?.options !== undefined) {
+        if (!isNonArrayObject(result.options)) {
+          throw new EmailValidationError("Email send options must be an object.");
+        }
+
+        const cloned = cloneNestedSendOptions(result.options);
+        const merged: EmailSendOptions = { ...options, ...cloned };
+
+        for (const key of [
+          "adapter",
+          "idempotencyKey",
+          "idempotency",
+          "signal",
+          "retry",
+          "fallback",
+          "metadata",
+        ] as const) {
+          if (Object.hasOwn(result.options, key) && !(key in cloned)) {
+            merged[key] = undefined;
+          }
+        }
+
+        options = merged;
       }
 
       onOptions?.(options);

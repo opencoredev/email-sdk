@@ -1469,6 +1469,128 @@ describe("audit hardening regressions", () => {
       expect(seenBoxCounts).toEqual([0, 0]);
       expect(sharedMetaBox.count).toBe(0);
 
+      // 24. Class-instance metadata with prototype getters is preserved across send & defaultsPlugin
+      class ProtoMeta {
+        get env() {
+          return "prod";
+        }
+      }
+
+      const protoMetaAdapter = memoryAdapter("pm");
+
+      const protoMetaClient = createEmailClient({
+        adapters: [protoMetaAdapter],
+        plugins: [defaultsPlugin({ metadata: new ProtoMeta() })],
+        telemetry: false,
+      });
+
+      await protoMetaClient.send(msg, { metadata: new ProtoMeta() });
+      expect(protoMetaAdapter.raw.sent[0]?.message.metadata).toEqual({ env: "prod" });
+
+      // 25. Throwing accepted getter on adapter result does not fail a delivered send
+      const throwingAccClient = createEmailClient({
+        adapters: [
+          {
+            name: "throw-acc",
+            capabilities: {
+              repeatedHeaders: false,
+              idempotency: "none",
+              scheduling: false,
+              personalized: "expanded",
+            },
+            async send() {
+              return {
+                adapter: "throw-acc",
+                id: "delivered-123",
+                // @ts-expect-error -- testing throwing accepted getter on resolved send
+                get accepted() {
+                  throw new Error("accepted boom");
+                },
+              };
+            },
+          },
+        ],
+        telemetry: false,
+      });
+
+      const throwAccRes = await throwingAccClient.send(msg);
+      expect(throwAccRes.id).toBe("delivered-123");
+
+      // 26. beforeSend returning a class-instance message works in sendPersonalized
+      class MwClassMsg {
+        get from() {
+          return "mw@example.com";
+        }
+
+        get subject() {
+          return "Hi %recipient.name%";
+        }
+
+        get text() {
+          return "Hello %recipient.name%";
+        }
+      }
+
+      const mwPersAdapter = memoryAdapter("mw-pers");
+
+      const mwPersClient = createEmailClient({
+        adapters: [mwPersAdapter],
+        plugins: [
+          {
+            id: "mw-class-msg",
+            middleware: [{ beforeSend: () => ({ message: new MwClassMsg() }) }],
+          },
+        ],
+        telemetry: false,
+      });
+
+      const mwPersRes = await mwPersClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "s", text: "t" },
+        recipients: [{ to: "b@example.com", variables: { name: "Ada" } }],
+      });
+
+      expect(mwPersRes.accepted).toEqual(["b@example.com"]);
+      expect(mwPersAdapter.raw.sent[0]?.message.subject).toBe("Hi Ada");
+
+      // 27. defaultsPlugin rejects non-object options & does not coerce invalid headers/tags; invalid idempotency mode rejected
+      expect(() =>
+        // @ts-expect-error -- runtime null defaultsPlugin options
+        defaultsPlugin(null),
+      ).toThrow(EmailValidationError);
+
+      const hdrDefClient = createEmailClient({
+        adapters: [memoryAdapter("h")],
+        plugins: [defaultsPlugin({ headers: [{ name: "X-App", value: "demo" }] })],
+        telemetry: false,
+      });
+
+      await expect(
+        hdrDefClient.send({
+          ...msg,
+          // @ts-expect-error -- runtime invalid headers string
+          headers: "bad",
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        // @ts-expect-error -- runtime invalid idempotency mode
+        clsClient.validate(msg, { idempotency: "best_effort" }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      const badMwOptsClient = createEmailClient({
+        adapters: [memoryAdapter("bmo")],
+        plugins: [
+          {
+            id: "bad-opts",
+            // @ts-expect-error -- runtime non-object middleware options
+            middleware: [{ beforeSend: () => ({ options: "bad" }) }],
+          },
+        ],
+        telemetry: false,
+      });
+
+      await expect(badMwOptsClient.send(msg)).rejects.toBeInstanceOf(EmailMiddlewareError);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

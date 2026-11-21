@@ -342,10 +342,25 @@ export function withPersonalizedMessage(
   input: EmailPersonalizedInput,
   message: EmailMessage,
 ): EmailPersonalizedInput {
-  const { to: _to, cc: _cc, bcc: _bcc, ...template } = message;
+  const { to: _to, cc: _cc, bcc: _bcc, ...rest } = message;
+
+  const template = {
+    ...rest,
+    from: message.from,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    replyTo: message.replyTo,
+    headers: message.headers,
+    attachments: message.attachments,
+    tags: message.tags,
+    metadata: message.metadata,
+    sendAt: message.sendAt,
+  };
 
   return {
-    // SAFETY: Removing to, cc, and bcc from an EmailMessage leaves exactly the template shape.
+    // SAFETY: Copying known template fields preserves class-instance prototype getters returned
+    // by beforeSend middleware, while omitting to, cc, and bcc restores the template shape.
     message: template as EmailPersonalizedInput["message"],
     recipients: input.recipients,
   };

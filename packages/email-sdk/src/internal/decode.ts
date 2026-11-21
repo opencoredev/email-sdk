@@ -315,6 +315,31 @@ export function cloneMetadataRecord<T>(metadata: T): T {
         });
       }
 
+      // Preserve prototype getters on class-instance metadata while still isolating mutations.
+      let cursor = proto;
+
+      while (cursor !== null && Object.getPrototypeOf(cursor) !== null) {
+        for (const key of Object.getOwnPropertyNames(cursor)) {
+          if (key === "constructor" || Object.prototype.hasOwnProperty.call(copy, key)) continue;
+
+          const desc = Object.getOwnPropertyDescriptor(cursor, key);
+
+          if (!desc?.get) continue;
+
+          // SAFETY: Getter exists on the prototype chain of `value`.
+          const entry = desc.get.call(value);
+
+          Object.defineProperty(copy, key, {
+            value: clone(entry),
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        }
+
+        cursor = Object.getPrototypeOf(cursor);
+      }
+
       return copy;
     }
 

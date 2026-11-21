@@ -30,6 +30,14 @@ export function validateCapabilities(
       throw new EmailValidationError(`${adapter.name} does not support scheduled email.`);
     }
 
+    if (
+      sendOptions?.idempotency !== undefined &&
+      sendOptions.idempotency !== "strict" &&
+      sendOptions.idempotency !== "best-effort"
+    ) {
+      throw new EmailValidationError('idempotency must be "strict" or "best-effort".');
+    }
+
     // An idempotency key is a safety promise: a retried or replayed send is delivered once. An
     // adapter that cannot keep that promise fails loudly instead of silently dropping the key.
     if (sendOptions?.idempotencyKey !== undefined) {

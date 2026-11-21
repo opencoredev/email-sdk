@@ -22,6 +22,10 @@ export type EmailDefaultsPluginOptions = {
 };
 
 export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin {
+  if (!isNonArrayObject(options)) {
+    throw new EmailValidationError("defaultsPlugin options must be an object.");
+  }
+
   if (options.metadata !== undefined && !isNonArrayObject(options.metadata)) {
     throw new EmailValidationError("defaultsPlugin metadata must be an object.");
   }
@@ -116,6 +120,22 @@ function mergeHeaders(
     return value;
   }
 
+  if (value === undefined) {
+    return defaults.map((header) => ({ ...header }));
+  }
+
+  if (Array.isArray(value)) {
+    if (
+      value.some(
+        (header) => !isNonArrayObject(header) || !isStringMember(header.name) || header.name.length === 0,
+      )
+    ) {
+      return value;
+    }
+  } else if (!isNonArrayObject(value)) {
+    return value;
+  }
+
   // headerList also reads the legacy name-to-value object that JavaScript callers send.
   const own = headerList(value);
 
@@ -141,7 +161,15 @@ function mergeTags(
     return value;
   }
 
-  if (!value?.length) {
+  if (value === undefined) {
+    return defaults.map((tag) => ({ ...tag }));
+  }
+
+  if (!Array.isArray(value) || value.some((tag) => !isNonArrayObject(tag))) {
+    return value;
+  }
+
+  if (!value.length) {
     return defaults.map((tag) => ({ ...tag }));
   }
 
@@ -164,10 +192,13 @@ function mergeMetadata(
     return value;
   }
 
-  return cloneMetadataRecord({
-    ...defaults,
-    ...value,
-  });
+  const clonedDefaults = cloneMetadataRecord(defaults);
+  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value);
+
+  return {
+    ...clonedDefaults,
+    ...clonedValue,
+  };
 }
 
 function mergeSendMetadata(
@@ -186,10 +217,13 @@ function mergeSendMetadata(
     return value;
   }
 
-  return cloneMetadataRecord({
-    ...defaults,
-    ...value,
-  });
+  const clonedDefaults = cloneMetadataRecord(defaults);
+  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value);
+
+  return {
+    ...clonedDefaults,
+    ...clonedValue,
+  };
 }
 
 function applyIdempotencyDefault(
@@ -198,7 +232,13 @@ function applyIdempotencyDefault(
 ) {
   const key = value ?? options.idempotencyKey;
 
-  if (!key || !options.idempotencyKeyPrefix || key.startsWith(options.idempotencyKeyPrefix)) {
+  if (
+    !isStringMember(key) ||
+    !key ||
+    !isStringMember(options.idempotencyKeyPrefix) ||
+    !options.idempotencyKeyPrefix ||
+    key.startsWith(options.idempotencyKeyPrefix)
+  ) {
     return key;
   }
 

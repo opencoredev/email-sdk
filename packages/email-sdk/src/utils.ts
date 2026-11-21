@@ -39,6 +39,20 @@ export type LegacyEmailSendResult = Omit<EmailSendResult, "adapter"> & {
   messageId?: string;
 };
 
+/** The send already resolved, so an unreadable optional recipient list must not fail it. */
+function readOptionalStringList(
+  result: LegacyEmailSendResult,
+  key: "accepted" | "rejected",
+): readonly string[] | undefined {
+  try {
+    const value = result[key];
+
+    return Array.isArray(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function normalizeAdapterResult<Name extends string>(
   adapter: Name,
   result: LegacyEmailSendResult,
@@ -48,8 +62,8 @@ export function normalizeAdapterResult<Name extends string>(
     // Either way the value names the adapter registered under `Name`.
     adapter: (result.adapter || result.provider || adapter) as Name,
     id: result.id ?? result.messageId,
-    accepted: Array.isArray(result.accepted) ? result.accepted : undefined,
-    rejected: Array.isArray(result.rejected) ? result.rejected : undefined,
+    accepted: readOptionalStringList(result, "accepted"),
+    rejected: readOptionalStringList(result, "rejected"),
     raw: result.raw,
   };
 }
