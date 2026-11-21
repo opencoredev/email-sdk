@@ -2,4 +2,4 @@
 "@opencoredev/email-sdk": patch
 ---
 
-Harden client and adapter input boundaries: isolate `metadata`, `message`, and attachment byte snapshots across hooks, middleware, retries, fallbacks, and `sendMany`; cap array snapshot lengths to guard against forged huge-length array proxies; reject CR/LF characters in header names; bind plugin/hook/retry callables via `Function.prototype.bind`; and validate direct `mailgun`/`sendgrid` `sendPersonalized` inputs before network requests.
+Harden client and adapter input boundaries: isolate plain `metadata`, `message`, error/response snapshots (`accepted`/`rejected`), and attachment byte snapshots across observational hooks (`afterSend`, `onError`, `onRetry`), middleware, retries, fallbacks, and `sendMany` (note: hooks can no longer share mutable state by mutating plain `metadata` objects; wrap shared state in a custom class instance if shared references are required); cap array snapshot lengths and metadata nesting depth; reject CR/LF characters in header names; bind plugin/hook/retry callables via `Function.prototype.bind`; and validate direct `mailgun`/`sendgrid` `sendPersonalized` inputs before network requests.

@@ -378,15 +378,18 @@ function cloneRegExpValue<T>(value: T): RegExp | undefined {
 
 const MAX_METADATA_ARRAY_LENGTH = 1_000_000;
 
+const MAX_METADATA_CLONE_DEPTH = 128;
+
 function isObjectPrototype<T>(proto: T): boolean {
   if (proto === null || proto === undefined) return false;
 
   if (proto === Object.prototype) return true;
 
-  return (
-    Object.getPrototypeOf(proto) === null &&
-    Object.prototype.hasOwnProperty.call(proto, "__proto__")
-  );
+  if (Object.getPrototypeOf(proto) !== null) return false;
+
+  const protoDesc = Object.getOwnPropertyDescriptor(proto, "__proto__");
+
+  return protoDesc !== undefined && isCallable(protoDesc.get);
 }
 
 const MAX_PROTOTYPE_CHAIN_DEPTH = 64;
@@ -422,6 +425,10 @@ export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false
   function clone<V>(value: V, depth: number): V {
     if (isPrimitive(value) || value === null || value === undefined || isCallable(value)) {
       return value;
+    }
+
+    if (depth > MAX_METADATA_CLONE_DEPTH) {
+      throw new EmailValidationError("Email metadata exceeds maximum nesting depth.");
     }
 
     const cached = seen.get(value);

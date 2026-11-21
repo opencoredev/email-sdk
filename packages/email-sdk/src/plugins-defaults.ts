@@ -421,7 +421,12 @@ function mergeSendMetadata(
   }
 
   const clonedDefaults = cloneMetadataRecord(defaults);
-  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value);
+
+  if (value === undefined) {
+    return clonedDefaults;
+  }
+
+  const clonedValue = cloneMetadataRecord(value);
 
   return {
     ...clonedDefaults,

@@ -3595,5 +3595,102 @@ describe("audit hardening regressions", () => {
     });
 
     expect(cyclicResult.id).toBe("r32-1");
+
+    // R33: Buffer attachment content keeps Buffer type & isolation, SendGrid omits undefined metadata,
+    // deep metadata fails fast with EmailValidationError, and null-proto parent with own __proto__ preserves inherited keys.
+    type R33ChildMeta = { child?: { inherited?: { v?: number } } };
+
+    let seenBufferIsBuf = false;
+    let seenBufferBase64 = "";
+    let seenNullProtoInherited: number | undefined;
+
+    const r33Client = createEmailClient({
+      adapters: [
+        {
+          name: "r33",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(m, ctx) {
+            const firstAtt = m.attachments?.[0]?.content;
+            seenBufferIsBuf = Buffer.isBuffer(firstAtt);
+
+            if (Buffer.isBuffer(firstAtt)) {
+              seenBufferBase64 = firstAtt.toString("base64");
+              firstAtt[0] = 0x7a;
+            }
+
+            // SAFETY: Test passes null-prototype child with inherited `{ v: 42 }`.
+            const metaObj = ctx.metadata as R33ChildMeta | undefined;
+            seenNullProtoInherited = metaObj?.child?.inherited?.v;
+
+            return { adapter: "r33", id: "r33-1" };
+          },
+        },
+      ],
+      telemetry: false,
+    });
+
+    const origNodeBuf = Buffer.from("hello");
+
+    type NullProtoNode = { inherited?: { v: number }; own?: { v: number } };
+
+    // SAFETY: Object.create(null) initializes a null-prototype test fixture.
+    const protoParent = Object.create(null) as NullProtoNode;
+
+    Object.defineProperty(protoParent, "__proto__", {
+      value: { marker: 1 },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    protoParent.inherited = { v: 42 };
+
+    // SAFETY: Object.create(protoParent) creates a child inheriting from the null-prototype parent.
+    const protoChild = Object.create(protoParent) as NullProtoNode;
+    protoChild.own = { v: 2 };
+
+    await r33Client.send(
+      {
+        ...baseMsg,
+        attachments: [{ filename: "a.txt", content: origNodeBuf }],
+      },
+      {
+        // SAFETY: Testing null-prototype parent chain with own __proto__ data property.
+        metadata: { child: protoChild } as never,
+      },
+    );
+
+    expect(seenBufferIsBuf).toBe(true);
+    expect(seenBufferBase64).toBe("aGVsbG8=");
+    expect(origNodeBuf.toString("utf8")).toBe("hello");
+    expect(seenNullProtoInherited).toBe(42);
+
+    type NestedNode = { next?: NestedNode };
+
+    let deepMeta: NestedNode = {};
+
+    for (let i = 0; i < 140; i += 1) {
+      deepMeta = { next: deepMeta };
+    }
+
+    await expect(
+      r33Client.send(baseMsg, {
+        // SAFETY: Testing deep nesting cap throws EmailValidationError instead of stack overflow.
+        metadata: deepMeta as never,
+      }),
+    ).rejects.toThrow(EmailValidationError);
+
+    const { stringMetadata } = await import("./payloads.js");
+
+    expect(stringMetadata({ a: undefined, b: null, c: 1, d: true })).toEqual({
+      b: "",
+      c: "1",
+      d: "true",
+    });
+    expect(stringMetadata({ only: undefined })).toBeUndefined();
   });
 });

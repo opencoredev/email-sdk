@@ -10,6 +10,7 @@ import {
   cloneMetadataRecord,
   isBinaryBuffer,
   isDateLike,
+  isFunction,
   isNonArrayObject,
   isStringMember,
 } from "./decode.js";
@@ -75,6 +76,31 @@ export function snapshotAddressField(value: OneOrMany<EmailAddress>): OneOrMany<
   return snapshotAddressItem(value);
 }
 
+interface BinaryViewCtor {
+  from?(bytes: Uint8Array): Uint8Array;
+}
+
+function cloneAttachmentView(rawVal: ArrayBufferView): Uint8Array {
+  const bytes = new Uint8Array(rawVal.buffer, rawVal.byteOffset, rawVal.byteLength).slice();
+
+  if (rawVal instanceof Uint8Array && Object.getPrototypeOf(rawVal) !== Uint8Array.prototype) {
+    try {
+      // SAFETY: Preserve Uint8Array subclasses via their own static `from` without referencing Node globals.
+      const ctor = rawVal.constructor as BinaryViewCtor | undefined;
+
+      if (ctor && isFunction(ctor.from)) {
+        const cloned = ctor.from(bytes);
+
+        if (cloned instanceof Uint8Array) return cloned;
+      }
+    } catch {
+      return bytes;
+    }
+  }
+
+  return bytes;
+}
+
 function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
   if (!isNonArrayObject(attachment)) return attachment;
 
@@ -95,7 +121,7 @@ function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
 
     const val =
       key === "content" && ArrayBuffer.isView(rawVal)
-        ? new Uint8Array(rawVal.buffer, rawVal.byteOffset, rawVal.byteLength).slice()
+        ? cloneAttachmentView(rawVal)
         : key === "content" && isBinaryBuffer(rawVal)
           ? new Uint8Array(rawVal).slice().buffer
           : rawVal;

@@ -187,13 +187,23 @@ export function sendAtUtcDateTime(message: EmailMessage) {
 export function stringMetadata(
   metadata: EmailMessage["metadata"],
 ): Record<string, string> | undefined {
-  if (!metadata || Object.keys(metadata).length === 0) {
+  if (!metadata) {
     return undefined;
   }
 
-  return Object.fromEntries(
-    Object.entries(metadata).map(([key, value]) => [key, value === null ? "" : String(value)]),
-  );
+  const entries: Array<[string, string]> = [];
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === undefined) continue;
+
+    entries.push([key, value === null ? "" : String(value)]);
+  }
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries);
 }
 
 export function commonHeadersObject(message: EmailMessage) {
