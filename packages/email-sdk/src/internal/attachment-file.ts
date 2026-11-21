@@ -35,5 +35,10 @@ function loadNodeFs(): Promise<NodeFsPromises> {
 export async function readAttachmentFile(path: string): Promise<Uint8Array> {
   const fs = await loadNodeFs();
 
-  return fs.readFile(path);
+  try {
+    return await fs.readFile(path);
+  } catch (error) {
+    // A missing or unreadable local file proves nothing was sent, so surface it as validation.
+    throw new EmailValidationError(`Attachment file "${path}" could not be read.`, error);
+  }
 }

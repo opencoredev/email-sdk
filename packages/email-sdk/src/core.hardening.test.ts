@@ -1591,6 +1591,188 @@ describe("audit hardening regressions", () => {
 
       await expect(badMwOptsClient.send(msg)).rejects.toBeInstanceOf(EmailMiddlewareError);
 
+      // 28. Throwing id/raw getters on resolved send do not retry or fail; personalized reads accepted once
+      let throwIdCalls = 0;
+
+      const throwIdClient = createEmailClient({
+        adapters: [
+          {
+            name: "tid",
+            capabilities: {
+              repeatedHeaders: false,
+              idempotency: "none",
+              scheduling: false,
+              personalized: "native",
+            },
+            async send() {
+              throwIdCalls += 1;
+
+              return {
+                adapter: "tid",
+                // @ts-expect-error -- testing throwing id getter on resolved send
+                get id() {
+                  throw new Error("network timeout");
+                },
+              };
+            },
+            async sendPersonalized() {
+              let reads = 0;
+
+              return {
+                adapter: "tid",
+                get accepted() {
+                  reads += 1;
+
+                  return reads === 1 ? ["b@example.com"] : [];
+                },
+                rejected: [],
+              };
+            },
+          },
+        ],
+        retry: { maxAttempts: 3, delay: () => 0 },
+        telemetry: false,
+      });
+
+      const tidRes = await throwIdClient.send(msg);
+      expect(throwIdCalls).toBe(1);
+      expect(tidRes.adapter).toBe("tid");
+
+      const persSingleRes = await throwIdClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "s", text: "t" },
+        recipients: [{ to: "b@example.com" }],
+      });
+
+      expect(persSingleRes.accepted).toEqual(["b@example.com"]);
+
+      // 29. defaultsPlugin rejects whitespace/empty idempotencyKey and preserves class-instance replyTo/headers/tags
+      class ClassAddr {
+        get email() {
+          return "r@example.com";
+        }
+      }
+
+      const emptyKeyClient = createEmailClient({
+        adapters: [memoryAdapter("ek")],
+        plugins: [defaultsPlugin({ idempotencyKey: "" })],
+        telemetry: false,
+      });
+
+      await expect(emptyKeyClient.send(msg)).rejects.toBeInstanceOf(EmailValidationError);
+
+      const wsKeyClient = createEmailClient({
+        adapters: [memoryAdapter("wk")],
+        plugins: [defaultsPlugin({ idempotencyKeyPrefix: "pfx:" })],
+        telemetry: false,
+      });
+
+      await expect(wsKeyClient.send(msg, { idempotencyKey: "   " })).rejects.toBeInstanceOf(
+        EmailValidationError,
+      );
+
+      const clsReplyAdapter = memoryAdapter("cr");
+
+      const clsReplyClient = createEmailClient({
+        adapters: [clsReplyAdapter],
+        plugins: [defaultsPlugin({ replyTo: new ClassAddr() })],
+        telemetry: false,
+      });
+
+      await clsReplyClient.send(msg);
+      expect(clsReplyAdapter.raw.sent[0]?.message.replyTo).toEqual({
+        email: "r@example.com",
+        name: undefined,
+      });
+
+      // 30. Invalid plugin middleware handler & primitive extendClient rejected at createEmailClient time
+      expect(() =>
+        createEmailClient({
+          adapters: [memoryAdapter("pmw")],
+          plugins: [
+            {
+              id: "bad-mw",
+              // @ts-expect-error -- runtime invalid middleware handler
+              middleware: [{ afterSend: 123 }],
+            },
+          ],
+          telemetry: false,
+        }),
+      ).toThrow(EmailValidationError);
+
+      expect(() =>
+        createEmailClient({
+          adapters: [memoryAdapter("pext")],
+          plugins: [
+            {
+              id: "bad-ext",
+              // @ts-expect-error -- runtime primitive extension
+              extendClient: () => "abc",
+            },
+          ],
+          telemetry: false,
+        }),
+      ).toThrow(EmailValidationError);
+
+      // 31. sendPersonalized snapshots recipients once against TOCTOU
+      let recipReads = 0;
+      const toctouPersAdapter = memoryAdapter("tp");
+
+      const toctouPersClient = createEmailClient({
+        adapters: [toctouPersAdapter],
+        telemetry: false,
+      });
+
+      await toctouPersClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "s", text: "t" },
+        recipients: [
+          {
+            get to() {
+              recipReads += 1;
+
+              return recipReads === 1 ? "good@example.com" : "evil@example.com";
+            },
+          },
+        ],
+      });
+
+      expect(recipReads).toBe(1);
+      expect(toctouPersAdapter.raw.sent[0]?.message.to).toBe("good@example.com");
+
+      // 32. Missing attachment file surfaces as EmailValidationError, and errored inbound stream as InboundError
+      const { attachmentToBase64 } = await import("./utils.js");
+
+      await expect(
+        attachmentToBase64({
+          filename: "missing.txt",
+          path: "/nonexistent-email-sdk-r18-file.txt",
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      const { handleInbound, InboundError } = await import("./inbound.js");
+
+      const brokenStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("x"));
+          controller.error(new Error("client disconnected"));
+        },
+      });
+
+      const inboundErr = await handleInbound(
+        new Request("https://x.test/inbound", {
+          method: "POST",
+          body: brokenStream,
+          // @ts-expect-error -- Node/Bun streaming request duplex option
+          duplex: "half",
+        }),
+        { provider: "postmark", auth: { user: "u", password: "p" } },
+      ).catch((error) => error);
+
+      expect(inboundErr).toBeInstanceOf(InboundError);
+
+      if (inboundErr instanceof InboundError) {
+        expect(inboundErr.reason).toBe("payload_invalid");
+      }
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

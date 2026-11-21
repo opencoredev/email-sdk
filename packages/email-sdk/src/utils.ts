@@ -16,6 +16,7 @@ import {
   isJsonString,
   isNonArrayObject,
   isObjectLike,
+  isString,
   isStringMember,
   readJson,
 } from "./internal/decode.js";
@@ -39,15 +40,37 @@ export type LegacyEmailSendResult = Omit<EmailSendResult, "adapter"> & {
   messageId?: string;
 };
 
-/** The send already resolved, so an unreadable optional recipient list must not fail it. */
+/** An acknowledgement accessor must not fail or retry a completed send. */
+function readResultField<Key extends keyof LegacyEmailSendResult>(
+  result: LegacyEmailSendResult,
+  key: Key,
+): LegacyEmailSendResult[Key] | undefined {
+  try {
+    return result[key];
+  } catch {
+    return undefined;
+  }
+}
+
+function readOptionalString(
+  result: LegacyEmailSendResult,
+  key: "adapter" | "provider" | "id" | "messageId",
+) {
+  const value = readResultField(result, key);
+
+  return isString(value) && value.length > 0 ? value : undefined;
+}
+
 function readOptionalStringList(
   result: LegacyEmailSendResult,
   key: "accepted" | "rejected",
 ): readonly string[] | undefined {
-  try {
-    const value = result[key];
+  const value = readResultField(result, key);
 
-    return Array.isArray(value) ? value : undefined;
+  if (!Array.isArray(value)) return undefined;
+
+  try {
+    return [...value].filter((entry) => isString(entry));
   } catch {
     return undefined;
   }
@@ -57,14 +80,24 @@ export function normalizeAdapterResult<Name extends string>(
   adapter: Name,
   result: LegacyEmailSendResult,
 ): EmailSendResult<Name> {
+  if (!isObjectLike(result) || Array.isArray(result)) {
+    throw new EmailAdapterError(`${adapter} resolved without a valid result object.`, {
+      adapter,
+      delivery: "unknown",
+      retryable: false,
+    });
+  }
+
   return {
     // SAFETY: an adapter reports its own name; legacy adapters report it as `provider`.
     // Either way the value names the adapter registered under `Name`.
-    adapter: (result.adapter || result.provider || adapter) as Name,
-    id: result.id ?? result.messageId,
+    adapter: (readOptionalString(result, "adapter") ??
+      readOptionalString(result, "provider") ??
+      adapter) as Name,
+    id: readOptionalString(result, "id") ?? readOptionalString(result, "messageId"),
     accepted: readOptionalStringList(result, "accepted"),
     rejected: readOptionalStringList(result, "rejected"),
-    raw: result.raw,
+    raw: readResultField(result, "raw"),
   };
 }
 

@@ -62,23 +62,25 @@ export async function attemptNativePersonalized(
     await invokeHooks(hooks, "beforeSend", event);
 
     try {
-      const result = await measureAttempt(
+      const personalized = await measureAttempt(
         adapter,
         "personalized_native",
         input.recipients.length,
-        () =>
-          adapter.sendPersonalized!(input, {
-            adapter: adapter.name,
-            operation: "personalized",
-            attempt,
-            signal: sendOptions?.signal,
-            idempotencyKey: sendOptions?.idempotencyKey,
-            metadata: sendOptions?.metadata,
-          }),
+        async () =>
+          personalizedResult(
+            adapter.name,
+            await adapter.sendPersonalized!(input, {
+              adapter: adapter.name,
+              operation: "personalized",
+              attempt,
+              signal: sendOptions?.signal,
+              idempotencyKey: sendOptions?.idempotencyKey,
+              metadata: sendOptions?.metadata,
+            }),
+          ),
       );
 
       throwIfAborted(sendOptions?.signal);
-      const personalized = personalizedResult(adapter.name, result);
 
       if (personalized.accepted.length > 0) {
         await invokeAfterSendMiddleware(middleware, { ...event, response: personalized });
@@ -152,7 +154,7 @@ function personalizedResult(
 ): EmailPersonalizedResult {
   const normalized = normalizeAdapterResult(adapterName, result);
 
-  if (!Array.isArray(result.accepted)) {
+  if (!Array.isArray(normalized.accepted)) {
     throw new EmailAdapterError(
       `${adapterName}.sendPersonalized resolved without an accepted recipient list.`,
       { adapter: adapterName, delivery: "unknown", retryable: false },
@@ -161,8 +163,8 @@ function personalizedResult(
 
   return {
     ...normalized,
-    accepted: result.accepted,
-    rejected: Array.isArray(result.rejected) ? result.rejected : [],
+    accepted: normalized.accepted,
+    rejected: normalized.rejected ?? [],
   };
 }
 

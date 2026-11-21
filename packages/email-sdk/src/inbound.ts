@@ -286,7 +286,19 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
   let total = 0;
 
   for (;;) {
-    const { done, value } = await reader.read();
+    let chunk: Awaited<ReturnType<typeof reader.read>>;
+
+    try {
+      chunk = await reader.read();
+    } catch (error) {
+      throw new InboundError("Inbound request body could not be read.", {
+        reason: "payload_invalid",
+        provider,
+        cause: error instanceof Error ? error : undefined,
+      });
+    }
+
+    const { done, value } = chunk;
 
     if (done) break;
     total += value.byteLength;

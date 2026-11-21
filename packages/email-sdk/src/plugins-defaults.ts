@@ -34,6 +34,14 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
     throw new EmailValidationError("defaultsPlugin sendMetadata must be an object.");
   }
 
+  if (options.headers !== undefined && !Array.isArray(options.headers)) {
+    throw new EmailValidationError("defaultsPlugin headers must be an array.");
+  }
+
+  if (options.tags !== undefined && !Array.isArray(options.tags)) {
+    throw new EmailValidationError("defaultsPlugin tags must be an array.");
+  }
+
   return {
     id: options.id ?? "defaults",
     middleware: [
@@ -58,10 +66,16 @@ function cloneReplyTo(
   if (replyTo === undefined || isStringMember(replyTo)) return replyTo;
 
   if (Array.isArray(replyTo)) {
-    return replyTo.map((entry) => (isStringMember(entry) ? entry : { ...entry }));
+    return replyTo.map((entry) =>
+      isStringMember(entry) || !isNonArrayObject(entry)
+        ? entry
+        : { ...entry, email: entry.email, name: entry.name },
+    );
   }
 
-  return { ...replyTo };
+  if (!isNonArrayObject(replyTo)) return replyTo;
+
+  return { ...replyTo, email: replyTo.email, name: replyTo.name };
 }
 
 function withMessageDefaults(
@@ -95,7 +109,7 @@ function withSendOptionDefaults(
   const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 
-  if (!sendOptions && !metadata && !idempotencyKey) {
+  if (!sendOptions && metadata === undefined && idempotencyKey === undefined) {
     return undefined;
   }
 
@@ -121,7 +135,7 @@ function mergeHeaders(
   }
 
   if (value === undefined) {
-    return defaults.map((header) => ({ ...header }));
+    return defaults.map((header) => ({ ...header, name: header.name, value: header.value }));
   }
 
   if (Array.isArray(value)) {
@@ -140,7 +154,7 @@ function mergeHeaders(
   const own = headerList(value);
 
   if (own.length === 0) {
-    return defaults.map((header) => ({ ...header }));
+    return defaults.map((header) => ({ ...header, name: header.name, value: header.value }));
   }
 
   const overridden = new Set(own.map((header) => header.name.toLowerCase()));
@@ -148,8 +162,8 @@ function mergeHeaders(
   return [
     ...defaults
       .filter((header) => !overridden.has(header.name.toLowerCase()))
-      .map((header) => ({ ...header })),
-    ...own.map((header) => ({ ...header })),
+      .map((header) => ({ ...header, name: header.name, value: header.value })),
+    ...own.map((header) => ({ ...header, name: header.name, value: header.value })),
   ];
 }
 
@@ -162,7 +176,7 @@ function mergeTags(
   }
 
   if (value === undefined) {
-    return defaults.map((tag) => ({ ...tag }));
+    return defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value }));
   }
 
   if (!Array.isArray(value) || value.some((tag) => !isNonArrayObject(tag))) {
@@ -170,10 +184,13 @@ function mergeTags(
   }
 
   if (!value.length) {
-    return defaults.map((tag) => ({ ...tag }));
+    return defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value }));
   }
 
-  return [...defaults.map((tag) => ({ ...tag })), ...value.map((tag) => ({ ...tag }))];
+  return [
+    ...defaults.map((tag) => ({ ...tag, name: tag.name, value: tag.value })),
+    ...value.map((tag) => ({ ...tag, name: tag.name, value: tag.value })),
+  ];
 }
 
 function mergeMetadata(
@@ -234,7 +251,7 @@ function applyIdempotencyDefault(
 
   if (
     !isStringMember(key) ||
-    !key ||
+    key.trim().length === 0 ||
     !isStringMember(options.idempotencyKeyPrefix) ||
     !options.idempotencyKeyPrefix ||
     key.startsWith(options.idempotencyKeyPrefix)

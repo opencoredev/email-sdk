@@ -56,6 +56,12 @@ export function applyClientExtension<TClient extends object, TExtension extends 
   pluginId: string,
   extension: TExtension,
 ) {
+  if (!isNonArrayObject(extension)) {
+    throw new EmailValidationError(
+      `Email plugin "${pluginId}" extendClient must return an object.`,
+    );
+  }
+
   for (const key of Object.keys(extension)) {
     if (Object.hasOwn(client, key)) {
       throw new EmailValidationError(
@@ -91,15 +97,17 @@ async function runBeforeSendMiddleware(
   for (const item of middleware) {
     try {
       const result = await item.beforeSend?.({ message, options });
+      const nextMessage = result?.message;
+      const nextOptions = result?.options;
 
-      if (result?.message) message = result.message;
+      if (nextMessage) message = nextMessage;
 
-      if (result?.options !== undefined) {
-        if (!isNonArrayObject(result.options)) {
+      if (nextOptions !== undefined) {
+        if (!isNonArrayObject(nextOptions)) {
           throw new EmailValidationError("Email send options must be an object.");
         }
 
-        const cloned = cloneNestedSendOptions(result.options);
+        const cloned = cloneNestedSendOptions(nextOptions);
         const merged: EmailSendOptions = { ...options, ...cloned };
 
         for (const key of [
@@ -111,7 +119,7 @@ async function runBeforeSendMiddleware(
           "fallback",
           "metadata",
         ] as const) {
-          if (Object.hasOwn(result.options, key) && !(key in cloned)) {
+          if (Object.hasOwn(nextOptions, key) && !(key in cloned)) {
             merged[key] = undefined;
           }
         }

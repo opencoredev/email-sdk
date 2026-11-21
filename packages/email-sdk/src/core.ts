@@ -85,9 +85,54 @@ import type {
   EmailSendSettledResult,
   EmailValidationResult,
 } from "./types.js";
-import { isFunction, isNonArrayObject, isObjectLike, isStringMember } from "./internal/decode.js";
+import {
+  cloneMetadataRecord,
+  isFunction,
+  isNonArrayObject,
+  isObjectLike,
+  isStringMember,
+} from "./internal/decode.js";
 import { ReadonlyMapView } from "./internal/readonly-map.js";
 import { assertMessage, isBuiltInAdapter } from "./utils.js";
+
+const MESSAGE_FIELDS = [
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "replyTo",
+  "subject",
+  "html",
+  "text",
+  "headers",
+  "attachments",
+  "tags",
+  "metadata",
+  "sendAt",
+] as const;
+
+/**
+ * Read each message field once after middleware so validation and adapters see identical values
+ * even on class instances with getters, and metadata is isolated.
+ */
+function snapshotMessage(message: EmailMessage): EmailMessage {
+  const copy: Partial<EmailMessage> = { ...message };
+
+  for (const key of MESSAGE_FIELDS) {
+    const value = message[key];
+
+    if (value === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value: key === "metadata" && isNonArrayObject(value) ? cloneMetadataRecord(value) : value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every EmailMessage field was copied from `message`.
+  return copy as EmailMessage;
+}
 
 function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
   if (!isNonArrayObject(raw)) {
@@ -240,14 +285,46 @@ export function createEmailClient<
           throw new EmailValidationError(`Plugin "${pluginId}" middleware must be an array.`);
         }
 
-        const copiedMiddleware = [...rawPluginMiddleware];
+        const copiedMiddleware: EmailSendMiddleware[] = [];
 
-        for (const entry of copiedMiddleware) {
+        for (const entry of rawPluginMiddleware) {
           if (!isNonArrayObject(entry)) {
             throw new EmailValidationError(
               `Plugin "${pluginId}" middleware entries must be objects.`,
             );
           }
+
+          const beforeSend = entry.beforeSend;
+          const afterSend = entry.afterSend;
+          const onError = entry.onError;
+
+          if (beforeSend !== undefined && !isFunction(beforeSend)) {
+            throw new EmailValidationError(
+              `Plugin "${pluginId}" middleware beforeSend must be a function.`,
+            );
+          }
+
+          if (afterSend !== undefined && !isFunction(afterSend)) {
+            throw new EmailValidationError(
+              `Plugin "${pluginId}" middleware afterSend must be a function.`,
+            );
+          }
+
+          if (onError !== undefined && !isFunction(onError)) {
+            throw new EmailValidationError(
+              `Plugin "${pluginId}" middleware onError must be a function.`,
+            );
+          }
+
+          const item: EmailSendMiddleware = {};
+
+          if (beforeSend) item.beforeSend = beforeSend.bind(entry);
+
+          if (afterSend) item.afterSend = afterSend.bind(entry);
+
+          if (onError) item.onError = onError.bind(entry);
+
+          copiedMiddleware.push(item);
         }
 
         rawPluginMiddleware = copiedMiddleware;
@@ -616,13 +693,26 @@ export function createEmailClient<
           options: safeInitialOptions,
         },
         (nextOptions) => {
-          attemptedAdapter =
-            readBoundary(() => nextOptions?.adapter, "Email send options") ?? defaultAdapter;
+          try {
+            const nextAdapter = nextOptions?.adapter;
+
+            if (nextAdapter !== undefined) attemptedAdapter = nextAdapter;
+          } catch {
+            // Keep the last known adapter so a throwing getter does not mask EmailMiddlewareError.
+          }
         },
       );
 
       // The lifecycle helpers return a native promise only when there is work to wait for.
-      const prepared = preparing instanceof Promise ? await preparing : preparing;
+      const preparedRaw = preparing instanceof Promise ? await preparing : preparing;
+
+      const prepared = {
+        ...preparedRaw,
+        message: isNonArrayObject(preparedRaw.message)
+          ? readBoundary(() => snapshotMessage(preparedRaw.message), "Email message")
+          : preparedRaw.message,
+      };
+
       const safePreparedOptions = snapshotSendOptions(prepared.options);
       attemptedAdapter = safePreparedOptions?.adapter ?? defaultAdapter;
 
@@ -943,7 +1033,23 @@ export function createEmailClient<
         if (!isNonArrayObject(input)) return input;
 
         const rawRecipients = input.recipients;
-        const recipients = Array.isArray(rawRecipients) ? [...rawRecipients] : rawRecipients;
+
+        const recipients = Array.isArray(rawRecipients)
+          ? [...rawRecipients].map((recipient) => {
+              if (!isNonArrayObject(recipient)) return recipient;
+
+              const rawVars = recipient.variables;
+
+              const variables =
+                rawVars !== undefined && isNonArrayObject(rawVars)
+                  ? Object.fromEntries(Object.entries(rawVars))
+                  : rawVars;
+
+              return variables === undefined
+                ? { to: recipient.to }
+                : { to: recipient.to, variables };
+            })
+          : rawRecipients;
 
         return {
           message: input.message,
@@ -968,8 +1074,13 @@ export function createEmailClient<
           options: safeInitialOptions,
         },
         (nextOptions) => {
-          attemptedAdapter =
-            readBoundary(() => nextOptions?.adapter, "Email send options") ?? defaultAdapter;
+          try {
+            const nextAdapter = nextOptions?.adapter;
+
+            if (nextAdapter !== undefined) attemptedAdapter = nextAdapter;
+          } catch {
+            // Keep the last known adapter so a throwing getter does not mask EmailMiddlewareError.
+          }
         },
       );
 
