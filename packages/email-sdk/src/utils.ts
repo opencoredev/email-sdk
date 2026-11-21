@@ -148,7 +148,12 @@ export function assertMessage(message: EmailMessage) {
     throw new EmailValidationError("Email message requires either html or text content.");
   }
 
-  if (message.attachments !== undefined && !Array.isArray(message.attachments)) {
+  // null stays an empty list, as it always was; only other non-array values are rejected.
+  if (
+    message.attachments !== undefined &&
+    message.attachments !== null &&
+    !Array.isArray(message.attachments)
+  ) {
     throw new EmailValidationError("Email message attachments must be an array.");
   }
 

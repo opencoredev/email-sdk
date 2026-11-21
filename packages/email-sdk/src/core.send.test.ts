@@ -205,6 +205,13 @@ describe("createEmailClient v1", () => {
     await expect(notArray).rejects.toBeInstanceOf(EmailValidationError);
     await expect(notArray).rejects.toThrow("Email message attachments must be an array.");
 
+    // SAFETY: JSON records often carry attachments: null; it has always meant no attachments.
+    await expect(client.send({ ...message, attachments: null as never })).resolves.toMatchObject({
+      id: "primary_1",
+    });
+    expect(sends).toBe(1);
+    sends = 0;
+
     // SAFETY: deliberately missing message from an untyped JavaScript caller.
     const missing = client.validate(undefined as never);
 
