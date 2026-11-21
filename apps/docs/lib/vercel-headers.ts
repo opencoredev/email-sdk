@@ -40,17 +40,43 @@ export const securityHeaders = {
   "Content-Security-Policy": contentSecurityPolicy,
 } satisfies Record<string, string>;
 
-/** Added at the top: every response gets the security headers. */
+const discoveryLink =
+  '</sitemap.xml>; rel="sitemap", </.well-known/api-catalog>; rel="api-catalog", </.well-known/agent.json>; rel="describedby"; type="application/json"';
+
+const homeAlternatesLink =
+  '</index.md>; rel="alternate"; type="text/markdown", </llms.txt>; rel="alternate"; type="text/plain"';
+
+const revalidatingCache = "public, max-age=3600, stale-while-revalidate=86400";
+
+/** Added at the top: every response gets the security and discovery headers. */
 export const headerRoutes: VercelRoute[] = [
-  { src: "^/.*$", headers: { ...securityHeaders }, continue: true },
+  { src: "^/.*$", headers: { ...securityHeaders, Link: discoveryLink }, continue: true },
+  { src: "^/$", headers: { Link: `${discoveryLink}, ${homeAlternatesLink}` }, continue: true },
+  { src: "^/(?!blog/).*\\.md$", headers: { "Cache-Control": revalidatingCache }, continue: true },
+  { src: "^/.*\\.txt$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   {
     src: "^/feeds/docs\\.jsonl$",
-    headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": revalidatingCache,
+    },
     continue: true,
   },
   {
     src: "^/feed\\.json$",
     headers: { "Content-Type": "application/feed+json; charset=utf-8" },
+    continue: true,
+  },
+  {
+    src: "^/\\.well-known/agent-skills/?$",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    continue: true,
+  },
+  {
+    src: "^/\\.well-known/api-catalog/?$",
+    headers: {
+      "Content-Type": 'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"',
+    },
     continue: true,
   },
   {

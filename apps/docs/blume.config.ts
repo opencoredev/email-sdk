@@ -24,11 +24,37 @@ const archiveRedirects: Redirect[] = archivedDocsVersions.flatMap((version): Red
     status: 308,
   },
   {
+    from: `${legacyArchivedVersionHref(version)}/index.md`,
+    to: `/${version.id}/docs.md`,
+    status: 308,
+  },
+  {
+    from: `/${version.id}/docs/index.md`,
+    to: `/${version.id}/docs.md`,
+    status: 308,
+  },
+  {
     from: `${legacyArchivedVersionHref(version)}/:path*`,
     to: `/${version.id}/docs/:path*`,
     status: 308,
   },
 ]);
+
+// Legacy directory-index Markdown URLs that Fumadocs served at /.../index.md.
+const docsIndexMdRedirects: Redirect[] = [
+  "/docs",
+  "/docs/adapters",
+  "/docs/agents",
+  "/docs/integrations/convex",
+  "/docs/plugins",
+  "/docs/reference/cli",
+  "/docs/reference/errors",
+  "/docs/ui",
+].map((base): Redirect => ({
+  from: `${base}/index.md`,
+  to: `${base}.md`,
+  status: 308,
+}));
 
 // An archive has no page at its bare /<id> (its pages start at /<id>/docs),
 // which is where the version switcher lands from a page outside the docs.
@@ -187,6 +213,7 @@ export default defineConfig({
   redirects: [
     ...archiveRedirects,
     ...archiveRootRedirects,
+    ...docsIndexMdRedirects,
     ...docsRedirects,
     ...siteRedirects,
     ...machineRedirects,

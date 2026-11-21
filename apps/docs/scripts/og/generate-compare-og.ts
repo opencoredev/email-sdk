@@ -1,6 +1,6 @@
 // Build-time Open Graph cards for the curated /compare/<pair> pages.
 //
-// One PNG per pair under public/og/compare/, referenced from each page's
+// One PNG per pair under public/images/og/compare/, referenced from each page's
 // og:image tags. PNG, not the runtime SVG used for blog cards, because the
 // major social unfurlers do not rasterize SVG OG images. The layout mirrors
 // the blog cards so both surfaces share one visual language.
@@ -15,7 +15,7 @@ const ogDir = import.meta.dirname;
 
 const fontsDir = join(ogDir, "fonts");
 
-const outputDir = join(ogDir, "../../public/og/compare");
+const outputDir = join(ogDir, "../../public/images/og/compare");
 
 const width = 1200;
 

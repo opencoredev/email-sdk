@@ -98,7 +98,7 @@ function pairPage(pair: ComparePair, order: number) {
     `description: ${yaml(buildCompareDescription(pair))}`,
     "seo:",
     `  title: ${yaml(buildComparePageTitle(pair))}`,
-    `  image: /og/compare/${pair.slug}.png`,
+    `  image: /images/og/compare/${pair.slug}.png`,
     "sidebar:",
     `  order: ${order}`,
     `lastModified: ${comparePairLastmod(pair)}`,
