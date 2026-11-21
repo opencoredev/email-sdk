@@ -72,18 +72,71 @@ export function isNonArrayObject<T>(value: T): boolean {
   return value !== null && value !== undefined && !Array.isArray(value) && Object(value) === value;
 }
 
-/** True for ArrayBuffer and SharedArrayBuffer instances, including cross-realm buffers. */
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype,
+  "byteLength",
+)?.get;
+
+const sharedArrayBufferByteLength = isFunction(globalThis.SharedArrayBuffer)
+  ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "byteLength")?.get
+  : undefined;
+
+/** True for real ArrayBuffer and SharedArrayBuffer instances across realms (rejects spoofed tags). */
 export function isBinaryBuffer<T>(value: T): boolean {
+  if (isPrimitive(value)) return false;
+
   if (value instanceof ArrayBuffer) return true;
+
+  if (arrayBufferByteLength) {
+    try {
+      arrayBufferByteLength.call(value);
+
+      return true;
+    } catch {
+      // Not an ArrayBuffer; check SharedArrayBuffer below.
+    }
+  }
+
+  if (sharedArrayBufferByteLength) {
+    try {
+      sharedArrayBufferByteLength.call(value);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/** True for real Date instances across realms (rejects spoofed tags). */
+export function isDateLike<T>(value: T): boolean {
+  if (isPrimitive(value)) return false;
+
+  if (value instanceof Date) return true;
+
+  try {
+    Date.prototype.getTime.call(value);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True for Blob/File instances, including cross-realm Blobs implementing arrayBuffer(). */
+export function isBlobLike<T>(value: T): value is Extract<T, Blob> {
+  if (value instanceof Blob) return true;
+
+  if (isPrimitive(value)) return false;
 
   const tag = tagOf(value);
 
-  return tag === "[object ArrayBuffer]" || tag === "[object SharedArrayBuffer]";
-}
+  if (tag !== "[object Blob]" && tag !== "[object File]") return false;
 
-/** True for Date instances, including cross-realm Dates. */
-export function isDateLike<T>(value: T): boolean {
-  return value instanceof Date || tagOf(value) === "[object Date]";
+  // SAFETY: Cross-realm Blob/File duck-type check before calling arrayBuffer().
+  return isFunction((value as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer);
 }
 
 /** Narrow a JSON value to a JSON object. */

@@ -209,17 +209,18 @@ describe("audit hardening regressions", () => {
       handleInbound(graphHandshake, {
         provider: "graph",
         clientState: "state",
+        api: { getAccessToken: () => "token" },
         maxBodyBytes: 0,
       }),
     ).rejects.toBeInstanceOf(RangeError);
 
-    const mandrillHead = new Request("https://example.com/inbound", { method: "HEAD" });
+    const mailchimpHead = new Request("https://example.com/inbound", { method: "HEAD" });
 
     await expect(
-      handleInbound(mandrillHead, {
-        provider: "mandrill",
-        webhookKey: "key",
-        webhookUrl: "https://example.com/inbound",
+      handleInbound(mailchimpHead, {
+        provider: "mailchimp",
+        secret: "key",
+        url: "https://example.com/inbound",
         maxBodyBytes: -1,
       }),
     ).rejects.toBeInstanceOf(RangeError);
@@ -490,5 +491,104 @@ describe("audit hardening regressions", () => {
     expect(settled[2]?.ok).toBe(true);
     expect(settled[3]?.ok).toBe(true);
     expect(seenKeys).toEqual(["batch-key:0", "batch-key:2", "custom-key"]);
+  });
+
+  test("rejects whitespace shared keys, preserves invalid shared keys over undefined item key, rejects spoofed buffers, tracks in-place reroutes, and handles throwing getters safely", async () => {
+    const { telemetry, events, exceptions } = captureTelemetry();
+    setSharedTelemetry(telemetry);
+
+    try {
+      const resend = memoryAdapter("resend");
+      const postmark = memoryAdapter("postmark");
+      const client = createEmailClient({ adapters: [resend, postmark] });
+      const msg = { from: "a@example.com", to: "b@example.com", subject: "hi", text: "ok" };
+
+      const wsBatch = await client.sendMany([{ message: msg }], { idempotencyKey: "   " });
+      expect(wsBatch[0]?.ok).toBe(false);
+
+      if (!wsBatch[0]?.ok) expect(wsBatch[0]?.error).toBeInstanceOf(EmailValidationError);
+
+      const overrideUndef = await client.sendMany(
+        [{ message: msg, options: { idempotencyKey: undefined } }],
+        { idempotencyKey: "" },
+      );
+
+      expect(overrideUndef[0]?.ok).toBe(false);
+
+      if (!overrideUndef[0]?.ok) {
+        expect(overrideUndef[0]?.error).toBeInstanceOf(EmailValidationError);
+      }
+
+      // Spoofed Symbol.toStringTag ArrayBuffer/Date rejected
+      const fakeBuffer = { [Symbol.toStringTag]: "ArrayBuffer" };
+
+      await expect(
+        client.send({
+          ...msg,
+          // @ts-expect-error -- runtime spoof check
+          attachments: [{ filename: Object.create(null), content: fakeBuffer }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      // Cross-realm Blob-like object accepted
+      const blobLike = {
+        [Symbol.toStringTag]: "Blob",
+        async arrayBuffer() {
+          return new Uint8Array([65, 66]).buffer;
+        },
+      };
+
+      // @ts-expect-error -- simulating cross-realm Blob
+      expect(await attachmentContentToString(blobLike)).toBe("QUI=");
+
+      // Throwing item.options getter settles as EmailValidationError with accurate batch adapter
+      const badOptsItem = { message: msg };
+
+      Object.defineProperty(badOptsItem, "options", {
+        enumerable: true,
+        get() {
+          throw new TypeError("options boom");
+        },
+      });
+
+      // @ts-expect-error -- runtime throwing getter check
+      const badOptsRes = await client.sendMany([badOptsItem]);
+      expect(badOptsRes[0]?.ok).toBe(false);
+
+      if (!badOptsRes[0]?.ok) expect(badOptsRes[0]?.error).toBeInstanceOf(EmailValidationError);
+
+      // In-place options.adapter mutation + later throw preserves rerouted adapter
+      const inPlaceClient = createEmailClient({
+        adapters: [resend, postmark],
+        plugins: [
+          {
+            id: "in-place-reroute",
+            middleware: [
+              {
+                name: "mutate",
+                beforeSend: (ctx) => {
+                  if (ctx.options) ctx.options.adapter = "postmark";
+                },
+              },
+              {
+                name: "fail",
+                beforeSend: () => {
+                  throw new Error("stop");
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(inPlaceClient.send(msg, { adapter: "resend" })).rejects.toBeInstanceOf(
+        EmailMiddlewareError,
+      );
+
+      expect(events.at(-1)?.properties?.adapter).toBe("postmark");
+      expect(exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
   });
 });

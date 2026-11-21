@@ -347,10 +347,20 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
-    let facts = telemetry && messageFacts(message);
-    let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
+    let facts: ReturnType<typeof messageFacts> | undefined;
+    let attemptedAdapter = defaultAdapter;
 
     try {
+      if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
+        throw new EmailValidationError("Email send options must be an object.");
+      }
+
+      if (sendOptions?.adapter !== undefined) {
+        attemptedAdapter = sendOptions.adapter;
+      }
+
+      if (telemetry) facts = messageFacts(message);
+
       if (!isNonArrayObject(message)) {
         throw new EmailValidationError("Email message must be an object.");
       }
@@ -476,11 +486,23 @@ export function createEmailClient<
     }
 
     const startedAt = Date.now();
-    const { concurrency = 1, ...shared } = manyOptions ?? {};
+    let concurrency = 1;
+    let sendOptions: EmailSendOptions | undefined;
 
-    // Keep "no shared options" as undefined, so items without options send exactly as before.
-    const sendOptions: EmailSendOptions | undefined =
-      manyOptions === undefined || Object.keys(shared).length === 0 ? undefined : shared;
+    if (manyOptions !== undefined) {
+      if (!isNonArrayObject(manyOptions)) {
+        throw new EmailValidationError("sendMany options must be an object.");
+      }
+
+      try {
+        const { concurrency: requestedConcurrency = 1, ...shared } = manyOptions;
+        concurrency = requestedConcurrency;
+        // Keep "no shared options" as undefined, so items without options send exactly as before.
+        sendOptions = Object.keys(shared).length === 0 ? undefined : shared;
+      } catch (error) {
+        throw new EmailValidationError("sendMany options could not be read.", error);
+      }
+    }
 
     if (!Number.isInteger(concurrency) || concurrency < 1) {
       throw new EmailValidationError(
@@ -501,7 +523,7 @@ export function createEmailClient<
         merged &&
         itemOptions?.idempotencyKey === undefined &&
         isStringMember(sendOptions?.idempotencyKey) &&
-        sendOptions.idempotencyKey.length > 0
+        sendOptions.idempotencyKey.trim().length > 0
       ) {
         return {
           ...merged,
@@ -516,7 +538,12 @@ export function createEmailClient<
       let itemOptions: EmailSendOptions | undefined;
 
       try {
-        itemOptions = item.options;
+        try {
+          itemOptions = item.options;
+        } catch (error) {
+          throw new EmailValidationError("sendMany item options could not be read.", error);
+        }
+
         const result = await send(message, itemSendOptions(index, itemOptions));
 
         if (telemetry) usedAdapters.add(normalizeAdapterName(result.adapter));
@@ -622,11 +649,20 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailPersonalizedResult> => {
     const startedAt = Date.now();
-    let facts = telemetry && personalizedFacts(input);
-    let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
+    let facts: ReturnType<typeof personalizedFacts> | undefined;
+    let attemptedAdapter = defaultAdapter;
     let deliveryPath = "personalized";
 
     try {
+      if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
+        throw new EmailValidationError("Email send options must be an object.");
+      }
+
+      if (sendOptions?.adapter !== undefined) {
+        attemptedAdapter = sendOptions.adapter;
+      }
+
+      if (telemetry) facts = personalizedFacts(input);
       validatePersonalizedInput(input);
       throwIfAborted(sendOptions?.signal);
 

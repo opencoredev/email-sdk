@@ -10,6 +10,7 @@ import { base64ToBytes, bytesToBase64, utf8ToBytes } from "./internal/bytes.js";
 import {
   causeString,
   isBinaryBuffer,
+  isBlobLike,
   isDateLike,
   isJsonObject,
   isJsonString,
@@ -128,16 +129,26 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
 export function isValidAddress(address: EmailAddress): boolean {
   if (isStringMember(address)) return address.trim().length > 0;
 
-  return isNonArrayObject(address) && isStringMember(address.email) && address.email.trim().length > 0;
+  if (!isNonArrayObject(address)) return false;
+
+  try {
+    return isStringMember(address.email) && address.email.trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function isValidAttachmentContent(content: NonNullable<EmailAttachment["content"]>): boolean {
   return (
     isStringMember(content) ||
-    content instanceof Blob ||
+    isBlobLike(content) ||
     isBinaryBuffer(content) ||
     ArrayBuffer.isView(content)
   );
+}
+
+function attachmentLabel(filename: EmailAttachment["filename"]): string {
+  return isStringMember(filename) && filename.length > 0 ? filename : "(unnamed)";
 }
 
 export function assertMessage(message: EmailMessage) {
@@ -201,10 +212,10 @@ export function assertMessage(message: EmailMessage) {
         throw new EmailValidationError("Each email attachment must be an object.");
       }
 
+      const name = attachmentLabel(attachment.filename);
+
       if (attachment.content === null) {
-        throw new EmailValidationError(
-          `Attachment "${attachment.filename}" has invalid attachment content.`,
-        );
+        throw new EmailValidationError(`Attachment "${name}" has invalid attachment content.`);
       }
 
       const hasContent = attachment.content !== undefined;
@@ -212,13 +223,13 @@ export function assertMessage(message: EmailMessage) {
 
       if (hasContent === hasPath) {
         throw new EmailValidationError(
-          `Attachment "${attachment.filename}" requires exactly one of content or path.`,
+          `Attachment "${name}" requires exactly one of content or path.`,
         );
       }
 
       if (hasContent && !isValidAttachmentContent(attachment.content!)) {
         throw new EmailValidationError(
-          `Attachment "${attachment.filename}" content must be a string, Blob, ArrayBuffer, or typed array.`,
+          `Attachment "${name}" content must be a string, Blob, ArrayBuffer, or typed array.`,
         );
       }
     }
@@ -396,7 +407,7 @@ export async function attachmentContentToString(
     return bytesToBase64(utf8ToBytes(content));
   }
 
-  if (content instanceof Blob) {
+  if (isBlobLike(content)) {
     return bytesToBase64(new Uint8Array(await content.arrayBuffer()));
   }
 
@@ -455,13 +466,13 @@ export async function attachmentToBytes(
       return base64ToBytes(content);
     } catch (error) {
       throw new EmailValidationError(
-        `Attachment "${attachment.filename}" has invalid base64 content.`,
+        `Attachment "${attachmentLabel(attachment.filename)}" has invalid base64 content.`,
         error,
       );
     }
   }
 
-  if (content instanceof Blob) {
+  if (isBlobLike(content)) {
     return new Uint8Array(await content.arrayBuffer());
   }
 
@@ -475,7 +486,7 @@ export async function attachmentToBytes(
   }
 
   throw new EmailValidationError(
-    `Attachment "${attachment.filename}" content must be a string, Blob, ArrayBuffer, or typed array.`,
+    `Attachment "${attachmentLabel(attachment.filename)}" content must be a string, Blob, ArrayBuffer, or typed array.`,
   );
 }
 

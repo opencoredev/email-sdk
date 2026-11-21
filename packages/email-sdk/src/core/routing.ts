@@ -72,6 +72,10 @@ export function resolveRoute(
   const primary = sendOptions?.adapter ?? defaultAdapter;
   const fallback = sendOptions?.fallback ?? clientFallback;
 
+  if (fallback?.adapters !== undefined && !Array.isArray(fallback.adapters)) {
+    throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
+  }
+
   if (!fallback?.adapters?.length) return { primary, fallback, names: [primary] };
 
   return {
@@ -118,6 +122,10 @@ export function mergeSendOptions(
   if (!override) return base;
 
   const merged: EmailSendOptions = { ...base, ...override };
+
+  if (override.idempotencyKey === undefined && base.idempotencyKey !== undefined) {
+    merged.idempotencyKey = base.idempotencyKey;
+  }
 
   if (base.retry && override.retry) merged.retry = { ...base.retry, ...override.retry };
 

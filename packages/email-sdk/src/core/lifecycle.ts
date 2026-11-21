@@ -92,9 +92,11 @@ async function runBeforeSendMiddleware(
 
       if (result?.options) {
         options = Object.assign({}, options, result.options);
-        onOptions?.(options);
       }
+
+      onOptions?.(options);
     } catch (error) {
+      onOptions?.(options);
       throw new EmailMiddlewareError("before_send", error);
     }
   }
