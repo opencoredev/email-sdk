@@ -259,14 +259,20 @@ function bodyTooLarge(provider: InboundProvider, maxBodyBytes: number) {
   });
 }
 
-/** Reads at most `maxBodyBytes`, refusing an oversized Content-Length before reading anything. */
-async function readBoundedBody(request: Request, maxBodyBytes: number, provider: InboundProvider): Promise<Uint8Array<ArrayBuffer>> {
+function validateMaxBodyBytes(maxBodyBytes: number): number {
   if (
     (!Number.isFinite(maxBodyBytes) && maxBodyBytes !== Number.POSITIVE_INFINITY) ||
     maxBodyBytes <= 0
   ) {
     throw new RangeError("handleInbound maxBodyBytes must be a positive number of bytes or Infinity.");
   }
+
+  return maxBodyBytes;
+}
+
+/** Reads at most `maxBodyBytes`, refusing an oversized Content-Length before reading anything. */
+async function readBoundedBody(request: Request, maxBodyBytes: number, provider: InboundProvider): Promise<Uint8Array<ArrayBuffer>> {
+  validateMaxBodyBytes(maxBodyBytes);
 
   const declared = Number(request.headers.get("content-length") ?? Number.NaN);
 
@@ -312,6 +318,10 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
  * `signature_*` and `timestamp_expired` reasons to 401 and `payload_invalid` to 400.
  */
 export async function handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult> {
+  const maxBodyBytes = validateMaxBodyBytes(
+    config.maxBodyBytes === undefined ? DEFAULT_INBOUND_MAX_BODY_BYTES : config.maxBodyBytes,
+  );
+
   const fetchOptions = { fetch: config.fetch, signal: config.signal };
   const clock = { now: config.now, toleranceSeconds: config.toleranceSeconds };
 
@@ -332,7 +342,7 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
   // Copy headers before reading the body: Bun drops a FormData Content-Type from headers
   // first accessed after the body is consumed.
   const headers = new Headers(request.headers);
-  const body = await readBoundedBody(request, config.maxBodyBytes ?? DEFAULT_INBOUND_MAX_BODY_BYTES, config.provider);
+  const body = await readBoundedBody(request, maxBodyBytes, config.provider);
   const payload: InboundRequestPayload = { body, headers, url: request.url };
 
   switch (config.provider) {

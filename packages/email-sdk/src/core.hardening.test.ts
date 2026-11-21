@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import vm from "node:vm";
 
 import { createEmailClient } from "./core.js";
-import { EmailValidationError } from "./errors.js";
+import { EmailAdapterError, EmailMiddlewareError, EmailValidationError } from "./errors.js";
 import { handleInbound } from "./inbound.js";
 import { decodeBase64Strict } from "./inbound/shared.js";
 import {
@@ -180,7 +180,7 @@ describe("audit hardening regressions", () => {
     }
   });
 
-  test("rejects non-number maxBodyBytes in handleInbound with RangeError", async () => {
+  test("rejects non-number maxBodyBytes in handleInbound with RangeError including null and handshakes", async () => {
     const req = new Request("https://example.com/inbound", { method: "POST", body: "hello" });
 
     await expect(
@@ -191,5 +191,304 @@ describe("audit hardening regressions", () => {
         maxBodyBytes: "abc",
       }),
     ).rejects.toBeInstanceOf(RangeError);
+
+    await expect(
+      handleInbound(req, {
+        provider: "resend",
+        secret: "whsec_test",
+        // @ts-expect-error -- untyped callers can pass null maxBodyBytes at runtime
+        maxBodyBytes: null,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+
+    const graphHandshake = new Request("https://example.com/inbound?validationToken=ok", {
+      method: "POST",
+    });
+
+    await expect(
+      handleInbound(graphHandshake, {
+        provider: "graph",
+        clientState: "state",
+        maxBodyBytes: 0,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+
+    const mandrillHead = new Request("https://example.com/inbound", { method: "HEAD" });
+
+    await expect(
+      handleInbound(mandrillHead, {
+        provider: "mandrill",
+        webhookKey: "key",
+        webhookUrl: "https://example.com/inbound",
+        maxBodyBytes: -1,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+  });
+
+  test("rejects invalid attachment content, non-canonical base64 padding, and supports DataView/SharedArrayBuffer", async () => {
+    const invalidContents = [5, {}, [], null, true];
+
+    for (const content of invalidContents) {
+      await expect(
+        // @ts-expect-error -- untyped callers can pass non-binary attachment content at runtime
+        attachmentContentToString(content),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        attachmentToBytes({
+          filename: "bad.bin",
+          // @ts-expect-error -- untyped callers can pass non-binary attachment content at runtime
+          content,
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+    }
+
+    const badBase64 = ["====", "=", "QUJD===", "YQ=====", "QR==", "QUJ="];
+
+    for (const content of badBase64) {
+      await expect(attachmentContentToString(content, "base64")).rejects.toBeInstanceOf(
+        EmailValidationError,
+      );
+
+      await expect(
+        attachmentToBytes({
+          filename: "bad.bin",
+          content,
+          contentEncoding: "base64",
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+    }
+
+    // URL-safe base64 without padding is canonicalized to standard padded base64.
+    expect(await attachmentContentToString("-_8", "base64")).toBe("+/8=");
+
+    const view = new DataView(new Uint8Array([9, 10, 11, 12]).buffer, 1, 2);
+    expect(await attachmentContentToString(view)).toBe("Cgs=");
+    expect([...(await attachmentToBytes({ filename: "dv.bin", content: view }))]).toEqual([10, 11]);
+
+    const shared = new SharedArrayBuffer(3);
+    new Uint8Array(shared).set([1, 2, 3]);
+    expect(await attachmentContentToString(shared)).toBe("AQID");
+    expect([...(await attachmentToBytes({ filename: "sab.bin", content: shared }))]).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  test("rejects malformed send, sendPersonalized, and idempotencyKey fields with EmailValidationError and zero exception captures", async () => {
+    const { telemetry, exceptions } = captureTelemetry();
+    setSharedTelemetry(telemetry);
+
+    try {
+      const client = createEmailClient({
+        adapters: [memoryAdapter("resend")],
+      });
+
+      await expect(
+        client.send({
+          from: "a@example.com",
+          to: "b@example.com",
+          // @ts-expect-error -- untyped callers can pass numeric subject at runtime
+          subject: 123,
+          text: "ok",
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        client.send({
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "ok",
+          text: "ok",
+          attachments: [
+            {
+              filename: "bad.bin",
+              // @ts-expect-error -- untyped callers can pass null attachment content at runtime
+              content: null,
+            },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        client.send(
+          { from: "a@example.com", to: "b@example.com", subject: "ok", text: "ok" },
+          { idempotencyKey: "" },
+        ),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        client.send(
+          { from: "a@example.com", to: "b@example.com", subject: "ok", text: "ok" },
+          // @ts-expect-error -- untyped callers can pass numeric idempotencyKey at runtime
+          { idempotencyKey: 0 },
+        ),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        client.sendPersonalized({
+          message: { from: "a@example.com", subject: "hi", text: "ok" },
+          // @ts-expect-error -- untyped callers can pass null recipient.to at runtime
+          recipients: [{ to: null }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        client.sendPersonalized({
+          message: { from: "a@example.com", subject: "hi %recipient.x%", text: "ok" },
+          recipients: [
+            {
+              to: "b@example.com",
+              // @ts-expect-error -- untyped callers can pass null-prototype objects without toString
+              variables: { x: Object.create(null) },
+            },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      const okPersonalized = await client.sendPersonalized({
+        message: { from: "a@example.com", subject: "hi %recipient.x%", text: "body" },
+        // @ts-expect-error -- untyped callers can omit variables
+        recipients: [{ to: "b@example.com", variables: undefined }],
+      });
+
+      expect(okPersonalized.accepted).toHaveLength(1);
+      expect(exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("preserves rerouted adapter on later middleware throw and fallback adapter on middleware throw", async () => {
+    const { telemetry, events } = captureTelemetry();
+    setSharedTelemetry(telemetry);
+
+    try {
+      const resend = {
+        ...memoryAdapter("resend"),
+        send: async () => {
+          throw new EmailAdapterError("primary rejected", {
+            adapter: "resend",
+            delivery: "not_sent",
+          });
+        },
+      };
+
+      const postmark = memoryAdapter("postmark");
+
+      const rerouteThenThrowClient = createEmailClient({
+        adapters: [memoryAdapter("resend"), postmark],
+        plugins: [
+          {
+            id: "two-step",
+            middleware: [
+              {
+                name: "reroute",
+                beforeSend: (ctx) => ({
+                  ...ctx,
+                  options: { ...ctx.options, adapter: "postmark" },
+                }),
+              },
+              {
+                name: "throw-after-reroute",
+                beforeSend: () => {
+                  throw new Error("stop");
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(
+        rerouteThenThrowClient.send({
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "hi",
+          text: "body",
+        }),
+      ).rejects.toBeInstanceOf(EmailMiddlewareError);
+
+      expect(events.at(-1)?.properties?.adapter).toBe("postmark");
+
+      const fallbackClient = createEmailClient({
+        adapters: [resend, postmark],
+        fallback: { adapters: ["postmark"] },
+        plugins: [
+          {
+            id: "after-throw",
+            middleware: [
+              {
+                name: "after-send-throw",
+                afterSend: () => {
+                  throw new Error("afterSend failed");
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(
+        fallbackClient.send({
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "hi",
+          text: "body",
+        }),
+      ).rejects.toBeInstanceOf(EmailMiddlewareError);
+
+      expect(events.at(-1)?.properties?.adapter).toBe("postmark");
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("derives distinct per-item idempotency keys in sendMany and settles throwing item getters", async () => {
+    const seenKeys: Array<string | undefined> = [];
+    const base = memoryAdapter("resend");
+
+    const adapter = {
+      ...base,
+      send: async (message: Parameters<typeof base.send>[0], ctx: Parameters<typeof base.send>[1]) => {
+        seenKeys.push(ctx.idempotencyKey);
+
+        return base.send(message, ctx);
+      },
+    };
+
+    const client = createEmailClient({ adapters: [adapter], telemetry: false });
+
+    const throwingItem = {};
+
+    Object.defineProperty(throwingItem, "message", {
+      enumerable: true,
+      get() {
+        throw new Error("getter exploded");
+      },
+    });
+
+    const settled = await client.sendMany(
+      [
+        {
+          message: { from: "a@example.com", to: "one@example.com", subject: "1", text: "one" },
+        },
+        // @ts-expect-error -- testing runtime item with throwing getter
+        throwingItem,
+        {
+          message: { from: "a@example.com", to: "two@example.com", subject: "2", text: "two" },
+        },
+        {
+          message: { from: "a@example.com", to: "three@example.com", subject: "3", text: "three" },
+          options: { idempotencyKey: "custom-key" },
+        },
+      ],
+      { idempotencyKey: "batch-key" },
+    );
+
+    expect(settled[0]?.ok).toBe(true);
+    expect(settled[1]?.ok).toBe(false);
+    expect(settled[2]?.ok).toBe(true);
+    expect(settled[3]?.ok).toBe(true);
+    expect(seenKeys).toEqual(["batch-key:0", "batch-key:2", "custom-key"]);
   });
 });

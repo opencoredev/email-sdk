@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailAdapterNotFoundError, EmailValidationError } from "../errors.js";
+import { isStringMember } from "../internal/decode.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -20,15 +21,17 @@ export function validateCapabilities(
 
   // An idempotency key is a safety promise: a retried or replayed send is delivered once. An
   // adapter that cannot keep that promise fails loudly instead of silently dropping the key.
-  if (
-    sendOptions?.idempotencyKey &&
-    sendOptions.idempotency !== "best-effort" &&
-    adapter.capabilities.idempotency === "none"
-  ) {
-    throw new EmailValidationError(
-      `${adapter.name} cannot deduplicate sends, so idempotencyKey would be ignored. Route to an adapter with idempotency support, remove idempotencyKey, or pass idempotency: "best-effort" to send without provider deduplication.`,
-      { adapter: adapter.name, capability: "idempotency" },
-    );
+  if (sendOptions?.idempotencyKey !== undefined) {
+    if (!isStringMember(sendOptions.idempotencyKey) || sendOptions.idempotencyKey.trim().length === 0) {
+      throw new EmailValidationError("idempotencyKey must be a non-empty string.");
+    }
+
+    if (sendOptions.idempotency !== "best-effort" && adapter.capabilities.idempotency === "none") {
+      throw new EmailValidationError(
+        `${adapter.name} cannot deduplicate sends, so idempotencyKey would be ignored. Route to an adapter with idempotency support, remove idempotencyKey, or pass idempotency: "best-effort" to send without provider deduplication.`,
+        { adapter: adapter.name, capability: "idempotency" },
+      );
+    }
   }
 
   if (operation === "personalized" && adapter.capabilities.personalized === "unsupported") {

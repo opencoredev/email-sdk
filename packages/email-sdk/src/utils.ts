@@ -9,8 +9,11 @@ import { readAttachmentFile } from "./internal/attachment-file.js";
 import { base64ToBytes, bytesToBase64, utf8ToBytes } from "./internal/bytes.js";
 import {
   causeString,
+  isBinaryBuffer,
+  isDateLike,
   isJsonObject,
   isJsonString,
+  isNonArrayObject,
   isObjectLike,
   isStringMember,
   readJson,
@@ -122,8 +125,19 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
   return [...headers];
 }
 
-function isNonArrayObject<T>(value: T): boolean {
-  return isObjectLike(value) && !Array.isArray(value);
+export function isValidAddress(address: EmailAddress): boolean {
+  if (isStringMember(address)) return address.trim().length > 0;
+
+  return isNonArrayObject(address) && isStringMember(address.email) && address.email.trim().length > 0;
+}
+
+function isValidAttachmentContent(content: NonNullable<EmailAttachment["content"]>): boolean {
+  return (
+    isStringMember(content) ||
+    content instanceof Blob ||
+    isBinaryBuffer(content) ||
+    ArrayBuffer.isView(content)
+  );
 }
 
 export function assertMessage(message: EmailMessage) {
@@ -131,20 +145,50 @@ export function assertMessage(message: EmailMessage) {
     throw new EmailValidationError("Email message must be an object.");
   }
 
-  if (!message.from) {
-    throw new EmailValidationError("Email message requires a from address.");
+  if (!isValidAddress(message.from)) {
+    throw new EmailValidationError("Email message requires a valid from address.");
   }
 
-  if (arrayify(message.to).length === 0) {
-    throw new EmailValidationError("Email message requires at least one recipient.");
+  const recipients = arrayify(message.to);
+
+  if (recipients.length === 0 || !recipients.every((entry) => isValidAddress(entry))) {
+    throw new EmailValidationError("Email message requires at least one valid recipient.");
   }
 
-  if (!message.subject) {
-    throw new EmailValidationError("Email message requires a subject.");
+  if (message.cc !== undefined && !arrayify(message.cc).every((entry) => isValidAddress(entry))) {
+    throw new EmailValidationError("Email message cc addresses must be valid.");
+  }
+
+  if (message.bcc !== undefined && !arrayify(message.bcc).every((entry) => isValidAddress(entry))) {
+    throw new EmailValidationError("Email message bcc addresses must be valid.");
+  }
+
+  if (!isStringMember(message.subject) || message.subject.length === 0) {
+    throw new EmailValidationError("Email message requires a string subject.");
+  }
+
+  if (message.html !== undefined && !isStringMember(message.html)) {
+    throw new EmailValidationError("Email message html content must be a string.");
+  }
+
+  if (message.text !== undefined && !isStringMember(message.text)) {
+    throw new EmailValidationError("Email message text content must be a string.");
   }
 
   if (!message.html && !message.text) {
     throw new EmailValidationError("Email message requires either html or text content.");
+  }
+
+  if (message.headers !== undefined) {
+    if (Array.isArray(message.headers)) {
+      for (const header of message.headers) {
+        if (!isNonArrayObject(header) || !isStringMember(header.name) || header.name.length === 0) {
+          throw new EmailValidationError("Each email header must be an object with a string name.");
+        }
+      }
+    } else if (!isNonArrayObject(message.headers)) {
+      throw new EmailValidationError("Email message headers must be an object or array of headers.");
+    }
   }
 
   if (message.attachments !== undefined) {
@@ -157,12 +201,24 @@ export function assertMessage(message: EmailMessage) {
         throw new EmailValidationError("Each email attachment must be an object.");
       }
 
+      if (attachment.content === null) {
+        throw new EmailValidationError(
+          `Attachment "${attachment.filename}" has invalid attachment content.`,
+        );
+      }
+
       const hasContent = attachment.content !== undefined;
       const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
 
       if (hasContent === hasPath) {
         throw new EmailValidationError(
           `Attachment "${attachment.filename}" requires exactly one of content or path.`,
+        );
+      }
+
+      if (hasContent && !isValidAttachmentContent(attachment.content!)) {
+        throw new EmailValidationError(
+          `Attachment "${attachment.filename}" content must be a string, Blob, ArrayBuffer, or typed array.`,
         );
       }
     }
@@ -178,6 +234,10 @@ const RFC_3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[
 // Past sendAt values are intentionally allowed: providers either send immediately or reject
 // with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
 export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
+  if (!isStringMember(sendAt) && !isDateLike(sendAt)) {
+    throw new EmailValidationError("Email message sendAt must be a Date or RFC 3339 string.");
+  }
+
   if (isStringMember(sendAt) && !RFC_3339_TIMESTAMP.test(sendAt)) {
     throw new EmailValidationError(
       `Email message sendAt must be an RFC 3339 timestamp with Z or an explicit offset: "${sendAt}".`,
@@ -316,13 +376,6 @@ function isRetryableRuntimeError(error: Error) {
   );
 }
 
-function isArrayBufferLike(value: Uint8Array | ArrayBuffer): value is ArrayBuffer {
-  return (
-    value instanceof ArrayBuffer ||
-    Object.prototype.toString.call(value) === "[object ArrayBuffer]"
-  );
-}
-
 export async function attachmentContentToString(
   content: string | Uint8Array | ArrayBuffer | Blob | undefined,
   encoding: "raw" | "base64" = "raw",
@@ -334,12 +387,10 @@ export async function attachmentContentToString(
   if (isStringMember(content)) {
     if (encoding === "base64") {
       try {
-        base64ToBytes(content);
+        return bytesToBase64(base64ToBytes(content));
       } catch (error) {
         throw new EmailValidationError("Attachment has invalid base64 content.", error);
       }
-
-      return content;
     }
 
     return bytesToBase64(utf8ToBytes(content));
@@ -349,11 +400,18 @@ export async function attachmentContentToString(
     return bytesToBase64(new Uint8Array(await content.arrayBuffer()));
   }
 
-  if (isArrayBufferLike(content)) {
-    return bytesToBase64(new Uint8Array(content));
+  if (isBinaryBuffer(content)) {
+    // SAFETY: isBinaryBuffer checks the ArrayBuffer/SharedArrayBuffer tag across realms.
+    return bytesToBase64(new Uint8Array(content as ArrayBufferLike));
   }
 
-  return bytesToBase64(content);
+  if (ArrayBuffer.isView(content)) {
+    return bytesToBase64(new Uint8Array(content.buffer, content.byteOffset, content.byteLength));
+  }
+
+  throw new EmailValidationError(
+    "Attachment content must be a string, Blob, ArrayBuffer, or typed array.",
+  );
 }
 
 /** Maps attachments concurrently, without a promise round-trip when there are none. */
@@ -407,11 +465,18 @@ export async function attachmentToBytes(
     return new Uint8Array(await content.arrayBuffer());
   }
 
-  if (isArrayBufferLike(content)) {
-    return new Uint8Array(content);
+  if (isBinaryBuffer(content)) {
+    // SAFETY: isBinaryBuffer checks ArrayBuffer/SharedArrayBuffer; copying guarantees a fresh ArrayBuffer.
+    return new Uint8Array(new Uint8Array(content as ArrayBufferLike));
   }
 
-  return new Uint8Array(content);
+  if (ArrayBuffer.isView(content)) {
+    return new Uint8Array(new Uint8Array(content.buffer, content.byteOffset, content.byteLength));
+  }
+
+  throw new EmailValidationError(
+    `Attachment "${attachment.filename}" content must be a string, Blob, ArrayBuffer, or typed array.`,
+  );
 }
 
 export type MessageFieldSupport = Partial<

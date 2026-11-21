@@ -67,6 +67,25 @@ export function isObjectLike(value: unknown): value is object {
   return value !== null && value !== undefined && Object(value) === value;
 }
 
+/** Non-null, non-array objects: safe across realms and null prototypes. */
+export function isNonArrayObject<T>(value: T): boolean {
+  return value !== null && value !== undefined && !Array.isArray(value) && Object(value) === value;
+}
+
+/** True for ArrayBuffer and SharedArrayBuffer instances, including cross-realm buffers. */
+export function isBinaryBuffer<T>(value: T): boolean {
+  if (value instanceof ArrayBuffer) return true;
+
+  const tag = tagOf(value);
+
+  return tag === "[object ArrayBuffer]" || tag === "[object SharedArrayBuffer]";
+}
+
+/** True for Date instances, including cross-realm Dates. */
+export function isDateLike<T>(value: T): boolean {
+  return value instanceof Date || tagOf(value) === "[object Date]";
+}
+
 /** Narrow a JSON value to a JSON object. */
 export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return value !== undefined && value !== null && !Array.isArray(value) && Object(value) === value;

@@ -311,12 +311,11 @@ async function requestAccessToken(
     });
   }
 
+  const lifetimeMs = tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000;
+
   return {
     accessToken,
-    refreshAt:
-      Date.now() +
-      tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000 -
-      TOKEN_REFRESH_SKEW_MS,
+    refreshAt: Date.now() + Math.max(lifetimeMs - TOKEN_REFRESH_SKEW_MS, 0),
   };
 }
 

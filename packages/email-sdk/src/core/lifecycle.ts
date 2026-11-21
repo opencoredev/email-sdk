@@ -12,6 +12,7 @@ import type {
   EmailPlugin,
   EmailPluginContext,
   EmailSendMiddleware,
+  EmailSendOptions,
   MaybePromise,
 } from "../types.js";
 import { addAdapter } from "./routing.js";
@@ -68,15 +69,17 @@ export function applyClientExtension<TClient extends object, TExtension extends 
 export function applyBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
+  onOptions?: (options: EmailSendOptions | undefined) => void,
 ): MaybePromise<EmailBeforeSendEvent> {
   if (middleware.length === 0) return event;
 
-  return runBeforeSendMiddleware(middleware, event);
+  return runBeforeSendMiddleware(middleware, event, onOptions);
 }
 
 async function runBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
+  onOptions?: (options: EmailSendOptions | undefined) => void,
 ): Promise<EmailBeforeSendEvent> {
   let message = event.message;
   let options = event.options;
@@ -87,7 +90,10 @@ async function runBeforeSendMiddleware(
 
       if (result?.message) message = result.message;
 
-      if (result?.options) options = Object.assign({}, options, result.options);
+      if (result?.options) {
+        options = Object.assign({}, options, result.options);
+        onOptions?.(options);
+      }
     } catch (error) {
       throw new EmailMiddlewareError("before_send", error);
     }

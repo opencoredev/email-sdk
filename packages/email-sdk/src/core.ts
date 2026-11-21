@@ -81,7 +81,7 @@ import type {
   EmailSendSettledResult,
   EmailValidationResult,
 } from "./types.js";
-import { isObjectLike } from "./internal/decode.js";
+import { isNonArrayObject, isObjectLike, isStringMember } from "./internal/decode.js";
 import { ReadonlyMapView } from "./internal/readonly-map.js";
 import { assertMessage, isBuiltInAdapter } from "./utils.js";
 
@@ -351,12 +351,22 @@ export function createEmailClient<
     let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
 
     try {
+      if (!isNonArrayObject(message)) {
+        throw new EmailValidationError("Email message must be an object.");
+      }
+
       throwIfAborted(sendOptions?.signal);
 
-      const preparing = applyBeforeSendMiddleware(middleware, {
-        message,
-        options: sendOptions,
-      });
+      const preparing = applyBeforeSendMiddleware(
+        middleware,
+        {
+          message,
+          options: sendOptions,
+        },
+        (nextOptions) => {
+          attemptedAdapter = nextOptions?.adapter ?? defaultAdapter;
+        },
+      );
 
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
@@ -376,6 +386,7 @@ export function createEmailClient<
       const failures: EmailAdapterError[] = [];
 
       for (const [index, name] of route.names.entries()) {
+        attemptedAdapter = name;
         const adapter = requireAdapter(adapters, name);
 
         try {
@@ -481,10 +492,32 @@ export function createEmailClient<
     const usedAdapters = new Set<string>();
     let failed = 0;
     let firstErrorCode: string | undefined;
+    let totalRecipients = 0;
 
-    const settle = async (index: number, item: EmailSendItem) => {
+    const itemSendOptions = (index: number, itemOptions: EmailSendOptions | undefined) => {
+      const merged = mergeSendOptions(sendOptions, itemOptions);
+
+      if (
+        merged &&
+        itemOptions?.idempotencyKey === undefined &&
+        isStringMember(sendOptions?.idempotencyKey) &&
+        sendOptions.idempotencyKey.length > 0
+      ) {
+        return {
+          ...merged,
+          idempotencyKey: `${sendOptions.idempotencyKey}:${index}`,
+        };
+      }
+
+      return merged;
+    };
+
+    const settle = async (index: number, message: EmailMessage, item: EmailSendItem) => {
+      let itemOptions: EmailSendOptions | undefined;
+
       try {
-        const result = await send(item.message, mergeSendOptions(sendOptions, item.options));
+        itemOptions = item.options;
+        const result = await send(message, itemSendOptions(index, itemOptions));
 
         if (telemetry) usedAdapters.add(normalizeAdapterName(result.adapter));
         results[index] = { ok: true, index, result };
@@ -501,7 +534,9 @@ export function createEmailClient<
                 ? normalized.adapter
                 : undefined);
 
-          const adapter = failedAdapter ?? item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
+          const adapter =
+            failedAdapter ?? itemOptions?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
+
           usedAdapters.add(normalizeAdapterName(adapter));
         }
 
@@ -516,21 +551,35 @@ export function createEmailClient<
     // default concurrency of 1 this is the same ordered, one-at-a-time loop as before.
     let next = 0;
 
-    const isNonArrayObject = <T>(value: T): boolean => isObjectLike(value) && !Array.isArray(value);
-
-    const itemMessage = (item: (typeof items)[number] | undefined): EmailMessage | undefined =>
-      item !== undefined && isNonArrayObject(item) && isNonArrayObject(item.message)
-        ? item.message
-        : undefined;
+    const readItemMessage = (
+      item: (typeof items)[number] | undefined,
+    ): EmailMessage | undefined => {
+      try {
+        return item !== undefined && isNonArrayObject(item) && isNonArrayObject(item.message)
+          ? item.message
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    };
 
     const worker = async () => {
       while (next < items.length) {
         const index = next;
         next += 1;
         const item = items[index];
+        const msg = readItemMessage(item);
 
-        if (item && itemMessage(item)) {
-          await settle(index, item);
+        if (item && msg) {
+          if (telemetry) {
+            try {
+              totalRecipients += recipientCount(msg);
+            } catch {
+              // Throwing getters on malformed messages are surfaced as item failures below.
+            }
+          }
+
+          await settle(index, msg, item);
         } else {
           const error = new EmailValidationError("sendMany item is missing a message.");
           failed += 1;
@@ -557,13 +606,7 @@ export function createEmailClient<
       measurement_scope: "batch_summary",
       succeeded: items.length - failed,
       failed,
-      recipients: items.reduce((total, item) => {
-        const msg = itemMessage(item);
-
-        if (!msg) return total;
-
-        return total + recipientCount(msg);
-      }, 0),
+      recipients: totalRecipients,
       adapter,
       success: failed === 0,
       duration_ms: Date.now() - startedAt,
@@ -587,10 +630,16 @@ export function createEmailClient<
       validatePersonalizedInput(input);
       throwIfAborted(sendOptions?.signal);
 
-      const prepared = await applyBeforeSendMiddleware(middleware, {
-        message: personalizedMiddlewareMessage(input),
-        options: sendOptions,
-      });
+      const prepared = await applyBeforeSendMiddleware(
+        middleware,
+        {
+          message: personalizedMiddlewareMessage(input),
+          options: sendOptions,
+        },
+        (nextOptions) => {
+          attemptedAdapter = nextOptions?.adapter ?? defaultAdapter;
+        },
+      );
 
       attemptedAdapter = prepared.options?.adapter ?? defaultAdapter;
 
@@ -626,6 +675,7 @@ export function createEmailClient<
       const clientRetry = callerRetry(options.retry);
 
       for (const [index, name] of route.names.entries()) {
+        attemptedAdapter = name;
         const adapter = requireAdapter(adapters, name);
         deliveryPath = adapter.sendPersonalized ? "personalized_native" : "personalized_expanded";
 

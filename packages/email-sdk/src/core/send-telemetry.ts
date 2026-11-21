@@ -1,5 +1,5 @@
 import type { EmailAdapterError, EmailSdkError } from "../errors.js";
-import { isObjectLike } from "../internal/decode.js";
+import { isNonArrayObject } from "../internal/decode.js";
 import {
   getTelemetry,
   normalizeAdapterName,
@@ -17,10 +17,6 @@ function listLength<T>(value: OneOrMany<T> | undefined) {
 /** to + cc + bcc, counted without copying the lists. */
 export function recipientCount(message: EmailMessage) {
   return listLength(message.to) + listLength(message.cc) + listLength(message.bcc);
-}
-
-function isNonArrayObject<T>(value: T): boolean {
-  return isObjectLike(value) && !Array.isArray(value);
 }
 
 export function messageFacts(message: EmailMessage) {

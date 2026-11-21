@@ -5,7 +5,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
-import { isObjectLike } from "../internal/decode.js";
+import { isNonArrayObject, isStringMember } from "../internal/decode.js";
 import type {
   EmailAdapter,
   EmailHooks,
@@ -17,7 +17,7 @@ import type {
   EmailSendOptions,
   EmailSendResult,
 } from "../types.js";
-import { emailAddressOf, normalizeAdapterResult } from "../utils.js";
+import { emailAddressOf, isValidAddress, normalizeAdapterResult } from "../utils.js";
 import {
   attemptAdapter,
   defaultDelay,
@@ -241,10 +241,6 @@ export async function attemptExpandedPersonalized(
   };
 }
 
-function isNonArrayObject<T>(value: T): boolean {
-  return isObjectLike(value) && !Array.isArray(value);
-}
-
 export function validatePersonalizedInput(input: EmailPersonalizedInput) {
   if (!isNonArrayObject(input)) {
     throw new EmailValidationError("sendPersonalized input must be an object.");
@@ -252,6 +248,18 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
   if (!isNonArrayObject(input.message)) {
     throw new EmailValidationError("sendPersonalized message must be an object.");
+  }
+
+  if (!isStringMember(input.message.subject) || input.message.subject.length === 0) {
+    throw new EmailValidationError("sendPersonalized message requires a string subject.");
+  }
+
+  if (input.message.html !== undefined && !isStringMember(input.message.html)) {
+    throw new EmailValidationError("sendPersonalized message html content must be a string.");
+  }
+
+  if (input.message.text !== undefined && !isStringMember(input.message.text)) {
+    throw new EmailValidationError("sendPersonalized message text content must be a string.");
   }
 
   if (!Array.isArray(input.recipients) || input.recipients.length === 0) {
@@ -267,6 +275,10 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
     if (recipient.variables !== undefined && !isNonArrayObject(recipient.variables)) {
       throw new EmailValidationError("Personalized recipient variables must be an object.");
+    }
+
+    if (!isValidAddress(recipient.to)) {
+      throw new EmailValidationError("Personalized recipients require a valid email address.");
     }
 
     const address = emailAddressOf(recipient.to).toLowerCase();
@@ -285,6 +297,14 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
         if (!/^[\w-]+$/.test(key)) {
           throw new EmailValidationError(
             `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
+          );
+        }
+
+        try {
+          String(recipient.variables[key]);
+        } catch {
+          throw new EmailValidationError(
+            `Personalized variable "${key}" cannot be converted to a string.`,
           );
         }
       }
@@ -319,10 +339,14 @@ export function expandPersonalizedMessage(
   to: EmailPersonalizedInput["recipients"][number]["to"],
   variables: EmailPersonalizedInput["recipients"][number]["variables"],
 ): EmailMessage {
+  const vars = isNonArrayObject(variables) ? variables : undefined;
+
   const render = (value: string | undefined) =>
-    value?.replace(/%recipient\.([\w-]+)%/g, (_match, key: string) =>
-      Object.hasOwn(variables, key) ? String(variables[key]) : `%recipient.${key}%`,
-    );
+    isStringMember(value)
+      ? value.replace(/%recipient\.([\w-]+)%/g, (_match, key: string) =>
+          vars && Object.hasOwn(vars, key) ? String(vars[key]) : `%recipient.${key}%`,
+        )
+      : undefined;
 
   // SAFETY: The template has html or text, and each is rendered only when present, so the
   // result keeps the html-or-text shape of an EmailMessage.

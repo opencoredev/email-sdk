@@ -27,12 +27,30 @@ export function utf8ToBase64(value: string): string {
 
 /**
  * Decodes standard or URL-safe base64 and tolerates whitespace and missing padding, matching
- * what `Buffer.from(value, "base64")` accepted before. Throws on characters outside the
- * base64 alphabet instead of silently dropping them.
+ * what `Buffer.from(value, "base64")` accepted before. Throws on invalid padding, non-canonical
+ * pad bits, or characters outside the base64 alphabet instead of silently accepting garbage.
  */
 export function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
-  const clean = value.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
-  const binary = atob(clean + "=".repeat((4 - (clean.length % 4)) % 4));
+  const stripped = value.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+
+  if (stripped.length === 0) return new Uint8Array(0);
+
+  if (stripped.includes("=")) {
+    if (stripped.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={1,2}$/.test(stripped)) {
+      throw new Error("Invalid base64 padding.");
+    }
+  } else if (stripped.length % 4 === 1 || !/^[A-Za-z0-9+/]+$/.test(stripped)) {
+    throw new Error("Invalid base64 encoding.");
+  }
+
+  const unpadded = stripped.replace(/=+$/, "");
+  const padded = unpadded + "=".repeat((4 - (unpadded.length % 4)) % 4);
+  const binary = atob(padded);
+
+  if (btoa(binary).replace(/=+$/, "") !== unpadded) {
+    throw new Error("Invalid base64 padding bits.");
+  }
+
   const bytes = new Uint8Array(binary.length);
 
   for (let index = 0; index < binary.length; index += 1) {
