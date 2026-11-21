@@ -8,6 +8,7 @@ import type {
   EmailSendOptions,
 } from "./types.js";
 import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "./internal/decode.js";
+import { copyBoundedArray } from "./internal/snapshot.js";
 import { headerList } from "./utils.js";
 
 export type EmailDefaultsPluginOptions = {
@@ -53,7 +54,7 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
         throw new EmailValidationError("defaultsPlugin headers must be an array.");
       }
 
-      safeHeaders = [...headers].map((header) => {
+      safeHeaders = copyBoundedArray(headers, "defaultsPlugin headers").map((header) => {
         if (!isNonArrayObject(header)) {
           throw new EmailValidationError(
             "defaultsPlugin headers must contain objects with non-empty string name and string value.",
@@ -80,7 +81,7 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
         throw new EmailValidationError("defaultsPlugin tags must be an array.");
       }
 
-      safeTags = [...tags].map((tag) => {
+      safeTags = copyBoundedArray(tags, "defaultsPlugin tags").map((tag) => {
         if (!isNonArrayObject(tag)) {
           throw new EmailValidationError(
             "defaultsPlugin tags must contain objects with string name and string value.",
@@ -134,7 +135,10 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
             };
           } catch (error) {
             if (error instanceof EmailValidationError) throw error;
-            throw new EmailValidationError("Email message or send options could not be read.", error);
+            throw new EmailValidationError(
+              "Email message or send options could not be read.",
+              error,
+            );
           }
         },
       },
@@ -157,7 +161,7 @@ function cloneReplyTo(
   if (replyTo === undefined || isStringMember(replyTo)) return replyTo;
 
   if (Array.isArray(replyTo)) {
-    return [...replyTo].map(cloneAddressEntry);
+    return copyBoundedArray(replyTo, "defaultsPlugin replyTo").map(cloneAddressEntry);
   }
 
   return cloneAddressEntry(replyTo);
@@ -372,10 +376,7 @@ function mergeTags(
     return defaults.map((tag) => ({ name: tag.name, value: tag.value }));
   }
 
-  return [
-    ...defaults.map((tag) => ({ name: tag.name, value: tag.value })),
-    ...own,
-  ];
+  return [...defaults.map((tag) => ({ name: tag.name, value: tag.value })), ...own];
 }
 
 function mergeMetadata(

@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import vm from "node:vm";
 
 import { createEmailClient } from "./core.js";
-import { EmailAdapterError, EmailMiddlewareError, EmailValidationError } from "./errors.js";
+import {
+  EmailAdapterError,
+  EmailMiddlewareError,
+  EmailRouteError,
+  EmailValidationError,
+} from "./errors.js";
 import { handleInbound } from "./inbound.js";
 import { decodeBase64Strict } from "./inbound/shared.js";
 import {
@@ -2616,7 +2621,12 @@ describe("audit hardening regressions", () => {
     const brokenClient = createEmailClient({
       adapters: [
         // SAFETY: Intentionally testing a runtime custom adapter missing `capabilities`.
-        { name: "broken", async send() { return { adapter: "broken" }; } } as never,
+        {
+          name: "broken",
+          async send() {
+            return { adapter: "broken" };
+          },
+        } as never,
       ],
       telemetry: false,
     });
@@ -2677,7 +2687,9 @@ describe("audit hardening regressions", () => {
     // SAFETY: Intentionally passing revoked proxy options to sendMany().
     await expect(client.sendMany([], revokedObj as never)).rejects.toThrow(EmailValidationError);
     // SAFETY: Intentionally passing revoked proxy to sendPersonalized().
-    await expect(client.sendPersonalized(revokedObj as never)).rejects.toThrow(EmailValidationError);
+    await expect(client.sendPersonalized(revokedObj as never)).rejects.toThrow(
+      EmailValidationError,
+    );
     // SAFETY: Intentionally passing revoked proxy to withAdapter().send().
     await expect(client.withAdapter("m").send(baseMsg, revokedObj as never)).rejects.toThrow(
       EmailValidationError,
@@ -2704,9 +2716,9 @@ describe("audit hardening regressions", () => {
     });
 
     // 3. Empty legacy header name and CR/LF header names are rejected.
-    await expect(
-      client.validate({ ...baseMsg, headers: { "": "x" } }),
-    ).rejects.toThrow(EmailValidationError);
+    await expect(client.validate({ ...baseMsg, headers: { "": "x" } })).rejects.toThrow(
+      EmailValidationError,
+    );
 
     await expect(
       client.validate({ ...baseMsg, headers: { "X-Bad\r\nInject": "x" } }),
@@ -3334,5 +3346,162 @@ describe("audit hardening regressions", () => {
     ).rejects.toThrow();
 
     expect(seenPersErrorSubjects).toEqual(["orig-pers"]);
+
+    // R31: private-field class metadata, array symbol keys, bounded metadata/plugin/defaults arrays,
+    // null-proto parent mutable data isolation, multi-hook isolation, and error-delivery fallback safety
+    class PrivateTenant {
+      #tenantId = "priv-t";
+
+      getTenantId() {
+        return this.#tenantId;
+      }
+    }
+
+    const arrSym = Symbol("arr-meta");
+    const taggedArr: number[] & { [arrSym]?: { id: string } } = [1];
+    taggedArr[arrSym] = { id: "t-arr" };
+
+    const nullParentState = Object.create(null, {
+      state: { value: { n: 0 }, enumerable: true },
+    });
+
+    const nullStateChild = Object.create(nullParentState);
+    const seenNullStates: number[] = [];
+    const seenHookMetaVals: number[] = [];
+    let observedPrivTenant = "";
+    let observedArrSym = "";
+    let backupCalls = 0;
+
+    const r31Client = createEmailClient({
+      adapters: [
+        {
+          name: "r31-primary",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(_m, ctx) {
+            // SAFETY: Test passes PrivateTenant, taggedArr, and nullStateChild in metadata.
+            const meta = ctx.metadata as {
+              priv: PrivateTenant;
+              arr: typeof taggedArr;
+              ns: { state: { n: number } };
+              val: number;
+            };
+
+            observedPrivTenant = meta.priv.getTenantId();
+            observedArrSym = meta.arr[arrSym]?.id ?? "";
+            seenNullStates.push(meta.ns.state.n);
+            meta.ns.state.n += 1;
+
+            throw new EmailAdapterError("ambiguous", {
+              adapter: "r31-primary",
+              delivery: "unknown",
+            });
+          },
+        },
+        {
+          name: "r31-backup",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send() {
+            backupCalls += 1;
+
+            return { adapter: "r31-backup", id: "dup" };
+          },
+        },
+      ],
+      fallback: { adapters: ["r31-backup"] },
+      plugins: [
+        {
+          id: "r31-plugin",
+          hooks: {
+            beforeSend(ev) {
+              // SAFETY: Test mutates metadata.val to confirm isolation across hooks.
+              const m = ev.metadata as { val: number };
+              seenHookMetaVals.push(m.val);
+              m.val = 99;
+            },
+          },
+          middleware: [
+            {
+              onError(ev) {
+                // SAFETY: Attempting to rewrite error.delivery must not trigger fallback or corrupt thrown error.
+                const mutableErr = ev.error as { delivery: string; message: string };
+                mutableErr.delivery = "not_sent";
+                mutableErr.message = "tampered";
+              },
+            },
+          ],
+        },
+      ],
+      hooks: {
+        beforeSend(ev) {
+          // SAFETY: Test verifies second hook sees isolated metadata.val.
+          const m = ev.metadata as { val: number };
+          seenHookMetaVals.push(m.val);
+        },
+      },
+      telemetry: false,
+    });
+
+    let routeErr: unknown;
+
+    try {
+      await r31Client.send(baseMsg, {
+        // SAFETY: Test passes PrivateTenant, symbol-keyed array, and null-proto parent chain.
+        metadata: {
+          priv: new PrivateTenant(),
+          arr: taggedArr,
+          ns: nullStateChild,
+          val: 0,
+        } as never,
+      });
+    } catch (error) {
+      routeErr = error;
+    }
+
+    expect(routeErr).toBeInstanceOf(EmailRouteError);
+    expect(observedPrivTenant).toBe("priv-t");
+    expect(observedArrSym).toBe("t-arr");
+    expect(seenNullStates).toEqual([0]);
+    expect(nullParentState.state.n).toBe(0);
+    expect(seenHookMetaVals).toEqual([0, 0]);
+    expect(backupCalls).toBe(0);
+
+    if (!(routeErr instanceof EmailRouteError)) {
+      throw new Error("expected EmailRouteError");
+    }
+
+    expect(routeErr.failures[0]?.message).toBe("ambiguous");
+    expect(routeErr.failures[0]?.delivery).toBe("unknown");
+
+    const hugeMetaProxy = new Proxy([], {
+      get(_target, prop) {
+        if (prop === "length") return 2 ** 32 - 1;
+
+        throw new Error("should not index huge metadata array");
+      },
+    });
+
+    await expect(
+      r31Client.send(baseMsg, {
+        // SAFETY: Testing huge-length Proxy array inside metadata.
+        metadata: { array: hugeMetaProxy } as never,
+      }),
+    ).rejects.toThrow(EmailValidationError);
+
+    expect(() =>
+      defaultsPlugin({
+        // SAFETY: Testing huge-length Proxy array in defaultsPlugin headers.
+        headers: hugeMetaProxy as never,
+      }),
+    ).toThrow(EmailValidationError);
   });
 });

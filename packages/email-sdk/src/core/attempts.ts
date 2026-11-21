@@ -10,7 +10,6 @@ import { cloneMetadataRecord, isFunction } from "../internal/decode.js";
 import { snapshotMessage } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
-  EmailAfterSendEvent,
   EmailHooks,
   EmailMessage,
   EmailRetryConfig,
@@ -20,7 +19,12 @@ import type {
 } from "../types.js";
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
 import { isAbort, sleep, throwIfAborted } from "./failures.js";
-import { hookEvent, invokeAfterSendMiddleware, invokeHooks } from "./lifecycle.js";
+import {
+  cloneAdapterError,
+  hookEvent,
+  invokeAfterSendMiddleware,
+  invokeHooks,
+} from "./lifecycle.js";
 import { recipientCount } from "./send-telemetry.js";
 
 export const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
@@ -102,7 +106,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
         input.options?.metadata ? cloneMetadataRecord(input.options.metadata) : undefined,
       );
 
-    const beforeSend = invokeHooks(input.hooks, "beforeSend", freshEvent());
+    const beforeSend = invokeHooks(input.hooks, "beforeSend", freshEvent);
 
     if (beforeSend) await beforeSend;
 
@@ -154,24 +158,28 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       if (normalized.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, delayFor(attempt, normalized));
-      await invokeHooks(input.hooks, "onRetry", {
+      await invokeHooks(input.hooks, "onRetry", () => ({
         ...freshEvent(),
-        error: normalized,
+        error: cloneAdapterError(normalized),
         nextAttempt: attempt + 1,
         delayMs,
-      });
+      }));
       await sleep(delayMs, input.options?.signal);
       continue;
     }
 
     if (input.middleware.length > 0) {
-      const afterEvent: EmailAfterSendEvent = { ...freshEvent(), response: result };
-      await invokeAfterSendMiddleware(input.middleware, afterEvent);
+      await invokeAfterSendMiddleware(input.middleware, () => ({
+        ...freshEvent(),
+        response: { ...result },
+      }));
     }
 
     if (input.hooks.length > 0) {
-      const afterEvent: EmailAfterSendEvent = { ...freshEvent(), response: result };
-      await invokeHooks(input.hooks, "afterSend", afterEvent);
+      await invokeHooks(input.hooks, "afterSend", () => ({
+        ...freshEvent(),
+        response: { ...result },
+      }));
     }
 
     return result;

@@ -1,5 +1,5 @@
 import { ReadonlyMapView } from "../internal/readonly-map.js";
-import { EmailMiddlewareError, EmailValidationError } from "../errors.js";
+import { EmailAdapterError, EmailMiddlewareError, EmailValidationError } from "../errors.js";
 import type {
   EmailAdapter,
   EmailAfterSendEvent,
@@ -168,22 +168,41 @@ async function runBeforeSendMiddleware(
   return { message, options };
 }
 
+export function cloneAdapterError(error: EmailAdapterError): EmailAdapterError {
+  const copy = new EmailAdapterError(error.message, {
+    adapter: error.adapter,
+    status: error.status,
+    requestId: error.requestId,
+    retryable: error.retryable,
+    delivery: error.delivery,
+    acceptedCount: error.acceptedCount,
+    rejectedCount: error.rejectedCount,
+    cause: error.cause,
+  });
+
+  copy.stack = error.stack;
+
+  return copy;
+}
+
 export function invokeAfterSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailAfterSendEvent,
+  createEvent: () => EmailAfterSendEvent,
 ): Promise<void> | undefined {
   if (middleware.length === 0) return undefined;
 
-  return runAfterSendMiddleware(middleware, event);
+  return runAfterSendMiddleware(middleware, createEvent);
 }
 
 async function runAfterSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailAfterSendEvent,
+  createEvent: () => EmailAfterSendEvent,
 ) {
   for (const item of middleware) {
+    if (!item.afterSend) continue;
+
     try {
-      await item.afterSend?.(event);
+      await item.afterSend(createEvent());
     } catch (error) {
       throw new EmailMiddlewareError("after_send", error);
     }
@@ -192,33 +211,26 @@ async function runAfterSendMiddleware(
 
 export function invokeErrorMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailErrorEvent,
+  createEvent: () => EmailErrorEvent,
 ): Promise<void> | undefined {
   if (middleware.length === 0) return undefined;
 
-  return runErrorMiddleware(middleware, event);
+  return runErrorMiddleware(middleware, createEvent);
 }
 
 async function runErrorMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailErrorEvent,
+  createEvent: () => EmailErrorEvent,
 ) {
   for (const item of middleware) {
+    if (!item.onError) continue;
+
     try {
-      await item.onError?.(event);
+      await item.onError(createEvent());
     } catch (error) {
       throw new EmailMiddlewareError("on_error", error);
     }
   }
-}
-
-export async function invokeSendFailureLifecycle(
-  middleware: readonly EmailSendMiddleware[],
-  hooks: readonly EmailHooks[],
-  event: EmailErrorEvent,
-) {
-  await invokeErrorMiddleware(middleware, event);
-  await invokeHooks(hooks, "onError", event);
 }
 
 type EmailHookEvents = {
@@ -233,23 +245,26 @@ type EmailHookHandlers = {
 export function invokeHooks<K extends keyof EmailHooks>(
   hooks: readonly EmailHooks[],
   name: K,
-  event: EmailHookEvents[K],
+  createEvent: () => EmailHookEvents[K],
 ): Promise<void> | undefined {
   if (hooks.length === 0) return undefined;
 
-  return runHooks(hooks, name, event);
+  return runHooks(hooks, name, createEvent);
 }
 
 async function runHooks<K extends keyof EmailHooks>(
   hooks: readonly EmailHooks[],
   name: K,
-  event: EmailHookEvents[K],
+  createEvent: () => EmailHookEvents[K],
 ) {
   for (const hook of hooks) {
     try {
       const handlers: EmailHookHandlers = hook;
+      const handler = handlers[name];
 
-      await handlers[name]?.(event);
+      if (!handler) continue;
+
+      await handler(createEvent());
     } catch {
       // Hooks are observability callbacks and never change delivery behavior.
     }

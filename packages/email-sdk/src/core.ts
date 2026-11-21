@@ -13,6 +13,7 @@ import {
 import {
   applyBeforeSendMiddleware,
   applyClientExtension,
+  cloneAdapterError,
   createPluginContext,
   invokeErrorMiddleware,
   invokeHooks,
@@ -212,7 +213,9 @@ export function createEmailClient<
   const extensionPlugins: Array<Pick<EmailPlugin, "id" | "extendClient">> = [];
 
   try {
-    const adapterList = rawAdapters ? copyBoundedArray(rawAdapters, "createEmailClient adapters") : [];
+    const adapterList = rawAdapters
+      ? copyBoundedArray(rawAdapters, "createEmailClient adapters")
+      : [];
 
     for (const adapter of adapterList) addAdapter(adapters, adapter);
   } catch (error) {
@@ -261,7 +264,10 @@ export function createEmailClient<
 
         const copiedMiddleware: EmailSendMiddleware[] = [];
 
-        for (const entry of rawPluginMiddleware) {
+        for (const entry of copyBoundedArray(
+          rawPluginMiddleware,
+          `Plugin "${pluginId}" middleware`,
+        )) {
           if (!isNonArrayObject(entry)) {
             throw new EmailValidationError(
               `Plugin "${pluginId}" middleware entries must be objects.`,
@@ -350,7 +356,10 @@ export function createEmailClient<
     const context = createPluginContext(adapters, requestedDefault);
 
     try {
-      for (const adapter of resolvePluginAdapters(plugin, context, pluginId)) {
+      for (const adapter of copyBoundedArray(
+        resolvePluginAdapters(plugin, context, pluginId),
+        `Plugin "${pluginId}" adapters`,
+      )) {
         if (!isNonArrayObject(adapter) || !isStringMember(adapter.name)) {
           throw new EmailValidationError(`Plugin "${pluginId}" returned an invalid email adapter.`);
         }
@@ -812,25 +821,25 @@ export function createEmailClient<
           const failure = normalizeAdapterFailure(name, error);
           failures.push(failure);
 
-          await invokeErrorMiddleware(middleware, {
+          await invokeErrorMiddleware(middleware, () => ({
             adapter: name,
             message: snapshotMessage(prepared.message),
             attempt: failureAttempt(error),
             metadata: safePreparedOptions?.metadata
               ? cloneMetadataRecord(safePreparedOptions.metadata)
               : undefined,
-            error: failure,
-          });
+            error: cloneAdapterError(failure),
+          }));
 
-          await invokeHooks(hooks, "onError", {
+          await invokeHooks(hooks, "onError", () => ({
             adapter: name,
             message: snapshotMessage(prepared.message),
             attempt: failureAttempt(error),
             metadata: safePreparedOptions?.metadata
               ? cloneMetadataRecord(safePreparedOptions.metadata)
               : undefined,
-            error: failure,
-          });
+            error: cloneAdapterError(failure),
+          }));
 
           const hasNext = index < route.names.length - 1;
 
@@ -994,9 +1003,7 @@ export function createEmailClient<
       | { ok: true; message: EmailMessage | undefined }
       | { ok: false; error: unknown };
 
-    const readItemMessage = (
-      item: (typeof items)[number] | undefined,
-    ): ItemMessageReadResult => {
+    const readItemMessage = (item: (typeof items)[number] | undefined): ItemMessageReadResult => {
       try {
         if (item === undefined || !isNonArrayObject(item)) return { ok: true, message: undefined };
         const msg = item.message;
@@ -1077,9 +1084,9 @@ export function createEmailClient<
                 const rawItemOptions = item.options;
 
                 itemAdapter =
-                rawItemOptions !== undefined && isNonArrayObject(rawItemOptions)
-                  ? rawItemOptions.adapter
-                  : undefined;
+                  rawItemOptions !== undefined && isNonArrayObject(rawItemOptions)
+                    ? rawItemOptions.adapter
+                    : undefined;
               } catch {
                 itemAdapter = undefined;
               }

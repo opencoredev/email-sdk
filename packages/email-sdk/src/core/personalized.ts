@@ -33,6 +33,7 @@ import {
   throwIfAborted,
 } from "./failures.js";
 import {
+  cloneAdapterError,
   hookEvent,
   invokeAfterSendMiddleware,
   invokeErrorMiddleware,
@@ -68,7 +69,7 @@ export async function attemptNativePersonalized(
         sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
       );
 
-    await invokeHooks(hooks, "beforeSend", freshEvent());
+    await invokeHooks(hooks, "beforeSend", freshEvent);
 
     try {
       const attemptInput = snapshotPersonalizedInputForSend(input);
@@ -99,11 +100,25 @@ export async function attemptNativePersonalized(
 
       if (personalized.accepted.length > 0) {
         if (middleware.length > 0) {
-          await invokeAfterSendMiddleware(middleware, { ...freshEvent(), response: personalized });
+          await invokeAfterSendMiddleware(middleware, () => ({
+            ...freshEvent(),
+            response: {
+              ...personalized,
+              accepted: [...personalized.accepted],
+              rejected: [...personalized.rejected],
+            },
+          }));
         }
 
         if (hooks.length > 0) {
-          await invokeHooks(hooks, "afterSend", { ...freshEvent(), response: personalized });
+          await invokeHooks(hooks, "afterSend", () => ({
+            ...freshEvent(),
+            response: {
+              ...personalized,
+              accepted: [...personalized.accepted],
+              rejected: [...personalized.rejected],
+            },
+          }));
         }
 
         return { ...personalized, failures: [] };
@@ -126,11 +141,17 @@ export async function attemptNativePersonalized(
       );
 
       if (middleware.length > 0) {
-        await invokeErrorMiddleware(middleware, { ...freshEvent(), error: failure });
+        await invokeErrorMiddleware(middleware, () => ({
+          ...freshEvent(),
+          error: cloneAdapterError(failure),
+        }));
       }
 
       if (hooks.length > 0) {
-        await invokeHooks(hooks, "onError", { ...freshEvent(), error: failure });
+        await invokeHooks(hooks, "onError", () => ({
+          ...freshEvent(),
+          error: cloneAdapterError(failure),
+        }));
       }
 
       return {
@@ -151,11 +172,17 @@ export async function attemptNativePersonalized(
         const finalFailure = earlierOutcomeUnknown ? withUnknownDelivery(failure) : failure;
 
         if (middleware.length > 0) {
-          await invokeErrorMiddleware(middleware, { ...freshEvent(), error: finalFailure });
+          await invokeErrorMiddleware(middleware, () => ({
+            ...freshEvent(),
+            error: cloneAdapterError(finalFailure),
+          }));
         }
 
         if (hooks.length > 0) {
-          await invokeHooks(hooks, "onError", { ...freshEvent(), error: finalFailure });
+          await invokeHooks(hooks, "onError", () => ({
+            ...freshEvent(),
+            error: cloneAdapterError(finalFailure),
+          }));
         }
 
         return { adapter: adapter.name, accepted: [], rejected: [], failures: [finalFailure] };
@@ -164,12 +191,12 @@ export async function attemptNativePersonalized(
       if (failure.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, (retry?.delay ?? defaultDelay)(attempt, failure));
-      await invokeHooks(hooks, "onRetry", {
+      await invokeHooks(hooks, "onRetry", () => ({
         ...freshEvent(),
-        error: failure,
+        error: cloneAdapterError(failure),
         nextAttempt: attempt + 1,
         delayMs,
-      });
+      }));
       await sleep(delayMs, sendOptions?.signal);
     }
   }
@@ -251,23 +278,23 @@ export async function attemptExpandedPersonalized(
       const attemptNum = failureAttempt(error);
 
       if (middleware.length > 0) {
-        await invokeErrorMiddleware(middleware, {
+        await invokeErrorMiddleware(middleware, () => ({
           adapter: adapter.name,
           message: snapshotMessage(message),
           attempt: attemptNum,
           metadata: sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
-          error: failure,
-        });
+          error: cloneAdapterError(failure),
+        }));
       }
 
       if (hooks.length > 0) {
-        await invokeHooks(hooks, "onError", {
+        await invokeHooks(hooks, "onError", () => ({
           adapter: adapter.name,
           message: snapshotMessage(message),
           attempt: attemptNum,
           metadata: sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
-          error: failure,
-        });
+          error: cloneAdapterError(failure),
+        }));
       }
     }
   }

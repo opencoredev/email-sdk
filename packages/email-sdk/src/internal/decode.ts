@@ -9,6 +9,8 @@
  * primitive and function the SDK accepts.
  */
 
+import { EmailValidationError } from "../errors.js";
+
 /** A value produced by `JSON.parse`. */
 export type JsonValue = string | number | boolean | null | readonly JsonValue[] | JsonObject;
 
@@ -374,12 +376,45 @@ function cloneRegExpValue<T>(value: T): RegExp | undefined {
   return copy;
 }
 
+const MAX_METADATA_ARRAY_LENGTH = 1_000_000;
+
+function isObjectPrototype<T>(proto: T): boolean {
+  if (proto === null || proto === undefined) return false;
+
+  if (proto === Object.prototype) return true;
+
+  return (
+    Object.getPrototypeOf(proto) === null &&
+    Object.prototype.hasOwnProperty.call(proto, "__proto__")
+  );
+}
+
+function hasObjectPrototypeInChain<T>(proto: T): boolean {
+  let cursor = proto;
+
+  while (cursor !== null && cursor !== undefined) {
+    if (isObjectPrototype(cursor)) return true;
+
+    cursor = Object.getPrototypeOf(cursor);
+  }
+
+  return false;
+}
+
+function isArrayIndexKey(key: string, length: number): boolean {
+  const num = Number(key);
+
+  return Number.isInteger(num) && num >= 0 && num < length && String(num) === key;
+}
+
 /** Recursively clone plain objects, arrays, Dates, Maps, Sets, and binary views inside a metadata record. */
 export function cloneMetadataRecord<T>(metadata: T): T {
   const seen = new Map();
 
-  function clone<V>(value: V): V {
-    if (isPrimitive(value) || value === null || value === undefined) return value;
+  function clone<V>(value: V, depth: number): V {
+    if (isPrimitive(value) || value === null || value === undefined || isCallable(value)) {
+      return value;
+    }
 
     const cached = seen.get(value);
 
@@ -393,14 +428,54 @@ export function cloneMetadataRecord<T>(metadata: T): T {
     }
 
     if (Array.isArray(value)) {
+      const length = value.length;
+
+      if (!Number.isInteger(length) || length < 0 || length > MAX_METADATA_ARRAY_LENGTH) {
+        throw new EmailValidationError("Email metadata array exceeds the maximum supported size.");
+      }
+
       const arr: V[] = [];
       seen.set(value, arr);
 
-      for (const item of value) {
-        arr.push(clone(item));
+      for (let i = 0; i < length; i += 1) {
+        arr.push(clone(value[i], depth + 1));
       }
 
-      // SAFETY: Cloning each element of an array produces an array matching V.
+      for (const key of Object.keys(value)) {
+        if (isArrayIndexKey(key, length)) continue;
+
+        const desc = Object.getOwnPropertyDescriptor(value, key);
+
+        if (!desc?.enumerable) continue;
+
+        const entry = desc.get ? desc.get.call(value) : desc.value;
+
+        Object.defineProperty(arr, key, {
+          value: clone(entry, depth + 1),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      for (const sym of Object.getOwnPropertySymbols(value)) {
+        if (!Object.prototype.propertyIsEnumerable.call(value, sym)) continue;
+
+        const desc = Object.getOwnPropertyDescriptor(value, sym);
+
+        if (!desc) continue;
+
+        const entry = desc.get ? desc.get.call(value) : desc.value;
+
+        Object.defineProperty(arr, sym, {
+          value: clone(entry, depth + 1),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      // SAFETY: Cloning elements and enumerable properties of an array produces an array matching V.
       return arr as V;
     }
 
@@ -421,7 +496,7 @@ export function cloneMetadataRecord<T>(metadata: T): T {
       seen.set(value, copy);
 
       for (const [entryKey, entryValue] of Map.prototype.entries.call(value)) {
-        copy.set(clone(entryKey), clone(entryValue));
+        copy.set(clone(entryKey, depth + 1), clone(entryValue, depth + 1));
       }
 
       // SAFETY: Input passed Map brand check; returning a cloned Map preserves V.
@@ -433,7 +508,7 @@ export function cloneMetadataRecord<T>(metadata: T): T {
       seen.set(value, copy);
 
       for (const entryValue of Set.prototype.values.call(value)) {
-        copy.add(clone(entryValue));
+        copy.add(clone(entryValue, depth + 1));
       }
 
       // SAFETY: Input passed Set brand check; returning a cloned Set preserves V.
@@ -455,14 +530,21 @@ export function cloneMetadataRecord<T>(metadata: T): T {
     const proto = Object.getPrototypeOf(value);
 
     if (!isBuiltInValueObject(value)) {
-      // SAFETY: Creating a fresh object with the same prototype preserves class methods and instanceof.
-      const copy = Object.create(proto) as V;
+      const objectProtoRoot = hasObjectPrototypeInChain(proto);
+
+      // Keep nested custom class instances by reference so ES private fields and methods work.
+      if (depth > 0 && proto !== null && !isObjectPrototype(proto) && objectProtoRoot) {
+        return value;
+      }
+
+      // SAFETY: Plain objects and null-prototype chains are deep-cloned into isolated objects.
+      const copy = (proto === null || !objectProtoRoot ? Object.create(null) : {}) as V;
       seen.set(value, copy);
 
       // SAFETY: Non-primitive objects are valid Object.entries targets.
       for (const [key, entry] of Object.entries(value as NonNullable<V>)) {
         Object.defineProperty(copy, key, {
-          value: clone(entry),
+          value: clone(entry, depth + 1),
           enumerable: true,
           writable: true,
           configurable: true,
@@ -479,37 +561,50 @@ export function cloneMetadataRecord<T>(metadata: T): T {
         const entry = desc.get ? desc.get.call(value) : desc.value;
 
         Object.defineProperty(copy, sym, {
-          value: clone(entry),
+          value: clone(entry, depth + 1),
           enumerable: true,
           writable: true,
           configurable: true,
         });
       }
 
-      // Preserve prototype getters (including private-field getters and null-prototype parents)
-      // while still isolating mutations. Stop at Object.prototype (including cross-realm).
+      // Materialize inherited getters and enumerable data properties from null-prototype
+      // parent chains or top-level class records so nested mutable data cannot leak.
       let cursor = proto;
 
-      while (
-        cursor !== null &&
-        cursor !== Object.prototype &&
-        !(
-          Object.getPrototypeOf(cursor) === null &&
-          Object.prototype.hasOwnProperty.call(cursor, "__proto__")
-        )
-      ) {
+      while (cursor !== null && !isObjectPrototype(cursor)) {
         for (const key of Object.getOwnPropertyNames(cursor)) {
           if (key === "constructor" || Object.prototype.hasOwnProperty.call(copy, key)) continue;
 
           const desc = Object.getOwnPropertyDescriptor(cursor, key);
 
-          if (!desc?.get) continue;
+          if (!desc) continue;
 
-          // SAFETY: Getter exists on the prototype chain of `value`.
-          const entry = desc.get.call(value);
+          if (!desc.get && !desc.enumerable) continue;
+
+          const entry = desc.get ? desc.get.call(value) : desc.value;
 
           Object.defineProperty(copy, key, {
-            value: clone(entry),
+            value: clone(entry, depth + 1),
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        }
+
+        for (const sym of Object.getOwnPropertySymbols(cursor)) {
+          if (Object.prototype.hasOwnProperty.call(copy, sym)) continue;
+
+          const desc = Object.getOwnPropertyDescriptor(cursor, sym);
+
+          if (!desc) continue;
+
+          if (!desc.get && !desc.enumerable) continue;
+
+          const entry = desc.get ? desc.get.call(value) : desc.value;
+
+          Object.defineProperty(copy, sym, {
+            value: clone(entry, depth + 1),
             enumerable: true,
             writable: true,
             configurable: true,
@@ -525,5 +620,5 @@ export function cloneMetadataRecord<T>(metadata: T): T {
     return value;
   }
 
-  return clone(metadata);
+  return clone(metadata, 0);
 }
