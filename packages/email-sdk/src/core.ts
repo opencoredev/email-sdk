@@ -92,6 +92,18 @@ export function createEmailClient<
 >(
   options: EmailClientOptions<TAdapters, TPlugins>,
 ): EmailClient<TAdapters, EmailPluginClientExtensions<TPlugins>> {
+  if (!isNonArrayObject(options)) {
+    throw new EmailValidationError("createEmailClient options must be an object.");
+  }
+
+  if (options.adapters !== undefined && !Array.isArray(options.adapters)) {
+    throw new EmailValidationError("createEmailClient adapters must be an array.");
+  }
+
+  if (options.plugins !== undefined && !Array.isArray(options.plugins)) {
+    throw new EmailValidationError("createEmailClient plugins must be an array.");
+  }
+
   const adapters = new Map<string, EmailAdapter>();
   const pluginHooks: EmailHooks[] = [];
   const middleware: EmailSendMiddleware[] = [];
@@ -128,8 +140,15 @@ export function createEmailClient<
   }
 
   requireAdapter(adapters, defaultAdapter);
-  validateRetry(options.retry);
-  validateFallback(adapters, options.fallback);
+
+  try {
+    validateRetry(options.retry);
+    validateFallback(adapters, options.fallback);
+  } catch (error) {
+    if (error instanceof EmailSdkError) throw error;
+
+    throw new EmailValidationError("createEmailClient options could not be read.", error);
+  }
 
   // A telemetry instance that starts disabled never turns on again, so the client drops it and
   // every send skips building telemetry facts.
@@ -333,6 +352,30 @@ export function createEmailClient<
     }
   };
 
+  const snapshotSendOptions = (
+    raw: EmailSendOptions | undefined,
+  ): EmailSendOptions | undefined => {
+    if (raw === undefined) return undefined;
+
+    if (!isNonArrayObject(raw)) {
+      throw new EmailValidationError("Email send options must be an object.");
+    }
+
+    return readBoundary(() => {
+      const copy: EmailSendOptions = { ...raw };
+
+      if (copy.fallback && isNonArrayObject(copy.fallback)) {
+        copy.fallback = { ...copy.fallback };
+      }
+
+      if (copy.retry && isNonArrayObject(copy.retry)) {
+        copy.retry = { ...copy.retry };
+      }
+
+      return copy;
+    }, "Email send options");
+  };
+
   const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
     validateRetry(sendOptions?.retry);
     const route = resolveRoute(defaultAdapter, options.fallback, sendOptions);
@@ -345,12 +388,9 @@ export function createEmailClient<
     message: EmailMessage,
     sendOptions?: EmailSendOptions,
   ): Promise<EmailValidationResult> => {
-    if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
-      throw new EmailValidationError("Email send options must be an object.");
-    }
-
-    const route = readBoundary(() => resolveCheckedRoute(sendOptions), "Email send options");
-    await validateRoute(message, route, "send", sendOptions);
+    const safeOptions = snapshotSendOptions(sendOptions);
+    const route = readBoundary(() => resolveCheckedRoute(safeOptions), "Email send options");
+    await validateRoute(message, route, "send", safeOptions);
 
     return { adapter: route.primary, warnings: [] };
   };
@@ -366,14 +406,10 @@ export function createEmailClient<
     let attemptedAdapter = defaultAdapter;
 
     try {
-      if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
-        throw new EmailValidationError("Email send options must be an object.");
-      }
+      const safeInitialOptions = snapshotSendOptions(sendOptions);
 
-      const initialAdapter = readBoundary(() => sendOptions?.adapter, "Email send options");
-
-      if (initialAdapter !== undefined) {
-        attemptedAdapter = initialAdapter;
+      if (safeInitialOptions?.adapter !== undefined) {
+        attemptedAdapter = safeInitialOptions.adapter;
       }
 
       if (telemetry) facts = messageFacts(message);
@@ -382,14 +418,14 @@ export function createEmailClient<
         throw new EmailValidationError("Email message must be an object.");
       }
 
-      const initialSignal = readBoundary(() => sendOptions?.signal, "Email send options");
-      throwIfAborted(initialSignal);
+      const initialSignal = safeInitialOptions?.signal;
+      readBoundary(() => throwIfAborted(initialSignal), "Email send options");
 
       const preparing = applyBeforeSendMiddleware(
         middleware,
         {
           message,
-          options: sendOptions,
+          options: safeInitialOptions,
         },
         (nextOptions) => {
           attemptedAdapter =
@@ -399,23 +435,23 @@ export function createEmailClient<
 
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
-      attemptedAdapter =
-        readBoundary(() => prepared.options?.adapter, "Email send options") ?? defaultAdapter;
+      const safePreparedOptions = snapshotSendOptions(prepared.options);
+      attemptedAdapter = safePreparedOptions?.adapter ?? defaultAdapter;
 
-      const preparedSignal = readBoundary(() => prepared.options?.signal, "Email send options");
-      throwIfAborted(preparedSignal ?? initialSignal);
+      const preparedSignal = safePreparedOptions?.signal;
+      readBoundary(() => throwIfAborted(preparedSignal ?? initialSignal), "Email send options");
 
       // Middleware such as defaultsPlugin can add or mutate recipients, attachments, or sendAt,
       // including in place, so recompute telemetry facts from the prepared message.
       if (facts) facts = messageFacts(prepared.message);
-      const route = readBoundary(() => resolveCheckedRoute(prepared.options), "Email send options");
+      const route = readBoundary(() => resolveCheckedRoute(safePreparedOptions), "Email send options");
       attemptedAdapter = route.primary;
-      const validating = validateRoute(prepared.message, route, "send", prepared.options);
+      const validating = validateRoute(prepared.message, route, "send", safePreparedOptions);
 
       if (validating) await validating;
 
       const retry = readBoundary(
-        () => callerRetry(prepared.options?.retry ?? options.retry),
+        () => callerRetry(safePreparedOptions?.retry ?? options.retry),
         "Email send options",
       );
 
@@ -429,7 +465,7 @@ export function createEmailClient<
           const result = await attemptAdapter({
             adapter,
             message: prepared.message,
-            options: prepared.options,
+            options: safePreparedOptions,
             retry,
             hooks,
             middleware,
@@ -464,14 +500,14 @@ export function createEmailClient<
             adapter: name,
             message: prepared.message,
             attempt: failureAttempt(error),
-            metadata: prepared.options?.metadata,
+            metadata: safePreparedOptions?.metadata,
             error: failure,
           });
           await invokeHooks(hooks, "onError", {
             adapter: name,
             message: prepared.message,
             attempt: failureAttempt(error),
-            metadata: prepared.options?.metadata,
+            metadata: safePreparedOptions?.metadata,
             error: failure,
           });
 
@@ -635,7 +671,14 @@ export function createEmailClient<
       while (next < items.length) {
         const index = next;
         next += 1;
-        const item = items[index];
+        let item: (typeof items)[number] | undefined;
+
+        try {
+          item = items[index];
+        } catch {
+          item = undefined;
+        }
+
         const msg = readItemMessage(item);
 
         if (item && msg) {
@@ -695,20 +738,16 @@ export function createEmailClient<
     let deliveryPath = "personalized";
 
     try {
-      if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
-        throw new EmailValidationError("Email send options must be an object.");
-      }
+      const safeInitialOptions = snapshotSendOptions(sendOptions);
 
-      const initialAdapter = readBoundary(() => sendOptions?.adapter, "Email send options");
-
-      if (initialAdapter !== undefined) {
-        attemptedAdapter = initialAdapter;
+      if (safeInitialOptions?.adapter !== undefined) {
+        attemptedAdapter = safeInitialOptions.adapter;
       }
 
       if (telemetry) facts = personalizedFacts(input);
       readBoundary(() => validatePersonalizedInput(input), "sendPersonalized input");
-      const initialSignal = readBoundary(() => sendOptions?.signal, "Email send options");
-      throwIfAborted(initialSignal);
+      const initialSignal = safeInitialOptions?.signal;
+      readBoundary(() => throwIfAborted(initialSignal), "Email send options");
 
       const initialMessage = readBoundary(
         () => personalizedMiddlewareMessage(input),
@@ -719,7 +758,7 @@ export function createEmailClient<
         middleware,
         {
           message: initialMessage,
-          options: sendOptions,
+          options: safeInitialOptions,
         },
         (nextOptions) => {
           attemptedAdapter =
@@ -727,12 +766,12 @@ export function createEmailClient<
         },
       );
 
-      attemptedAdapter =
-        readBoundary(() => prepared.options?.adapter, "Email send options") ?? defaultAdapter;
+      const safePreparedOptions = snapshotSendOptions(prepared.options);
+      attemptedAdapter = safePreparedOptions?.adapter ?? defaultAdapter;
 
       // A slow beforeSend hook can outlive the caller's deadline; stop before validating or sending.
-      const preparedSignal = readBoundary(() => prepared.options?.signal, "Email send options");
-      throwIfAborted(preparedSignal ?? initialSignal);
+      const preparedSignal = safePreparedOptions?.signal;
+      readBoundary(() => throwIfAborted(preparedSignal ?? initialSignal), "Email send options");
 
       const preparedInput = readBoundary(
         () => withPersonalizedMessage(input, prepared.message),
@@ -740,7 +779,7 @@ export function createEmailClient<
       );
 
       if (facts) facts = personalizedFacts(preparedInput);
-      const route = readBoundary(() => resolveCheckedRoute(prepared.options), "Email send options");
+      const route = readBoundary(() => resolveCheckedRoute(safePreparedOptions), "Email send options");
       attemptedAdapter = route.primary;
 
       const expanded = readBoundary(
@@ -753,7 +792,7 @@ export function createEmailClient<
       );
 
       for (const { message } of expanded) {
-        await validateRoute(message, route, "personalized", prepared.options);
+        await validateRoute(message, route, "personalized", safePreparedOptions);
       }
 
       const routeFailures: EmailAdapterError[] = [];
@@ -762,9 +801,9 @@ export function createEmailClient<
       // and the choice between them is left alone.
       const attemptOptions = readBoundary(
         () =>
-          prepared.options && {
-            ...prepared.options,
-            retry: callerRetry(prepared.options.retry),
+          safePreparedOptions && {
+            ...safePreparedOptions,
+            retry: callerRetry(safePreparedOptions.retry),
           },
         "Email send options",
       );

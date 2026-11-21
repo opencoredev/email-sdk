@@ -86,6 +86,10 @@ export function resolveRoute(
   const primary = sendOptions?.adapter ?? defaultAdapter;
   const fallback = sendOptions?.fallback ?? clientFallback;
 
+  if (fallback !== undefined && !isNonArrayObject(fallback)) {
+    throw new EmailValidationError("fallback must be an object.");
+  }
+
   if (fallback?.adapters !== undefined && !Array.isArray(fallback.adapters)) {
     throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
   }
@@ -105,6 +109,10 @@ export function canFallback(error: EmailAdapterError, fallback: EmailFallbackCon
 }
 
 export function validateRetry(retry: EmailRetryConfig | undefined) {
+  if (retry !== undefined && !isNonArrayObject(retry)) {
+    throw new EmailValidationError("retry must be an object.");
+  }
+
   if (
     retry?.maxAttempts !== undefined &&
     (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1)
@@ -119,11 +127,38 @@ export function validateFallback(
   adapters: ReadonlyMap<string, EmailAdapter>,
   fallback: EmailFallbackConfig | undefined,
 ) {
+  if (fallback !== undefined && !isNonArrayObject(fallback)) {
+    throw new EmailValidationError("fallback must be an object.");
+  }
+
   if (fallback?.adapters !== undefined && !Array.isArray(fallback.adapters)) {
     throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
   }
 
   for (const name of fallback?.adapters ?? []) requireAdapter(adapters, name);
+}
+
+function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
+  const copy: EmailSendOptions = { ...options };
+
+  if (copy.retry && isNonArrayObject(copy.retry)) {
+    copy.retry = { ...copy.retry };
+  }
+
+  if (copy.fallback && isNonArrayObject(copy.fallback)) {
+    copy.fallback = {
+      ...copy.fallback,
+      adapters: Array.isArray(copy.fallback.adapters)
+        ? [...copy.fallback.adapters]
+        : copy.fallback.adapters,
+    };
+  }
+
+  if (copy.metadata && isNonArrayObject(copy.metadata)) {
+    copy.metadata = { ...copy.metadata };
+  }
+
+  return copy;
 }
 
 /**
@@ -135,9 +170,9 @@ export function mergeSendOptions(
   base: EmailSendOptions | undefined,
   override: EmailSendOptions | undefined,
 ): EmailSendOptions | undefined {
-  if (!base) return override;
+  if (!base) return override ? cloneNestedSendOptions(override) : undefined;
 
-  if (!override) return { ...base };
+  if (!override) return cloneNestedSendOptions(base);
 
   const merged: EmailSendOptions = { ...base, ...override };
 
@@ -152,6 +187,8 @@ export function mergeSendOptions(
     isNonArrayObject(override.retry)
   ) {
     merged.retry = { ...base.retry, ...override.retry };
+  } else if (merged.retry && isNonArrayObject(merged.retry)) {
+    merged.retry = { ...merged.retry };
   }
 
   if (
@@ -160,7 +197,28 @@ export function mergeSendOptions(
     isNonArrayObject(base.fallback) &&
     isNonArrayObject(override.fallback)
   ) {
-    merged.fallback = { ...base.fallback, ...override.fallback };
+    merged.fallback = {
+      ...base.fallback,
+      ...override.fallback,
+      adapters: Array.isArray(override.fallback.adapters)
+        ? [...override.fallback.adapters]
+        : override.fallback.adapters !== undefined
+          ? override.fallback.adapters
+          : Array.isArray(base.fallback.adapters)
+            ? [...base.fallback.adapters]
+            : base.fallback.adapters,
+    };
+  } else if (merged.fallback && isNonArrayObject(merged.fallback)) {
+    merged.fallback = {
+      ...merged.fallback,
+      adapters: Array.isArray(merged.fallback.adapters)
+        ? [...merged.fallback.adapters]
+        : merged.fallback.adapters,
+    };
+  }
+
+  if (merged.metadata && isNonArrayObject(merged.metadata)) {
+    merged.metadata = { ...merged.metadata };
   }
 
   return merged;

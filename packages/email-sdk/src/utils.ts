@@ -161,24 +161,50 @@ export function assertMessage(message: EmailMessage) {
       throw new EmailValidationError("Email message requires a valid from address.");
     }
 
+    const inspectAddress = (entry: EmailAddress) => {
+      if (!isStringMember(entry) && isNonArrayObject(entry)) {
+        void entry.name;
+      }
+    };
+
+    inspectAddress(message.from);
+
     const recipients = arrayify(message.to);
 
     if (recipients.length === 0 || !recipients.every((entry) => isValidAddress(entry))) {
       throw new EmailValidationError("Email message requires at least one valid recipient.");
     }
 
-    if (
-      message.cc !== undefined &&
-      !arrayify(message.cc).every((entry) => isValidAddress(entry))
-    ) {
-      throw new EmailValidationError("Email message cc addresses must be valid.");
+    for (const entry of recipients) inspectAddress(entry);
+
+    if (message.cc !== undefined) {
+      const cc = arrayify(message.cc);
+
+      if (!cc.every((entry) => isValidAddress(entry))) {
+        throw new EmailValidationError("Email message cc addresses must be valid.");
+      }
+
+      for (const entry of cc) inspectAddress(entry);
     }
 
-    if (
-      message.bcc !== undefined &&
-      !arrayify(message.bcc).every((entry) => isValidAddress(entry))
-    ) {
-      throw new EmailValidationError("Email message bcc addresses must be valid.");
+    if (message.bcc !== undefined) {
+      const bcc = arrayify(message.bcc);
+
+      if (!bcc.every((entry) => isValidAddress(entry))) {
+        throw new EmailValidationError("Email message bcc addresses must be valid.");
+      }
+
+      for (const entry of bcc) inspectAddress(entry);
+    }
+
+    if (message.replyTo !== undefined) {
+      const replyTo = arrayify(message.replyTo);
+
+      if (!replyTo.every((entry) => isValidAddress(entry))) {
+        throw new EmailValidationError("Email message replyTo addresses must be valid.");
+      }
+
+      for (const entry of replyTo) inspectAddress(entry);
     }
 
     if (!isStringMember(message.subject) || message.subject.length === 0) {
@@ -209,11 +235,42 @@ export function assertMessage(message: EmailMessage) {
               "Each email header must be an object with a string name.",
             );
           }
+
+          void header.value;
         }
-      } else if (!isNonArrayObject(message.headers)) {
+      } else if (isNonArrayObject(message.headers)) {
+        for (const value of Object.values(message.headers)) {
+          void value;
+        }
+      } else {
         throw new EmailValidationError(
           "Email message headers must be an object or array of headers.",
         );
+      }
+    }
+
+    if (message.tags !== undefined) {
+      if (!Array.isArray(message.tags)) {
+        throw new EmailValidationError("Email message tags must be an array.");
+      }
+
+      for (const tag of message.tags) {
+        if (!isNonArrayObject(tag)) {
+          throw new EmailValidationError("Each email tag must be an object.");
+        }
+
+        void tag.name;
+        void tag.value;
+      }
+    }
+
+    if (message.metadata !== undefined) {
+      if (!isNonArrayObject(message.metadata)) {
+        throw new EmailValidationError("Email message metadata must be an object.");
+      }
+
+      for (const key of Object.keys(message.metadata)) {
+        void message.metadata[key];
       }
     }
 
@@ -232,6 +289,11 @@ export function assertMessage(message: EmailMessage) {
             "Each email attachment requires a non-empty string filename.",
           );
         }
+
+        void attachment.contentType;
+        void attachment.contentEncoding;
+        void attachment.contentId;
+        void attachment.disposition;
 
         const name = attachmentLabel(attachment.filename);
 
@@ -434,7 +496,13 @@ export async function attachmentContentToString(
   }
 
   if (isBlobLike(content)) {
-    const buffer = await content.arrayBuffer();
+    let buffer: unknown;
+
+    try {
+      buffer = await content.arrayBuffer();
+    } catch (error) {
+      throw new EmailValidationError("Attachment Blob could not be read.", error);
+    }
 
     if (!isBinaryBuffer(buffer)) {
       throw new EmailValidationError(
@@ -506,7 +574,16 @@ export async function attachmentToBytes(
   }
 
   if (isBlobLike(content)) {
-    const buffer = await content.arrayBuffer();
+    let buffer: unknown;
+
+    try {
+      buffer = await content.arrayBuffer();
+    } catch (error) {
+      throw new EmailValidationError(
+        `Attachment "${attachmentLabel(attachment.filename)}" Blob could not be read.`,
+        error,
+      );
+    }
 
     if (!isBinaryBuffer(buffer)) {
       throw new EmailValidationError(
@@ -514,7 +591,7 @@ export async function attachmentToBytes(
       );
     }
 
-    return new Uint8Array(buffer);
+    return new Uint8Array(new Uint8Array(buffer));
   }
 
   if (isBinaryBuffer(content)) {
@@ -849,29 +926,35 @@ export function assertSupportedMessageFields(
   message: EmailMessage,
   supported: MessageFieldSupport,
 ) {
-  const unsupported: string[] = [];
+  try {
+    const unsupported: string[] = [];
 
-  if (hasOptionalRecipients(message.cc) && !supported.cc) unsupported.push("cc");
+    if (hasOptionalRecipients(message.cc) && !supported.cc) unsupported.push("cc");
 
-  if (hasOptionalRecipients(message.bcc) && !supported.bcc) unsupported.push("bcc");
+    if (hasOptionalRecipients(message.bcc) && !supported.bcc) unsupported.push("bcc");
 
-  if (hasOptionalRecipients(message.replyTo) && !supported.replyTo) unsupported.push("replyTo");
+    if (hasOptionalRecipients(message.replyTo) && !supported.replyTo) unsupported.push("replyTo");
 
-  if (hasValues(message.headers) && !supported.headers) unsupported.push("headers");
+    if (hasValues(message.headers) && !supported.headers) unsupported.push("headers");
 
-  if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
+    if (message.attachments?.length && !supported.attachments) unsupported.push("attachments");
 
-  if (message.tags?.length && !supported.tags) unsupported.push("tags");
+    if (message.tags?.length && !supported.tags) unsupported.push("tags");
 
-  if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
+    if (hasValues(message.metadata) && !supported.metadata) unsupported.push("metadata");
 
-  if (message.sendAt !== undefined && !supported.sendAt) unsupported.push("sendAt");
+    if (message.sendAt !== undefined && !supported.sendAt) unsupported.push("sendAt");
 
-  if (unsupported.length > 0) {
-    throw new EmailValidationError(
-      `${adapter} does not support these EmailMessage fields: ${unsupported.join(", ")}.`,
-      { adapter, unsupported },
-    );
+    if (unsupported.length > 0) {
+      throw new EmailValidationError(
+        `${adapter} does not support these EmailMessage fields: ${unsupported.join(", ")}.`,
+        { adapter, unsupported },
+      );
+    }
+  } catch (error) {
+    if (error instanceof EmailSdkError) throw error;
+
+    throw new EmailValidationError("Email message could not be read.", error);
   }
 }
 
