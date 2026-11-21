@@ -7,6 +7,7 @@ import {
   isRetryableEmailError,
 } from "../errors.js";
 import { isFunction } from "../internal/decode.js";
+import { snapshotMessage } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailAfterSendEvent,
@@ -92,7 +93,14 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
-    const event = hookEvent(input.adapter.name, input.message, attempt, input.options?.metadata);
+
+    const event = hookEvent(
+      input.adapter.name,
+      snapshotMessage(input.message),
+      attempt,
+      input.options?.metadata,
+    );
+
     const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
 
     if (beforeSend) await beforeSend;
@@ -100,6 +108,8 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     let result: EmailSendResult;
 
     try {
+      const attemptMessage = snapshotMessage(input.message);
+
       result = await input.measureAttempt(
         input.adapter,
         input.path ?? "single",
@@ -107,7 +117,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
         async () =>
           normalizeAdapterResult(
             input.adapter.name,
-            await input.adapter.send(input.message, {
+            await input.adapter.send(attemptMessage, {
               adapter: input.adapter.name,
               operation: "send",
               attempt,

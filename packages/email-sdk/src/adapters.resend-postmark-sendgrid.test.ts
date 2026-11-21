@@ -354,5 +354,60 @@ describe("legacy header objects", () => {
       ),
     ).rejects.toThrow(EmailValidationError);
     expect(pmCapture.calls).toHaveLength(0);
+
+    // Direct resend.validate() single-reads message getters.
+    let validateFromReads = 0;
+
+    resend({ apiKey: "key", fetch: repeatCapture.fetch }).validate?.(
+      {
+        get from() {
+          validateFromReads += 1;
+
+          return "a@example.com";
+        },
+        to: "b@example.com",
+        subject: "once",
+        text: "hello",
+      },
+      { adapter: "resend", operation: "send" },
+    );
+
+    expect(validateFromReads).toBe(1);
+
+    // Direct sendgrid.sendPersonalized() preserves class-instance template getters and single-reads recipients.
+    let recipientReads = 0;
+    const sgCapture = jsonCapture({ message_id: "sg_cls" });
+
+    class ClassTemplate {
+      get from() {
+        return "sender@example.com";
+      }
+
+      get subject() {
+        return "Hello %recipient.name%";
+      }
+
+      get text() {
+        return "Hi %recipient.name%";
+      }
+    }
+
+    const sgAdapter = sendgrid({ apiKey: "sg_key", fetch: sgCapture.fetch });
+
+    const sgResult = await sgAdapter.sendPersonalized!(
+      {
+        message: new ClassTemplate(),
+        get recipients() {
+          recipientReads += 1;
+
+          return [{ to: "alice@example.com", variables: { name: "Alice" } }];
+        },
+      },
+      { adapter: "sendgrid", operation: "personalized", attempt: 1 },
+    );
+
+    expect(recipientReads).toBe(1);
+    expect(sgResult.accepted).toEqual(["alice@example.com"]);
+    expect(sgCapture.calls).toHaveLength(1);
   });
 });

@@ -1,4 +1,7 @@
+import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { isNonArrayObject } from "./internal/decode.js";
+import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import {
   apiAddress,
   apiAddresses,
@@ -59,16 +62,29 @@ export function sendgrid(
   return {
     ...provider,
     async sendPersonalized(input, context) {
+      const safeInput = snapshotPersonalizedInputForSend(input);
+
+      if (
+        !isNonArrayObject(safeInput) ||
+        !isNonArrayObject(safeInput.message) ||
+        !Array.isArray(safeInput.recipients)
+      ) {
+        throw new EmailValidationError("sendPersonalized input must include a message and recipients.");
+      }
+
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
+        safeInput.recipients.map((recipient) => [
+          emailAddressOf(recipient.to),
+          recipient.variables,
+        ]),
       );
 
       const result = await provider.send(
-        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
-        // them. recipientVariables is the legacy extension read by sendgridPersonalizations.
+        // SAFETY: safeInput.message is a snapshotted EmailMessage without its recipient fields,
+        // and `to` restores them. recipientVariables is the legacy extension read by sendgridPersonalizations.
         {
-          ...input.message,
-          to: input.recipients.map((recipient) => recipient.to),
+          ...safeInput.message,
+          to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
         context,
@@ -76,7 +92,7 @@ export function sendgrid(
 
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
+        accepted: safeInput.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },

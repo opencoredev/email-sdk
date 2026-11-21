@@ -21,6 +21,7 @@ import {
   readJson,
 } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
+import { snapshotMessageForSend } from "./internal/snapshot.js";
 import type {
   EmailAddress,
   EmailAdapter,
@@ -353,9 +354,27 @@ export function assertMessage(message: EmailMessage) {
               "Each email header must be an object with a non-empty string name and string value.",
             );
           }
+
+          if (/[\r\n]/.test(header.name)) {
+            throw new EmailValidationError(
+              "Email header names must not contain CR or LF characters.",
+            );
+          }
         }
       } else if (isNonArrayObject(message.headers)) {
-        for (const value of Object.values(message.headers)) {
+        for (const [key, value] of Object.entries(message.headers)) {
+          if (key.length === 0) {
+            throw new EmailValidationError(
+              "Each email header must be an object with a non-empty string name and string value.",
+            );
+          }
+
+          if (/[\r\n]/.test(key)) {
+            throw new EmailValidationError(
+              "Email header names must not contain CR or LF characters.",
+            );
+          }
+
           if (!isStringMember(value)) {
             throw new EmailValidationError("Each email header value must be a string.");
           }
@@ -997,14 +1016,15 @@ export function validateBuiltInMessage(
   message: EmailMessage,
   rules: MessageRules | undefined,
 ) {
-  assertMessage(message);
-  assertSupportedMessageFields(adapter, message, SUPPORTED_MESSAGE_FIELDS[adapter]);
+  const safeMessage = snapshotMessageForSend(message);
+  assertMessage(safeMessage);
+  assertSupportedMessageFields(adapter, safeMessage, SUPPORTED_MESSAGE_FIELDS[adapter]);
 
   if (!BUILT_IN_ADAPTER_CAPABILITIES[adapter].repeatedHeaders) {
-    assertUniqueHeaderNames(adapter, message.headers);
+    assertUniqueHeaderNames(adapter, safeMessage.headers);
   }
 
-  rules?.(message);
+  rules?.(safeMessage);
 }
 
 const NO_HEADERS: readonly EmailHeader[] = [];

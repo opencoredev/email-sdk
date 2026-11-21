@@ -6,6 +6,7 @@ import {
   isRetryableEmailError,
 } from "../errors.js";
 import { isNonArrayObject, isStringMember } from "../internal/decode.js";
+import { snapshotMessage, snapshotPersonalizedInputForSend } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailHooks,
@@ -58,10 +59,19 @@ export async function attemptNativePersonalized(
   // loop needs no exit condition and no unreachable fallback result after it.
   for (let attempt = 1; ; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
-    const event = hookEvent(adapter.name, hookMessage, attempt, sendOptions?.metadata);
+
+    const event = hookEvent(
+      adapter.name,
+      snapshotMessage(hookMessage),
+      attempt,
+      sendOptions?.metadata,
+    );
+
     await invokeHooks(hooks, "beforeSend", event);
 
     try {
+      const attemptInput = snapshotPersonalizedInputForSend(input);
+
       const personalized = await measureAttempt(
         adapter,
         "personalized_native",
@@ -69,7 +79,7 @@ export async function attemptNativePersonalized(
         async () =>
           personalizedResult(
             adapter.name,
-            await adapter.sendPersonalized!(input, {
+            await adapter.sendPersonalized!(attemptInput, {
               adapter: adapter.name,
               operation: "personalized",
               attempt,

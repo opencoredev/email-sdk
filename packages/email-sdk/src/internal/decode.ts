@@ -85,6 +85,42 @@ const blobSizeGetter = isFunction(globalThis.Blob)
   ? Object.getOwnPropertyDescriptor(Blob.prototype, "size")?.get
   : undefined;
 
+const mapSizeGetter = Object.getOwnPropertyDescriptor(Map.prototype, "size")?.get;
+
+const setSizeGetter = Object.getOwnPropertyDescriptor(Set.prototype, "size")?.get;
+
+const regExpSourceGetter = Object.getOwnPropertyDescriptor(RegExp.prototype, "source")?.get;
+
+const urlHrefGetter = isFunction(globalThis.URL)
+  ? Object.getOwnPropertyDescriptor(URL.prototype, "href")?.get
+  : undefined;
+
+function hasGetterBrand<T>(getter: ((this: T) => T) | undefined, value: T): boolean {
+  if (!getter) return false;
+
+  try {
+    getter.call(value);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isBuiltInValueObject<T>(value: T): boolean {
+  return (
+    isFunctionMember(value) ||
+    hasGetterBrand(arrayBufferByteLength, value) ||
+    hasGetterBrand(sharedArrayBufferByteLength, value) ||
+    ArrayBuffer.isView(value) ||
+    hasGetterBrand(blobSizeGetter, value) ||
+    hasGetterBrand(regExpSourceGetter, value) ||
+    hasGetterBrand(mapSizeGetter, value) ||
+    hasGetterBrand(setSizeGetter, value) ||
+    hasGetterBrand(urlHrefGetter, value)
+  );
+}
+
 /** True for real ArrayBuffer and SharedArrayBuffer instances across realms (rejects spoofed tags and prototypes). */
 export function isBinaryBuffer(value: unknown): value is ArrayBufferLike {
   if (isPrimitive(value)) return false;
@@ -300,7 +336,7 @@ export function cloneMetadataRecord<T>(metadata: T): T {
 
     const proto = Object.getPrototypeOf(value);
 
-    if (proto === null || tagOf(value) === "[object Object]") {
+    if (!isBuiltInValueObject(value)) {
       // SAFETY: Creating a fresh plain object with matching prototype preserves V.
       const copy = (proto === null ? Object.create(null) : {}) as V;
       seen.set(value, copy);

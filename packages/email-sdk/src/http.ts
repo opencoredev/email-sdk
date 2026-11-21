@@ -1,7 +1,7 @@
-import { EmailProviderError, EmailValidationError } from "./errors.js";
-import { isNonArrayObject, jsonString, readJsonBody } from "./internal/decode.js";
+import { EmailProviderError } from "./errors.js";
+import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
-import { snapshotMessage } from "./internal/snapshot.js";
+import { snapshotMessageForSend } from "./internal/snapshot.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
@@ -16,6 +16,8 @@ import {
   type LegacyEmailSendResult,
   type MessageRules,
 } from "./utils.js";
+
+export { snapshotMessageForSend };
 
 export type JsonProviderOptions<
   Name extends BuiltInAdapterName,
@@ -39,17 +41,6 @@ export type JsonProviderOptions<
     response: Response,
   ) => LegacyEmailSendResult;
 };
-
-export function snapshotMessageForSend(message: EmailMessage): EmailMessage {
-  try {
-    if (!isNonArrayObject(message)) return message;
-
-    return snapshotMessage(message);
-  } catch (error) {
-    if (error instanceof EmailValidationError) throw error;
-    throw new EmailValidationError("Email message could not be read.", error);
-  }
-}
 
 export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
   options: JsonProviderOptions<Name, TPayload>,

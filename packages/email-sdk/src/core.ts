@@ -86,7 +86,6 @@ import type {
   EmailValidationResult,
 } from "./types.js";
 import {
-  cloneMetadataRecord,
   isFunction,
   isNonArrayObject,
   isObjectLike,
@@ -94,65 +93,10 @@ import {
 } from "./internal/decode.js";
 import { ReadonlyMapView } from "./internal/readonly-map.js";
 import {
-  snapshotAddressItem,
   snapshotMessage,
-  snapshotMessageField,
+  snapshotPersonalizedInputForSend,
 } from "./internal/snapshot.js";
 import { assertMessage, isBuiltInAdapter } from "./utils.js";
-
-const TEMPLATE_MESSAGE_FIELDS = [
-  "from",
-  "subject",
-  "html",
-  "text",
-  "replyTo",
-  "headers",
-  "attachments",
-  "tags",
-  "metadata",
-  "sendAt",
-] as const;
-
-const TEMPLATE_EXCLUDED_FIELDS: ReadonlySet<PropertyKey> = new Set([
-  ...TEMPLATE_MESSAGE_FIELDS,
-  "to",
-  "cc",
-  "bcc",
-]);
-
-function snapshotTemplateMessage(
-  message: EmailPersonalizedInput["message"] | EmailMessage,
-): EmailPersonalizedInput["message"] {
-  const copy: Partial<EmailPersonalizedInput["message"]> = {};
-
-  for (const key of Reflect.ownKeys(message)) {
-    if (TEMPLATE_EXCLUDED_FIELDS.has(key)) continue;
-    const descriptor = Object.getOwnPropertyDescriptor(message, key);
-
-    if (!descriptor?.enumerable) continue;
-    Object.defineProperty(copy, key, {
-      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
-  }
-
-  for (const key of TEMPLATE_MESSAGE_FIELDS) {
-    const value = snapshotMessageField(key, message);
-
-    if (value === undefined) continue;
-    Object.defineProperty(copy, key, {
-      value,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
-  }
-
-  // SAFETY: Every template EmailMessage field (excluding to/cc/bcc) was copied once.
-  return copy as EmailPersonalizedInput["message"];
-}
 
 function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
   if (!isNonArrayObject(raw)) {
@@ -218,10 +162,6 @@ export function createEmailClient<
 >(
   options: EmailClientOptions<TAdapters, TPlugins>,
 ): EmailClient<TAdapters, EmailPluginClientExtensions<TPlugins>> {
-  if (!isNonArrayObject(options)) {
-    throw new EmailValidationError("createEmailClient options must be an object.");
-  }
-
   let rawAdapters: readonly EmailAdapter[] | undefined;
   let rawPlugins: readonly EmailPlugin[] | undefined;
   let rawDefaultAdapter: string | undefined;
@@ -231,6 +171,10 @@ export function createEmailClient<
   let rawTelemetry: EmailClientOptions<TAdapters, TPlugins>["telemetry"];
 
   try {
+    if (!isNonArrayObject(options)) {
+      throw new EmailValidationError("createEmailClient options must be an object.");
+    }
+
     rawAdapters = options.adapters;
     rawPlugins = options.plugins;
     rawDefaultAdapter = options.defaultAdapter;
@@ -658,11 +602,13 @@ export function createEmailClient<
   const snapshotSendOptions = (raw: EmailSendOptions | undefined): EmailSendOptions | undefined => {
     if (raw === undefined) return undefined;
 
-    if (!isNonArrayObject(raw)) {
-      throw new EmailValidationError("Email send options must be an object.");
-    }
+    return readBoundary(() => {
+      if (!isNonArrayObject(raw)) {
+        throw new EmailValidationError("Email send options must be an object.");
+      }
 
-    return readBoundary(() => cloneNestedSendOptions(raw), "Email send options");
+      return cloneNestedSendOptions(raw);
+    }, "Email send options");
   };
 
   const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
@@ -680,9 +626,10 @@ export function createEmailClient<
     const safeOptions = snapshotSendOptions(sendOptions);
     const route = readBoundary(() => resolveCheckedRoute(safeOptions), "Email send options");
 
-    const safeMessage = isNonArrayObject(message)
-      ? readBoundary(() => snapshotMessage(message), "Email message")
-      : message;
+    const safeMessage = readBoundary(
+      () => (isNonArrayObject(message) ? snapshotMessage(message) : message),
+      "Email message",
+    );
 
     await validateRoute(safeMessage, route, "send", safeOptions);
 
@@ -715,11 +662,13 @@ export function createEmailClient<
         attemptedAdapter = safeInitialOptions.adapter;
       }
 
-      if (!isNonArrayObject(message)) {
-        throw new EmailValidationError("Email message must be an object.");
-      }
+      const initialMessage = readBoundary(() => {
+        if (!isNonArrayObject(message)) {
+          throw new EmailValidationError("Email message must be an object.");
+        }
 
-      const initialMessage = readBoundary(() => snapshotMessage(message), "Email message");
+        return snapshotMessage(message);
+      }, "Email message");
 
       if (telemetry) facts = messageFacts(initialMessage);
 
@@ -749,8 +698,14 @@ export function createEmailClient<
       const prepared = {
         ...preparedRaw,
         message:
-          middleware.length > 0 && isNonArrayObject(preparedRaw.message)
-            ? readBoundary(() => snapshotMessage(preparedRaw.message), "Email message")
+          middleware.length > 0
+            ? readBoundary(
+                () =>
+                  isNonArrayObject(preparedRaw.message)
+                    ? snapshotMessage(preparedRaw.message)
+                    : preparedRaw.message,
+                "Email message",
+              )
             : preparedRaw.message,
       };
 
@@ -867,20 +822,22 @@ export function createEmailClient<
     items: readonly EmailSendItem[],
     manyOptions?: EmailSendManyOptions,
   ): Promise<readonly EmailSendSettledResult[]> => {
-    if (!Array.isArray(items)) {
-      throw new EmailValidationError("sendMany items must be an array.");
-    }
+    readBoundary(() => {
+      if (!Array.isArray(items)) {
+        throw new EmailValidationError("sendMany items must be an array.");
+      }
+    }, "sendMany items");
 
     const startedAt = Date.now();
     let concurrency = 1;
     let sendOptions: EmailSendOptions | undefined;
 
     if (manyOptions !== undefined) {
-      if (!isNonArrayObject(manyOptions)) {
-        throw new EmailValidationError("sendMany options must be an object.");
-      }
-
       try {
+        if (!isNonArrayObject(manyOptions)) {
+          throw new EmailValidationError("sendMany options must be an object.");
+        }
+
         concurrency = manyOptions.concurrency ?? 1;
         const shared = cloneNestedSendOptions(manyOptions);
         // Keep "no shared options" as undefined, so items without options send exactly as before.
@@ -1031,7 +988,10 @@ export function createEmailClient<
             try {
               const rawItemOptions = item && isNonArrayObject(item) ? item.options : undefined;
 
-              itemAdapter = isNonArrayObject(rawItemOptions) ? rawItemOptions.adapter : undefined;
+              itemAdapter =
+                rawItemOptions !== undefined && isNonArrayObject(rawItemOptions)
+                  ? rawItemOptions.adapter
+                  : undefined;
             } catch {
               itemAdapter = undefined;
             }
@@ -1070,7 +1030,10 @@ export function createEmailClient<
               try {
                 const rawItemOptions = item.options;
 
-                itemAdapter = isNonArrayObject(rawItemOptions) ? rawItemOptions.adapter : undefined;
+                itemAdapter =
+                rawItemOptions !== undefined && isNonArrayObject(rawItemOptions)
+                  ? rawItemOptions.adapter
+                  : undefined;
               } catch {
                 itemAdapter = undefined;
               }
@@ -1153,41 +1116,7 @@ export function createEmailClient<
         attemptedAdapter = safeInitialOptions.adapter;
       }
 
-      const safeInput = readBoundary(() => {
-        if (!isNonArrayObject(input)) return input;
-
-        const rawMessage = input.message;
-
-        const safeMessage = isNonArrayObject(rawMessage)
-          ? snapshotTemplateMessage(rawMessage)
-          : rawMessage;
-
-        const rawRecipients = input.recipients;
-
-        const recipients = Array.isArray(rawRecipients)
-          ? [...rawRecipients].map((recipient) => {
-              if (!isNonArrayObject(recipient)) return recipient;
-
-              const to = snapshotAddressItem(recipient.to);
-              const rawVars = recipient.variables;
-
-              const variables =
-                rawVars !== undefined && isNonArrayObject(rawVars)
-                  ? cloneMetadataRecord(rawVars)
-                  : rawVars;
-
-              // SAFETY: `to` was snapshotted from `recipient.to` preserving the EmailAddress shape.
-              return variables === undefined
-                ? { to: to as EmailPersonalizedInput["recipients"][number]["to"] }
-                : { to: to as EmailPersonalizedInput["recipients"][number]["to"], variables };
-            })
-          : rawRecipients;
-
-        return {
-          message: safeMessage,
-          recipients,
-        };
-      }, "sendPersonalized input");
+      const safeInput = snapshotPersonalizedInputForSend(input);
 
       if (telemetry) facts = personalizedFacts(safeInput);
       readBoundary(() => validatePersonalizedInput(safeInput), "sendPersonalized input");
@@ -1379,24 +1308,23 @@ export function createEmailClient<
       const routeOptions = (value: EmailSendOptions | undefined): EmailSendOptions => {
         if (value === undefined) return { adapter: name };
 
-        if (!isNonArrayObject(value)) {
-          throw new EmailValidationError("Email send options must be an object.");
-        }
+        return readBoundary(() => {
+          if (!isNonArrayObject(value)) {
+            throw new EmailValidationError("Email send options must be an object.");
+          }
 
-        return readBoundary(
-          () => ({ ...cloneNestedSendOptions(value), adapter: name }),
-          "Email send options",
-        );
+          return { ...cloneNestedSendOptions(value), adapter: name };
+        }, "Email send options");
       };
 
       const routeManyOptions = (value: EmailSendManyOptions | undefined): EmailSendManyOptions => {
         if (value === undefined) return { adapter: name };
 
-        if (!isNonArrayObject(value)) {
-          throw new EmailValidationError("sendMany options must be an object.");
-        }
-
         return readBoundary(() => {
+          if (!isNonArrayObject(value)) {
+            throw new EmailValidationError("sendMany options must be an object.");
+          }
+
           const concurrency = value.concurrency;
           const base = cloneNestedSendOptions(value);
 

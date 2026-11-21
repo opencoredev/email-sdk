@@ -1,3 +1,4 @@
+import { EmailValidationError } from "../errors.js";
 import type { EmailAddress, EmailAttachment, EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.js";
 import {
   cloneMetadataRecord,
@@ -206,4 +207,112 @@ export function snapshotMessage(message: EmailMessage): EmailMessage {
 
   // SAFETY: Every EmailMessage field was copied from `message`.
   return copy as EmailMessage;
+}
+
+const TEMPLATE_MESSAGE_FIELDS = [
+  "from",
+  "subject",
+  "html",
+  "text",
+  "replyTo",
+  "headers",
+  "attachments",
+  "tags",
+  "metadata",
+  "sendAt",
+] as const;
+
+const TEMPLATE_EXCLUDED_FIELDS: ReadonlySet<PropertyKey> = new Set([
+  ...TEMPLATE_MESSAGE_FIELDS,
+  "to",
+  "cc",
+  "bcc",
+]);
+
+export function snapshotTemplateMessage(
+  message: EmailPersonalizedInput["message"] | EmailMessage,
+): EmailPersonalizedInput["message"] {
+  const copy: Partial<EmailPersonalizedInput["message"]> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (TEMPLATE_EXCLUDED_FIELDS.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(copy, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  for (const key of TEMPLATE_MESSAGE_FIELDS) {
+    const value = snapshotMessageField(key, message);
+
+    if (value === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every template EmailMessage field (excluding to/cc/bcc) was copied once.
+  return copy as EmailPersonalizedInput["message"];
+}
+
+export function snapshotMessageForSend(message: EmailMessage): EmailMessage {
+  try {
+    if (!isNonArrayObject(message)) return message;
+
+    return snapshotMessage(message);
+  } catch (error) {
+    if (error instanceof EmailValidationError) throw error;
+    throw new EmailValidationError("Email message could not be read.", error);
+  }
+}
+
+export function snapshotPersonalizedInputForSend(
+  input: EmailPersonalizedInput,
+): EmailPersonalizedInput {
+  try {
+    if (!isNonArrayObject(input)) return input;
+
+    const rawMessage = input.message;
+
+    const safeMessage = isNonArrayObject(rawMessage)
+      ? snapshotTemplateMessage(rawMessage)
+      : rawMessage;
+
+    const rawRecipients = input.recipients;
+
+    const recipients = Array.isArray(rawRecipients)
+      ? [...rawRecipients].map((recipient) => {
+          if (!isNonArrayObject(recipient)) return recipient;
+
+          const to = snapshotAddressItem(recipient.to);
+          const rawVars = recipient.variables;
+
+          const variables =
+            rawVars !== undefined && isNonArrayObject(rawVars)
+              ? cloneMetadataRecord(rawVars)
+              : rawVars;
+
+          // SAFETY: `to` was snapshotted from `recipient.to` preserving the EmailAddress shape.
+          return variables === undefined
+            ? { to: to as EmailPersonalizedInput["recipients"][number]["to"] }
+            : { to: to as EmailPersonalizedInput["recipients"][number]["to"], variables };
+        })
+      : rawRecipients;
+
+    return {
+      message: safeMessage,
+      recipients,
+    };
+  } catch (error) {
+    if (error instanceof EmailValidationError) throw error;
+    throw new EmailValidationError("sendPersonalized input could not be read.", error);
+  }
 }

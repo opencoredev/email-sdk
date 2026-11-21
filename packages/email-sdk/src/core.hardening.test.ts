@@ -2648,4 +2648,112 @@ describe("audit hardening regressions", () => {
 
     await expect(valClient.send(badHdrMsg)).rejects.toThrow(EmailValidationError);
   });
+
+  test("R27: revoked proxies, toStringTag metadata, header validation, and hook/retry mutation isolation", async () => {
+    const { defaultsPlugin } = await import("./plugins-defaults.js");
+    const adapter = memoryAdapter("m");
+    const client = createEmailClient({ adapters: [adapter], telemetry: false });
+    const baseMsg = { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" };
+
+    // 1. Revoked proxies throw EmailValidationError across all client/plugin entrypoints.
+    const { proxy: revokedObj, revoke: revokeObj } = Proxy.revocable({}, {});
+    revokeObj();
+
+    const { proxy: revokedArr, revoke: revokeArr } = Proxy.revocable<EmailMessage[]>([], {});
+    revokeArr();
+
+    // SAFETY: Intentionally passing revoked proxies to test runtime error boundaries.
+    expect(() => createEmailClient(revokedObj as never)).toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy to defaultsPlugin.
+    expect(() => defaultsPlugin(revokedObj as never)).toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy to validate().
+    await expect(client.validate(revokedObj as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy to send().
+    await expect(client.send(revokedObj as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy as send options.
+    await expect(client.send(baseMsg, revokedObj as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy array to sendMany().
+    await expect(client.sendMany(revokedArr as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy options to sendMany().
+    await expect(client.sendMany([], revokedObj as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy to sendPersonalized().
+    await expect(client.sendPersonalized(revokedObj as never)).rejects.toThrow(EmailValidationError);
+    // SAFETY: Intentionally passing revoked proxy to withAdapter().send().
+    await expect(client.withAdapter("m").send(baseMsg, revokedObj as never)).rejects.toThrow(
+      EmailValidationError,
+    );
+
+    // 2. [Symbol.toStringTag] object in metadata/headers is cloned and single-read.
+    let metaReads = 0;
+
+    const taggedMeta = {
+      [Symbol.toStringTag]: "FakeTag",
+      get secret() {
+        metaReads += 1;
+
+        return "v1";
+      },
+    };
+
+    // SAFETY: Testing runtime object with custom Symbol.toStringTag as metadata.
+    await client.send({ ...baseMsg, metadata: taggedMeta as never });
+    expect(metaReads).toBe(1);
+    expect(adapter.raw.sent.at(-1)?.message.metadata).toEqual({ secret: "v1" });
+
+    // 3. Empty legacy header name and CR/LF header names are rejected.
+    await expect(
+      client.validate({ ...baseMsg, headers: { "": "x" } }),
+    ).rejects.toThrow(EmailValidationError);
+
+    await expect(
+      client.validate({ ...baseMsg, headers: { "X-Bad\r\nInject": "x" } }),
+    ).rejects.toThrow(EmailValidationError);
+
+    await expect(
+      client.validate({ ...baseMsg, headers: [{ name: "X-Bad\nName", value: "x" }] }),
+    ).rejects.toThrow(EmailValidationError);
+
+    // 4. hooks.beforeSend and failing adapter mutations do not leak into subsequent retries/attempts.
+    const seenSubjects: string[] = [];
+    let attemptNum = 0;
+
+    const isoClient = createEmailClient({
+      adapters: [
+        {
+          name: "mutator",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(msg) {
+            attemptNum += 1;
+            seenSubjects.push(msg.subject);
+            msg.subject = `mutated-by-attempt-${attemptNum}`;
+
+            if (attemptNum === 1) {
+              throw new EmailAdapterError("retry", {
+                adapter: "mutator",
+                retryable: true,
+                delivery: "not_sent",
+              });
+            }
+
+            return { adapter: "mutator", id: "ok" };
+          },
+        },
+      ],
+      hooks: {
+        beforeSend(event) {
+          event.message.subject = "mutated-by-hook";
+        },
+      },
+      retry: { maxAttempts: 2, delay: () => 0 },
+      telemetry: false,
+    });
+
+    await isoClient.send(baseMsg);
+    expect(seenSubjects).toEqual(["s", "s"]);
+  });
 });

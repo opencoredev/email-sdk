@@ -22,13 +22,13 @@ export type EmailDefaultsPluginOptions = {
 };
 
 export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin {
-  if (!isNonArrayObject(options)) {
-    throw new EmailValidationError("defaultsPlugin options must be an object.");
-  }
-
   let safeOptions: EmailDefaultsPluginOptions;
 
   try {
+    if (!isNonArrayObject(options)) {
+      throw new EmailValidationError("defaultsPlugin options must be an object.");
+    }
+
     const id = options.id;
     const metadata = options.metadata;
     const sendMetadata = options.sendMetadata;

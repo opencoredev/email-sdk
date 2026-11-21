@@ -1,7 +1,8 @@
-import { EmailAdapterError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
-import { jsonString } from "./internal/decode.js";
+import { isNonArrayObject, jsonString } from "./internal/decode.js";
+import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
@@ -128,16 +129,29 @@ export function mailgun(
     raw: { baseUrl },
     send,
     async sendPersonalized(input, context) {
+      const safeInput = snapshotPersonalizedInputForSend(input);
+
+      if (
+        !isNonArrayObject(safeInput) ||
+        !isNonArrayObject(safeInput.message) ||
+        !Array.isArray(safeInput.recipients)
+      ) {
+        throw new EmailValidationError("sendPersonalized input must include a message and recipients.");
+      }
+
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
+        safeInput.recipients.map((recipient) => [
+          emailAddressOf(recipient.to),
+          recipient.variables,
+        ]),
       );
 
       const result = await send(
-        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
-        // them. recipientVariables is the legacy extension read by the Mailgun form builder.
+        // SAFETY: safeInput.message is a snapshotted EmailMessage without its recipient fields,
+        // and `to` restores them. recipientVariables is the legacy extension read by the Mailgun form builder.
         {
-          ...input.message,
-          to: input.recipients.map((recipient) => recipient.to),
+          ...safeInput.message,
+          to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
         context,
@@ -145,7 +159,7 @@ export function mailgun(
 
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
+        accepted: safeInput.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },
