@@ -56,12 +56,24 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
       let safeMessage = message;
 
       try {
-        if (isNonArrayObject(message) && Array.isArray(message.tags)) {
-          const tags = message.tags.map((tag) =>
-            isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
-          );
+        if (isNonArrayObject(message)) {
+          const rawTags = message.tags;
 
-          safeMessage = { ...message, tags };
+          if (Array.isArray(rawTags)) {
+            const tags = rawTags.map((tag) =>
+              isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+            );
+
+            const descriptors = Object.getOwnPropertyDescriptors(message);
+
+            delete descriptors.tags;
+
+            // SAFETY: preserving the original prototype and own descriptors keeps EmailMessage's shape while replacing tags with a materialized array.
+            safeMessage = Object.create(Object.getPrototypeOf(message), {
+              ...descriptors,
+              tags: { value: tags, enumerable: true, writable: true, configurable: true },
+            }) as EmailMessage;
+          }
         }
       } catch (error) {
         if (error instanceof EmailValidationError) throw error;

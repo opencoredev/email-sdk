@@ -1216,15 +1216,17 @@ export function createEmailClient<
 
         if (item && msg) {
           let safeMsg: EmailMessage | undefined;
+          let snapshotFailed = false;
           let snapshotError: unknown;
 
           try {
             safeMsg = snapshotMessage(msg);
           } catch (error) {
+            snapshotFailed = true;
             snapshotError = error;
           }
 
-          if (snapshotError !== undefined) {
+          if (snapshotFailed) {
             const normalized = normalizeOwnedError(
               snapshotError instanceof EmailValidationError
                 ? snapshotError
@@ -1235,10 +1237,9 @@ export function createEmailClient<
               let itemAdapter: string | undefined;
 
               try {
-                itemAdapter =
-                  item.options !== undefined && isNonArrayObject(item.options)
-                    ? item.options.adapter
-                    : undefined;
+                const rawItemOptions = item.options;
+
+                itemAdapter = isNonArrayObject(rawItemOptions) ? rawItemOptions.adapter : undefined;
               } catch {
                 itemAdapter = undefined;
               }

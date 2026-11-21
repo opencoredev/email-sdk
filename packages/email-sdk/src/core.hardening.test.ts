@@ -2101,6 +2101,56 @@ describe("audit hardening regressions", () => {
       expect(unoTagValueReads).toBe(1);
       expect(unoBody).toContain('"tags":[{"name":"env","value":"prod"}]');
 
+      // 42. R22: jsonProvider preserves class prototype getters with tags (reading tags once), and sendMany handles `throw undefined`
+      let classTagsReads = 0;
+
+      class ClassTaggedMsg {
+        get from() {
+          return "proto@example.com";
+        }
+
+        get to() {
+          return "dest@example.com";
+        }
+
+        get subject() {
+          return "from-proto";
+        }
+
+        get text() {
+          return "hello-proto";
+        }
+
+        get tags() {
+          classTagsReads += 1;
+
+          return [{ name: "tier", value: "gold" }];
+        }
+      }
+
+      unoBody = "";
+      await unoAdapter.send(new ClassTaggedMsg(), { attempt: 1 });
+
+      expect(classTagsReads).toBe(1);
+      expect(unoBody).toContain('"from":"proto@example.com"');
+      expect(unoBody).toContain('"tags":[{"name":"tier","value":"gold"}]');
+
+      const undefThrowRes = await flakyClient.sendMany([
+        {
+          message: {
+            from: "a@example.com",
+            to: "b@example.com",
+            text: "hi",
+            get subject(): string {
+              throw undefined;
+            },
+          },
+        },
+      ]);
+
+      expect(undefThrowRes).toHaveLength(1);
+      expect(undefThrowRes[0]?.ok).toBe(false);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();
