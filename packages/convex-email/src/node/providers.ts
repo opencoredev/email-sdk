@@ -295,8 +295,10 @@ function envNameFor(
     throw new Error(`Graph ${key}Env must use ${fallback}; set ${fallback} in the deployment environment.`);
   }
 
-  // Adapter config can come from callers of the public API, and the sender action can read every
-  // deployment secret, so an override may only name a credential the adapter registry knows.
+  // The sender action can read every deployment secret, so an override may only name a credential
+  // the adapter registry knows. This is defense in depth: adapter config must still come only from
+  // trusted server code, because a caller who also controls `baseUrl` can send any of these
+  // credentials to their own server. `exposeApi()` refuses caller-supplied adapters for that reason.
   if (!isDeclaredEnvVar(override)) {
     throw new Error(
       `Convex Email adapter "${kind}" cannot read environment variable ${override}: ${key}Env ` +

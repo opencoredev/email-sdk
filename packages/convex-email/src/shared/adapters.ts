@@ -233,9 +233,9 @@ export function adapterFields(kind: string): ConvexAdapterFields | undefined {
 const declaredEnvVars = new Set<string>(CONVEX_EMAIL_ENV_VARS);
 
 /**
- * Whether a `<field>Env` override names a credential the registry knows. Adapter config can come
- * from callers of the public API while the app-side sender can read every deployment secret, so
- * an override must not be able to point a provider request at an unrelated secret.
+ * Whether a `<field>Env` override names a credential the registry knows. The app-side sender can
+ * read every deployment secret, so an override must not reach unrelated ones. Adapter config is
+ * still trusted input: `exposeApi()` refuses it from callers.
  */
 export function isDeclaredEnvVar(name: string) {
   return declaredEnvVars.has(name);

@@ -197,7 +197,9 @@ export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
 });
 ```
 
-The sender action reads only the names listed above. Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at another variable from that list. Naming any other variable throws an explicit error: adapter config can come from callers of `exposeApi()`, and the sender action can read every deployment secret, so an override must not be able to send an unrelated secret to a provider. To use a differently named secret, set it under the default name.
+The sender action reads only the names listed above. Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at another variable from that list. Naming any other variable throws an explicit error, because the sender action can read every deployment secret. To use a differently named secret, set it under the default name.
+
+Adapter configuration is trusted input. `exposeApi()` refuses it from callers, and server-side `email.send()` and `email.sendBatch()` must only receive adapters your own code chose. A custom public mutation that forwards a caller's `adapters` to `email.send()` lets that caller set `baseUrl` and `apiKeyEnv` together and send any of the credentials above to their own server; the variable-name check cannot prevent that.
 
 Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
 

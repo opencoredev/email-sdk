@@ -146,7 +146,9 @@ export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
 Each adapter's default variable follows its provider name: `RESEND_API_KEY`, `LETTERMINT_API_TOKEN`, `POSTMARK_SERVER_TOKEN`, `ZEPTOMAIL_TOKEN`, `MAILGUN_API_KEY` with `MAILGUN_DOMAIN`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` for SES, and so on. The [component README](https://github.com/opencoredev/email-sdk/tree/main/packages/convex-email) lists the full set.
 
 <Callout type="warn" title="Credentials use fixed variable names">
-The sender reads only the variable names Convex Email knows, the defaults listed in the component README. `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, and the other `Env` suffixes repoint a field at another of those names. Naming any other variable fails at send time with an explicit error, because adapter config can come from callers of the public API and must not be able to point a provider request at an unrelated secret. To use a differently named secret, set it under the default name.
+The sender reads only the variable names Convex Email knows, the defaults listed in the component README. `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, and the other `Env` suffixes repoint a field at another of those names. Naming any other variable fails at send time with an explicit error, because the sender action can read every deployment secret. To use a differently named secret, set it under the default name.
+
+Treat adapter configuration as trusted input. `exposeApi()` refuses it from callers, and you should never forward a caller's `adapters` to `email.send()` from your own public mutation: with `baseUrl` and `apiKeyEnv` together, that caller could send any of these credentials to their own server.
 </Callout>
 
 <Callout type="info" title="Serializable adapter options">
