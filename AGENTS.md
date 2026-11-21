@@ -224,7 +224,7 @@ point Homebrew at the new release.
 
 ## CI and Publishing
 
-- CI lives in `.github/workflows/ci.yml` and runs `bun run release:ci` on Tenki runners.
+- CI lives in `.github/workflows/ci.yml` and runs `bun run release:ci` on Tenki runners. Pull requests from forks fall back to GitHub-hosted `ubuntu-latest`, because Tenki runners never pick up fork jobs.
 - 2026-07-06: Turbo >=2.9.17 ignores `peerDependencies` when building the
   package graph (vercel/turborepo#13025), so convex-email's
   `@opencoredev/email-sdk` peer range no longer creates the
