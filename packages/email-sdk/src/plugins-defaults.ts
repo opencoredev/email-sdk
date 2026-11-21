@@ -6,7 +6,7 @@ import type {
   EmailTag,
   EmailSendOptions,
 } from "./types.js";
-import { cloneMetadataRecord, isStringMember } from "./internal/decode.js";
+import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "./internal/decode.js";
 import { headerList } from "./utils.js";
 
 export type EmailDefaultsPluginOptions = {
@@ -137,6 +137,10 @@ function mergeMetadata(
     return value;
   }
 
+  if (value !== undefined && !isNonArrayObject(value)) {
+    return value;
+  }
+
   return cloneMetadataRecord({
     ...defaults,
     ...value,
@@ -148,6 +152,10 @@ function mergeSendMetadata(
   value: EmailSendOptions["metadata"] | undefined,
 ) {
   if (!defaults) {
+    return value;
+  }
+
+  if (value !== undefined && !isNonArrayObject(value)) {
     return value;
   }
 

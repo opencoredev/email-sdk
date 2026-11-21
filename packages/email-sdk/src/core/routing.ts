@@ -218,18 +218,39 @@ export function validateFallback(
 }
 
 export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
-  const copy: EmailSendOptions = { ...options };
+  const copy: EmailSendOptions = {};
+  const adapter = options.adapter;
 
-  if (copy.retry !== undefined && isNonArrayObject(copy.retry)) {
-    copy.retry = snapshotRetryConfig(copy.retry);
+  if (adapter !== undefined) copy.adapter = adapter;
+
+  const idempotencyKey = options.idempotencyKey;
+
+  if (idempotencyKey !== undefined) copy.idempotencyKey = idempotencyKey;
+
+  const idempotency = options.idempotency;
+
+  if (idempotency !== undefined) copy.idempotency = idempotency;
+
+  const signal = options.signal;
+
+  if (signal !== undefined) copy.signal = signal;
+
+  const retry = options.retry;
+
+  if (retry !== undefined) {
+    copy.retry = isNonArrayObject(retry) ? snapshotRetryConfig(retry) : retry;
   }
 
-  if (copy.fallback !== undefined && isNonArrayObject(copy.fallback)) {
-    copy.fallback = snapshotFallbackConfig(copy.fallback);
+  const fallback = options.fallback;
+
+  if (fallback !== undefined) {
+    copy.fallback = isNonArrayObject(fallback) ? snapshotFallbackConfig(fallback) : fallback;
   }
 
-  if (copy.metadata && isNonArrayObject(copy.metadata)) {
-    copy.metadata = cloneMetadataRecord(copy.metadata);
+  const metadata = options.metadata;
+
+  if (metadata !== undefined) {
+    copy.metadata = isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
   }
 
   return copy;
@@ -302,6 +323,10 @@ export function mergeSendOptions(
 }
 
 export function requireAdapter(adapters: ReadonlyMap<string, EmailAdapter>, name: string) {
+  if (!isStringMember(name)) {
+    throw new EmailValidationError("Email adapter name must be a string.");
+  }
+
   const adapter = adapters.get(name);
 
   if (!adapter) throw new EmailAdapterNotFoundError(name);

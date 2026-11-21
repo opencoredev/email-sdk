@@ -1157,8 +1157,157 @@ describe("audit hardening regressions", () => {
       expect(snapPersResult.accepted).toEqual(["b@example.com"]);
       expect("failures" in snapPersResult).toBe(false);
 
-      // 12. Personalized-only adapter rejected cleanly by send() with EmailValidationError
+      // 12. Personalized-only adapter rejected cleanly by validate() and send() before any attempt
+      await expect(persClient.validate(msg)).rejects.toBeInstanceOf(EmailValidationError);
       await expect(persClient.send(msg)).rejects.toBeInstanceOf(EmailValidationError);
+
+      let primaryTries = 0;
+
+      const fallbackPonlyClient = createEmailClient({
+        adapters: [
+          {
+            ...resend,
+            send: async () => {
+              primaryTries += 1;
+
+              throw new EmailAdapterError("down", { adapter: "resend", delivery: "not_sent" });
+            },
+          },
+          personalizedOnly,
+        ],
+        fallback: { adapters: [personalizedOnly.name] },
+        telemetry: false,
+      });
+
+      await expect(fallbackPonlyClient.validate(msg)).rejects.toBeInstanceOf(EmailValidationError);
+      await expect(fallbackPonlyClient.send(msg)).rejects.toBeInstanceOf(EmailValidationError);
+      expect(primaryTries).toBe(0);
+
+      // 13. Class-instance sendPersonalized input preserves prototype message getter
+      class ClassPersonalizedInput {
+        get message() {
+          return { from: "a@example.com", subject: "hi", text: "ok" };
+        }
+
+        get recipients() {
+          return [{ to: "b@example.com" }];
+        }
+      }
+
+      const classPersRes = await persClient.sendPersonalized(new ClassPersonalizedInput());
+      expect(classPersRes.accepted).toEqual(["b@example.com"]);
+
+      // 14. Class-instance sendOptions & sendMany shared snapshot isolation + single-read item idempotencyKey + huge length rejection
+      class ClassSendOptions {
+        get adapter() {
+          return "postmark";
+        }
+
+        get idempotencyKey() {
+          return "cls-key";
+        }
+      }
+
+      const postmarkDual = memoryAdapter("postmark");
+      const clsClient = createEmailClient({ adapters: [resend, postmarkDual], telemetry: false });
+      const clsRes = await clsClient.send(msg, new ClassSendOptions());
+      expect(clsRes.adapter).toBe("postmark");
+
+      const sharedFb = { adapters: ["b1"] };
+      const sharedMeta = { nested: { v: 0 } };
+      const seenNested: number[] = [];
+
+      const b1 = memoryAdapter("b1");
+      const b2 = memoryAdapter("b2");
+
+      const snapManyClient = createEmailClient({
+        adapters: [
+          {
+            name: "fail",
+            capabilities: {
+              repeatedHeaders: false,
+              idempotency: "none",
+              scheduling: false,
+              personalized: "expanded",
+            },
+            async send(_m, ctx) {
+              // SAFETY: Test passes nested metadata object.
+              const nested = ctx.metadata?.nested as { v: number };
+              seenNested.push(nested.v);
+              sharedFb.adapters.splice(0, 1, "b2");
+              sharedMeta.nested.v = 99;
+
+              throw new EmailAdapterError("nope", { adapter: "fail", delivery: "not_sent" });
+            },
+          },
+          b1,
+          b2,
+        ],
+        telemetry: false,
+      });
+
+      const snapManyRes = await snapManyClient.sendMany([{ message: msg }, { message: msg }], {
+        fallback: sharedFb,
+        metadata: sharedMeta,
+      });
+
+      expect(snapManyRes[0]?.ok && snapManyRes[0].result.adapter).toBe("b1");
+      expect(snapManyRes[1]?.ok && snapManyRes[1].result.adapter).toBe("b1");
+      expect(seenNested).toEqual([0, 0]);
+
+      const hugeProxy = new Proxy([], {
+        get(_target, key) {
+          if (key === "length") return 0xffff_ffff;
+
+          return undefined;
+        },
+      });
+
+      // @ts-expect-error -- testing forged array length proxy
+      await expect(clsClient.sendMany(hugeProxy)).rejects.toBeInstanceOf(EmailValidationError);
+
+      // 15. defaultsPlugin preserves non-object message metadata for validation instead of spreading strings
+      const defClient = createEmailClient({
+        adapters: [memoryAdapter("m")],
+        plugins: [defaultsPlugin({ metadata: { env: "prod" } })],
+        telemetry: false,
+      });
+
+      await expect(
+        defClient.send({
+          ...msg,
+          // @ts-expect-error -- runtime non-object metadata check
+          metadata: "bad",
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      // 16. Symbol adapter name throws EmailValidationError with 0 telemetry exceptions
+      const symClient = createEmailClient({ adapters: [memoryAdapter("m")], telemetry: true });
+
+      await expect(
+        // @ts-expect-error -- runtime symbol adapter name check
+        symClient.send(msg, { adapter: Symbol("x") }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      // 17. plugin.adapters is read once
+      let adapterReads = 0;
+
+      const onceAdaptersPlugin = {
+        id: "once-adapters",
+        get adapters() {
+          adapterReads += 1;
+
+          return [memoryAdapter("from-plugin")];
+        },
+      };
+
+      createEmailClient({
+        adapters: [memoryAdapter("m")],
+        plugins: [onceAdaptersPlugin],
+        telemetry: false,
+      });
+
+      expect(adapterReads).toBe(1);
 
       expect(exceptions).toHaveLength(0);
     } finally {

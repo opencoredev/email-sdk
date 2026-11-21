@@ -34,8 +34,11 @@ export function resolvePluginAdapters(
   plugin: EmailPlugin,
   context: EmailPluginContext,
 ): EmailAdapter[] {
-  if (!plugin.adapters) return [];
-  const adapters = Array.isArray(plugin.adapters) ? plugin.adapters : plugin.adapters(context);
+  const configured = plugin.adapters;
+
+  if (!configured) return [];
+
+  const adapters = Array.isArray(configured) ? configured : configured.call(plugin, context);
 
   // JavaScript callers can pass an async factory; its promise is the only non-array result.
   if (!Array.isArray(adapters)) {

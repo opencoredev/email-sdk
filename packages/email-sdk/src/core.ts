@@ -495,6 +495,11 @@ export function createEmailClient<
     for (let index = from; index < route.names.length; index += 1) {
       const name = route.names[index] ?? route.primary;
       const adapter = requireAdapter(adapters, name);
+
+      if (operation === "send" && !isFunction(adapter.send)) {
+        throw new EmailValidationError(`${adapter.name} adapter does not support send().`);
+      }
+
       validateCapabilities(adapter, message, operation, sendOptions);
       let pending: MaybePromise<void>;
 
@@ -718,8 +723,8 @@ export function createEmailClient<
       }
 
       try {
-        const { concurrency: requestedConcurrency = 1, ...shared } = manyOptions;
-        concurrency = requestedConcurrency;
+        concurrency = manyOptions.concurrency ?? 1;
+        const shared = cloneNestedSendOptions(manyOptions);
         // Keep "no shared options" as undefined, so items without options send exactly as before.
         sendOptions = Object.keys(shared).length === 0 ? undefined : shared;
       } catch (error) {
@@ -735,22 +740,23 @@ export function createEmailClient<
 
     const itemCount = readBoundary(() => items.length, "sendMany items");
 
-    if (!Number.isSafeInteger(itemCount) || itemCount < 0 || itemCount > 0xffff_ffff) {
+    if (!Number.isSafeInteger(itemCount) || itemCount < 0 || itemCount > 1_000_000) {
       throw new EmailValidationError("sendMany items must be an array with a valid length.");
     }
 
-    const results: EmailSendSettledResult[] = Array.from({ length: itemCount });
+    const results: EmailSendSettledResult[] = [];
     const usedAdapters = new Set<string>();
     let failed = 0;
     let firstErrorCode: string | undefined;
     let totalRecipients = 0;
 
     const itemSendOptions = (index: number, itemOptions: EmailSendOptions | undefined) => {
-      const merged = mergeSendOptions(sendOptions, itemOptions);
+      const safeItem = itemOptions ? cloneNestedSendOptions(itemOptions) : undefined;
+      const merged = mergeSendOptions(sendOptions, safeItem);
 
       if (
         merged &&
-        itemOptions?.idempotencyKey === undefined &&
+        safeItem?.idempotencyKey === undefined &&
         isStringMember(sendOptions?.idempotencyKey) &&
         sendOptions.idempotencyKey.trim().length > 0
       ) {
@@ -918,7 +924,7 @@ export function createEmailClient<
         const recipients = Array.isArray(rawRecipients) ? [...rawRecipients] : rawRecipients;
 
         return {
-          ...input,
+          message: input.message,
           recipients,
         };
       }, "sendPersonalized input");

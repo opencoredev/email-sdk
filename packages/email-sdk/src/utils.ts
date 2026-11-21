@@ -48,8 +48,8 @@ export function normalizeAdapterResult<Name extends string>(
     // Either way the value names the adapter registered under `Name`.
     adapter: (result.adapter || result.provider || adapter) as Name,
     id: result.id ?? result.messageId,
-    accepted: result.accepted,
-    rejected: result.rejected,
+    accepted: Array.isArray(result.accepted) ? result.accepted : undefined,
+    rejected: Array.isArray(result.rejected) ? result.rejected : undefined,
     raw: result.raw,
   };
 }
