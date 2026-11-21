@@ -40,6 +40,24 @@ export const email = createEmailClient({
 
 Email SDK checks every fallback before sending. If your backup cannot handle part of the message, you get an error instead of a half-broken email.
 
+## Rotate credentials without rebuilding the client
+
+Every built-in adapter reads its API key, token, or AWS credentials from its options on each send, not once when the adapter is created. To rotate a key in a long-running server, change the value on the options object, or pass a getter that reads from your secret store:
+
+```ts title="lib/email.ts"
+const email = createEmailClient({
+  adapters: [
+    sendgrid({
+      get apiKey() {
+        return secrets.current("SENDGRID_API_KEY");
+      },
+    }),
+  ],
+});
+```
+
+The next send uses the new value. Account and region settings, such as a Cloudflare `accountId` or a Scaleway `region`, are still read once.
+
 ## Check your setup without sending
 
 ```bash

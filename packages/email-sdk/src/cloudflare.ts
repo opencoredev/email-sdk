@@ -185,9 +185,9 @@ function fromHttp(
       rules: cloudflareRules,
       baseUrl,
       endpoint: `/accounts/${encodeURIComponent(options.accountId)}/email/sending/send`,
-      headers: {
+      headers: () => ({
         Authorization: `Bearer ${options.apiToken}`,
-      },
+      }),
       fetch: options.fetch,
       async buildPayload(message) {
         assertCloudflareMessage(message);

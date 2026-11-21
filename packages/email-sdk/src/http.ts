@@ -20,7 +20,12 @@ export type JsonProviderOptions<Name extends BuiltInAdapterName, TPayload> = Ada
   name: Name;
   baseUrl: string;
   endpoint: string;
-  headers: Record<string, string>;
+  /**
+   * Request headers, built on every send. Credentials must be read inside this function, not
+   * when the adapter is created, so a rotated key or a getter on the adapter options reaches the
+   * next request without rebuilding the client.
+   */
+  headers: () => Record<string, string>;
   fetch?: typeof fetch;
   buildPayload: (message: EmailMessage) => TPayload | Promise<TPayload>;
   /** Receives the parsed JSON response body, or `{}` when the body is empty or malformed. */
@@ -54,7 +59,7 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
         signal: context.signal,
         headers: {
           "Content-Type": "application/json",
-          ...options.headers,
+          ...options.headers(),
         },
         body: JSON.stringify(payload),
       });

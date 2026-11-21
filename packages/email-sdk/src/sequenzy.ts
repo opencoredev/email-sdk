@@ -39,9 +39,9 @@ export function sequenzy(
     rules: sequenzyRules,
     baseUrl: options.baseUrl ?? "https://api.sequenzy.com/api/v1",
     endpoint: "/transactional/send",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("sequenzy", message, SUPPORTED_MESSAGE_FIELDS.sequenzy);

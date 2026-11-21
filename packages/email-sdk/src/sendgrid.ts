@@ -25,9 +25,9 @@ export function sendgrid(
     name: "sendgrid",
     baseUrl: options.baseUrl ?? "https://api.sendgrid.com",
     endpoint: "/v3/mail/send",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       return {

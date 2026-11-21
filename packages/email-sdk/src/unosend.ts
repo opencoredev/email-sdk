@@ -37,9 +37,9 @@ export function unosend(
     rules: unosendRules,
     baseUrl: options.baseUrl ?? "https://api.unosend.co",
     endpoint: "/emails",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertUnosendMessage(message);

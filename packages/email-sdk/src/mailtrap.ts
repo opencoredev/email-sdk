@@ -37,9 +37,9 @@ export function mailtrap(
     rules: mailtrapRules,
     baseUrl: options.baseUrl ?? "https://send.api.mailtrap.io",
     endpoint: "/api/send",
-    headers: {
+    headers: () => ({
       "Api-Token": options.apiKey,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("mailtrap", message, SUPPORTED_MESSAGE_FIELDS.mailtrap);

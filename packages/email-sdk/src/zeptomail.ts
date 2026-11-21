@@ -16,11 +16,11 @@ export function zeptomail(
     name: "zeptomail",
     baseUrl: options.baseUrl ?? "https://api.zeptomail.com",
     endpoint: "/v1.1/email",
-    headers: {
+    headers: () => ({
       Authorization: options.token.startsWith("Zoho-enczapikey ")
         ? options.token
         : `Zoho-enczapikey ${options.token}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("zeptomail", message, SUPPORTED_MESSAGE_FIELDS.zeptomail);

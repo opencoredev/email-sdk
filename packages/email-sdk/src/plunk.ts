@@ -33,7 +33,7 @@ export function plunk(options: PlunkAdapterOptions): EmailAdapter<"plunk", { bas
     rules: plunkRules,
     baseUrl: options.baseUrl ?? "https://next-api.useplunk.com",
     endpoint: "/v1/send",
-    headers: { Authorization: `Bearer ${options.apiKey}` },
+    headers: () => ({ Authorization: `Bearer ${options.apiKey}` }),
     async buildPayload(message) {
       assertSupportedMessageFields("plunk", message, SUPPORTED_MESSAGE_FIELDS.plunk);
       const attachments = await base64Attachments(message);
