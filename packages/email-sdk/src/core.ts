@@ -291,6 +291,7 @@ export function createEmailClient<
     message: EmailMessage,
     route: EmailRoute,
     operation: "send" | "personalized",
+    sendOptions: EmailSendOptions | undefined,
     from = 0,
   ): Promise<void> | undefined => {
     if (from === 0) assertMessage(message);
@@ -298,7 +299,7 @@ export function createEmailClient<
     for (let index = from; index < route.names.length; index += 1) {
       const name = route.names[index] ?? route.primary;
       const adapter = requireAdapter(adapters, name);
-      validateCapabilities(adapter, message, operation);
+      validateCapabilities(adapter, message, operation, sendOptions);
       let pending: MaybePromise<void>;
 
       try {
@@ -309,7 +310,7 @@ export function createEmailClient<
 
       if (pending !== undefined) {
         return Promise.resolve(pending).then(
-          () => validateRoute(message, route, operation, index + 1),
+          () => validateRoute(message, route, operation, sendOptions, index + 1),
           (cause: unknown) => markValidatorError(adapter, cause),
         );
       }
@@ -331,7 +332,7 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailValidationResult> => {
     const route = resolveCheckedRoute(sendOptions);
-    await validateRoute(message, route, "send");
+    await validateRoute(message, route, "send", sendOptions);
 
     return { adapter: route.primary, warnings: [] };
   };
@@ -354,7 +355,7 @@ export function createEmailClient<
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
       const route = resolveCheckedRoute(prepared.options);
-      const validating = validateRoute(prepared.message, route, "send");
+      const validating = validateRoute(prepared.message, route, "send", prepared.options);
 
       if (validating) await validating;
       const retry = callerRetry(prepared.options?.retry ?? options.retry);
@@ -533,7 +534,7 @@ export function createEmailClient<
       }));
 
       for (const { message } of expanded) {
-        await validateRoute(message, route, "personalized");
+        await validateRoute(message, route, "personalized", prepared.options);
       }
 
       const routeFailures: EmailAdapterError[] = [];

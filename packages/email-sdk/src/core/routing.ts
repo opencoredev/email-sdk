@@ -12,9 +12,23 @@ export function validateCapabilities(
   adapter: EmailAdapter,
   message: EmailMessage,
   operation: "send" | "personalized",
+  sendOptions?: Pick<EmailSendOptions, "idempotencyKey" | "idempotency">,
 ) {
   if (message.sendAt !== undefined && !adapter.capabilities.scheduling) {
     throw new EmailValidationError(`${adapter.name} does not support scheduled email.`);
+  }
+
+  // An idempotency key is a safety promise: a retried or replayed send is delivered once. An
+  // adapter that cannot keep that promise fails loudly instead of silently dropping the key.
+  if (
+    sendOptions?.idempotencyKey &&
+    sendOptions.idempotency !== "best-effort" &&
+    adapter.capabilities.idempotency === "none"
+  ) {
+    throw new EmailValidationError(
+      `${adapter.name} cannot deduplicate sends, so idempotencyKey would be ignored. Route to an adapter with idempotency support, remove idempotencyKey, or pass idempotency: "best-effort" to send without provider deduplication.`,
+      { adapter: adapter.name, capability: "idempotency" },
+    );
   }
 
   if (operation === "personalized" && adapter.capabilities.personalized === "unsupported") {

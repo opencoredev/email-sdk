@@ -65,7 +65,17 @@ await email.send(receipt, {
 });
 ```
 
-Resend, JetEmail, Lettermint, and Primitive have native idempotency support. SMTP derives `Message-ID` from the key. Other adapters receive the key in context but cannot guarantee provider-side deduplication.
+Resend, JetEmail, Lettermint, Primitive, SendHeron, and Helo have native idempotency support. SMTP derives `Message-ID` from the key. Every other built-in adapter reports `capabilities.idempotency: "none"`, so a send with `idempotencyKey` on a route that includes one of them fails with `EmailValidationError` before any request. That check also covers fallback adapters.
+
+When the key is for your own bookkeeping, or another layer such as a queue or outbox already deduplicates, pass `idempotency: "best-effort"`. The send goes through, and adapters that support the key still receive it:
+
+```ts title="src/send-receipt.ts"
+await email.send(receipt, {
+  adapter: "sendgrid",
+  idempotencyKey: "receipt:order_123",
+  idempotency: "best-effort",
+});
+```
 
 <Card title="Message reference" href="/docs/reference/message" description="See exact message, attachment, header, and schedule types." />
 <Card title="Capability groups" href="/docs/adapters/capability-groups" description="Choose adapters that support the sending mode you need." />

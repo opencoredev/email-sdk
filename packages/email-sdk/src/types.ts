@@ -174,6 +174,14 @@ export type EmailSendOptions<Name extends string = string> = {
   retry?: EmailRetryConfig;
   signal?: AbortSignal;
   idempotencyKey?: string;
+  /**
+   * What `idempotencyKey` requires of the route. `"strict"` (the default) rejects the send with
+   * an `EmailValidationError` before any request when an adapter on the route reports
+   * `capabilities.idempotency: "none"`, because that adapter cannot deduplicate a retried send.
+   * `"best-effort"` sends anyway and forwards the key to adapters that use it; choose it when the
+   * key is for your own bookkeeping or another layer (a queue, an outbox) already deduplicates.
+   */
+  idempotency?: "strict" | "best-effort";
   metadata?: EmailSendMetadata;
 };
 

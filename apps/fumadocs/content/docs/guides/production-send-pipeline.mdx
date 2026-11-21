@@ -54,7 +54,7 @@ await email.send(job.message, {
 });
 ```
 
-The key is effective only where the selected adapter supports it. Persist your own business-level deduplication before invoking the SDK.
+The key is effective only where the selected adapter supports it. If any adapter on the route reports `capabilities.idempotency: "none"`, the send fails with `EmailValidationError` unless you pass `idempotency: "best-effort"`. Persist your own business-level deduplication before invoking the SDK.
 
 ## Handle delivery certainty
 

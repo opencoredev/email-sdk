@@ -95,6 +95,8 @@ export function toV1Options(
     retry: options?.retries === undefined ? undefined : { maxAttempts: options.retries + 1 },
     signal: options?.signal,
     idempotencyKey: options?.idempotencyKey ?? message.idempotencyKey,
+    // Legacy clients forwarded the key and let adapters ignore it; keep that behavior.
+    idempotency: "best-effort",
     metadata: options?.metadata,
   };
 }

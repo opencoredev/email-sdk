@@ -78,6 +78,9 @@ export async function processEmail(options: ProcessEmailOptions) {
       adapter,
       fallback: { adapters: fallbackAdapters, onUnknownDelivery: "stop" },
       idempotencyKey: email.idempotencyKey,
+      // The component deduplicates by idempotencyKey itself, so adapters without provider-side
+      // deduplication still send; providers that support it get the key as a second guard.
+      idempotency: "best-effort",
       metadata: email.sendMetadata,
     });
 

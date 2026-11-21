@@ -67,9 +67,12 @@ type EmailSendOptions<Name extends string> = {
   };
   signal?: AbortSignal;
   idempotencyKey?: string;
+  idempotency?: "strict" | "best-effort";
   metadata?: EmailSendMetadata;
 };
 ```
+
+`idempotency` controls what `idempotencyKey` requires. With `"strict"`, the default, a route that includes an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` before any request, so a key is never dropped silently. `"best-effort"` sends anyway and forwards the key to adapters that use it.
 
 Per-send retry and fallback objects replace the client objects. `adapter` selects the primary route. `metadata` is lifecycle context, separate from provider-facing `message.metadata`. The SDK passes it unchanged to hooks, plugins, and adapter contexts.
 

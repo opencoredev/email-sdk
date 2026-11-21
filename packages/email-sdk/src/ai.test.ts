@@ -186,6 +186,7 @@ describe("createEmailTools", () => {
         options: {
           signal: abortController.signal,
           idempotencyKey: "email-tool:call_email_1",
+          idempotency: "best-effort",
           metadata: { source: "email-sdk-ai", toolCallId: "call_email_1" },
         },
       },
