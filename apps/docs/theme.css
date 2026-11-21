@@ -122,3 +122,14 @@ body :not(.email-landing *):is([class*="rounded"], button, input, select, textar
   font-size: 1.25rem;
   line-height: 1.75rem;
 }
+
+/* Step headings ----------------------------------------------------------- */
+
+/* Keep markdown headings inside <Step> blocks at step-title scale so numbered
+   steps align with their 24px badge and stay visually distinct from section H2s. */
+.prose [data-blume-step] > div > :is(h2, h3, h4):first-child {
+  font-size: var(--blume-step-title-size, 1.0625rem);
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}

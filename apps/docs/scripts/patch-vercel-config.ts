@@ -33,15 +33,20 @@ if (!existsSync(configPath)) {
   process.exit(1);
 }
 
+const routeSchema = z.looseObject({
+  src: z.string().optional(),
+  dest: z.string().optional(),
+  handle: z.string().optional(),
+  status: z.number().optional(),
+  continue: z.boolean().optional(),
+  has: z.array(z.looseObject({ type: z.string(), key: z.string(), value: z.string().optional() })).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+type ParsedRoute = z.infer<typeof routeSchema>;
+
 const configSchema = z.looseObject({
-  routes: z.array(
-    z.looseObject({
-      src: z.string().optional(),
-      dest: z.string().optional(),
-      handle: z.string().optional(),
-      headers: z.record(z.string(), z.string()).optional(),
-    }),
-  ),
+  routes: z.array(routeSchema),
 });
 
 function linkHeaderKey(entry: string): string {
@@ -57,11 +62,37 @@ function linkHeaderKey(entry: string): string {
   return entry.toLowerCase();
 }
 
+function splitLinkHeaderEntries(header: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  let inAngle = false;
+  let inQuotes = false;
+
+  for (let index = 0; index < header.length; index += 1) {
+    const ch = header[index];
+
+    if (ch === '"' && !inAngle) {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && ch === "<") {
+      inAngle = true;
+    } else if (!inQuotes && ch === ">") {
+      inAngle = false;
+    } else if (!inAngle && !inQuotes && ch === ",") {
+      entries.push(header.slice(start, index));
+      start = index + 1;
+    }
+  }
+
+  entries.push(header.slice(start));
+
+  return entries;
+}
+
 function mergeLinkHeaders(primary: string, existing: string): string {
   const seen = new Set<string>();
   const parts: string[] = [];
 
-  for (const raw of `${primary}, ${existing}`.split(",")) {
+  for (const raw of [...splitLinkHeaderEntries(primary), ...splitLinkHeaderEntries(existing)]) {
     const entry = raw.trim();
 
     if (!entry) continue;
@@ -176,26 +207,6 @@ const syncedRoutes = config.routes.map((route) => {
   return route;
 });
 
-// Blume sets no Content-Security-Policy itself, so finding one means this
-// script already ran on this build.
-const alreadyPatched = syncedRoutes.some((route) =>
-  JSON.stringify(route).includes("Content-Security-Policy"),
-);
-
-if (alreadyPatched) {
-  const routesChanged = JSON.stringify(syncedRoutes) !== JSON.stringify(config.routes);
-
-  if (routesChanged) {
-    writeFileSync(
-      configPath,
-      `${JSON.stringify({ ...config, routes: syncedRoutes }, null, "\t")}\n`,
-    );
-  }
-
-  console.log("[vercel] config.json already carries the site routes");
-  process.exit(0);
-}
-
 const filesystemIndex = syncedRoutes.findIndex((route) => route.handle === "filesystem");
 
 if (filesystemIndex === -1) {
@@ -203,22 +214,50 @@ if (filesystemIndex === -1) {
   process.exit(1);
 }
 
+function routeSignature(route: ParsedRoute): string {
+  const sortedHeaders = route.headers
+    ? Object.entries(route.headers).toSorted(([a], [b]) => a.localeCompare(b))
+    : undefined;
+
+  return JSON.stringify({
+    src: route.src ?? null,
+    dest: route.dest ?? null,
+    handle: route.handle ?? null,
+    status: route.status ?? null,
+    continue: route.continue ?? null,
+    has: route.has ?? null,
+    headers: sortedHeaders ?? null,
+  });
+}
+
+const existingSignatures = new Set(syncedRoutes.map((route) => routeSignature(route)));
+
 const hasHomeLinkRoute = syncedRoutes.some(
   (route) =>
     route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers),
 );
 
-const routes = [
+const missingSiteRoutes = [
   ...headerRoutes,
   ...(hasHomeLinkRoute ? [] : [{ src: "^/$", headers: { Link: homeLinkMerged }, continue: true }]),
   ...archivedIndexMdRedirects,
   agentModeRoute,
+].filter((route) => !existingSignatures.has(routeSignature(route)));
+
+const routesChanged =
+  missingSiteRoutes.length > 0 || JSON.stringify(syncedRoutes) !== JSON.stringify(config.routes);
+
+if (!routesChanged) {
+  console.log("[vercel] config.json already carries the site routes");
+  process.exit(0);
+}
+
+const routes = [
+  ...missingSiteRoutes,
   ...syncedRoutes.slice(0, filesystemIndex),
   ...syncedRoutes.slice(filesystemIndex),
 ];
 
 writeFileSync(configPath, `${JSON.stringify({ ...config, routes }, null, "\t")}\n`);
 
-const addedCount = routes.length - syncedRoutes.length;
-
-console.log(`[vercel] added ${addedCount} routes to .vercel/output/config.json`);
+console.log(`[vercel] added ${missingSiteRoutes.length} routes to .vercel/output/config.json`);

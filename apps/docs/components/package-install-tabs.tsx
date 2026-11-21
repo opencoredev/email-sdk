@@ -136,11 +136,11 @@ export function PackageInstallTabs({
       </div>
       <div
         aria-labelledby={activeTabId}
-        className="relative bg-fd-secondary"
+        className="flex items-center bg-fd-secondary"
         id={panelId}
         role="tabpanel"
       >
-        <div className="overflow-x-auto px-4 py-3.5 pr-12 font-mono text-[0.8125rem] leading-6">
+        <div className="min-w-0 flex-1 overflow-x-auto px-4 py-3.5 font-mono text-[0.8125rem] leading-6">
           <code className="whitespace-pre">
             <span className="text-fd-primary">{selectedCommand.executable}</span>{" "}
             <span className="text-fd-foreground">{selectedCommand.verb}</span>{" "}
@@ -151,7 +151,7 @@ export function PackageInstallTabs({
           aria-label={
             copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy code"
           }
-          className={`absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring ${
+          className={`mr-2 inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring ${
             copyState === "failed" ? "text-red-500" : "text-fd-muted-foreground"
           }`}
           onClick={copyCommand}
