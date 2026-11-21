@@ -2151,6 +2151,92 @@ describe("audit hardening regressions", () => {
       expect(undefThrowRes).toHaveLength(1);
       expect(undefThrowRes[0]?.ok).toBe(false);
 
+      // 43. R23: jsonProvider preserves #private-field class instances and single-reads undefined tags; empty native sendPersonalized result fails closed
+      let privTagsReads = 0;
+
+      class PrivateTaggedMsg {
+        #from = "priv@example.com";
+        #to = "dest@example.com";
+
+        get from() {
+          return this.#from;
+        }
+
+        get to() {
+          return this.#to;
+        }
+
+        get subject() {
+          return "private-ok";
+        }
+
+        get text() {
+          return "body";
+        }
+
+        get tags() {
+          privTagsReads += 1;
+
+          return [{ name: "scope", value: "priv" }];
+        }
+      }
+
+      unoBody = "";
+      await unoAdapter.send(new PrivateTaggedMsg(), { attempt: 1 });
+
+      expect(privTagsReads).toBe(1);
+      expect(unoBody).toContain('"from":"priv@example.com"');
+      expect(unoBody).toContain('"tags":[{"name":"scope","value":"priv"}]');
+
+      let undefTagsReads = 0;
+
+      await unoAdapter.send(
+        {
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "no-tags",
+          text: "body",
+          get tags() {
+            undefTagsReads += 1;
+
+            return undefined;
+          },
+        },
+        { attempt: 1 },
+      );
+
+      expect(undefTagsReads).toBe(1);
+
+      const fallbackMem = memoryAdapter("fb-mem");
+
+      const emptyNativeClient = createEmailClient({
+        adapters: [
+          {
+            name: "empty-native",
+            capabilities: personalizedOnly.capabilities,
+            send: async () => ({ adapter: "empty-native", id: "x" }),
+            sendPersonalized: async () => ({
+              adapter: "empty-native",
+              accepted: [],
+              rejected: [],
+            }),
+          },
+          fallbackMem,
+        ],
+        fallback: { adapters: ["fb-mem"] },
+        telemetry: false,
+      });
+
+      const emptyNativeErr = await emptyNativeClient
+        .sendPersonalized({
+          message: { from: "a@example.com", subject: "hi", text: "ok" },
+          recipients: [{ to: "b@example.com" }],
+        })
+        .catch((error) => error);
+
+      expect(emptyNativeErr).toMatchObject({ code: "all_recipients_failed" });
+      expect(fallbackMem.raw.sent).toHaveLength(0);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

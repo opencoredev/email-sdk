@@ -59,21 +59,20 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
         if (isNonArrayObject(message)) {
           const rawTags = message.tags;
 
-          if (Array.isArray(rawTags)) {
-            const tags = rawTags.map((tag) =>
-              isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
-            );
+          const tags = Array.isArray(rawTags)
+            ? rawTags.map((tag) =>
+                isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+              )
+            : rawTags;
 
-            const descriptors = Object.getOwnPropertyDescriptors(message);
+          safeMessage = new Proxy(message, {
+            get(target, prop) {
+              if (prop === "tags") return tags;
 
-            delete descriptors.tags;
-
-            // SAFETY: preserving the original prototype and own descriptors keeps EmailMessage's shape while replacing tags with a materialized array.
-            safeMessage = Object.create(Object.getPrototypeOf(message), {
-              ...descriptors,
-              tags: { value: tags, enumerable: true, writable: true, configurable: true },
-            }) as EmailMessage;
-          }
+              // SAFETY: forwarding property reads directly on target binds getters to the original EmailMessage receiver (preserving #private fields and WeakMaps).
+              return target[prop as keyof EmailMessage];
+            },
+          });
         }
       } catch (error) {
         if (error instanceof EmailValidationError) throw error;
