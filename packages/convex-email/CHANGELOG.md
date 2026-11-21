@@ -1,5 +1,61 @@
 # @opencoredev/convex-email
 
+## 6.0.0
+
+### Major Changes
+
+- a8975b5: Make the component deployable. Convex rejects `"use node"` modules inside components, and 5.0.0 shipped three, so `convex dev` and `convex deploy` refused every app that mounted it. The component now runs entirely in Convex's default runtime and keeps the queue, retries, cleanup, and webhook records. Provider requests, SMTP, and URL attachment fetching move into a sender action your app exports from a `"use node"` file with `emailSender()` from the new `@opencoredev/convex-email/node` entry, and `new ConvexEmail()` takes it as the required `sender` option. Adapter credentials are read from the deployment environment, so the component no longer declares environment variables and `app.use(convexEmail, { env })` mappings must be removed. `emailSender(component, { telemetry: false })` turns off Email SDK telemetry for component sends, and `emailSender(component, { env: () => ({ RESEND_API_KEY: process.env.OTHER_KEY }) })` maps differently named secrets, replacing the old per-instance `app.use` mapping. `retry()` now passes the client's current sender, so it works after the sender action is renamed. Because the sender can read every credential in the deployment environment, `exposeApi()` `send` and `sendBatch` now reject an `adapters` field: public sends use the adapters configured on the client, and callers can still pick one by name.
+
+  Before:
+
+  ```ts
+  // convex/convex.config.ts
+  app.use(convexEmail, { env: { RESEND_API_KEY: app.env.RESEND_API_KEY } });
+
+  // convex/email.ts
+  export const email = new ConvexEmail(components.convexEmail, {
+    adapters: [{ kind: "resend" }],
+  });
+  ```
+
+  After:
+
+  ```ts
+  // convex/convex.config.ts
+  app.use(convexEmail);
+
+  // convex/emailSender.ts
+  ("use node");
+  import { emailSender } from "@opencoredev/convex-email/node";
+  import { components } from "./_generated/api";
+  export const send = emailSender(components.convexEmail);
+
+  // convex/email.ts
+  export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+    sender: internal.emailSender.send,
+    adapters: [{ kind: "resend" }],
+  });
+  ```
+
+### Patch Changes
+
+- e0ee155: Queued retries no longer fall back to another provider after an earlier attempt may have sent the email. The email records the first adapter whose outcome was unknown in the new `unknownDeliveryAdapter` field, and every later attempt, including a manual `retry`, goes only to that adapter with the same idempotency key. An outcome counts as unknown after a timeout, 5xx or network error, after any error once a request went out (such as failing to record a send the provider accepted), and when a stalled worker is recovered. Before, each queued attempt started again at the primary adapter, so a 503 followed by a 401 on the next attempt could send a second copy through the fallback adapter. The pin uses the adapter's registered name, so an adapter registered under another provider's name never receives the retry. Manual retries of emails that failed with an unknown outcome before this change are pinned the same way; if the stored adapter name matches more than one registered adapter, `retry` returns `false` instead of guessing.
+
+  The worker also records each provider attempt before the request goes out, and does not send if it cannot. The new `dispatchedAdapter` field shows the adapter the current attempt last reached.
+
+- c1a455b: Update Nodemailer to 10.2.1 for SMTP delivery and Zod to 4.6.7 for Convex input validation.
+- Updated dependencies [bb81df3]
+- Updated dependencies [e0ee155]
+- Updated dependencies [dc1bda4]
+- Updated dependencies [bb81df3]
+- Updated dependencies [5ba46c0]
+- Updated dependencies [c13c2c0]
+- Updated dependencies [9f32ee0]
+- Updated dependencies [3dee481]
+- Updated dependencies [ceceea2]
+- Updated dependencies [c1a455b]
+  - @opencoredev/email-sdk@3.1.0
+
 ## 5.0.0
 
 ### Major Changes
