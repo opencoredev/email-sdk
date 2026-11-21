@@ -1,0 +1,16 @@
+---
+title: middleware_error
+description: Plugin middleware threw while preparing a send or handling its outcome.
+---
+
+`EmailMiddlewareError` has code `middleware_error`, is not retryable, and exposes `phase`:
+
+- `before_send`
+- `after_send`
+- `on_error`
+
+The original exception remains the standard `cause`.
+
+Hook exceptions do not produce this error because hooks are isolated and swallowed. Only middleware failures are delivery-visible.
+
+A `before_send` failure happens before adapter dispatch. An `after_send` failure can occur after the provider accepted the message, so application recovery must not assume the email was unsent.
