@@ -10,6 +10,7 @@ import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
   arrayify,
+  attachmentToBytes,
   emailAddressOf,
   formatAddress,
   formatAddresses,
@@ -99,6 +100,7 @@ export function smtp<const Name extends string = "smtp">(
       try {
         mail = await toNodemailerMessage(message, options.defaults, context.idempotencyKey);
       } catch (error) {
+        if (error instanceof EmailValidationError) throw error;
         throw new EmailAdapterError(
           error instanceof Error ? error.message : "SMTP message preparation failed.",
           { adapter: name, delivery: "not_sent", retryable: false, cause: error },
@@ -215,7 +217,10 @@ async function toNodemailerMessage(
 }
 
 async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail.Attachment> {
-  const content = "content" in attachment ? await nodemailerContent(attachment.content) : undefined;
+  const content =
+    "content" in attachment && attachment.content !== undefined
+      ? await nodemailerContent(attachment)
+      : undefined;
 
   const result: Mail.Attachment = {
     filename: attachment.filename,
@@ -238,15 +243,9 @@ async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail
 }
 
 async function nodemailerContent(
-  content: EmailAttachment["content"],
-): Promise<string | Buffer | undefined> {
-  if (isStringMember(content)) return content;
+  attachment: EmailAttachment,
+): Promise<string | Buffer> {
+  if (isStringMember(attachment.content)) return attachment.content;
 
-  if (content instanceof ArrayBuffer) return Buffer.from(new Uint8Array(content));
-
-  if (content instanceof Uint8Array) return Buffer.from(content);
-
-  if (content instanceof Blob) return Buffer.from(await content.arrayBuffer());
-
-  return undefined;
+  return Buffer.from(await attachmentToBytes(attachment));
 }

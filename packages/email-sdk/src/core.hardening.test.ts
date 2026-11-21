@@ -591,4 +591,189 @@ describe("audit hardening regressions", () => {
       resetTelemetry();
     }
   });
+
+  test("deeply isolates metadata and fallback options across send, sendMany, and plugins; hardens createEmailClient and SMTP Blob/binary attachments", async () => {
+    const { smtp } = await import("./smtp.js");
+    const { defaultsPlugin } = await import("./plugins-defaults.js");
+    const { telemetry, exceptions } = captureTelemetry();
+    setSharedTelemetry(telemetry);
+
+    try {
+      // 1. Recursive metadata + fallback.adapters isolation on send() and sendMany()
+      const observedAttempts: number[] = [];
+      const resend = memoryAdapter("resend");
+      const postmark = memoryAdapter("postmark");
+
+      const mutatingClient = createEmailClient({
+        adapters: [resend, postmark],
+        plugins: [
+          {
+            id: "mutator",
+            middleware: [
+              {
+                name: "mutate-options",
+                beforeSend: (ctx) => {
+                  // SAFETY: Test fixture passes metadata.trace as { attempts: number }.
+                  const trace = ctx.options?.metadata?.trace as { attempts: number } | undefined;
+
+                  if (trace) {
+                    observedAttempts.push(trace.attempts);
+                    trace.attempts += 1;
+                  }
+
+                  // SAFETY: Test fixture passes fallback.adapters as a mutable string array.
+                  const adapters = ctx.options?.fallback?.adapters as string[] | undefined;
+
+                  if (Array.isArray(adapters)) adapters.push("postmark");
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const sharedOpts = {
+        metadata: { trace: { attempts: 0 }, tags: ["a"] },
+        fallback: { adapters: ["postmark" as const] },
+      };
+
+      const msg = { from: "a@example.com", to: "b@example.com", subject: "hi", text: "ok" };
+
+      await mutatingClient.send(msg, sharedOpts);
+      await mutatingClient.send(msg, sharedOpts);
+
+      expect(sharedOpts.metadata.trace.attempts).toBe(0);
+      expect(sharedOpts.fallback.adapters).toEqual(["postmark"]);
+
+      observedAttempts.length = 0;
+
+      const batchResults = await mutatingClient.sendMany(
+        [{ message: msg }, { message: msg }],
+        sharedOpts,
+      );
+
+      expect(batchResults.every((r) => r.ok)).toBe(true);
+      expect(observedAttempts).toEqual([0, 0]);
+      expect(sharedOpts.metadata.trace.attempts).toBe(0);
+
+      // 2. defaultsPlugin returns fresh headers/tags arrays so middleware mutations do not compound
+      const seenHeaders: Array<number> = [];
+
+      const defaultsClient = createEmailClient({
+        adapters: [
+          {
+            ...memoryAdapter("resend"),
+            send: async (message, ctx) => {
+              seenHeaders.push(Array.isArray(message.headers) ? message.headers.length : 0);
+
+              return memoryAdapter("resend").send(message, ctx);
+            },
+          },
+        ],
+        plugins: [
+          defaultsPlugin({
+            headers: [{ name: "X-Default", value: "1" }],
+            tags: [{ name: "env", value: "test" }],
+          }),
+          {
+            id: "push-header",
+            middleware: [
+              {
+                name: "push",
+                beforeSend: (ctx) => {
+                  if (Array.isArray(ctx.message.headers)) {
+                    ctx.message.headers.push({ name: "X-Extra", value: "mut" });
+                  }
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await defaultsClient.send(msg);
+      await defaultsClient.send(msg);
+      expect(seenHeaders).toEqual([2, 2]);
+
+      // 3. createEmailClient catches throwing getters, null adapters/plugins, and snapshots fallback/retry
+      expect(() =>
+        createEmailClient({
+          // @ts-expect-error -- runtime null adapter
+          adapters: [null],
+        }),
+      ).toThrow(EmailValidationError);
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          // @ts-expect-error -- runtime null plugin
+          plugins: [null],
+        }),
+      ).toThrow(EmailValidationError);
+
+      const throwingOpts = {};
+
+      Object.defineProperty(throwingOpts, "adapters", {
+        enumerable: true,
+        get() {
+          throw new TypeError("adapters boom");
+        },
+      });
+
+      // @ts-expect-error -- runtime throwing getter
+      expect(() => createEmailClient(throwingOpts)).toThrow(EmailValidationError);
+
+      const throwingFallback = Object.defineProperty(
+        { adapters: ["postmark" as const] },
+        "onUnknownDelivery",
+        {
+          enumerable: true,
+          get() {
+            throw new TypeError("onUnknownDelivery boom");
+          },
+        },
+      );
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend, postmark],
+          fallback: throwingFallback,
+        }),
+      ).toThrow(EmailValidationError);
+
+      const throwingRetry = Object.defineProperty({ maxAttempts: 2 }, "shouldRetry", {
+        enumerable: true,
+        get() {
+          throw new TypeError("shouldRetry boom");
+        },
+      });
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          retry: throwingRetry,
+        }),
+      ).toThrow(EmailValidationError);
+
+      // 4. SMTP rejecting Blob.arrayBuffer() yields EmailValidationError and zero exception captures
+      const badBlob = new Blob(["x"]);
+
+      badBlob.arrayBuffer = () => Promise.reject(new TypeError("blob read failed"));
+
+      const smtpClient = createEmailClient({
+        adapters: [smtp({ host: "127.0.0.1", port: 1 })],
+      });
+
+      await expect(
+        smtpClient.send({
+          ...msg,
+          attachments: [{ filename: "bad.bin", content: badBlob }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      expect(exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
+  });
 });

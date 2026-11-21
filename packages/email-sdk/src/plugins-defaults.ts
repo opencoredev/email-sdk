@@ -88,12 +88,17 @@ function mergeHeaders(
   const own = headerList(value);
 
   if (own.length === 0) {
-    return defaults;
+    return defaults.map((header) => ({ ...header }));
   }
 
   const overridden = new Set(own.map((header) => header.name.toLowerCase()));
 
-  return [...defaults.filter((header) => !overridden.has(header.name.toLowerCase())), ...own];
+  return [
+    ...defaults
+      .filter((header) => !overridden.has(header.name.toLowerCase()))
+      .map((header) => ({ ...header })),
+    ...own.map((header) => ({ ...header })),
+  ];
 }
 
 function mergeTags(
@@ -105,10 +110,10 @@ function mergeTags(
   }
 
   if (!value?.length) {
-    return defaults;
+    return defaults.map((tag) => ({ ...tag }));
   }
 
-  return [...defaults, ...value];
+  return [...defaults.map((tag) => ({ ...tag })), ...value.map((tag) => ({ ...tag }))];
 }
 
 function mergeMetadata(

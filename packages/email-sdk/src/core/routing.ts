@@ -4,7 +4,7 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "../errors.js";
-import { isNonArrayObject, isStringMember } from "../internal/decode.js";
+import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "../internal/decode.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -138,7 +138,7 @@ export function validateFallback(
   for (const name of fallback?.adapters ?? []) requireAdapter(adapters, name);
 }
 
-function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
+export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
   const copy: EmailSendOptions = { ...options };
 
   if (copy.retry && isNonArrayObject(copy.retry)) {
@@ -155,7 +155,7 @@ function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
   }
 
   if (copy.metadata && isNonArrayObject(copy.metadata)) {
-    copy.metadata = { ...copy.metadata };
+    copy.metadata = cloneMetadataRecord(copy.metadata);
   }
 
   return copy;
@@ -218,7 +218,7 @@ export function mergeSendOptions(
   }
 
   if (merged.metadata && isNonArrayObject(merged.metadata)) {
-    merged.metadata = { ...merged.metadata };
+    merged.metadata = cloneMetadataRecord(merged.metadata);
   }
 
   return merged;
@@ -233,6 +233,10 @@ export function requireAdapter(adapters: ReadonlyMap<string, EmailAdapter>, name
 }
 
 export function addAdapter(adapters: Map<string, EmailAdapter>, adapter: EmailAdapter) {
+  if (!isNonArrayObject(adapter) || !isStringMember(adapter.name) || !adapter.name.trim()) {
+    throw new EmailValidationError("Each email adapter must be an object with a non-empty name.");
+  }
+
   if (adapters.has(adapter.name)) {
     throw new EmailValidationError(`Duplicate email adapter "${adapter.name}".`);
   }

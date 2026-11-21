@@ -29,6 +29,7 @@ import {
 import {
   addAdapter,
   canFallback,
+  cloneNestedSendOptions,
   mergeSendOptions,
   requireAdapter,
   resolveRoute,
@@ -96,12 +97,42 @@ export function createEmailClient<
     throw new EmailValidationError("createEmailClient options must be an object.");
   }
 
-  if (options.adapters !== undefined && !Array.isArray(options.adapters)) {
-    throw new EmailValidationError("createEmailClient adapters must be an array.");
-  }
+  let rawAdapters: readonly EmailAdapter[] | undefined;
+  let rawPlugins: readonly EmailPlugin[] | undefined;
+  let rawDefaultAdapter: string | undefined;
+  let rawFallback: EmailClientOptions<TAdapters, TPlugins>["fallback"];
+  let rawRetry: EmailRetryConfig | undefined;
+  let rawHooks: EmailHooks | undefined;
+  let rawTelemetry: EmailClientOptions<TAdapters, TPlugins>["telemetry"];
 
-  if (options.plugins !== undefined && !Array.isArray(options.plugins)) {
-    throw new EmailValidationError("createEmailClient plugins must be an array.");
+  try {
+    rawAdapters = options.adapters;
+    rawPlugins = options.plugins;
+    rawDefaultAdapter = options.defaultAdapter;
+    rawFallback = options.fallback;
+    rawRetry = options.retry;
+    rawHooks = options.hooks;
+    rawTelemetry = options.telemetry;
+
+    if (rawAdapters !== undefined && !Array.isArray(rawAdapters)) {
+      throw new EmailValidationError("createEmailClient adapters must be an array.");
+    }
+
+    if (rawPlugins !== undefined && !Array.isArray(rawPlugins)) {
+      throw new EmailValidationError("createEmailClient plugins must be an array.");
+    }
+
+    if (rawHooks !== undefined && !isNonArrayObject(rawHooks)) {
+      throw new EmailValidationError("createEmailClient hooks must be an object.");
+    }
+
+    if (rawTelemetry !== undefined && rawTelemetry !== false && !isNonArrayObject(rawTelemetry)) {
+      throw new EmailValidationError("createEmailClient telemetry must be false or an object.");
+    }
+  } catch (error) {
+    if (error instanceof EmailSdkError) throw error;
+
+    throw new EmailValidationError("createEmailClient options could not be read.", error);
   }
 
   const adapters = new Map<string, EmailAdapter>();
@@ -109,17 +140,37 @@ export function createEmailClient<
   const middleware: EmailSendMiddleware[] = [];
   const extensionPlugins: EmailPlugin[] = [];
 
-  for (const adapter of options.adapters ?? []) addAdapter(adapters, adapter);
+  try {
+    for (const adapter of rawAdapters ?? []) addAdapter(adapters, adapter);
+  } catch (error) {
+    if (error instanceof EmailSdkError) throw error;
 
-  const requestedDefault = options.defaultAdapter ?? options.adapters?.[0]?.name ?? "";
+    throw new EmailValidationError("createEmailClient adapters could not be read.", error);
+  }
+
+  const requestedDefault = rawDefaultAdapter ?? adapters.keys().next().value ?? "";
   const pluginIds = new Set<string>();
 
-  for (const plugin of options.plugins ?? []) {
-    if (pluginIds.has(plugin.id)) {
-      throw new EmailValidationError(`Duplicate email plugin "${plugin.id}".`);
+  for (const plugin of rawPlugins ?? []) {
+    let pluginId: string;
+
+    try {
+      if (!isNonArrayObject(plugin) || !isStringMember(plugin.id) || !plugin.id.trim()) {
+        throw new EmailValidationError("Each email plugin must be an object with a non-empty id.");
+      }
+
+      pluginId = plugin.id;
+    } catch (error) {
+      if (error instanceof EmailSdkError) throw error;
+
+      throw new EmailValidationError("createEmailClient plugins could not be read.", error);
     }
 
-    pluginIds.add(plugin.id);
+    if (pluginIds.has(pluginId)) {
+      throw new EmailValidationError(`Duplicate email plugin "${pluginId}".`);
+    }
+
+    pluginIds.add(pluginId);
 
     const context = createPluginContext(adapters, requestedDefault);
 
@@ -133,7 +184,7 @@ export function createEmailClient<
     if (plugin.extendClient) extensionPlugins.push(plugin);
   }
 
-  const defaultAdapter = options.defaultAdapter ?? adapters.keys().next().value;
+  const defaultAdapter = rawDefaultAdapter ?? adapters.keys().next().value;
 
   if (!defaultAdapter) {
     throw new EmailValidationError("createEmailClient requires at least one adapter.");
@@ -141,9 +192,21 @@ export function createEmailClient<
 
   requireAdapter(adapters, defaultAdapter);
 
+  let clientRetry: EmailRetryConfig | undefined;
+  let clientFallback: EmailClientOptions<TAdapters, TPlugins>["fallback"];
+
   try {
-    validateRetry(options.retry);
-    validateFallback(adapters, options.fallback);
+    validateRetry(rawRetry);
+    clientRetry = rawRetry ? { ...rawRetry } : undefined;
+    validateFallback(adapters, rawFallback);
+    clientFallback = rawFallback
+      ? {
+          ...rawFallback,
+          adapters: Array.isArray(rawFallback.adapters)
+            ? [...rawFallback.adapters]
+            : rawFallback.adapters,
+        }
+      : undefined;
   } catch (error) {
     if (error instanceof EmailSdkError) throw error;
 
@@ -152,10 +215,10 @@ export function createEmailClient<
 
   // A telemetry instance that starts disabled never turns on again, so the client drops it and
   // every send skips building telemetry facts.
-  const sharedTelemetry = options.telemetry === false ? undefined : getTelemetry();
+  const sharedTelemetry = rawTelemetry === false ? undefined : getTelemetry();
   const telemetry = sharedTelemetry?.enabled ? sharedTelemetry : undefined;
   const telemetrySource = getTelemetrySource();
-  const hooks = [...pluginHooks, ...(options.hooks ? [options.hooks] : [])];
+  const hooks = [...pluginHooks, ...(rawHooks ? [{ ...rawHooks }] : [])];
 
   const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke) => {
     if (!telemetry?.enabled) return invoke();
@@ -361,24 +424,12 @@ export function createEmailClient<
       throw new EmailValidationError("Email send options must be an object.");
     }
 
-    return readBoundary(() => {
-      const copy: EmailSendOptions = { ...raw };
-
-      if (copy.fallback && isNonArrayObject(copy.fallback)) {
-        copy.fallback = { ...copy.fallback };
-      }
-
-      if (copy.retry && isNonArrayObject(copy.retry)) {
-        copy.retry = { ...copy.retry };
-      }
-
-      return copy;
-    }, "Email send options");
+    return readBoundary(() => cloneNestedSendOptions(raw), "Email send options");
   };
 
   const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
     validateRetry(sendOptions?.retry);
-    const route = resolveRoute(defaultAdapter, options.fallback, sendOptions);
+    const route = resolveRoute(defaultAdapter, clientFallback, sendOptions);
     validateFallback(adapters, route.fallback);
 
     return route;
@@ -451,7 +502,7 @@ export function createEmailClient<
       if (validating) await validating;
 
       const retry = readBoundary(
-        () => callerRetry(safePreparedOptions?.retry ?? options.retry),
+        () => callerRetry(safePreparedOptions?.retry ?? clientRetry),
         "Email send options",
       );
 
@@ -808,7 +859,7 @@ export function createEmailClient<
         "Email send options",
       );
 
-      const clientRetry = callerRetry(options.retry);
+      const resolvedClientRetry = callerRetry(clientRetry);
 
       for (const [index, name] of route.names.entries()) {
         attemptedAdapter = name;
@@ -821,7 +872,7 @@ export function createEmailClient<
               preparedInput,
               expanded[0]!.message,
               attemptOptions,
-              clientRetry,
+              resolvedClientRetry,
               hooks,
               middleware,
               measureAttempt,
@@ -830,7 +881,7 @@ export function createEmailClient<
               adapter,
               expanded,
               attemptOptions,
-              clientRetry,
+              resolvedClientRetry,
               hooks,
               middleware,
               measureAttempt,

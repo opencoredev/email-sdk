@@ -259,3 +259,67 @@ export function causeNumber(cause: unknown, key: "responseCode" | "status"): num
 
   return isNumber(field) ? field : undefined;
 }
+
+function cloneDateValue<T>(value: T): Date | undefined {
+  try {
+    return new Date(Date.prototype.getTime.call(value));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Recursively clone plain objects, arrays, and Dates inside a metadata record. */
+export function cloneMetadataRecord<T>(metadata: T): T {
+  const seen = new Map();
+
+  function clone<V>(value: V): V {
+    if (isPrimitive(value) || value === null || value === undefined) return value;
+
+    const cached = seen.get(value);
+
+    if (cached !== undefined) return cached;
+
+    const clonedDate = cloneDateValue(value);
+
+    if (clonedDate !== undefined) {
+      // SAFETY: Input passed Date brand check; returning a cloned Date matches V.
+      return clonedDate as V;
+    }
+
+    if (Array.isArray(value)) {
+      const arr: V[] = [];
+      seen.set(value, arr);
+
+      for (const item of value) {
+        arr.push(clone(item));
+      }
+
+      // SAFETY: Cloning each element of an array produces an array matching V.
+      return arr as V;
+    }
+
+    const proto = Object.getPrototypeOf(value);
+
+    if (proto === Object.prototype || proto === null) {
+      // SAFETY: Creating a fresh plain object with matching prototype preserves V.
+      const copy = (proto === null ? Object.create(null) : {}) as V;
+      seen.set(value, copy);
+
+      // SAFETY: Non-primitive plain objects are valid Object.entries targets.
+      for (const [key, entry] of Object.entries(value as NonNullable<V>)) {
+        Object.defineProperty(copy, key, {
+          value: clone(entry),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      return copy;
+    }
+
+    return value;
+  }
+
+  return clone(metadata);
+}
