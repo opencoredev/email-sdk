@@ -5,7 +5,7 @@
  * snapshot keeps the pages on a client-safe copy of the same data. A test in
  * lib/compare.test.ts fails if the snapshot drifts from the SDK.
  *
- * Run with: bun run field-support:generate (from apps/fumadocs).
+ * Run with: bun run field-support:generate (from apps/docs).
  */
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";

@@ -12,6 +12,7 @@ type QueryCondition = { type: "query"; key: string; value: string };
 export type VercelRoute = {
   src: string;
   dest?: string;
+  status?: number;
   headers?: Record<string, string>;
   has?: QueryCondition[];
   continue?: boolean;
@@ -40,10 +41,10 @@ export const securityHeaders = {
   "Content-Security-Policy": contentSecurityPolicy,
 } satisfies Record<string, string>;
 
-const discoveryLink =
+export const discoveryLink =
   '</sitemap.xml>; rel="sitemap", </.well-known/api-catalog>; rel="api-catalog", </.well-known/agent.json>; rel="describedby"; type="application/json"';
 
-const homeAlternatesLink =
+export const homeAlternatesLink =
   '</index.md>; rel="alternate"; type="text/markdown", </llms.txt>; rel="alternate"; type="text/plain"';
 
 const revalidatingCache = "public, max-age=3600, stale-while-revalidate=86400";
@@ -51,7 +52,6 @@ const revalidatingCache = "public, max-age=3600, stale-while-revalidate=86400";
 /** Added at the top: every response gets the security and discovery headers. */
 export const headerRoutes: VercelRoute[] = [
   { src: "^/.*$", headers: { ...securityHeaders, Link: discoveryLink }, continue: true },
-  { src: "^/$", headers: { Link: `${discoveryLink}, ${homeAlternatesLink}` }, continue: true },
   { src: "^/(?!blog/).*\\.md$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   { src: "^/.*\\.txt$", headers: { "Cache-Control": revalidatingCache }, continue: true },
   {

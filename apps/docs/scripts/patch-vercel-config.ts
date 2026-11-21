@@ -7,7 +7,13 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import { siteUrl } from "../lib/shared";
-import { agentModeRoute, headerRoutes } from "../lib/vercel-headers";
+import {
+  agentModeRoute,
+  discoveryLink,
+  headerRoutes,
+  homeAlternatesLink,
+  type VercelRoute,
+} from "../lib/vercel-headers";
 import { archivedDocsVersions } from "../lib/versions";
 
 const docsDir = join(import.meta.dirname, "..");
@@ -16,7 +22,7 @@ const configPath = join(docsDir, ".vercel/output/config.json");
 
 const staticDir = join(docsDir, ".vercel/output/static");
 
-const curatedIndexMdPath = join(docsDir, "public/index.md");
+const curatedIndexMdPath = join(docsDir, "lib/index.md");
 
 const builtIndexMdPath = join(staticDir, "index.md");
 
@@ -30,12 +36,46 @@ if (!existsSync(configPath)) {
 const configSchema = z.looseObject({
   routes: z.array(
     z.looseObject({
+      src: z.string().optional(),
       dest: z.string().optional(),
       handle: z.string().optional(),
       headers: z.record(z.string(), z.string()).optional(),
     }),
   ),
 });
+
+function mergeLinkHeaders(primary: string, existing: string): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+
+  for (const raw of `${primary}, ${existing}`.split(",")) {
+    const entry = raw.trim();
+
+    if (!entry) continue;
+
+    const key = entry.toLowerCase();
+
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    parts.push(entry);
+  }
+
+  return parts.join(", ");
+}
+
+const archivedIndexMdRedirects: VercelRoute[] = [
+  {
+    src: "^/docs/v/(\\d+\\.\\d+\\.\\d+)/(.+)/index\\.md$",
+    headers: { Location: "/v$1/docs/$2.md" },
+    status: 308,
+  },
+  {
+    src: "^/(v\\d+\\.\\d+\\.\\d+/docs/.+)/index\\.md$",
+    headers: { Location: "/$1.md" },
+    status: 308,
+  },
+];
 
 const config = configSchema.parse(JSON.parse(readFileSync(configPath, "utf8")));
 
@@ -51,12 +91,18 @@ if (curatedIndexMd !== undefined) {
 const indexTokenCount =
   curatedIndexMd !== undefined ? String(Math.ceil(Buffer.byteLength(curatedIndexMd) / 4)) : undefined;
 
-// Trim archived version link sections from llms.txt so the index stays focused on current docs.
+// Trim archived version link sections from llms.txt while preserving any later non-archived sections.
 if (existsSync(builtLlmsTxtPath)) {
   const llms = readFileSync(builtLlmsTxtPath, "utf8");
   const archivedHeadingIndex = llms.search(/^## v\d+\.\d+\.\d+ \(archived\)$/m);
 
   if (archivedHeadingIndex !== -1) {
+    const afterArchived = llms.slice(archivedHeadingIndex);
+    const nextNonArchivedOffset = afterArchived.search(/^## (?!v\d+\.\d+\.\d+ \(archived\)$).+$/m);
+
+    const trailing =
+      nextNonArchivedOffset === -1 ? "" : `\n${afterArchived.slice(nextNonArchivedOffset).trimStart()}`;
+
     const summaryLines = archivedDocsVersions.map(
       (version) => `- [${version.id}](${siteUrl}/${version.id}/docs): archived documentation`,
     );
@@ -68,11 +114,13 @@ if (existsSync(builtLlmsTxtPath)) {
       "",
       ...summaryLines,
       "",
-    ].join("\n");
+    ].join("\n") + trailing;
 
     writeFileSync(builtLlmsTxtPath, trimmed);
   }
 }
+
+const homeLinkMerged = `${discoveryLink}, ${homeAlternatesLink}`;
 
 const syncedRoutes = config.routes.map((route) => {
   if (
@@ -86,6 +134,19 @@ const syncedRoutes = config.routes.map((route) => {
       headers: {
         ...route.headers,
         "x-markdown-tokens": indexTokenCount,
+      },
+    };
+  }
+
+  if (route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers)) {
+    const key = "link" in route.headers ? "link" : "Link";
+    const existing = route.headers[key] ?? "";
+
+    return {
+      ...route,
+      headers: {
+        ...route.headers,
+        [key]: mergeLinkHeaders(homeLinkMerged, existing),
       },
     };
   }
@@ -112,8 +173,14 @@ if (filesystemIndex === -1) {
   process.exit(1);
 }
 
+const hasHomeLinkRoute = syncedRoutes.some(
+  (route) => route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers),
+);
+
 const routes = [
   ...headerRoutes,
+  ...(hasHomeLinkRoute ? [] : [{ src: "^/$", headers: { Link: homeLinkMerged }, continue: true }]),
+  ...archivedIndexMdRedirects,
   agentModeRoute,
   ...syncedRoutes.slice(0, filesystemIndex),
   ...syncedRoutes.slice(filesystemIndex),

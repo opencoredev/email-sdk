@@ -38,4 +38,8 @@ The build also writes, without committing them: Notra posts to `content/blog/(no
 
 ## Redirects and headers
 
-`blume.config.ts` holds every redirect: the old `/docs/v/<release>/...` archive URLs, renamed docs pages, reversed compare slugs, and the feed and `llms` URLs the Fumadocs site used. After `blume build`, `scripts/patch-vercel-config.ts` adds the security headers and the `/?mode=agent` rewrite from `lib/vercel-headers.ts` to `.vercel/output/config.json`, because Vercel ignores `vercel.json` headers for Build Output API deploys.
+`blume.config.ts` holds every redirect: the old `/docs/v/<release>/...` archive URLs, renamed docs pages, reversed compare slugs, and the feed and `llms` URLs the Fumadocs site used. After `blume build`, `scripts/patch-vercel-config.ts` adds the security headers, archived nested `index.md` redirects, homepage `Link` discovery headers, and the `/?mode=agent` rewrite from `lib/vercel-headers.ts` to `.vercel/output/config.json`, because Vercel ignores `vercel.json` headers for Build Output API deploys.
+
+## Removed Nitro server endpoints
+
+The previous Fumadocs/Nitro app included `/api/build-info` (for the `StaleBuildNotice` client poller) and a Nitro `@usenotra/geo` server middleware. Both were intentionally removed in the Blume migration so static HTML pages serve directly from Vercel's CDN without per-request server middleware; if Notra GEO tracking is needed again, add an Astro middleware backed by `@usenotra/geo`.
