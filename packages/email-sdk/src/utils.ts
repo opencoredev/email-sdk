@@ -622,6 +622,7 @@ type RuledAdapterName =
   | "scaleway"
   | "sendheron"
   | "sequenzy"
+  | "ses"
   | "smtp"
   | "unosend";
 

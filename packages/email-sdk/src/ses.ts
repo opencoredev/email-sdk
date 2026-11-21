@@ -12,12 +12,22 @@ import type { EmailMessage, EmailAdapter } from "./types.js";
 import {
   builtInAdapterDefinition,
   SUPPORTED_MESSAGE_FIELDS,
+  assertMaxItems,
   assertSupportedMessageFields,
+  headerList,
   httpErrorMessage,
   httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
+  type MessageRules,
 } from "./utils.js";
+
+/** SES v2 SendEmail accepts at most 15 entries in Message.Headers. */
+const SES_MAX_HEADERS = 15;
+
+const sesRules: MessageRules = (message) => {
+  assertMaxItems("ses", "header", headerList(message.headers), SES_MAX_HEADERS);
+};
 
 export type SesAdapterOptions = {
   accessKeyId: string;
@@ -38,7 +48,7 @@ export function ses(
 
   return {
     name: "ses",
-    ...builtInAdapterDefinition("ses"),
+    ...builtInAdapterDefinition("ses", sesRules),
     raw: { baseUrl, region: options.region },
     async send(message, context) {
       const fetcher = options.fetch ?? fetch;
@@ -92,6 +102,8 @@ export function ses(
 
 async function toSesPayload(message: EmailMessage, options: SesAdapterOptions) {
   assertSupportedMessageFields("ses", message, SUPPORTED_MESSAGE_FIELDS.ses);
+  // adapter.send can be called without the client's validation pass, so the limit runs here too.
+  sesRules(message);
 
   const charset = options.charset ?? "UTF-8";
   const attachments = await base64Attachments(message);

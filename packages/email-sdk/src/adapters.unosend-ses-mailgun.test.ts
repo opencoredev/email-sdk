@@ -68,6 +68,30 @@ describe("provider payloads", () => {
     ).rejects.toThrow("unosend failed: Sending domain is not verified.");
   });
 
+  test("SES rejects more than 15 headers before signing or sending", async () => {
+    const capture = jsonCapture({ MessageId: "ses_123" });
+
+    const adapter = ses({
+      accessKeyId: "access",
+      secretAccessKey: "secret",
+      region: "us-east-1",
+      fetch: capture.fetch,
+    });
+
+    const headers = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ name: `X-Header-${index}`, value: "v" }));
+
+    const tooMany = { ...messageWithoutMetadata, headers: headers(16) };
+
+    // The client's validation pass and a direct adapter.send both enforce the SES v2 limit.
+    expect(() => adapter.validate?.(tooMany, context)).toThrow(EmailValidationError);
+    await expect(adapter.send(tooMany, context)).rejects.toThrow("ses only supports 15 headers per message.");
+    expect(capture.calls).toHaveLength(0);
+
+    await adapter.send({ ...messageWithoutMetadata, headers: headers(15) }, context);
+    expect(capture.calls[0]?.json.Content.Simple.Headers).toHaveLength(15);
+  });
+
   test("SES signs and maps simple email payloads", async () => {
     const capture = jsonCapture({ MessageId: "ses_123" });
 
