@@ -11,6 +11,8 @@ import {
   message,
   messageWithoutMetadata,
   messageWithoutProviderSpecificFields,
+  messageWithTypedMetadata,
+  typedMetadataAsStrings,
 } from "../test-support/adapter-fixtures.js";
 import { expectPerSendAuth } from "../test-support/credential-rotation.js";
 
@@ -106,6 +108,43 @@ describe("provider payloads", () => {
       content: base64("hello"),
       type: "text/plain",
     });
+  });
+
+  test("SendGrid sends non-string metadata as string custom_args", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_123" } });
+
+    await sendgrid({ apiKey: "sg", fetch: capture.fetch }).send(messageWithTypedMetadata, context);
+
+    // SendGrid rejects custom_args values that are not strings with a 400.
+    expect(capture.calls[0]?.json.personalizations[0].custom_args).toEqual(typedMetadataAsStrings);
+  });
+
+  test("SendGrid personalized sends coerce metadata on every personalization", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+
+    await sendgrid({ apiKey: "sg", fetch: capture.fetch }).sendPersonalized?.(
+      {
+        message: {
+          from: "Acme <hello@acme.com>",
+          subject: "Hi %recipient.name%",
+          text: "Hi %recipient.name%",
+          metadata: messageWithTypedMetadata.metadata,
+        },
+        recipients: [
+          { to: "a@example.com", variables: { name: "Ada" } },
+          { to: "b@example.com", variables: { name: "Linus" } },
+        ],
+      },
+      context,
+    );
+
+    const personalizations: { custom_args: Record<string, string> }[] =
+      capture.calls[0]?.json.personalizations;
+
+    expect(personalizations.map((entry) => entry.custom_args)).toEqual([
+      typedMetadataAsStrings,
+      typedMetadataAsStrings,
+    ]);
   });
 
   test("SendGrid batch sending emits one personalization with substitutions per recipient", async () => {

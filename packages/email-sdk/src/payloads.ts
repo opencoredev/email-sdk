@@ -214,6 +214,23 @@ export function sendAtUtcDateTime(message: EmailMessage) {
   return date === undefined ? undefined : date.toISOString().slice(0, 19).replace("T", " ");
 }
 
+/**
+ * Metadata as string values, for providers whose custom-argument fields accept only strings
+ * (SendGrid `custom_args`, Mailtrap `custom_variables`). `null` becomes `""`. Returns undefined
+ * when there is no metadata, so the field is left out of the payload.
+ */
+export function stringMetadata(
+  metadata: EmailMessage["metadata"],
+): Record<string, string> | undefined {
+  if (!metadata || Object.keys(metadata).length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [key, value === null ? "" : String(value)]),
+  );
+}
+
 export function commonHeadersObject(message: EmailMessage) {
   return headersToObject(message.headers);
 }

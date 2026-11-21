@@ -7,8 +7,9 @@ import {
   commonHeadersObject,
   optionalApiAddresses,
   optionalSingleApiAddress,
+  stringMetadata,
 } from "./payloads.js";
-import type { EmailMessage, EmailAdapter } from "./types.js";
+import type { EmailAdapter } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertMaxItems,
@@ -55,7 +56,7 @@ export function mailtrap(
         html: message.html,
         text: message.text,
         headers: commonHeadersObject(message),
-        custom_variables: mailtrapMetadata(message.metadata),
+        custom_variables: stringMetadata(message.metadata),
         category: message.tags?.[0]?.value,
         attachments: attachments?.map((attachment) => ({
           filename: attachment.filename,
@@ -78,14 +79,4 @@ export function mailtrap(
       };
     },
   });
-}
-
-function mailtrapMetadata(metadata: EmailMessage["metadata"]) {
-  if (!metadata || Object.keys(metadata).length === 0) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    Object.entries(metadata).map(([key, value]) => [key, value === null ? "" : String(value)]),
-  );
 }

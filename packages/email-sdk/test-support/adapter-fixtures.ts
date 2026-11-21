@@ -34,6 +34,20 @@ export const message: EmailMessage = {
   },
 };
 
+/** Metadata with every non-string value EmailMessage allows; string-only providers must coerce it. */
+export const messageWithTypedMetadata: EmailMessage = {
+  ...message,
+  metadata: { userId: "user_123", retryCount: 3, flagged: true, archived: false, empty: null },
+};
+
+export const typedMetadataAsStrings = {
+  userId: "user_123",
+  retryCount: "3",
+  flagged: "true",
+  archived: "false",
+  empty: "",
+};
+
 export const messageWithoutProviderSpecificFields: EmailMessage = {
   ...message,
   headers: undefined,

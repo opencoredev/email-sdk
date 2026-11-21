@@ -7,6 +7,7 @@ import {
   recipientVariableEntries,
   sendAtUnixSeconds,
   sendgridAttachments,
+  stringMetadata,
 } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
 import { arrayify, assertMaxItems, emailAddressOf, hasRecipientVariables } from "./utils.js";
@@ -92,7 +93,7 @@ function sendgridPersonalizations(message: EmailMessage) {
     return recipientVariableEntries(message).map((entry) => ({
       to: [apiAddress(entry.to)],
       headers: commonHeadersObject(message),
-      custom_args: message.metadata,
+      custom_args: stringMetadata(message.metadata),
       substitutions: recipientSubstitutions(entry.variables),
     }));
   }
@@ -103,7 +104,7 @@ function sendgridPersonalizations(message: EmailMessage) {
       cc: optionalApiAddresses(message.cc),
       bcc: optionalApiAddresses(message.bcc),
       headers: commonHeadersObject(message),
-      custom_args: message.metadata,
+      custom_args: stringMetadata(message.metadata),
     },
   ];
 }
