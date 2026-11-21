@@ -52,7 +52,9 @@ export async function attemptNativePersonalized(
   // See attemptAdapter: after an attempt with an unknown outcome, nothing later proves not_sent.
   let earlierOutcomeUnknown = false;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  // Every pass returns, throws, or retries while attempt < maxAttempts (validated >= 1), so the
+  // loop needs no exit condition and no unreachable fallback result after it.
+  for (let attempt = 1; ; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
     const event = hookEvent(adapter.name, hookMessage, attempt, sendOptions?.metadata);
     await invokeHooks(hooks, "beforeSend", event);
@@ -74,13 +76,7 @@ export async function attemptNativePersonalized(
       );
 
       throwIfAborted(sendOptions?.signal);
-      const normalized = normalizeAdapterResult(adapter.name, result);
-
-      const personalized = {
-        ...normalized,
-        accepted: result.accepted,
-        rejected: result.rejected,
-      };
+      const personalized = personalizedResult(adapter.name, result);
 
       if (personalized.accepted.length > 0) {
         await invokeAfterSendMiddleware(middleware, { ...event, response: personalized });
@@ -138,8 +134,34 @@ export async function attemptNativePersonalized(
       await sleep(delayMs, sendOptions?.signal);
     }
   }
+}
 
-  return { adapter: adapter.name, accepted: [], rejected: [], failures: [] };
+/**
+ * Checks a native personalized result before core reads it. The type requires `accepted` and
+ * `rejected`, but a plain JavaScript or custom adapter can omit them. A missing `rejected` list
+ * means nothing was reported rejected. A missing `accepted` list is an adapter defect: the call
+ * resolved, so the provider may have sent, and the failure reports `unknown` delivery instead of
+ * letting a `TypeError` escape or treating every recipient as rejected (which would allow a
+ * duplicate-sending fallback).
+ */
+function personalizedResult(
+  adapterName: string,
+  result: EmailPersonalizedResult,
+): EmailPersonalizedResult {
+  const normalized = normalizeAdapterResult(adapterName, result);
+
+  if (!Array.isArray(result.accepted)) {
+    throw new EmailAdapterError(
+      `${adapterName}.sendPersonalized resolved without an accepted recipient list.`,
+      { adapter: adapterName, delivery: "unknown", retryable: false },
+    );
+  }
+
+  return {
+    ...normalized,
+    accepted: result.accepted,
+    rejected: Array.isArray(result.rejected) ? result.rejected : [],
+  };
 }
 
 export type ExpandedRecipient = {

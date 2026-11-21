@@ -342,7 +342,7 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
-    const facts = telemetry && messageFacts(message);
+    let facts = telemetry && messageFacts(message);
 
     try {
       throwIfAborted(sendOptions?.signal);
@@ -354,6 +354,10 @@ export function createEmailClient<
 
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
+
+      // Middleware such as defaultsPlugin can add recipients, attachments, or sendAt, so the
+      // telemetry facts describe the message that is actually sent.
+      if (facts && prepared.message !== message) facts = messageFacts(prepared.message);
       const route = resolveCheckedRoute(prepared.options);
       const validating = validateRoute(prepared.message, route, "send", prepared.options);
 
@@ -509,7 +513,7 @@ export function createEmailClient<
     sendOptions?: EmailSendOptions,
   ): Promise<EmailPersonalizedResult> => {
     const startedAt = Date.now();
-    const facts = telemetry && personalizedFacts(input);
+    let facts = telemetry && personalizedFacts(input);
     let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
     let deliveryPath = "personalized";
 
@@ -522,7 +526,12 @@ export function createEmailClient<
         options: sendOptions,
       });
 
+      // A slow beforeSend hook can outlive the caller's deadline; stop before validating or sending.
+      throwIfAborted(prepared.options?.signal ?? sendOptions?.signal);
+
       const preparedInput = withPersonalizedMessage(input, prepared.message);
+
+      if (facts) facts = personalizedFacts(preparedInput);
       const route = resolveRoute(defaultAdapter, options.fallback, prepared.options);
       attemptedAdapter = route.primary;
       validateFallback(adapters, route.fallback);
