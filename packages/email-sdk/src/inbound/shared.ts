@@ -166,7 +166,12 @@ export function decodeBase64Strict(value: string): Uint8Array<ArrayBuffer> {
     throw new Error("Malformed base64.");
   }
 
-  const binary = atob(padded ? value : value + "=".repeat((4 - value.length % 4) % 4));
+  const paddedInput = padded ? value : value + "=".repeat((4 - value.length % 4) % 4);
+  const binary = atob(paddedInput);
+
+  if (btoa(binary).replace(/=+$/, "") !== value.replace(/=+$/, "")) {
+    throw new Error("Malformed base64.");
+  }
 
   return Uint8Array.from(binary, char => char.charCodeAt(0));
 }

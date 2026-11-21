@@ -42,7 +42,7 @@ const result = await email.sendPersonalized(
       { to: "linus@example.com", variables: { name: "Linus" } },
     ],
   },
-  { idempotencyKey: "campaign:42" },
+  { idempotencyKey: "campaign:42", idempotency: "best-effort" },
 );
 ```
 

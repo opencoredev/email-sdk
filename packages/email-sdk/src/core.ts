@@ -43,10 +43,12 @@ import {
   captureSendTelemetry,
   messageFacts,
   personalizedFacts,
+  recipientCount,
 } from "./core/send-telemetry.js";
 import {
   EmailAbortError,
   EmailAdapterError,
+  EmailAdapterNotFoundError,
   EmailAllRecipientsFailedError,
   EmailMiddlewareError,
   EmailRouteError,
@@ -81,7 +83,7 @@ import type {
 } from "./types.js";
 import { isObjectLike } from "./internal/decode.js";
 import { ReadonlyMapView } from "./internal/readonly-map.js";
-import { arrayify, assertMessage, isBuiltInAdapter } from "./utils.js";
+import { assertMessage, isBuiltInAdapter } from "./utils.js";
 
 export function createEmailClient<
   const TAdapters extends readonly EmailAdapter[],
@@ -483,7 +485,15 @@ export function createEmailClient<
         const normalized = normalizeOwnedError(error);
 
         if (telemetry) {
-          const adapter = item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
+          const failedAdapter =
+            normalized instanceof EmailRouteError
+              ? normalized.failures.at(-1)?.adapter
+              : normalized instanceof EmailAdapterError ||
+                  normalized instanceof EmailAdapterNotFoundError
+                ? normalized.adapter
+                : undefined;
+
+          const adapter = failedAdapter ?? item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
           usedAdapters.add(normalizeAdapterName(adapter));
         }
 
@@ -499,9 +509,9 @@ export function createEmailClient<
     let next = 0;
 
     const itemMessage = (item: (typeof items)[number] | undefined): EmailMessage | undefined =>
-      item instanceof Object &&
+      isObjectLike(item) &&
       !Array.isArray(item) &&
-      item.message instanceof Object &&
+      isObjectLike(item.message) &&
       !Array.isArray(item.message)
         ? item.message
         : undefined;
@@ -545,7 +555,7 @@ export function createEmailClient<
 
         if (!msg) return total;
 
-        return total + arrayify(msg.to).length + arrayify(msg.cc).length + arrayify(msg.bcc).length;
+        return total + recipientCount(msg);
       }, 0),
       adapter,
       success: failed === 0,
@@ -574,6 +584,8 @@ export function createEmailClient<
         message: personalizedMiddlewareMessage(input),
         options: sendOptions,
       });
+
+      attemptedAdapter = prepared.options?.adapter ?? defaultAdapter;
 
       // A slow beforeSend hook can outlive the caller's deadline; stop before validating or sending.
       throwIfAborted(prepared.options?.signal ?? sendOptions?.signal);

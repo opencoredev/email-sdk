@@ -122,8 +122,12 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
   return [...headers];
 }
 
+function isNonArrayObject<T>(value: T): boolean {
+  return isObjectLike(value) && !Array.isArray(value);
+}
+
 export function assertMessage(message: EmailMessage) {
-  if (!(message instanceof Object) || Array.isArray(message)) {
+  if (!isNonArrayObject(message)) {
     throw new EmailValidationError("Email message must be an object.");
   }
 
@@ -149,7 +153,7 @@ export function assertMessage(message: EmailMessage) {
     }
 
     for (const attachment of message.attachments) {
-      if (!(attachment instanceof Object) || Array.isArray(attachment)) {
+      if (!isNonArrayObject(attachment)) {
         throw new EmailValidationError("Each email attachment must be an object.");
       }
 
@@ -368,7 +372,18 @@ export async function attachmentToBytes(
   }
 
   if (isStringMember(content)) {
-    return attachment.contentEncoding === "base64" ? base64ToBytes(content) : utf8ToBytes(content);
+    if (attachment.contentEncoding !== "base64") {
+      return utf8ToBytes(content);
+    }
+
+    try {
+      return base64ToBytes(content);
+    } catch (error) {
+      throw new EmailValidationError(
+        `Attachment "${attachment.filename}" has invalid base64 content.`,
+        error,
+      );
+    }
   }
 
   if (content instanceof Blob) {

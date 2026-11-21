@@ -50,7 +50,7 @@ export const CONTRACT_TEST_FILES = {
   sequenzy: ["adapters.credential-rotation.test.ts", "adapters.field-support.test.ts", "adapters.http-delivery.test.ts", "adapters.sequenzy-iterable-zeptomail.test.ts"],
   ses: ["adapters.field-support.test.ts", "adapters.http-delivery.test.ts", "adapters.scheduling.test.ts", "adapters.unosend-ses-mailgun.test.ts"],
   smtp: ["smtp.test.ts"],
-  graph: ["adapters.http-delivery.test.ts", "graph.test.ts"],
+  graph: ["adapters.credential-rotation.test.ts", "adapters.http-delivery.test.ts", "graph.test.ts"],
   sparkpost: ["adapters.credential-rotation.test.ts", "adapters.field-support.test.ts", "adapters.http-delivery.test.ts", "adapters.scheduling.test.ts"],
   unosend: ["adapters.credential-rotation.test.ts", "adapters.field-support.test.ts", "adapters.http-delivery.test.ts", "adapters.json-providers.test.ts", "adapters.unosend-ses-mailgun.test.ts"],
   zeptomail: ["adapters.credential-rotation.test.ts", "adapters.http-delivery.test.ts", "adapters.json-providers.test.ts", "adapters.sequenzy-iterable-zeptomail.test.ts"],

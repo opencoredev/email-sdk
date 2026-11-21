@@ -34,6 +34,7 @@ export async function POST(request: Request) {
         timestamp_expired: 401,
         secret_missing: 500,
         payload_invalid: 400,
+        payload_too_large: 413,
         unsupported: 200,
         decryption_required: 500,
         fetch_failed: 502,
