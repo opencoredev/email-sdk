@@ -6,6 +6,7 @@ import type {
   EmailTag,
   EmailSendOptions,
 } from "./types.js";
+import { headerList } from "./utils.js";
 
 export type EmailDefaultsPluginOptions = {
   id?: string;
@@ -69,19 +70,30 @@ function withSendOptionDefaults(
   };
 }
 
+/**
+ * A default header applies only when the message does not set a header with the same name
+ * (compared case-insensitively, as header names are). Appending both would send two values,
+ * which adapters without repeated-header support reject, and on the others the message would
+ * not win. Repeated headers within the message itself are kept as given.
+ */
 function mergeHeaders(
   defaults: readonly EmailHeader[] | undefined,
-  value: readonly EmailHeader[] | undefined,
+  value: EmailMessage["headers"],
 ) {
-  if (!defaults) {
+  if (!defaults?.length) {
     return value;
   }
 
-  if (!value) {
+  // headerList also reads the legacy name-to-value object that JavaScript callers send.
+  const own = headerList(value);
+
+  if (own.length === 0) {
     return defaults;
   }
 
-  return [...defaults, ...value];
+  const overridden = new Set(own.map((header) => header.name.toLowerCase()));
+
+  return [...defaults.filter((header) => !overridden.has(header.name.toLowerCase())), ...own];
 }
 
 function mergeTags(
