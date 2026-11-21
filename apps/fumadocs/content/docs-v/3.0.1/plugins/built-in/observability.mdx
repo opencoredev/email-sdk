@@ -1,0 +1,68 @@
+---
+title: Observability plugin
+description: Emit send, retry, and error events through isolated log, metric, and trace callbacks.
+---
+
+`observabilityPlugin` calls each configured observer with `Promise.allSettled`, so observer failures do not reject the send.
+
+```ts title="src/email.ts"
+import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+
+const email = createEmailClient({
+  adapters: [adapter],
+  plugins: [
+    observabilityPlugin({
+      log(event) {
+        console.info(event.type, {
+          adapter: event.adapter,
+          attempt: event.attempt,
+        });
+      },
+    }),
+  ],
+});
+```
+
+## Event types
+
+| Type | Emitted when | Additional fields |
+| --- | --- | --- |
+| `email.sent` | An adapter succeeds. | `responseId?` |
+| `email.retry` | A retry is scheduled. | `nextAttempt`, `delayMs`, `error` |
+| `email.error` | An adapter reaches terminal failure. | `error` |
+
+Every event includes the adapter, attempt, redacted message facts, and optional send metadata.
+
+## Default redaction
+
+The built-in redactor keeps:
+
+- `subject`
+- recipient counts
+- whether HTML or text exists
+- attachment count
+- tag names
+- metadata keys
+
+It excludes bodies, addresses, attachment contents, and metadata values. If subjects are sensitive, provide `redactMessage` and return a stricter `RedactedEmailMessage`.
+
+```ts title="src/email.ts"
+observabilityPlugin({
+  redactMessage(message) {
+    return {
+      subject: "[redacted]",
+      toCount: Array.isArray(message.to) ? message.to.length : 1,
+      ccCount: 0,
+      bccCount: 0,
+      hasHtml: Boolean(message.html),
+      hasText: Boolean(message.text),
+      attachmentCount: message.attachments?.length ?? 0,
+      tagNames: [],
+      metadataKeys: [],
+    };
+  },
+});
+```
+
+<Card title="Hooks and middleware" href="/docs/concepts/hooks" description="Understand lifecycle ordering and failure isolation." />
+<Card title="Telemetry and privacy" href="/docs/reference/telemetry" description="Separate SDK analytics from your application observability." />
