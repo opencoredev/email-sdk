@@ -87,7 +87,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 
 ## Telemetry
 
-Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run in a terminal prints a notice with opt-out instructions.
 
 What gets collected:
 
