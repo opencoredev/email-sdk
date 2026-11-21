@@ -22,9 +22,16 @@ export class ReadonlyMapView<K, V> implements ReadonlyMap<K, V> {
     return this.#source.has(key);
   }
 
-  // `thisArg` is left out: an arrow function or bind covers it, and it is optional in ReadonlyMap.
-  forEach(callback: (value: V, key: K, map: ReadonlyMap<K, V>) => void): void {
-    for (const [key, value] of this.#source) callback(value, key, this);
+  forEach<This>(
+    callback: (this: This, value: V, key: K, map: ReadonlyMap<K, V>) => void,
+    thisArg: This,
+  ): void;
+  forEach(callback: (value: V, key: K, map: ReadonlyMap<K, V>) => void): void;
+  forEach<This>(
+    callback: (this: This | undefined, value: V, key: K, map: ReadonlyMap<K, V>) => void,
+    thisArg?: This,
+  ): void {
+    for (const [key, value] of this.#source) callback.call(thisArg, value, key, this);
   }
 
   entries(): MapIterator<[K, V]> {

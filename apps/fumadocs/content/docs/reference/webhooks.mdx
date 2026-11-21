@@ -58,7 +58,7 @@ const valid = await verifyMailgunWebhook({
 });
 ```
 
-This helper accepts Mailgun's JSON event webhook envelope with a nested `signature` object containing `timestamp`, `token`, and hexadecimal `signature`. It does not handle inbound multipart/form-data routes; use `verifyMailgunInbound` from [`@opencoredev/email-sdk/inbound`](/docs/reference/inbound) for those (`/inbound` is not in a published release yet; it ships in the next minor release after 3.0.1). For subaccount events, explicitly select `signatureField: "parent-signature"` when using the parent account's signing key.
+This helper accepts Mailgun's JSON event webhook envelope with a nested `signature` object containing `timestamp`, `token`, and hexadecimal `signature`. It does not handle inbound multipart/form-data routes; use `verifyMailgunInbound` from [`@opencoredev/email-sdk/inbound`](/docs/reference/inbound) for those (`/inbound` is not in a published release yet; it ships in the next release after 3.0.1). For subaccount events, explicitly select `signatureField: "parent-signature"` when using the parent account's signing key.
 
 ### SendGrid
 

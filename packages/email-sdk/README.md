@@ -274,7 +274,7 @@ Import `@opencoredev/email-sdk/ai` only when your app also installs the optional
 
 ## Receiving email
 
-> `@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next minor release after 3.0.1, so `@opencoredev/email-sdk@3.0.1` from npm does not include it.
+> `@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next release after 3.0.1, so `@opencoredev/email-sdk@3.0.1` from npm does not include it.
 
 `@opencoredev/email-sdk/inbound` verifies and parses inbound webhooks from 17 providers, including Resend, Mailgun, SendGrid, SES, Cloudflare Email Workers, Microsoft Graph, and Postmark, into one typed `InboundEmail`. It uses only web-standard APIs and adds no dependency.
 

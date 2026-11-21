@@ -357,9 +357,9 @@ export function createEmailClient<
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
 
-      // Middleware such as defaultsPlugin can add recipients, attachments, or sendAt, so the
-      // telemetry facts describe the message that is actually sent.
-      if (facts && prepared.message !== message) facts = messageFacts(prepared.message);
+      // Middleware such as defaultsPlugin can add or mutate recipients, attachments, or sendAt,
+      // including in place, so recompute telemetry facts from the prepared message.
+      if (facts) facts = messageFacts(prepared.message);
       const route = resolveCheckedRoute(prepared.options);
       const validating = validateRoute(prepared.message, route, "send", prepared.options);
 

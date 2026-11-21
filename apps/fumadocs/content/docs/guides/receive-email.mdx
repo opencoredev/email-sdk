@@ -4,7 +4,7 @@ description: Verify and parse inbound email from Resend, Mailgun, SendGrid, SES,
 ---
 
 <Callout type="warn" title="Not on npm yet">
-`@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next minor release after 3.0.1, so `npm install @opencoredev/email-sdk@3.0.1` does not include it.
+`@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next release after 3.0.1, so `npm install @opencoredev/email-sdk@3.0.1` does not include it.
 </Callout>
 
 Point your provider's inbound webhook at a route, then hand the request to `handleInbound`. It checks the provider's signature, parses the payload, and returns one `InboundEmail` shape for every provider:

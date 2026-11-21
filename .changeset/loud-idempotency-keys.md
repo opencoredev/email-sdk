@@ -1,5 +1,5 @@
 ---
-"@opencoredev/email-sdk": minor
+"@opencoredev/email-sdk": major
 ---
 
 `idempotencyKey` is no longer dropped silently. When any adapter on the route (primary or fallback) reports `capabilities.idempotency: "none"`, `send`, `sendMany` items, `sendPersonalized`, and `validate` now throw `EmailValidationError` before any request, because that adapter cannot deduplicate a retried send. Twenty built-in adapters report `"none"`, including SendGrid, Postmark, SES, Mailgun, and Brevo.
