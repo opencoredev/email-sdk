@@ -5,6 +5,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
+import { isObjectLike } from "../internal/decode.js";
 import type {
   EmailAdapter,
   EmailHooks,
@@ -240,14 +241,34 @@ export async function attemptExpandedPersonalized(
   };
 }
 
+function isNonArrayObject<T>(value: T): boolean {
+  return isObjectLike(value) && !Array.isArray(value);
+}
+
 export function validatePersonalizedInput(input: EmailPersonalizedInput) {
-  if (input.recipients.length === 0) {
+  if (!isNonArrayObject(input)) {
+    throw new EmailValidationError("sendPersonalized input must be an object.");
+  }
+
+  if (!isNonArrayObject(input.message)) {
+    throw new EmailValidationError("sendPersonalized message must be an object.");
+  }
+
+  if (!Array.isArray(input.recipients) || input.recipients.length === 0) {
     throw new EmailValidationError("sendPersonalized requires at least one recipient.");
   }
 
   const recipients = new Set<string>();
 
   for (const recipient of input.recipients) {
+    if (!isNonArrayObject(recipient)) {
+      throw new EmailValidationError("Each personalized recipient must be an object.");
+    }
+
+    if (recipient.variables !== undefined && !isNonArrayObject(recipient.variables)) {
+      throw new EmailValidationError("Personalized recipient variables must be an object.");
+    }
+
     const address = emailAddressOf(recipient.to).toLowerCase();
 
     if (!address)
@@ -259,11 +280,13 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
     recipients.add(address);
 
-    for (const key of Object.keys(recipient.variables)) {
-      if (!/^[\w-]+$/.test(key)) {
-        throw new EmailValidationError(
-          `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
-        );
+    if (recipient.variables) {
+      for (const key of Object.keys(recipient.variables)) {
+        if (!/^[\w-]+$/.test(key)) {
+          throw new EmailValidationError(
+            `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
+          );
+        }
       }
     }
   }

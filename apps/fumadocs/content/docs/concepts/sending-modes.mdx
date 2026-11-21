@@ -23,7 +23,7 @@ const results = await email.sendMany([
 ]);
 ```
 
-The method returns one settled result per item. Item options override method-level options, including replacement of the fallback object.
+The method returns one settled result per item. Item options override method-level options; `retry` and `fallback` merge one level deep, so an item's `fallback.adapters` replaces the method's list while keeping method-level `onUnknownDelivery`.
 
 ## Personalized recipients
 

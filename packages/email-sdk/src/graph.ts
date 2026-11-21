@@ -233,18 +233,20 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
         return cached.accessToken;
       }
 
-      const body = new URLSearchParams({
-        client_id: options.clientId,
-        client_secret: options.clientSecret,
-        scope: options.scope ?? "https://graph.microsoft.com/.default",
-        grant_type: "client_credentials",
-      });
-
-      refreshing ??= requestAccessToken(fetcher, tokenUrl, body, tokenTimeoutMs)
-        .then((token) => (cached = token))
-        .finally(() => {
-          refreshing = undefined;
+      if (!refreshing) {
+        const body = new URLSearchParams({
+          client_id: options.clientId,
+          client_secret: options.clientSecret,
+          scope: options.scope ?? "https://graph.microsoft.com/.default",
+          grant_type: "client_credentials",
         });
+
+        refreshing = requestAccessToken(fetcher, tokenUrl, body, tokenTimeoutMs)
+          .then((token) => (cached = token))
+          .finally(() => {
+            refreshing = undefined;
+          });
+      }
 
       return (await refreshing).accessToken;
     },

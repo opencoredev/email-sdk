@@ -340,6 +340,8 @@ export function createEmailClient<
     return { adapter: route.primary, warnings: [] };
   };
 
+  const attemptedAdapters = new WeakMap<Error, string>();
+
   const send = async (
     message: EmailMessage,
     sendOptions?: EmailSendOptions,
@@ -435,6 +437,7 @@ export function createEmailClient<
       throw new EmailRouteError(failures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
+      attemptedAdapters.set(normalized, attemptedAdapter);
 
       if (facts) {
         captureSendFailure({
@@ -457,6 +460,10 @@ export function createEmailClient<
     items: readonly EmailSendItem[],
     manyOptions?: EmailSendManyOptions,
   ): Promise<readonly EmailSendSettledResult[]> => {
+    if (!Array.isArray(items)) {
+      throw new EmailValidationError("sendMany items must be an array.");
+    }
+
     const startedAt = Date.now();
     const { concurrency = 1, ...shared } = manyOptions ?? {};
 
@@ -486,12 +493,13 @@ export function createEmailClient<
 
         if (telemetry) {
           const failedAdapter =
-            normalized instanceof EmailRouteError
+            attemptedAdapters.get(normalized) ??
+            (normalized instanceof EmailRouteError
               ? normalized.failures.at(-1)?.adapter
               : normalized instanceof EmailAdapterError ||
                   normalized instanceof EmailAdapterNotFoundError
                 ? normalized.adapter
-                : undefined;
+                : undefined);
 
           const adapter = failedAdapter ?? item.options?.adapter ?? sendOptions?.adapter ?? defaultAdapter;
           usedAdapters.add(normalizeAdapterName(adapter));
@@ -508,11 +516,10 @@ export function createEmailClient<
     // default concurrency of 1 this is the same ordered, one-at-a-time loop as before.
     let next = 0;
 
+    const isNonArrayObject = <T>(value: T): boolean => isObjectLike(value) && !Array.isArray(value);
+
     const itemMessage = (item: (typeof items)[number] | undefined): EmailMessage | undefined =>
-      isObjectLike(item) &&
-      !Array.isArray(item) &&
-      isObjectLike(item.message) &&
-      !Array.isArray(item.message)
+      item !== undefined && isNonArrayObject(item) && isNonArrayObject(item.message)
         ? item.message
         : undefined;
 
@@ -674,6 +681,7 @@ export function createEmailClient<
       throw new EmailAllRecipientsFailedError(routeFailures);
     } catch (error) {
       const normalized = normalizeOwnedError(error);
+      attemptedAdapters.set(normalized, attemptedAdapter);
 
       if (facts) {
         captureSendFailure({

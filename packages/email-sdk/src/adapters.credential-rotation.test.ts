@@ -34,7 +34,7 @@ type CapturedCall = { headers: Headers; key?: string };
 type RotationCase = {
   name: string;
   /** Builds the adapter with a credential read through a getter, like a secret manager client. */
-  build: (credential: () => string, fetch: typeof fetch) => EmailAdapter;
+  build: (credential: () => string, fetcher: typeof fetch) => EmailAdapter;
   /** Where the credential shows up in the request. */
   read: (call: CapturedCall) => string | null | undefined;
   expected: (key: string) => string;
@@ -327,6 +327,7 @@ describe("adapters read credentials on every send", () => {
     const adapter = graph({
       tenantId: "tenant-1",
       clientId: "client-1",
+      user: "sender@example.com",
       get clientSecret() {
         return secret;
       },

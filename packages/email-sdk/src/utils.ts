@@ -316,6 +316,13 @@ function isRetryableRuntimeError(error: Error) {
   );
 }
 
+function isArrayBufferLike(value: Uint8Array | ArrayBuffer): value is ArrayBuffer {
+  return (
+    value instanceof ArrayBuffer ||
+    Object.prototype.toString.call(value) === "[object ArrayBuffer]"
+  );
+}
+
 export async function attachmentContentToString(
   content: string | Uint8Array | ArrayBuffer | Blob | undefined,
   encoding: "raw" | "base64" = "raw",
@@ -325,14 +332,24 @@ export async function attachmentContentToString(
   }
 
   if (isStringMember(content)) {
-    return encoding === "base64" ? content : bytesToBase64(utf8ToBytes(content));
+    if (encoding === "base64") {
+      try {
+        base64ToBytes(content);
+      } catch (error) {
+        throw new EmailValidationError("Attachment has invalid base64 content.", error);
+      }
+
+      return content;
+    }
+
+    return bytesToBase64(utf8ToBytes(content));
   }
 
   if (content instanceof Blob) {
     return bytesToBase64(new Uint8Array(await content.arrayBuffer()));
   }
 
-  if (content instanceof ArrayBuffer) {
+  if (isArrayBufferLike(content)) {
     return bytesToBase64(new Uint8Array(content));
   }
 
@@ -390,7 +407,7 @@ export async function attachmentToBytes(
     return new Uint8Array(await content.arrayBuffer());
   }
 
-  if (content instanceof ArrayBuffer) {
+  if (isArrayBufferLike(content)) {
     return new Uint8Array(content);
   }
 

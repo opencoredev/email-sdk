@@ -261,7 +261,10 @@ function bodyTooLarge(provider: InboundProvider, maxBodyBytes: number) {
 
 /** Reads at most `maxBodyBytes`, refusing an oversized Content-Length before reading anything. */
 async function readBoundedBody(request: Request, maxBodyBytes: number, provider: InboundProvider): Promise<Uint8Array<ArrayBuffer>> {
-  if (Number.isNaN(maxBodyBytes) || maxBodyBytes <= 0) {
+  if (
+    (!Number.isFinite(maxBodyBytes) && maxBodyBytes !== Number.POSITIVE_INFINITY) ||
+    maxBodyBytes <= 0
+  ) {
     throw new RangeError("handleInbound maxBodyBytes must be a positive number of bytes or Infinity.");
   }
 
