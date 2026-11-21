@@ -217,31 +217,25 @@ async function toNodemailerMessage(
 }
 
 async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail.Attachment> {
-  const content =
-    "content" in attachment && attachment.content !== undefined
-      ? await nodemailerContent(attachment)
-      : undefined;
+  const content = await nodemailerContent(attachment);
 
-  const result: Mail.Attachment = {
+  return {
     filename: attachment.filename,
     contentType: attachment.contentType,
     cid: attachment.contentId,
     contentDisposition: attachment.disposition,
+    content,
   };
-
-  if (content === undefined) {
-    result.path = attachment.path;
-  } else {
-    result.content = content;
-  }
-
-  return result;
 }
 
 async function nodemailerContent(
   attachment: EmailAttachment,
 ): Promise<string | Buffer> {
-  if (isStringMember(attachment.content) && attachment.contentEncoding !== "base64") {
+  if (
+    attachment.path === undefined &&
+    isStringMember(attachment.content) &&
+    attachment.contentEncoding !== "base64"
+  ) {
     return attachment.content;
   }
 

@@ -67,6 +67,8 @@ import {
 import { isTestAdapter } from "./testing.js";
 import type {
   EmailAdapter,
+  EmailAddress,
+  EmailAttachment,
   EmailClient,
   EmailClientOptions,
   EmailHooks,
@@ -84,6 +86,7 @@ import type {
   EmailRetryConfig,
   EmailSendSettledResult,
   EmailValidationResult,
+  OneOrMany,
 } from "./types.js";
 import {
   cloneMetadataRecord,
@@ -111,19 +114,178 @@ const MESSAGE_FIELDS = [
   "sendAt",
 ] as const;
 
+function snapshotAddressItem(address: EmailAddress): EmailAddress {
+  if (isStringMember(address) || !isNonArrayObject(address)) return address;
+
+  const email = address.email;
+  const name = address.name;
+
+  return name === undefined ? { email } : { email, name };
+}
+
+function isAddressList(value: OneOrMany<EmailAddress>): value is readonly EmailAddress[] {
+  return Array.isArray(value);
+}
+
+function snapshotAddressField(value: OneOrMany<EmailAddress>): OneOrMany<EmailAddress> {
+  if (isAddressList(value)) {
+    return [...value].map(snapshotAddressItem);
+  }
+
+  return snapshotAddressItem(value);
+}
+
+function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
+  if (!isNonArrayObject(attachment)) return attachment;
+
+  const copy: Partial<EmailAttachment> = {};
+
+  for (const key of [
+    "filename",
+    "content",
+    "path",
+    "contentType",
+    "contentId",
+    "disposition",
+    "contentEncoding",
+  ] as const) {
+    const val = attachment[key];
+
+    if (val === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value: val,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every defined EmailAttachment property was copied from `attachment`.
+  return copy as EmailAttachment;
+}
+
+function snapshotHeaders(value: EmailMessage["headers"]): EmailMessage["headers"] {
+  if (Array.isArray(value)) {
+    return [...value].map((header) =>
+      isNonArrayObject(header) ? { name: header.name, value: header.value } : header,
+    );
+  }
+
+  // SAFETY: Legacy object headers are cloned via cloneMetadataRecord while keeping runtime shape.
+  return (isNonArrayObject(value) ? cloneMetadataRecord(value) : value) as EmailMessage["headers"];
+}
+
+function snapshotTags(value: EmailMessage["tags"]): EmailMessage["tags"] {
+  if (Array.isArray(value)) {
+    return [...value].map((tag) =>
+      isNonArrayObject(tag) ? { name: tag.name, value: tag.value } : tag,
+    );
+  }
+
+  return value;
+}
+
+function snapshotMessageField(
+  key: (typeof MESSAGE_FIELDS)[number],
+  message: EmailMessage | EmailPersonalizedInput["message"],
+): EmailMessage[(typeof MESSAGE_FIELDS)[number]] {
+  if (key === "from") {
+    const from = message.from;
+
+    return from === undefined ? undefined : snapshotAddressItem(from);
+  }
+
+  if (key === "to" && "to" in message) {
+    const to = message.to;
+
+    return to === undefined ? undefined : snapshotAddressField(to);
+  }
+
+  if (key === "cc" && "cc" in message) {
+    const cc = message.cc;
+
+    return cc === undefined ? undefined : snapshotAddressField(cc);
+  }
+
+  if (key === "bcc" && "bcc" in message) {
+    const bcc = message.bcc;
+
+    return bcc === undefined ? undefined : snapshotAddressField(bcc);
+  }
+
+  if (key === "replyTo") {
+    const replyTo = message.replyTo;
+
+    return replyTo === undefined ? undefined : snapshotAddressField(replyTo);
+  }
+
+  if (key === "headers") {
+    const headers = message.headers;
+
+    return headers === undefined ? undefined : snapshotHeaders(headers);
+  }
+
+  if (key === "tags") {
+    const tags = message.tags;
+
+    return tags === undefined ? undefined : snapshotTags(tags);
+  }
+
+  if (key === "attachments") {
+    const attachments = message.attachments;
+
+    if (attachments === undefined) return undefined;
+
+    return Array.isArray(attachments) ? [...attachments].map(snapshotAttachmentItem) : attachments;
+  }
+
+  if (key === "metadata") {
+    const metadata = message.metadata;
+
+    if (metadata === undefined) return undefined;
+
+    return isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
+  }
+
+  if (key === "subject") return message.subject;
+
+  if (key === "html") return message.html;
+
+  if (key === "text") return message.text;
+
+  if (key === "sendAt") return message.sendAt;
+
+  return undefined;
+}
+
+const MESSAGE_FIELD_SET: ReadonlySet<PropertyKey> = new Set(MESSAGE_FIELDS);
+
 /**
- * Read each message field once after middleware so validation and adapters see identical values
- * even on class instances with getters, and metadata is isolated.
+ * Read each message field once so validation and adapters see identical values
+ * even on class instances with getters, and nested objects/arrays are isolated.
  */
 function snapshotMessage(message: EmailMessage): EmailMessage {
-  const copy: Partial<EmailMessage> = { ...message };
+  const copy: Partial<EmailMessage> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (MESSAGE_FIELD_SET.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(copy, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
 
   for (const key of MESSAGE_FIELDS) {
-    const value = message[key];
+    const value = snapshotMessageField(key, message);
 
     if (value === undefined) continue;
     Object.defineProperty(copy, key, {
-      value: key === "metadata" && isNonArrayObject(value) ? cloneMetadataRecord(value) : value,
+      value,
       enumerable: true,
       writable: true,
       configurable: true,
@@ -132,6 +294,60 @@ function snapshotMessage(message: EmailMessage): EmailMessage {
 
   // SAFETY: Every EmailMessage field was copied from `message`.
   return copy as EmailMessage;
+}
+
+const TEMPLATE_MESSAGE_FIELDS = [
+  "from",
+  "subject",
+  "html",
+  "text",
+  "replyTo",
+  "headers",
+  "attachments",
+  "tags",
+  "metadata",
+  "sendAt",
+] as const;
+
+const TEMPLATE_EXCLUDED_FIELDS: ReadonlySet<PropertyKey> = new Set([
+  ...TEMPLATE_MESSAGE_FIELDS,
+  "to",
+  "cc",
+  "bcc",
+]);
+
+function snapshotTemplateMessage(
+  message: EmailPersonalizedInput["message"] | EmailMessage,
+): EmailPersonalizedInput["message"] {
+  const copy: Partial<EmailPersonalizedInput["message"]> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (TEMPLATE_EXCLUDED_FIELDS.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(copy, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  for (const key of TEMPLATE_MESSAGE_FIELDS) {
+    const value = snapshotMessageField(key, message);
+
+    if (value === undefined) continue;
+    Object.defineProperty(copy, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Every template EmailMessage field (excluding to/cc/bcc) was copied once.
+  return copy as EmailPersonalizedInput["message"];
 }
 
 function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
@@ -452,11 +668,18 @@ export function createEmailClient<
       let resultRejected: number | undefined;
 
       try {
-        if (Array.isArray(result?.accepted)) resultAccepted = result.accepted.length;
+        const acceptedList = result?.accepted;
 
-        if (Array.isArray(result?.rejected)) resultRejected = result.rejected.length;
+        if (Array.isArray(acceptedList)) resultAccepted = acceptedList.length;
       } catch {
         resultAccepted = undefined;
+      }
+
+      try {
+        const rejectedList = result?.rejected;
+
+        if (Array.isArray(rejectedList)) resultRejected = rejectedList.length;
+      } catch {
         resultRejected = undefined;
       }
 
@@ -655,7 +878,12 @@ export function createEmailClient<
   ): Promise<EmailValidationResult> => {
     const safeOptions = snapshotSendOptions(sendOptions);
     const route = readBoundary(() => resolveCheckedRoute(safeOptions), "Email send options");
-    await validateRoute(message, route, "send", safeOptions);
+
+    const safeMessage = isNonArrayObject(message)
+      ? readBoundary(() => snapshotMessage(message), "Email message")
+      : message;
+
+    await validateRoute(safeMessage, route, "send", safeOptions);
 
     return { adapter: route.primary, warnings: [] };
   };
@@ -677,11 +905,13 @@ export function createEmailClient<
         attemptedAdapter = safeInitialOptions.adapter;
       }
 
-      if (telemetry) facts = messageFacts(message);
-
       if (!isNonArrayObject(message)) {
         throw new EmailValidationError("Email message must be an object.");
       }
+
+      const initialMessage = readBoundary(() => snapshotMessage(message), "Email message");
+
+      if (telemetry) facts = messageFacts(initialMessage);
 
       const initialSignal = safeInitialOptions?.signal;
       readBoundary(() => throwIfAborted(initialSignal), "Email send options");
@@ -689,7 +919,7 @@ export function createEmailClient<
       const preparing = applyBeforeSendMiddleware(
         middleware,
         {
-          message,
+          message: initialMessage,
           options: safeInitialOptions,
         },
         (nextOptions) => {
@@ -708,9 +938,10 @@ export function createEmailClient<
 
       const prepared = {
         ...preparedRaw,
-        message: isNonArrayObject(preparedRaw.message)
-          ? readBoundary(() => snapshotMessage(preparedRaw.message), "Email message")
-          : preparedRaw.message,
+        message:
+          middleware.length > 0 && isNonArrayObject(preparedRaw.message)
+            ? readBoundary(() => snapshotMessage(preparedRaw.message), "Email message")
+            : preparedRaw.message,
       };
 
       const safePreparedOptions = snapshotSendOptions(prepared.options);
@@ -1032,12 +1263,19 @@ export function createEmailClient<
       const safeInput = readBoundary(() => {
         if (!isNonArrayObject(input)) return input;
 
+        const rawMessage = input.message;
+
+        const safeMessage = isNonArrayObject(rawMessage)
+          ? snapshotTemplateMessage(rawMessage)
+          : rawMessage;
+
         const rawRecipients = input.recipients;
 
         const recipients = Array.isArray(rawRecipients)
           ? [...rawRecipients].map((recipient) => {
               if (!isNonArrayObject(recipient)) return recipient;
 
+              const to = snapshotAddressItem(recipient.to);
               const rawVars = recipient.variables;
 
               const variables =
@@ -1045,14 +1283,15 @@ export function createEmailClient<
                   ? Object.fromEntries(Object.entries(rawVars))
                   : rawVars;
 
+              // SAFETY: `to` was snapshotted from `recipient.to` preserving the EmailAddress shape.
               return variables === undefined
-                ? { to: recipient.to }
-                : { to: recipient.to, variables };
+                ? { to: to as EmailPersonalizedInput["recipients"][number]["to"] }
+                : { to: to as EmailPersonalizedInput["recipients"][number]["to"], variables };
             })
           : rawRecipients;
 
         return {
-          message: input.message,
+          message: safeMessage,
           recipients,
         };
       }, "sendPersonalized input");
@@ -1091,10 +1330,19 @@ export function createEmailClient<
       const preparedSignal = safePreparedOptions?.signal;
       readBoundary(() => throwIfAborted(preparedSignal ?? initialSignal), "Email send options");
 
-      const preparedInput = readBoundary(
-        () => withPersonalizedMessage(safeInput, prepared.message),
-        "sendPersonalized input",
-      );
+      const preparedInput =
+        middleware.length > 0
+          ? readBoundary(
+              () =>
+                withPersonalizedMessage(
+                  safeInput,
+                  isNonArrayObject(prepared.message)
+                    ? snapshotMessage(prepared.message)
+                    : prepared.message,
+                ),
+              "sendPersonalized input",
+            )
+          : safeInput;
 
       if (facts) facts = personalizedFacts(preparedInput);
       const route = readBoundary(() => resolveCheckedRoute(safePreparedOptions), "Email send options");

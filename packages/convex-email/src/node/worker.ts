@@ -77,7 +77,7 @@ export async function processEmail(options: ProcessEmailOptions) {
     const response = await client.send(message, {
       adapter,
       fallback: { adapters: fallbackAdapters, onUnknownDelivery: "stop" },
-      idempotencyKey: email.idempotencyKey,
+      idempotencyKey: email.idempotencyKey?.trim() ? email.idempotencyKey : undefined,
       // The component deduplicates by idempotencyKey itself, so adapters without provider-side
       // deduplication still send; providers that support it get the key as a second guard.
       idempotency: "best-effort",

@@ -26,29 +26,93 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
     throw new EmailValidationError("defaultsPlugin options must be an object.");
   }
 
-  if (options.metadata !== undefined && !isNonArrayObject(options.metadata)) {
-    throw new EmailValidationError("defaultsPlugin metadata must be an object.");
-  }
+  let safeOptions: EmailDefaultsPluginOptions;
 
-  if (options.sendMetadata !== undefined && !isNonArrayObject(options.sendMetadata)) {
-    throw new EmailValidationError("defaultsPlugin sendMetadata must be an object.");
-  }
+  try {
+    const id = options.id;
+    const metadata = options.metadata;
+    const sendMetadata = options.sendMetadata;
+    const headers = options.headers;
+    const tags = options.tags;
+    const replyTo = options.replyTo;
+    const idempotencyKey = options.idempotencyKey;
+    const idempotencyKeyPrefix = options.idempotencyKeyPrefix;
 
-  if (options.headers !== undefined && !Array.isArray(options.headers)) {
-    throw new EmailValidationError("defaultsPlugin headers must be an array.");
-  }
+    if (metadata !== undefined && !isNonArrayObject(metadata)) {
+      throw new EmailValidationError("defaultsPlugin metadata must be an object.");
+    }
 
-  if (options.tags !== undefined && !Array.isArray(options.tags)) {
-    throw new EmailValidationError("defaultsPlugin tags must be an array.");
+    if (sendMetadata !== undefined && !isNonArrayObject(sendMetadata)) {
+      throw new EmailValidationError("defaultsPlugin sendMetadata must be an object.");
+    }
+
+    let safeHeaders: EmailHeader[] | undefined;
+
+    if (headers !== undefined) {
+      if (!Array.isArray(headers)) {
+        throw new EmailValidationError("defaultsPlugin headers must be an array.");
+      }
+
+      safeHeaders = [...headers].map((header) => {
+        if (
+          !isNonArrayObject(header) ||
+          !isStringMember(header.name) ||
+          header.name.length === 0 ||
+          !isStringMember(header.value)
+        ) {
+          throw new EmailValidationError(
+            "defaultsPlugin headers must contain objects with non-empty string name and string value.",
+          );
+        }
+
+        return { name: header.name, value: header.value };
+      });
+    }
+
+    let safeTags: EmailTag[] | undefined;
+
+    if (tags !== undefined) {
+      if (!Array.isArray(tags)) {
+        throw new EmailValidationError("defaultsPlugin tags must be an array.");
+      }
+
+      safeTags = [...tags].map((tag) => {
+        if (
+          !isNonArrayObject(tag) ||
+          !isStringMember(tag.name) ||
+          !isStringMember(tag.value)
+        ) {
+          throw new EmailValidationError(
+            "defaultsPlugin tags must contain objects with string name and string value.",
+          );
+        }
+
+        return { name: tag.name, value: tag.value };
+      });
+    }
+
+    safeOptions = {
+      id,
+      headers: safeHeaders,
+      tags: safeTags,
+      metadata: metadata === undefined ? undefined : cloneMetadataRecord(metadata),
+      sendMetadata: sendMetadata === undefined ? undefined : cloneMetadataRecord(sendMetadata),
+      replyTo: cloneReplyTo(replyTo),
+      idempotencyKey,
+      idempotencyKeyPrefix,
+    };
+  } catch (error) {
+    if (error instanceof EmailValidationError) throw error;
+    throw new EmailValidationError("defaultsPlugin options could not be read.");
   }
 
   return {
-    id: options.id ?? "defaults",
+    id: safeOptions.id ?? "defaults",
     middleware: [
       {
         beforeSend(event) {
-          const message = withMessageDefaults(event.message, options);
-          const sendOptions = withSendOptionDefaults(event.options, message, options);
+          const message = withMessageDefaults(event.message, safeOptions);
+          const sendOptions = withSendOptionDefaults(event.options, message, safeOptions);
 
           return {
             message,

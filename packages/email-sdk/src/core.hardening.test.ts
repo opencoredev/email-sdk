@@ -1773,6 +1773,107 @@ describe("audit hardening regressions", () => {
         expect(inboundErr.reason).toBe("payload_invalid");
       }
 
+      // 33. R19: non-string accepted entries in native sendPersonalized fail closed with unknown delivery (zero backup sends)
+      const badAccBackup = memoryAdapter("bad-acc-backup");
+
+      const badAccClient = createEmailClient({
+        adapters: [
+          {
+            name: "bad-acc-native",
+            capabilities: {
+              repeatedHeaders: true,
+              idempotency: "native",
+              scheduling: true,
+              personalized: "native",
+            },
+            async send() {
+              throw new Error("unused");
+            },
+            async sendPersonalized() {
+              return {
+                adapter: "bad-acc-native",
+                // @ts-expect-error -- runtime non-string accepted item
+                accepted: [{ email: "b@example.com" }],
+                rejected: [],
+              };
+            },
+          },
+          badAccBackup,
+        ],
+        fallback: { adapters: ["bad-acc-backup"] },
+        telemetry: false,
+      });
+
+      await expect(
+        badAccClient.sendPersonalized({
+          message: { from: "a@example.com", subject: "s", text: "t" },
+          recipients: [{ to: "b@example.com", variables: {} }],
+        }),
+      ).rejects.toThrow();
+
+      expect(badAccBackup.raw.sent).toHaveLength(0);
+
+      // 34. R19: message own getter is read once (no spread double-read), nested addresses snapshotted, class-instance metadata consistent across validate/send
+      let ownToReads = 0;
+      const singleReadAdapter = memoryAdapter("sra");
+      const singleReadClient = createEmailClient({ adapters: [singleReadAdapter], telemetry: false });
+
+      await singleReadClient.send({
+        from: "a@example.com",
+        get to() {
+          ownToReads += 1;
+
+          return ownToReads === 1 ? "good@example.com" : "evil@example.com";
+        },
+        subject: "hi",
+        text: "ok",
+      });
+
+      expect(ownToReads).toBe(1);
+      expect(singleReadAdapter.raw.sent[0]?.message.to).toBe("good@example.com");
+
+      // 35. R19: SMTP rejects missing path and URL path with EmailValidationError before connecting
+      await expect(
+        smtpClient.send({
+          ...msg,
+          attachments: [{ filename: "missing.txt", path: "/nonexistent-email-sdk-r19.txt" }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      await expect(
+        smtpClient.send({
+          ...msg,
+          attachments: [{ filename: "url.txt", path: "http://127.0.0.1:1/secret" }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      // 36. R19: handleInbound wraps already-consumed Request body as InboundError(payload_invalid)
+      const consumedReq = new Request("https://x.test/inbound", {
+        method: "POST",
+        body: JSON.stringify({ From: "a@b.com" }),
+        headers: { "content-type": "application/json" },
+      });
+
+      await consumedReq.text();
+
+      const consumedErr = await handleInbound(consumedReq, {
+        provider: "postmark",
+        auth: { none: true },
+      }).catch((error) => error);
+
+      expect(consumedErr).toBeInstanceOf(InboundError);
+
+      // 37. R19: defaultsPlugin rejects malformed header/tag elements upfront with EmailValidationError
+      expect(() =>
+        // @ts-expect-error -- runtime malformed defaultsPlugin header element
+        defaultsPlugin({ headers: [null] }),
+      ).toThrow(EmailValidationError);
+
+      expect(() =>
+        // @ts-expect-error -- runtime malformed defaultsPlugin tag element
+        defaultsPlugin({ tags: [null] }),
+      ).toThrow(EmailValidationError);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

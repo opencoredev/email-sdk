@@ -16,7 +16,9 @@ const NAMED_ADDRESS = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/;
 
 export function emailParts(address: string | { email: string; name?: string }) {
   if (!isStringMember(address)) {
-    return address;
+    return address.name === undefined
+      ? { email: address.email }
+      : { email: address.email, name: address.name };
   }
 
   // Bare addresses are the common case, and NAMED_ADDRESS cannot match without "<".

@@ -281,7 +281,18 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
   if (!request.body) return new Uint8Array(0);
 
   // Content-Length can be absent (chunked) or wrong, so the stream is counted as it arrives.
-  const reader = request.body.getReader();
+  let reader: ReadableStreamDefaultReader<Uint8Array>;
+
+  try {
+    reader = request.body.getReader();
+  } catch (error) {
+    throw new InboundError("Inbound request body could not be read.", {
+      reason: "payload_invalid",
+      provider,
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
+
   const chunks: Uint8Array[] = [];
   let total = 0;
 

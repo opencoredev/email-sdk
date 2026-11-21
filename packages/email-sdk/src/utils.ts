@@ -70,7 +70,9 @@ function readOptionalStringList(
   if (!Array.isArray(value)) return undefined;
 
   try {
-    return [...value].filter((entry) => isString(entry));
+    const entries = [...value];
+
+    return entries.every((entry) => isString(entry)) ? entries : undefined;
   } catch {
     return undefined;
   }
@@ -170,7 +172,10 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
     }));
   }
 
-  return [...headers];
+  return headers.map((header) => ({
+    name: header.name,
+    value: header.value,
+  }));
 }
 
 export function isValidAddress(address: EmailAddress): boolean {

@@ -100,23 +100,25 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     let result: EmailSendResult;
 
     try {
-      const adapterResult = await input.measureAttempt(
+      result = await input.measureAttempt(
         input.adapter,
         input.path ?? "single",
         recipientCount(input.message),
-        () =>
-          input.adapter.send(input.message, {
-            adapter: input.adapter.name,
-            operation: "send",
-            attempt,
-            signal: input.options?.signal,
-            idempotencyKey: input.options?.idempotencyKey,
-            metadata: input.options?.metadata,
-          }),
+        async () =>
+          normalizeAdapterResult(
+            input.adapter.name,
+            await input.adapter.send(input.message, {
+              adapter: input.adapter.name,
+              operation: "send",
+              attempt,
+              signal: input.options?.signal,
+              idempotencyKey: input.options?.idempotencyKey,
+              metadata: input.options?.metadata,
+            }),
+          ),
       );
 
       throwIfAborted(input.options?.signal);
-      result = normalizeAdapterResult(input.adapter.name, adapterResult);
     } catch (error) {
       if (isAbort(error, input.options?.signal)) throw new EmailAbortError(error);
 

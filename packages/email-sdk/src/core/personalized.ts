@@ -319,23 +319,10 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
 export function personalizedMiddlewareMessage(input: EmailPersonalizedInput): EmailMessage {
   const to = input.recipients[0]?.to ?? "";
-  const template = input.message;
 
-  // SAFETY: input.message is an EmailMessage without recipients. Copying known template fields
-  // preserves class-instance prototype getters, and adding `to` restores an EmailMessage.
-  // The empty `to` only reaches middleware; validatePersonalizedInput rejects empty recipients.
+  // SAFETY: input.message is an EmailMessage template without recipients; adding `to` restores EmailMessage.
   return {
-    ...template,
-    from: template.from,
-    subject: template.subject,
-    html: template.html,
-    text: template.text,
-    replyTo: template.replyTo,
-    headers: template.headers,
-    attachments: template.attachments,
-    tags: template.tags,
-    metadata: template.metadata,
-    sendAt: template.sendAt,
+    ...input.message,
     to,
   } as EmailMessage;
 }
@@ -346,24 +333,9 @@ export function withPersonalizedMessage(
 ): EmailPersonalizedInput {
   const { to: _to, cc: _cc, bcc: _bcc, ...rest } = message;
 
-  const template = {
-    ...rest,
-    from: message.from,
-    subject: message.subject,
-    html: message.html,
-    text: message.text,
-    replyTo: message.replyTo,
-    headers: message.headers,
-    attachments: message.attachments,
-    tags: message.tags,
-    metadata: message.metadata,
-    sendAt: message.sendAt,
-  };
-
   return {
-    // SAFETY: Copying known template fields preserves class-instance prototype getters returned
-    // by beforeSend middleware, while omitting to, cc, and bcc restores the template shape.
-    message: template as EmailPersonalizedInput["message"],
+    // SAFETY: Omitting to, cc, and bcc from a snapshotted EmailMessage restores the template shape.
+    message: rest as EmailPersonalizedInput["message"],
     recipients: input.recipients,
   };
 }
