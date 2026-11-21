@@ -93,7 +93,7 @@ const formatDate = (date: Date): string =>
         posts.map((post) => (
           <li class="post">
             <a class="post-thumb" href={post.href} tabindex="-1" aria-hidden="true">
-              <img alt="" height="138" loading="lazy" src={post.image} width="220" />
+              <img alt="" height="116" loading="lazy" src={post.image} width="220" />
             </a>
             <div class="post-body">
               <div class="post-meta">
@@ -188,7 +188,7 @@ const formatDate = (date: Date): string =>
     overflow: hidden;
     border: 1px solid var(--blume-border);
     background: var(--email-panel, var(--blume-muted));
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 1200 / 630;
   }
   .post-thumb img {
     display: block;

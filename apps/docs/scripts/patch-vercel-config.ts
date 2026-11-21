@@ -237,8 +237,17 @@ const hasHomeLinkRoute = syncedRoutes.some(
     route.src === "^/$" && route.headers && ("link" in route.headers || "Link" in route.headers),
 );
 
+const markdownContentTypeRoute: ParsedRoute = {
+  src: "^/.*\\.md$",
+  headers: {
+    "Content-Type": "text/markdown; charset=utf-8",
+  },
+  continue: true,
+};
+
 const missingSiteRoutes = [
   ...headerRoutes,
+  markdownContentTypeRoute,
   ...(hasHomeLinkRoute ? [] : [{ src: "^/$", headers: { Link: homeLinkMerged }, continue: true }]),
   ...archivedIndexMdRedirects,
   agentModeRoute,
@@ -252,11 +261,7 @@ if (!routesChanged) {
   process.exit(0);
 }
 
-const routes = [
-  ...missingSiteRoutes,
-  ...syncedRoutes.slice(0, filesystemIndex),
-  ...syncedRoutes.slice(filesystemIndex),
-];
+const routes = [...missingSiteRoutes, ...syncedRoutes];
 
 writeFileSync(configPath, `${JSON.stringify({ ...config, routes }, null, "\t")}\n`);
 
