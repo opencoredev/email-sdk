@@ -26,9 +26,9 @@ import {
   vEmailEventRecord,
   vEmailRecord,
   vListEmailEventsArgs,
+  vPublicSendBatchEmailsArgs,
+  vPublicSendEmailArgs,
   vRetryEmailArgs,
-  vSendBatchEmailsArgs,
-  vSendEmailArgs,
   vStatusArgs,
 } from "../shared/validators.js";
 
@@ -387,7 +387,7 @@ export class ConvexEmail {
 
     const publicApi = {
       send: mutationGeneric({
-        args: vSendEmailArgs,
+        args: vPublicSendEmailArgs,
         returns: v.string(),
         handler: async (ctx, args) => {
           const ownerId = await this.authorizePublic(ctx, "send", options.authorize);
@@ -396,7 +396,7 @@ export class ConvexEmail {
         },
       }),
       sendBatch: mutationGeneric({
-        args: vSendBatchEmailsArgs,
+        args: vPublicSendBatchEmailsArgs,
         returns: v.array(v.string()),
         handler: async (ctx, args) => {
           const ownerId = await this.authorizePublic(ctx, "sendBatch", options.authorize);

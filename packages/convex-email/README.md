@@ -294,6 +294,8 @@ export const { send, status, listEvents, cancel, retry } = email.exposeApi({
 });
 ```
 
+Public `send` and `sendBatch` do not accept `adapters`. The sender action reads credentials from the whole deployment environment, so a caller who could set `apiKeyEnv` and `baseUrl` could send a secret to their own server. Public sends use the adapters configured on the `ConvexEmail` client, and callers can still pick one of them by name with `adapter` and `fallbackAdapters`.
+
 This is intentionally a security boundary, not recipient policy: use explicit app wrappers when sending must be restricted to particular recipients or roles. `setConfig` and `getConfig` stay excluded by default. If they are needed, pass both `includeConfigApi: true` and an explicit `authorizeConfig` admin check.
 
 ### Migrating `exposeApi()` in v3
@@ -333,7 +335,7 @@ export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
 });
 ```
 
-`ConvexEmail` now requires its options argument, because `sender` is required.
+`ConvexEmail` now requires its options argument, because `sender` is required. `exposeApi()` send and batch functions reject an `adapters` field: configure adapters on the client instead, and let callers choose among them by name.
 
 ## Cleanup
 

@@ -160,6 +160,7 @@ Versions 5.0.0 and earlier put `"use node"` modules inside the component, which 
 1. Remove the `env` mapping from `app.use(convexEmail, { env })` and the matching `defineApp({ env })` entries you only added for the component. Set each secret with `bunx convex env set` under its default name.
 2. Add `convex/emailSender.ts` as shown above.
 3. Pass `sender: internal.emailSender.send` to `new ConvexEmail(...)` and annotate the export as `ConvexEmail`.
+4. If you use `exposeApi()`, configure adapters on the client. Its public `send` and `sendBatch` now reject an `adapters` field.
 
 ```ts title="Before (5.x)"
 export const email = new ConvexEmail(components.convexEmail, {
