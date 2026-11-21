@@ -93,6 +93,10 @@ body :not(.email-landing *):is([class*="rounded"], button, input, select, textar
   text-underline-offset: 4px;
 }
 
+.prose .not-prose a:not(.underline) {
+  text-decoration: none;
+}
+
 /* Component headings ------------------------------------------------------ */
 
 /* Blume's prose heading styles also reach headings inside the React

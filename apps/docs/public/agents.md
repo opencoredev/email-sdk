@@ -90,7 +90,7 @@ Predictable URLs for programmatic discovery:
 - Docs-scoped index: https://email-sdk.dev/docs/llms.txt
 - API catalog (RFC 9727): https://email-sdk.dev/.well-known/api-catalog
 - Schema feed (NLWeb): https://email-sdk.dev/schemamap.xml → https://email-sdk.dev/feeds/docs.jsonl
-- Skill descriptor: https://email-sdk.dev/.well-known/agent-skills
+- Skill descriptor: https://email-sdk.dev/.well-known/agent-skills/index.json
 
 Append `.md` to any documentation, comparison, or blog post URL (for example
 `/docs/getting-started/quickstart.md`, `/compare/resend-vs-postmark.md`, or

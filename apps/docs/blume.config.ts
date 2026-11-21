@@ -15,13 +15,20 @@ import { emailSdkDark, emailSdkLight } from "./themes/code";
 
 type Redirect = NonNullable<Parameters<typeof defineConfig>[0]["redirects"]>[number];
 
-// The Fumadocs site served each archive at /docs/v/<release>/...; Blume serves
-// it at /<id>/docs/... (an archived version's id must start with a letter).
-const archiveRedirects = archivedDocsVersions.map((version): Redirect => ({
-  from: `${legacyArchivedVersionHref(version)}/:path*`,
-  to: `/${version.id}/docs/:path*`,
-  status: 308,
-}));
+// The Fumadocs site served each archive at /docs/v/<release>/... (and /docs/v/<release>.md);
+// Blume serves it at /<id>/docs/... (an archived version's id must start with a letter).
+const archiveRedirects: Redirect[] = archivedDocsVersions.flatMap((version): Redirect[] => [
+  {
+    from: `${legacyArchivedVersionHref(version)}.md`,
+    to: `/${version.id}/docs.md`,
+    status: 308,
+  },
+  {
+    from: `${legacyArchivedVersionHref(version)}/:path*`,
+    to: `/${version.id}/docs/:path*`,
+    status: 308,
+  },
+]);
 
 // An archive has no page at its bare /<id> (its pages start at /<id>/docs),
 // which is where the version switcher lands from a page outside the docs.
@@ -45,6 +52,7 @@ const machineRedirects: Redirect[] = [
   { from: "/rss.xml", to: "/blog/rss.xml", status: 308 },
   { from: "/llms.md", to: "/llms.txt", status: 308 },
   { from: "/docs/llms.txt", to: "/llms.txt", status: 308 },
+  { from: "/.well-known/agent-skills", to: "/.well-known/agent-skills/index.json", status: 308 },
 ];
 
 export default defineConfig({

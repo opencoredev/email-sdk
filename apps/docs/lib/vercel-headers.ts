@@ -53,6 +53,11 @@ export const headerRoutes: VercelRoute[] = [
     headers: { "Content-Type": "application/feed+json; charset=utf-8" },
     continue: true,
   },
+  {
+    src: "^/v\\d+\\.\\d+\\.\\d+(?:/.*)?$",
+    headers: { "X-Robots-Tag": "noindex, follow" },
+    continue: true,
+  },
 ];
 
 /** Added before the filesystem handler: `/?mode=agent` serves the agent guide. */

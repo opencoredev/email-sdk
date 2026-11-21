@@ -25,7 +25,7 @@ claude mcp add --transport http email-sdk https://email-sdk.dev/mcp
 
 ## Prefer canonical URLs
 
-Use current `/docs/...` URLs unless you need behavior from a pinned historical release. Archived pages declare their current equivalent as canonical.
+Use current `/docs/...` URLs unless you need behavior from a pinned historical release. Archived pages carry `X-Robots-Tag: noindex, follow` (and HTML `noindex` meta tags) and point to the current docs for live usage.
 
 ## Retrieve one page
 

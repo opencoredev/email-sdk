@@ -28,10 +28,14 @@
     "@hugeicons/react": "^1.1.10",
     "@opencoredev/email-sdk": "workspace:*",
     "blume": "2.2.7",
+    "clsx": "^2.1.1",
     "d3-scale": "^4.0.3",
     "d3-shape": "^3.2.1",
+    "motion": "^12.43.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "shiki": "4.6.0",
+    "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

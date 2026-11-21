@@ -39,8 +39,8 @@ if (filesystemIndex === -1) {
 
 const routes = [
   ...headerRoutes,
-  ...config.routes.slice(0, filesystemIndex),
   agentModeRoute,
+  ...config.routes.slice(0, filesystemIndex),
   ...config.routes.slice(filesystemIndex),
 ];
 
