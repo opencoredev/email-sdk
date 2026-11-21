@@ -1,5 +1,10 @@
-import { EmailAdapterError, EmailAdapterNotFoundError, EmailValidationError } from "../errors.js";
-import { isStringMember } from "../internal/decode.js";
+import {
+  EmailAdapterError,
+  EmailAdapterNotFoundError,
+  EmailSdkError,
+  EmailValidationError,
+} from "../errors.js";
+import { isNonArrayObject, isStringMember } from "../internal/decode.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -15,46 +20,55 @@ export function validateCapabilities(
   operation: "send" | "personalized",
   sendOptions?: Pick<EmailSendOptions, "idempotencyKey" | "idempotency">,
 ) {
-  if (message.sendAt !== undefined && !adapter.capabilities.scheduling) {
-    throw new EmailValidationError(`${adapter.name} does not support scheduled email.`);
-  }
-
-  // An idempotency key is a safety promise: a retried or replayed send is delivered once. An
-  // adapter that cannot keep that promise fails loudly instead of silently dropping the key.
-  if (sendOptions?.idempotencyKey !== undefined) {
-    if (!isStringMember(sendOptions.idempotencyKey) || sendOptions.idempotencyKey.trim().length === 0) {
-      throw new EmailValidationError("idempotencyKey must be a non-empty string.");
+  try {
+    if (message.sendAt !== undefined && !adapter.capabilities.scheduling) {
+      throw new EmailValidationError(`${adapter.name} does not support scheduled email.`);
     }
 
-    if (sendOptions.idempotency !== "best-effort" && adapter.capabilities.idempotency === "none") {
-      throw new EmailValidationError(
-        `${adapter.name} cannot deduplicate sends, so idempotencyKey would be ignored. Route to an adapter with idempotency support, remove idempotencyKey, or pass idempotency: "best-effort" to send without provider deduplication.`,
-        { adapter: adapter.name, capability: "idempotency" },
-      );
-    }
-  }
-
-  if (operation === "personalized" && adapter.capabilities.personalized === "unsupported") {
-    throw new EmailValidationError(`${adapter.name} does not support personalized email.`);
-  }
-
-  // headerList also accepts the legacy name-to-value object that JavaScript callers send.
-  const headers = headerList(message.headers);
-
-  if (!adapter.capabilities.repeatedHeaders && headers.length > 1) {
-    const names = new Set<string>();
-
-    for (const header of headers) {
-      const normalized = header.name.toLowerCase();
-
-      if (names.has(normalized)) {
-        throw new EmailValidationError(
-          `${adapter.name} does not support repeated email header names: ${header.name}.`,
-        );
+    // An idempotency key is a safety promise: a retried or replayed send is delivered once. An
+    // adapter that cannot keep that promise fails loudly instead of silently dropping the key.
+    if (sendOptions?.idempotencyKey !== undefined) {
+      if (
+        !isStringMember(sendOptions.idempotencyKey) ||
+        sendOptions.idempotencyKey.trim().length === 0
+      ) {
+        throw new EmailValidationError("idempotencyKey must be a non-empty string.");
       }
 
-      names.add(normalized);
+      if (sendOptions.idempotency !== "best-effort" && adapter.capabilities.idempotency === "none") {
+        throw new EmailValidationError(
+          `${adapter.name} cannot deduplicate sends, so idempotencyKey would be ignored. Route to an adapter with idempotency support, remove idempotencyKey, or pass idempotency: "best-effort" to send without provider deduplication.`,
+          { adapter: adapter.name, capability: "idempotency" },
+        );
+      }
     }
+
+    if (operation === "personalized" && adapter.capabilities.personalized === "unsupported") {
+      throw new EmailValidationError(`${adapter.name} does not support personalized email.`);
+    }
+
+    // headerList also accepts the legacy name-to-value object that JavaScript callers send.
+    const headers = headerList(message.headers);
+
+    if (!adapter.capabilities.repeatedHeaders && headers.length > 1) {
+      const names = new Set<string>();
+
+      for (const header of headers) {
+        const normalized = header.name.toLowerCase();
+
+        if (names.has(normalized)) {
+          throw new EmailValidationError(
+            `${adapter.name} does not support repeated email header names: ${header.name}.`,
+          );
+        }
+
+        names.add(normalized);
+      }
+    }
+  } catch (error) {
+    if (error instanceof EmailSdkError) throw error;
+
+    throw new EmailValidationError("Email message or send options could not be read.", error);
   }
 }
 
@@ -105,6 +119,10 @@ export function validateFallback(
   adapters: ReadonlyMap<string, EmailAdapter>,
   fallback: EmailFallbackConfig | undefined,
 ) {
+  if (fallback?.adapters !== undefined && !Array.isArray(fallback.adapters)) {
+    throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
+  }
+
   for (const name of fallback?.adapters ?? []) requireAdapter(adapters, name);
 }
 
@@ -119,7 +137,7 @@ export function mergeSendOptions(
 ): EmailSendOptions | undefined {
   if (!base) return override;
 
-  if (!override) return base;
+  if (!override) return { ...base };
 
   const merged: EmailSendOptions = { ...base, ...override };
 
@@ -127,10 +145,23 @@ export function mergeSendOptions(
     merged.idempotencyKey = base.idempotencyKey;
   }
 
-  if (base.retry && override.retry) merged.retry = { ...base.retry, ...override.retry };
+  if (
+    base.retry &&
+    override.retry &&
+    isNonArrayObject(base.retry) &&
+    isNonArrayObject(override.retry)
+  ) {
+    merged.retry = { ...base.retry, ...override.retry };
+  }
 
-  if (base.fallback && override.fallback)
+  if (
+    base.fallback &&
+    override.fallback &&
+    isNonArrayObject(base.fallback) &&
+    isNonArrayObject(override.fallback)
+  ) {
     merged.fallback = { ...base.fallback, ...override.fallback };
+  }
 
   return merged;
 }

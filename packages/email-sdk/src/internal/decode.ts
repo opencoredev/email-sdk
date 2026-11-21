@@ -81,11 +81,13 @@ const sharedArrayBufferByteLength = isFunction(globalThis.SharedArrayBuffer)
   ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "byteLength")?.get
   : undefined;
 
-/** True for real ArrayBuffer and SharedArrayBuffer instances across realms (rejects spoofed tags). */
-export function isBinaryBuffer<T>(value: T): boolean {
-  if (isPrimitive(value)) return false;
+const blobSizeGetter = isFunction(globalThis.Blob)
+  ? Object.getOwnPropertyDescriptor(Blob.prototype, "size")?.get
+  : undefined;
 
-  if (value instanceof ArrayBuffer) return true;
+/** True for real ArrayBuffer and SharedArrayBuffer instances across realms (rejects spoofed tags and prototypes). */
+export function isBinaryBuffer(value: unknown): value is ArrayBufferLike {
+  if (isPrimitive(value)) return false;
 
   if (arrayBufferByteLength) {
     try {
@@ -110,11 +112,9 @@ export function isBinaryBuffer<T>(value: T): boolean {
   return false;
 }
 
-/** True for real Date instances across realms (rejects spoofed tags). */
-export function isDateLike<T>(value: T): boolean {
+/** True for real Date instances across realms (rejects spoofed tags and prototypes). */
+export function isDateLike(value: unknown): value is Date {
   if (isPrimitive(value)) return false;
-
-  if (value instanceof Date) return true;
 
   try {
     Date.prototype.getTime.call(value);
@@ -127,9 +127,19 @@ export function isDateLike<T>(value: T): boolean {
 
 /** True for Blob/File instances, including cross-realm Blobs implementing arrayBuffer(). */
 export function isBlobLike<T>(value: T): value is Extract<T, Blob> {
-  if (value instanceof Blob) return true;
-
   if (isPrimitive(value)) return false;
+
+  if (value instanceof Blob) {
+    if (!blobSizeGetter) return true;
+
+    try {
+      blobSizeGetter.call(value);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   const tag = tagOf(value);
 

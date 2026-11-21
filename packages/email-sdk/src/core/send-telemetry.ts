@@ -29,12 +29,21 @@ export function messageFacts(message: EmailMessage) {
     };
   }
 
-  return {
-    recipients: recipientCount(message),
-    has_attachments: Array.isArray(message.attachments) && message.attachments.length > 0,
-    used_recipient_variables: false,
-    used_send_at: message.sendAt !== undefined,
-  };
+  try {
+    return {
+      recipients: recipientCount(message),
+      has_attachments: Array.isArray(message.attachments) && message.attachments.length > 0,
+      used_recipient_variables: false,
+      used_send_at: message.sendAt !== undefined,
+    };
+  } catch {
+    return {
+      recipients: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
 }
 
 export function personalizedFacts(input: EmailPersonalizedInput) {
@@ -48,21 +57,31 @@ export function personalizedFacts(input: EmailPersonalizedInput) {
     };
   }
 
-  const recipients = Array.isArray(input.recipients) ? input.recipients : [];
-  const message = isNonArrayObject(input.message) ? input.message : undefined;
+  try {
+    const recipients = Array.isArray(input.recipients) ? input.recipients : [];
+    const message = isNonArrayObject(input.message) ? input.message : undefined;
 
-  return {
-    recipients: recipients.length,
-    personalized_recipient_count: recipients.length,
-    has_attachments: Array.isArray(message?.attachments) && message.attachments.length > 0,
-    used_recipient_variables: recipients.some(
-      (recipient) =>
-        isNonArrayObject(recipient) &&
-        isNonArrayObject(recipient.variables) &&
-        Object.keys(recipient.variables).length > 0,
-    ),
-    used_send_at: message?.sendAt !== undefined,
-  };
+    return {
+      recipients: recipients.length,
+      personalized_recipient_count: recipients.length,
+      has_attachments: Array.isArray(message?.attachments) && message.attachments.length > 0,
+      used_recipient_variables: recipients.some(
+        (recipient) =>
+          isNonArrayObject(recipient) &&
+          isNonArrayObject(recipient.variables) &&
+          Object.keys(recipient.variables).length > 0,
+      ),
+      used_send_at: message?.sendAt !== undefined,
+    };
+  } catch {
+    return {
+      recipients: 0,
+      personalized_recipient_count: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
 }
 
 export type SendTelemetryInput = {
