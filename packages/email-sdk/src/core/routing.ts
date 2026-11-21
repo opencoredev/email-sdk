@@ -74,7 +74,8 @@ export function resolveRoute(
   return {
     primary,
     fallback,
-    names: [primary, ...fallback.adapters.filter((name) => name !== primary)],
+    // A Set keeps first occurrences in order, so a repeated name is attempted once.
+    names: [...new Set([primary, ...fallback.adapters])],
   };
 }
 
@@ -100,6 +101,11 @@ export function validateFallback(
   for (const name of fallback?.adapters ?? []) requireAdapter(adapters, name);
 }
 
+/**
+ * Item options over `sendMany` method options. `retry` and `fallback` merge one level deep, so an
+ * item that sets only `retry.delay` keeps the batch's `retry.maxAttempts`; `fallback.adapters`
+ * from the item still replaces the batch list as a whole.
+ */
 export function mergeSendOptions(
   base: EmailSendOptions | undefined,
   override: EmailSendOptions | undefined,
@@ -108,7 +114,13 @@ export function mergeSendOptions(
 
   if (!override) return base;
 
-  return { ...base, ...override };
+  const merged: EmailSendOptions = { ...base, ...override };
+
+  if (base.retry && override.retry) merged.retry = { ...base.retry, ...override.retry };
+
+  if (base.fallback && override.fallback) merged.fallback = { ...base.fallback, ...override.fallback };
+
+  return merged;
 }
 
 export function requireAdapter(adapters: ReadonlyMap<string, EmailAdapter>, name: string) {

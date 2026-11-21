@@ -80,6 +80,7 @@ import type {
   EmailValidationResult,
 } from "./types.js";
 import { isObjectLike } from "./internal/decode.js";
+import { ReadonlyMapView } from "./internal/readonly-map.js";
 import { arrayify, assertMessage, isBuiltInAdapter } from "./utils.js";
 
 export function createEmailClient<
@@ -664,7 +665,8 @@ export function createEmailClient<
   // and adapter lookups match TAdapters. The loop below attaches each plugin's client extension
   // before the client is returned.
   const client = {
-    adapters,
+    // A live read-only view: the type says ReadonlyMap, and a cast can no longer change routing.
+    adapters: new ReadonlyMapView(adapters),
     defaultAdapter,
     validate(message: EmailMessage, sendOptions?: EmailSendOptions) {
       return validate(message, sendOptions);

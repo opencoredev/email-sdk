@@ -1,3 +1,4 @@
+import { ReadonlyMapView } from "../internal/readonly-map.js";
 import { EmailMiddlewareError, EmailValidationError } from "../errors.js";
 import type {
   EmailAdapter,
@@ -20,7 +21,7 @@ export function createPluginContext(
   defaultAdapter: string,
 ): EmailPluginContext {
   return {
-    adapters,
+    adapters: new ReadonlyMapView(adapters),
     defaultAdapter,
     addAdapter(adapter) {
       addAdapter(adapters, adapter);
