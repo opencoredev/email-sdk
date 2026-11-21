@@ -6,6 +6,7 @@ import type {
   EmailTag,
   EmailSendOptions,
 } from "./types.js";
+import { cloneMetadataRecord, isStringMember } from "./internal/decode.js";
 import { headerList } from "./utils.js";
 
 export type EmailDefaultsPluginOptions = {
@@ -38,13 +39,25 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
   };
 }
 
+function cloneReplyTo(
+  replyTo: EmailDefaultsPluginOptions["replyTo"],
+): EmailDefaultsPluginOptions["replyTo"] {
+  if (replyTo === undefined || isStringMember(replyTo)) return replyTo;
+
+  if (Array.isArray(replyTo)) {
+    return replyTo.map((entry) => (isStringMember(entry) ? entry : { ...entry }));
+  }
+
+  return { ...replyTo };
+}
+
 function withMessageDefaults(
   message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailMessage {
   return {
     ...message,
-    replyTo: message.replyTo ?? options.replyTo,
+    replyTo: message.replyTo ?? cloneReplyTo(options.replyTo),
     headers: mergeHeaders(options.headers, message.headers),
     tags: mergeTags(options.tags, message.tags),
     metadata: mergeMetadata(options.metadata, message.metadata),
@@ -124,10 +137,10 @@ function mergeMetadata(
     return value;
   }
 
-  return {
+  return cloneMetadataRecord({
     ...defaults,
     ...value,
-  };
+  });
 }
 
 function mergeSendMetadata(
@@ -138,10 +151,10 @@ function mergeSendMetadata(
     return value;
   }
 
-  return {
+  return cloneMetadataRecord({
     ...defaults,
     ...value,
-  };
+  });
 }
 
 function applyIdempotencyDefault(

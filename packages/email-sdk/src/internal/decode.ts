@@ -300,7 +300,7 @@ export function cloneMetadataRecord<T>(metadata: T): T {
 
     const proto = Object.getPrototypeOf(value);
 
-    if (proto === Object.prototype || proto === null) {
+    if (proto === null || (Object.getPrototypeOf(proto) === null && tagOf(value) === "[object Object]")) {
       // SAFETY: Creating a fresh plain object with matching prototype preserves V.
       const copy = (proto === null ? Object.create(null) : {}) as V;
       seen.set(value, copy);

@@ -37,6 +37,7 @@ import {
   invokeHooks,
   invokeSendFailureLifecycle,
 } from "./lifecycle.js";
+import { cloneNestedSendOptions } from "./routing.js";
 
 export async function attemptNativePersonalized(
   adapter: EmailAdapter,
@@ -48,8 +49,8 @@ export async function attemptNativePersonalized(
   middleware: EmailSendMiddleware[],
   measureAttempt: MeasureAttempt,
 ): Promise<PersonalizedAttempt> {
-  const maxAttempts = sendOptions?.retry?.maxAttempts ?? clientRetry?.maxAttempts ?? 1;
   const retry = sendOptions?.retry ?? clientRetry;
+  const maxAttempts = retry?.maxAttempts ?? 1;
   // See attemptAdapter: after an attempt with an unknown outcome, nothing later proves not_sent.
   let earlierOutcomeUnknown = false;
 
@@ -195,11 +196,13 @@ export async function attemptExpandedPersonalized(
       const result = await attemptAdapter({
         adapter,
         message,
-        options: {
-          ...sendOptions,
-          fallback: undefined,
-          idempotencyKey: recipientIdempotencyKey(sendOptions?.idempotencyKey, address),
-        },
+        options: sendOptions
+          ? cloneNestedSendOptions({
+              ...sendOptions,
+              fallback: undefined,
+              idempotencyKey: recipientIdempotencyKey(sendOptions.idempotencyKey, address),
+            })
+          : undefined,
         retry: sendOptions?.retry ?? clientRetry,
         hooks,
         middleware,

@@ -776,4 +776,288 @@ describe("audit hardening regressions", () => {
       resetTelemetry();
     }
   });
+
+  test("hardens cross-realm metadata, class-instance retry/hooks, defaultsPlugin nested fields, SMTP base64 validation, telemetry-enabled personalized-only adapters, and createEmailClient boundaries", async () => {
+    const vm = await import("node:vm");
+    const { smtp } = await import("./smtp.js");
+    const { defaultsPlugin } = await import("./plugins-defaults.js");
+    const { telemetry, exceptions } = captureTelemetry();
+    setSharedTelemetry(telemetry);
+
+    try {
+      const resend = memoryAdapter("resend");
+      const postmark = memoryAdapter("postmark");
+      const msg = { from: "a@example.com", to: "b@example.com", subject: "hi", text: "ok" };
+
+      // 1. Cross-realm plain objects in metadata are deeply cloned
+      const crossRealm = vm.runInNewContext('({ trace: { count: 0 }, tags: ["a"] })');
+      const seenCounts: number[] = [];
+
+      const realmClient = createEmailClient({
+        adapters: [resend],
+        plugins: [
+          {
+            id: "realm-mutator",
+            middleware: [
+              {
+                name: "mutate-meta",
+                beforeSend: (ctx) => {
+                  // SAFETY: Cross-realm fixture has shape { trace: { count: number } }.
+                  const trace = ctx.options?.metadata?.trace as { count: number } | undefined;
+
+                  if (trace) {
+                    seenCounts.push(trace.count);
+                    trace.count += 1;
+                  }
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await realmClient.send(msg, { metadata: crossRealm });
+      await realmClient.send(msg, { metadata: crossRealm });
+      expect(seenCounts).toEqual([0, 0]);
+      expect(crossRealm.trace.count).toBe(0);
+
+      // 2. Class-instance retry and hooks preserve prototype methods with bound `this`
+      class CustomRetry {
+        maxAttempts = 2;
+        checked = 0;
+        shouldRetry() {
+          this.checked += 1;
+
+          return true;
+        }
+        delay() {
+          return 0;
+        }
+      }
+
+      class CustomHooks {
+        before = 0;
+        after = 0;
+        beforeSend() {
+          this.before += 1;
+        }
+        afterSend() {
+          this.after += 1;
+        }
+      }
+
+      let attempts = 0;
+      const flakyRetry = new CustomRetry();
+      const classHooks = new CustomHooks();
+
+      const classClient = createEmailClient({
+        adapters: [
+          {
+            ...resend,
+            send: async (message, ctx) => {
+              attempts += 1;
+
+              if (attempts === 1) {
+                throw new EmailAdapterError("transient", {
+                  adapter: "resend",
+                  retryable: true,
+                  delivery: "not_sent",
+                });
+              }
+
+              return resend.send(message, ctx);
+            },
+          },
+        ],
+        retry: flakyRetry,
+        hooks: classHooks,
+      });
+
+      await classClient.send(msg);
+      expect(attempts).toBe(2);
+      expect(flakyRetry.checked).toBe(1);
+      expect(classHooks.before).toBe(2);
+      expect(classHooks.after).toBe(1);
+
+      // 3. Invalid retry/fallback callbacks and enum values throw EmailValidationError up front
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          // @ts-expect-error -- runtime invalid shouldRetry
+          retry: { maxAttempts: 2, shouldRetry: 5 },
+        }),
+      ).toThrow(EmailValidationError);
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend, postmark],
+          // @ts-expect-error -- runtime invalid onUnknownDelivery
+          fallback: { adapters: ["postmark"], onUnknownDelivery: "maybe" },
+        }),
+      ).toThrow(EmailValidationError);
+
+      // 4. Throwing hooks.beforeSend getter, throwing plugin.middleware getter, and single-read plugins with telemetry on
+      const badHooks = {};
+
+      Object.defineProperty(badHooks, "beforeSend", {
+        enumerable: true,
+        get() {
+          throw new TypeError("hook getter boom");
+        },
+      });
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          hooks: badHooks,
+        }),
+      ).toThrow(EmailValidationError);
+
+      const badPlugin = { id: "bad-mw" };
+
+      Object.defineProperty(badPlugin, "middleware", {
+        enumerable: true,
+        get() {
+          throw new TypeError("middleware getter boom");
+        },
+      });
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          plugins: [badPlugin],
+        }),
+      ).toThrow(EmailValidationError);
+
+      let pluginReads = 0;
+      const singleReadOpts = { adapters: [resend] };
+
+      Object.defineProperty(singleReadOpts, "plugins", {
+        enumerable: true,
+        get() {
+          pluginReads += 1;
+
+          return [];
+        },
+      });
+
+      createEmailClient(singleReadOpts);
+      expect(pluginReads).toBe(1);
+
+      // 5. defaultsPlugin deeply isolates replyTo and sendMetadata across sends
+      const seenReplyTo: string[] = [];
+      const seenMeta: number[] = [];
+
+      const defaultsClient = createEmailClient({
+        adapters: [
+          {
+            ...resend,
+            send: async (message, ctx) => {
+              const firstReply = Array.isArray(message.replyTo)
+                ? message.replyTo[0]
+                : message.replyTo;
+
+              seenReplyTo.push(
+                firstReply instanceof Object ? firstReply.email : (firstReply ?? ""),
+              );
+
+              return resend.send(message, ctx);
+            },
+          },
+        ],
+        plugins: [
+          defaultsPlugin({
+            replyTo: [{ email: "reply@example.com", name: "Reply" }],
+            sendMetadata: { nested: { count: 0 } },
+          }),
+          {
+            id: "mutate-defaults",
+            middleware: [
+              {
+                name: "mutate",
+                beforeSend: (ctx) => {
+                  if (Array.isArray(ctx.message.replyTo) && ctx.message.replyTo[0]) {
+                    // SAFETY: Test fixture sets replyTo as an array of EmailAddress objects.
+                    const addr = ctx.message.replyTo[0] as { email: string };
+                    addr.email = "mutated@example.com";
+                  }
+
+                  // SAFETY: Test fixture passes sendMetadata.nested as { count: number }.
+                  const nested = ctx.options?.metadata?.nested as { count: number } | undefined;
+
+                  if (nested) {
+                    seenMeta.push(nested.count);
+                    nested.count += 1;
+                  }
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      await defaultsClient.send(msg);
+      await defaultsClient.send(msg);
+      expect(seenReplyTo).toEqual(["mutated@example.com", "mutated@example.com"]);
+      expect(seenMeta).toEqual([0, 0]);
+
+      // 6. Personalized-only adapter works with telemetry enabled (no `in undefined` crash in isTestAdapter)
+      const personalizedOnly: EmailAdapter<"custom-pers"> = {
+        name: "custom-pers",
+        capabilities: {
+          attachments: false,
+          inlineAttachments: false,
+          scheduling: false,
+          tags: false,
+          customHeaders: false,
+          repeatedHeaders: false,
+          idempotency: "none",
+          personalized: "native",
+          templates: false,
+        },
+        // SAFETY: Test fixture exercises a personalized-only adapter with no send() method.
+        send: undefined as never,
+        sendPersonalized: async (input) => ({
+          id: "pers-1",
+          adapter: "custom-pers",
+          accepted: input.recipients.map((r) => (r.to instanceof Object ? r.to.email : r.to)),
+          rejected: [],
+          results: input.recipients.map((r) => ({
+            to: r.to instanceof Object ? r.to.email : r.to,
+            ok: true as const,
+            id: "pers-1",
+          })),
+        }),
+      };
+
+      const persClient = createEmailClient({ adapters: [personalizedOnly] });
+
+      const persResult = await persClient.sendPersonalized({
+        message: {
+          from: "a@example.com",
+          subject: "hi",
+          text: "hello",
+        },
+        recipients: [{ to: "b@example.com" }],
+      });
+
+      expect(persResult.accepted).toEqual(["b@example.com"]);
+
+      // 7. SMTP rejects invalid base64 string attachments with EmailValidationError before connecting
+      const smtpClient = createEmailClient({
+        adapters: [smtp({ host: "127.0.0.1", port: 1 })],
+      });
+
+      await expect(
+        smtpClient.send({
+          ...msg,
+          attachments: [{ filename: "bad.bin", content: "QR==", contentEncoding: "base64" }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      expect(exceptions).toHaveLength(0);
+    } finally {
+      resetTelemetry();
+    }
+  });
 });

@@ -235,17 +235,15 @@ async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail
     result.content = content;
   }
 
-  if (attachment.contentEncoding === "base64") {
-    result.encoding = "base64";
-  }
-
   return result;
 }
 
 async function nodemailerContent(
   attachment: EmailAttachment,
 ): Promise<string | Buffer> {
-  if (isStringMember(attachment.content)) return attachment.content;
+  if (isStringMember(attachment.content) && attachment.contentEncoding !== "base64") {
+    return attachment.content;
+  }
 
   return Buffer.from(await attachmentToBytes(attachment));
 }

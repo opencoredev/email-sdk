@@ -4,7 +4,12 @@ import {
   EmailSdkError,
   EmailValidationError,
 } from "../errors.js";
-import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "../internal/decode.js";
+import {
+  cloneMetadataRecord,
+  isFunction,
+  isNonArrayObject,
+  isStringMember,
+} from "../internal/decode.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -108,18 +113,78 @@ export function canFallback(error: EmailAdapterError, fallback: EmailFallbackCon
   return error.delivery === "not_sent" || fallback?.onUnknownDelivery === "continue";
 }
 
+export function snapshotRetryConfig(retry: EmailRetryConfig | undefined): EmailRetryConfig | undefined {
+  if (retry === undefined) return undefined;
+
+  if (!isNonArrayObject(retry)) {
+    throw new EmailValidationError("retry must be an object.");
+  }
+
+  const snapshot: EmailRetryConfig = {};
+
+  if ("maxAttempts" in retry) snapshot.maxAttempts = retry.maxAttempts;
+
+  if ("delay" in retry) {
+    const delay = retry.delay;
+    snapshot.delay = isFunction(delay) ? delay.bind(retry) : delay;
+  }
+
+  if ("shouldRetry" in retry) {
+    const shouldRetry = retry.shouldRetry;
+    snapshot.shouldRetry = isFunction(shouldRetry) ? shouldRetry.bind(retry) : shouldRetry;
+  }
+
+  return snapshot;
+}
+
+export function snapshotFallbackConfig<Name extends string = string>(
+  fallback: EmailFallbackConfig<Name> | undefined,
+): EmailFallbackConfig<Name> | undefined {
+  if (fallback === undefined) return undefined;
+
+  if (!isNonArrayObject(fallback)) {
+    throw new EmailValidationError("fallback must be an object.");
+  }
+
+  const rawAdapters = "adapters" in fallback ? fallback.adapters : undefined;
+
+  // SAFETY: Preserves caller's runtime non-array/missing adapters for validateFallback to reject.
+  const adapters = Array.isArray(rawAdapters) ? [...rawAdapters] : (rawAdapters as readonly Name[]);
+
+  const snapshot: EmailFallbackConfig<Name> = { adapters };
+
+  if ("onUnknownDelivery" in fallback) {
+    snapshot.onUnknownDelivery = fallback.onUnknownDelivery;
+  }
+
+  return snapshot;
+}
+
 export function validateRetry(retry: EmailRetryConfig | undefined) {
   if (retry !== undefined && !isNonArrayObject(retry)) {
     throw new EmailValidationError("retry must be an object.");
   }
 
-  if (
-    retry?.maxAttempts !== undefined &&
-    (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1)
-  ) {
+  if (!retry) return;
+
+  const maxAttempts = retry.maxAttempts;
+
+  if (maxAttempts !== undefined && (!Number.isInteger(maxAttempts) || maxAttempts < 1)) {
     throw new EmailValidationError(
       "retry.maxAttempts must be an integer greater than or equal to 1.",
     );
+  }
+
+  const delay = retry.delay;
+
+  if (delay !== undefined && !isFunction(delay)) {
+    throw new EmailValidationError("retry.delay must be a function.");
+  }
+
+  const shouldRetry = retry.shouldRetry;
+
+  if (shouldRetry !== undefined && !isFunction(shouldRetry)) {
+    throw new EmailValidationError("retry.shouldRetry must be a function.");
   }
 }
 
@@ -131,27 +196,36 @@ export function validateFallback(
     throw new EmailValidationError("fallback must be an object.");
   }
 
-  if (fallback?.adapters !== undefined && !Array.isArray(fallback.adapters)) {
+  if (!fallback) return;
+
+  const list = fallback.adapters;
+
+  if (list !== undefined && !Array.isArray(list)) {
     throw new EmailValidationError("fallback.adapters must be an array of adapter names.");
   }
 
-  for (const name of fallback?.adapters ?? []) requireAdapter(adapters, name);
+  const onUnknownDelivery = fallback.onUnknownDelivery;
+
+  if (
+    onUnknownDelivery !== undefined &&
+    onUnknownDelivery !== "stop" &&
+    onUnknownDelivery !== "continue"
+  ) {
+    throw new EmailValidationError('fallback.onUnknownDelivery must be "stop" or "continue".');
+  }
+
+  for (const name of list ?? []) requireAdapter(adapters, name);
 }
 
 export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
   const copy: EmailSendOptions = { ...options };
 
-  if (copy.retry && isNonArrayObject(copy.retry)) {
-    copy.retry = { ...copy.retry };
+  if (copy.retry !== undefined && isNonArrayObject(copy.retry)) {
+    copy.retry = snapshotRetryConfig(copy.retry);
   }
 
-  if (copy.fallback && isNonArrayObject(copy.fallback)) {
-    copy.fallback = {
-      ...copy.fallback,
-      adapters: Array.isArray(copy.fallback.adapters)
-        ? [...copy.fallback.adapters]
-        : copy.fallback.adapters,
-    };
+  if (copy.fallback !== undefined && isNonArrayObject(copy.fallback)) {
+    copy.fallback = snapshotFallbackConfig(copy.fallback);
   }
 
   if (copy.metadata && isNonArrayObject(copy.metadata)) {
