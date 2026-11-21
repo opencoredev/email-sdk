@@ -300,12 +300,12 @@ export function cloneMetadataRecord<T>(metadata: T): T {
 
     const proto = Object.getPrototypeOf(value);
 
-    if (proto === null || (Object.getPrototypeOf(proto) === null && tagOf(value) === "[object Object]")) {
+    if (proto === null || tagOf(value) === "[object Object]") {
       // SAFETY: Creating a fresh plain object with matching prototype preserves V.
       const copy = (proto === null ? Object.create(null) : {}) as V;
       seen.set(value, copy);
 
-      // SAFETY: Non-primitive plain objects are valid Object.entries targets.
+      // SAFETY: Non-primitive objects are valid Object.entries targets.
       for (const [key, entry] of Object.entries(value as NonNullable<V>)) {
         Object.defineProperty(copy, key, {
           value: clone(entry),

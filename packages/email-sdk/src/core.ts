@@ -371,16 +371,28 @@ export function createEmailClient<
       // Optional recipient lists/counts are evidence; IDs and resolved promises are not.
       const adapterError = failure instanceof EmailAdapterError ? failure : undefined;
 
+      let resultAccepted: number | undefined;
+      let resultRejected: number | undefined;
+
+      try {
+        if (Array.isArray(result?.accepted)) resultAccepted = result.accepted.length;
+
+        if (Array.isArray(result?.rejected)) resultRejected = result.rejected.length;
+      } catch {
+        resultAccepted = undefined;
+        resultRejected = undefined;
+      }
+
       const counts = acceptanceCounts(
-        result?.accepted?.length ?? adapterError?.acceptedCount,
-        result?.rejected?.length ?? adapterError?.rejectedCount,
+        resultAccepted ?? adapterError?.acceptedCount,
+        resultRejected ?? adapterError?.rejectedCount,
         recipients,
         adapterError !== undefined,
       );
 
       const { accepted, rejected } = counts;
       const acceptedMessages = path === "personalized_native" ? accepted : Number(accepted > 0);
-      const inferred = resolved && result?.accepted === undefined && result?.rejected === undefined;
+      const inferred = resolved && resultAccepted === undefined && resultRejected === undefined;
 
       const acceptanceBasis = counts.explicit
         ? "explicit"
@@ -498,6 +510,16 @@ export function createEmailClient<
 
       if (operation === "send" && !isFunction(adapter.send)) {
         throw new EmailValidationError(`${adapter.name} adapter does not support send().`);
+      }
+
+      if (
+        operation === "personalized" &&
+        !isFunction(adapter.sendPersonalized) &&
+        !isFunction(adapter.send)
+      ) {
+        throw new EmailValidationError(
+          `${adapter.name} adapter does not support sendPersonalized() or send().`,
+        );
       }
 
       validateCapabilities(adapter, message, operation, sendOptions);
@@ -998,9 +1020,10 @@ export function createEmailClient<
       for (const [index, name] of route.names.entries()) {
         attemptedAdapter = name;
         const adapter = requireAdapter(adapters, name);
-        deliveryPath = adapter.sendPersonalized ? "personalized_native" : "personalized_expanded";
+        const hasNativePersonalized = isFunction(adapter.sendPersonalized);
+        deliveryPath = hasNativePersonalized ? "personalized_native" : "personalized_expanded";
 
-        const result = adapter.sendPersonalized
+        const result = hasNativePersonalized
           ? await attemptNativePersonalized(
               adapter,
               preparedInput,
@@ -1096,12 +1119,34 @@ export function createEmailClient<
     withAdapter(name: string) {
       requireAdapter(adapters, name);
 
-      const routeOptions = <T extends EmailSendOptions | undefined>(value: T) => {
-        if (value !== undefined && !isNonArrayObject(value)) {
+      const routeOptions = (value: EmailSendOptions | undefined): EmailSendOptions => {
+        if (value === undefined) return { adapter: name };
+
+        if (!isNonArrayObject(value)) {
           throw new EmailValidationError("Email send options must be an object.");
         }
 
-        return readBoundary(() => ({ ...value, adapter: name }), "Email send options");
+        return readBoundary(
+          () => ({ ...cloneNestedSendOptions(value), adapter: name }),
+          "Email send options",
+        );
+      };
+
+      const routeManyOptions = (value: EmailSendManyOptions | undefined): EmailSendManyOptions => {
+        if (value === undefined) return { adapter: name };
+
+        if (!isNonArrayObject(value)) {
+          throw new EmailValidationError("sendMany options must be an object.");
+        }
+
+        return readBoundary(() => {
+          const concurrency = value.concurrency;
+          const base = cloneNestedSendOptions(value);
+
+          return concurrency === undefined
+            ? { ...base, adapter: name }
+            : { ...base, adapter: name, concurrency };
+        }, "sendMany options");
       };
 
       return {
@@ -1112,7 +1157,7 @@ export function createEmailClient<
           return send(message, routeOptions(sendOptions));
         },
         async sendMany(items: readonly EmailSendItem[], sendOptions?: EmailSendManyOptions) {
-          return sendMany(items, routeOptions(sendOptions));
+          return sendMany(items, routeManyOptions(sendOptions));
         },
         async sendPersonalized(input: EmailPersonalizedInput, sendOptions?: EmailSendOptions) {
           return sendPersonalized(input, routeOptions(sendOptions));

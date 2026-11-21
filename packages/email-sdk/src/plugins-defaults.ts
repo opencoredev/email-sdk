@@ -1,3 +1,4 @@
+import { EmailValidationError } from "./errors.js";
 import type {
   EmailAddress,
   EmailHeader,
@@ -21,6 +22,14 @@ export type EmailDefaultsPluginOptions = {
 };
 
 export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin {
+  if (options.metadata !== undefined && !isNonArrayObject(options.metadata)) {
+    throw new EmailValidationError("defaultsPlugin metadata must be an object.");
+  }
+
+  if (options.sendMetadata !== undefined && !isNonArrayObject(options.sendMetadata)) {
+    throw new EmailValidationError("defaultsPlugin sendMetadata must be an object.");
+  }
+
   return {
     id: options.id ?? "defaults",
     middleware: [
@@ -55,13 +64,23 @@ function withMessageDefaults(
   message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailMessage {
+  // SAFETY: Copying known EmailMessage fields preserves class-instance prototype getters while keeping the html-or-text shape.
   return {
     ...message,
+    from: message.from,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    attachments: message.attachments,
+    sendAt: message.sendAt,
     replyTo: message.replyTo ?? cloneReplyTo(options.replyTo),
     headers: mergeHeaders(options.headers, message.headers),
     tags: mergeTags(options.tags, message.tags),
     metadata: mergeMetadata(options.metadata, message.metadata),
-  };
+  } as EmailMessage;
 }
 
 function withSendOptionDefaults(
@@ -133,8 +152,12 @@ function mergeMetadata(
   defaults: EmailMessage["metadata"] | undefined,
   value: EmailMessage["metadata"] | undefined,
 ) {
-  if (!defaults) {
+  if (defaults === undefined) {
     return value;
+  }
+
+  if (!isNonArrayObject(defaults)) {
+    return value ?? defaults;
   }
 
   if (value !== undefined && !isNonArrayObject(value)) {
@@ -151,8 +174,12 @@ function mergeSendMetadata(
   defaults: EmailSendOptions["metadata"] | undefined,
   value: EmailSendOptions["metadata"] | undefined,
 ) {
-  if (!defaults) {
+  if (defaults === undefined) {
     return value;
+  }
+
+  if (!isNonArrayObject(defaults)) {
+    return value ?? defaults;
   }
 
   if (value !== undefined && !isNonArrayObject(value)) {

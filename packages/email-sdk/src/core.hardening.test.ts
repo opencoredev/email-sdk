@@ -1309,6 +1309,166 @@ describe("audit hardening regressions", () => {
 
       expect(adapterReads).toBe(1);
 
+      // 18. withAdapter() preserves class-instance sendOptions (signal, idempotencyKey, retry, fallback, concurrency)
+      const aborted = new AbortController();
+      aborted.abort();
+
+      class RoutedClassOptions {
+        get signal() {
+          return aborted.signal;
+        }
+
+        get idempotencyKey() {
+          return "wa-key";
+        }
+
+        get concurrency() {
+          return 2;
+        }
+      }
+
+      await expect(
+        clsClient.withAdapter("postmark").send(msg, new RoutedClassOptions()),
+      ).rejects.toThrow();
+
+      // 19. defaultsPlugin rejects non-object metadata/sendMetadata and preserves class-instance message getters
+      expect(() =>
+        // @ts-expect-error -- runtime non-object defaults check
+        defaultsPlugin({ metadata: "bad" }),
+      ).toThrow(EmailValidationError);
+
+      expect(() =>
+        // @ts-expect-error -- runtime non-object defaults check
+        defaultsPlugin({ sendMetadata: "bad" }),
+      ).toThrow(EmailValidationError);
+
+      class ClassEmailMessage {
+        get from() {
+          return "a@example.com";
+        }
+
+        get to() {
+          return "b@example.com";
+        }
+
+        get subject() {
+          return "cls-sub";
+        }
+
+        get text() {
+          return "cls-body";
+        }
+      }
+
+      const defClassRes = await defClient.send(new ClassEmailMessage());
+      expect(defClassRes.adapter).toBe("m");
+
+      // 20. Throwing accepted.length in adapter result does not turn a delivered send into a failure under telemetry
+      const weirdAcceptedClient = createEmailClient({
+        adapters: [
+          {
+            name: "weird-acc",
+            capabilities: {
+              repeatedHeaders: false,
+              idempotency: "none",
+              scheduling: false,
+              personalized: "expanded",
+            },
+            async send() {
+              return {
+                adapter: "weird-acc",
+                // @ts-expect-error -- testing throwing accepted.length under telemetry
+                accepted: {
+                  get length() {
+                    throw new Error("length boom");
+                  },
+                },
+              };
+            },
+          },
+        ],
+        telemetry: true,
+      });
+
+      const weirdAccRes = await weirdAcceptedClient.send(msg);
+      expect(weirdAccRes.adapter).toBe("weird-acc");
+
+      // 21. Non-string truthy attachment.path is rejected even when content is provided
+      await expect(
+        clsClient.validate({
+          ...msg,
+          // @ts-expect-error -- runtime non-string attachment.path check
+          attachments: [{ filename: "a.txt", content: "hi", path: 123 }],
+        }),
+      ).rejects.toBeInstanceOf(EmailValidationError);
+
+      // 22. Class-instance input.message works in sendPersonalized
+      class TemplateMsg {
+        get from() {
+          return "a@example.com";
+        }
+
+        get subject() {
+          return "Hi";
+        }
+
+        get text() {
+          return "Body";
+        }
+      }
+
+      class NestedClassPersInput {
+        get message() {
+          return new TemplateMsg();
+        }
+
+        get recipients() {
+          return [{ to: "u@example.com", variables: {} }];
+        }
+      }
+
+      const nestedClassPers = await persClient.sendPersonalized(new NestedClassPersInput());
+      expect(nestedClassPers.accepted).toEqual(["u@example.com"]);
+
+      // 23. Class-instance metadata is deep-cloned across sendMany items
+      class MetaBox {
+        count = 0;
+      }
+
+      const sharedMetaBox = new MetaBox();
+      const seenBoxCounts: number[] = [];
+
+      const metaIsoClient = createEmailClient({
+        adapters: [
+          {
+            name: "iso",
+            capabilities: {
+              repeatedHeaders: false,
+              idempotency: "none",
+              scheduling: false,
+              personalized: "expanded",
+            },
+            async send(_m, ctx) {
+              // SAFETY: Test fixture passes MetaBox with numeric count field.
+              const box = ctx.metadata as { count: number };
+              seenBoxCounts.push(box.count);
+              box.count += 1;
+
+              return { adapter: "iso", id: "1" };
+            },
+          },
+        ],
+        telemetry: false,
+      });
+
+      await metaIsoClient.sendMany([{ message: msg }, { message: msg }], {
+        // @ts-expect-error -- testing runtime class-instance metadata cloning
+        metadata: sharedMetaBox,
+      });
+
+      expect(seenBoxCounts).toEqual([0, 0]);
+      expect(sharedMetaBox.count).toBe(0);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();

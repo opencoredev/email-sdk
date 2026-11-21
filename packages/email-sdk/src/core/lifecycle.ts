@@ -15,7 +15,8 @@ import type {
   EmailSendOptions,
   MaybePromise,
 } from "../types.js";
-import { addAdapter } from "./routing.js";
+import { isNonArrayObject } from "../internal/decode.js";
+import { addAdapter, cloneNestedSendOptions } from "./routing.js";
 
 export function createPluginContext(
   adapters: Map<string, EmailAdapter>,
@@ -94,7 +95,9 @@ async function runBeforeSendMiddleware(
       if (result?.message) message = result.message;
 
       if (result?.options) {
-        options = Object.assign({}, options, result.options);
+        options = isNonArrayObject(result.options)
+          ? { ...options, ...result.options, ...cloneNestedSendOptions(result.options) }
+          : Object.assign({}, options, result.options);
       }
 
       onOptions?.(options);

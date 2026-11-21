@@ -301,8 +301,15 @@ export function assertMessage(message: EmailMessage) {
           throw new EmailValidationError(`Attachment "${name}" has invalid attachment content.`);
         }
 
+        if (
+          attachment.path !== undefined &&
+          (!isStringMember(attachment.path) || attachment.path.length === 0)
+        ) {
+          throw new EmailValidationError(`Attachment "${name}" path must be a non-empty string.`);
+        }
+
         const hasContent = attachment.content !== undefined;
-        const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
+        const hasPath = attachment.path !== undefined;
 
         if (hasContent === hasPath) {
           throw new EmailValidationError(

@@ -317,11 +317,25 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
 export function personalizedMiddlewareMessage(input: EmailPersonalizedInput): EmailMessage {
   const to = input.recipients[0]?.to ?? "";
+  const template = input.message;
 
-  // SAFETY: input.message is an EmailMessage without recipients. Omit flattens the html-or-text
-  // union, but the template still carries html or text, so adding `to` restores an EmailMessage.
+  // SAFETY: input.message is an EmailMessage without recipients. Copying known template fields
+  // preserves class-instance prototype getters, and adding `to` restores an EmailMessage.
   // The empty `to` only reaches middleware; validatePersonalizedInput rejects empty recipients.
-  return { ...input.message, to } as EmailMessage;
+  return {
+    ...template,
+    from: template.from,
+    subject: template.subject,
+    html: template.html,
+    text: template.text,
+    replyTo: template.replyTo,
+    headers: template.headers,
+    attachments: template.attachments,
+    tags: template.tags,
+    metadata: template.metadata,
+    sendAt: template.sendAt,
+    to,
+  } as EmailMessage;
 }
 
 export function withPersonalizedMessage(
