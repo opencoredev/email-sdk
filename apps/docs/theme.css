@@ -80,7 +80,7 @@
 /* The landing uses hard corners, and the docs follow it: cards, buttons,
    inputs, and code blocks read as one system. (theme.radius is "none" for
    Blume's own chrome; this covers the React docs components too.) */
-body :not(.email-landing *):is([class*="rounded"], button, input, select, textarea, pre, figure) {
+body :not(.email-landing *):is([class*="rounded"], button, input, select, textarea, pre, figure, aside a) {
   border-radius: 0;
 }
 

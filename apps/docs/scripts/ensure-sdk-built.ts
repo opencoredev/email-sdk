@@ -1,9 +1,12 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const sdkReactTypes = resolve(import.meta.dir, "../../../packages/email-sdk/dist/react/index.d.ts");
+const sdkDistEntries = [
+  resolve(import.meta.dir, "../../../packages/email-sdk/dist/index.d.ts"),
+  resolve(import.meta.dir, "../../../packages/email-sdk/dist/react.d.ts"),
+];
 
-if (!existsSync(sdkReactTypes)) {
+if (sdkDistEntries.some((entry) => !existsSync(entry))) {
   const proc = Bun.spawnSync(["bun", "run", "--cwd", "../../packages/email-sdk", "build"], {
     cwd: resolve(import.meta.dir, ".."),
     stdout: "inherit",

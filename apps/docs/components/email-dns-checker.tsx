@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 
 import type { CheckFinding, DnsCheckResult } from "../lib/dns-checker";
 import { checkEmailDns } from "../lib/dns-resolver";
@@ -51,7 +51,7 @@ export function EmailDnsChecker() {
     }
   }, []);
 
-  function onSubmit(event: FormEvent) {
+  function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (domain.trim()) void runCheck(domain);

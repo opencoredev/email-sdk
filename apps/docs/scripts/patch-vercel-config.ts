@@ -183,7 +183,15 @@ const alreadyPatched = syncedRoutes.some((route) =>
 );
 
 if (alreadyPatched) {
-  writeFileSync(configPath, `${JSON.stringify({ ...config, routes: syncedRoutes }, null, "\t")}\n`);
+  const routesChanged = JSON.stringify(syncedRoutes) !== JSON.stringify(config.routes);
+
+  if (routesChanged) {
+    writeFileSync(
+      configPath,
+      `${JSON.stringify({ ...config, routes: syncedRoutes }, null, "\t")}\n`,
+    );
+  }
+
   console.log("[vercel] config.json already carries the site routes");
   process.exit(0);
 }
@@ -211,4 +219,6 @@ const routes = [
 
 writeFileSync(configPath, `${JSON.stringify({ ...config, routes }, null, "\t")}\n`);
 
-console.log(`[vercel] added ${headerRoutes.length + 1} routes to .vercel/output/config.json`);
+const addedCount = routes.length - syncedRoutes.length;
+
+console.log(`[vercel] added ${addedCount} routes to .vercel/output/config.json`);
