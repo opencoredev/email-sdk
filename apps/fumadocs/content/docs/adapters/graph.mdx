@@ -187,5 +187,5 @@ In the Convex component, endpoint overrides and scope are server-controlled thro
 cannot provide literal endpoint URLs, so callers cannot redirect server credentials.
 `MS_GRAPH_CLIENT_SECRET` is restricted to Graph's `clientSecret` field; other adapter
 or field environment overrides cannot read it.
-Graph's environment mappings are fixed to its declared variables. Map custom secret
-names in the trusted `app.use(convexEmail, { env })` configuration, not in send requests.
+Graph's environment mappings are fixed to these variable names. Set them in the
+deployment environment; send requests cannot change which variables Graph reads.

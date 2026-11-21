@@ -3,7 +3,7 @@ title: Send email from Convex with retries
 description: "Send email from a Convex app with automatic retries: queue from a mutation, back off exponentially, deduplicate with idempotency keys, and track status reactively."
 ---
 
-To send email from a Convex app with retries, install `@opencoredev/convex-email`, mount it in `convex/convex.config.ts`, and call `email.send(ctx, message)` from a mutation with an `idempotencyKey`. The component stores the message in the same transaction, sends it through an Email SDK adapter such as Resend after the mutation commits, and retries retryable failures with exponential backoff: 3 attempts by default, starting at 1 second and capped at 60 seconds between attempts.
+To send email from a Convex app with retries, install `@opencoredev/convex-email`, mount it in `convex/convex.config.ts`, export its sender action from a `"use node"` file, and call `email.send(ctx, message)` from a mutation with an `idempotencyKey`. The component stores the message in the same transaction, runs your sender action after the mutation commits to send it through an Email SDK adapter such as Resend, and retries retryable failures with exponential backoff: 3 attempts by default, starting at 1 second and capped at 60 seconds between attempts.
 
 ```ts title="convex/users.ts"
 import { v } from "convex/values";
@@ -27,7 +27,7 @@ export const sendWelcomeEmail = mutation({
 });
 ```
 
-[Install and configure](/docs/integrations/convex/setup) shows the `convex/email.ts` client this imports.
+[Install and configure](/docs/integrations/convex/setup) shows the `convex/email.ts` client this imports and the sender action it needs.
 
 ## How retries work
 
@@ -45,7 +45,7 @@ export const sendWelcomeEmail = mutation({
 
 `@opencoredev/convex-email` is a real Convex Component: it owns isolated tables, queues provider work outside your mutation, retries safe failures, deduplicates sends, stores an event timeline, and exposes reactive delivery status.
 
-Email SDK owns message validation and provider adapters. The Convex component owns durable application state around those sends.
+Email SDK owns message validation and provider adapters. The Convex component owns durable application state around those sends. Convex does not allow Node code inside a component, so the provider request itself runs in a sender action your app exports with `emailSender()` from `@opencoredev/convex-email/node`.
 
 ## What you get
 
@@ -69,7 +69,7 @@ Email SDK owns message validation and provider adapters. The Convex component ow
 | `setConfig(ctx, config)` | Replace test, sender, retry, and retention defaults. |
 
 <Cards>
-  <Card title="Install and configure" href="/docs/integrations/convex/setup" description="Mount the component, map provider secrets, and create the server client." />
+  <Card title="Install and configure" href="/docs/integrations/convex/setup" description="Mount the component, export the sender action, and create the server client." />
   <Card title="Send and track email" href="/docs/integrations/convex/sending-and-status" description="Queue messages and expose reactive status to your application." />
   <Card title="Process webhooks" href="/docs/integrations/convex/webhooks" description="Verify provider events and store normalized delivery state." />
   <Card title="Test and recover" href="/docs/integrations/convex/testing-and-recovery" description="Redirect recipients, inspect failures, cancel work, and retry safely." />
@@ -79,7 +79,7 @@ Email SDK owns message validation and provider adapters. The Convex component ow
 
 ### Does a Convex action retry email sends on its own?
 
-No. Convex retries mutations on conflicts but never retries actions, and a provider request has to run in an action. The component runs that action for you from a durable queue and schedules each retry with the Convex scheduler.
+No. Convex retries mutations on conflicts but never retries actions, and a provider request has to run in an action. The component runs your sender action from a durable queue and schedules each retry with the Convex scheduler.
 
 ### Can it send through Resend and fall back to SMTP?
 

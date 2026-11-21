@@ -23,37 +23,31 @@ Use the official `@convex-dev/resend` component for a Resend-only app that wants
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
-import { v } from "convex/values";
 import convexEmail from "@opencoredev/convex-email/convex.config.js";
 
-const app = defineApp({
-  env: {
-    RESEND_API_KEY: v.optional(v.string()),
-    POSTMARK_SERVER_TOKEN: v.optional(v.string()),
-    SENDGRID_API_KEY: v.optional(v.string()),
-    SMTP_HOST: v.optional(v.string()),
-    SMTP_PORT: v.optional(v.string()),
-    SMTP_USER: v.optional(v.string()),
-    SMTP_PASS: v.optional(v.string()),
-  },
-});
-
-app.use(convexEmail, {
-  env: {
-    RESEND_API_KEY: app.env.RESEND_API_KEY,
-    POSTMARK_SERVER_TOKEN: app.env.POSTMARK_SERVER_TOKEN,
-    SENDGRID_API_KEY: app.env.SENDGRID_API_KEY,
-    SMTP_HOST: app.env.SMTP_HOST,
-    SMTP_PORT: app.env.SMTP_PORT,
-    SMTP_USER: app.env.SMTP_USER,
-    SMTP_PASS: app.env.SMTP_PASS,
-  },
-});
+const app = defineApp();
+app.use(convexEmail);
 
 export default app;
 ```
 
-Set provider secrets with Convex environment variables, then map them into the component:
+## Export The Sender Action
+
+Convex rejects `"use node"` modules inside components, so the component runs entirely in Convex's default runtime: it owns the queue, retries, cleanup, and webhook records. Provider requests (every HTTP adapter, SMTP, and URL attachment fetching) run in an action your app exports from its own `"use node"` file:
+
+```ts
+// convex/emailSender.ts
+"use node";
+
+import { emailSender } from "@opencoredev/convex-email/node";
+import { components } from "./_generated/api";
+
+export const send = emailSender(components.convexEmail);
+```
+
+The component schedules this internal action once per attempt through a function handle, and the action records each provider attempt and its result back in the component. Pass `emailSender(components.convexEmail, { telemetry: false })` to turn off Email SDK telemetry for these sends; otherwise the SDK follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
+
+Set provider secrets as Convex environment variables. The sender action reads them from the deployment environment:
 
 ```bash
 bun x convex env set RESEND_API_KEY re_xxx
@@ -63,10 +57,11 @@ bun x convex env set RESEND_API_KEY re_xxx
 
 ```ts
 // convex/email.ts
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { ConvexEmail } from "@opencoredev/convex-email";
 
-export const email = new ConvexEmail(components.convexEmail, {
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
   adapters: [
     {
       kind: "resend",
@@ -81,6 +76,8 @@ export const email = new ConvexEmail(components.convexEmail, {
   maxAttempts: 3,
 });
 ```
+
+Keep the `: ConvexEmail` annotation: `internal` is typed from every module in `convex/`, including this one, so without it TypeScript reports that `email` implicitly has type `any`.
 
 ## Send From A Mutation
 
@@ -139,7 +136,7 @@ unosend
 zeptomail
 ```
 
-Adapter configuration is data, not code. `src/shared/adapters.ts` declares each adapter's options, and the wire validators, config types, declared component environment, and runtime option resolution are all derived from it. A new Email SDK adapter becomes available here through one registry entry plus one factory line, and the build fails if its credentials are not declared in the component environment.
+Adapter configuration is data, not code. `src/shared/adapters.ts` declares each adapter's options, and the wire validators, config types, and runtime option resolution are all derived from it. A new Email SDK adapter becomes available here through one registry entry plus one factory line.
 
 Default environment variables:
 
@@ -190,7 +187,8 @@ ZEPTOMAIL_TOKEN
 Credentials are always read from the environment, so adapter config never stores a secret. Fields that identify a resource rather than authenticate one — `route`, `domain`, `accountId`, `campaignId`, `transactionalId`, `projectId`, `region`, `host`, `port`, `secure`, `baseUrl` — can be written inline instead:
 
 ```ts
-export const email = new ConvexEmail(components.convexEmail, {
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
   adapters: [
     { kind: "lettermint", route: "transactional" },
     { kind: "lettermint", name: "lettermint-broadcast", route: "broadcast" },
@@ -199,15 +197,7 @@ export const email = new ConvexEmail(components.convexEmail, {
 });
 ```
 
-A Convex component only receives the environment variables its own contract declares, so the component reads exactly the names listed above. To feed an adapter a differently named secret, map it onto the declared name when you mount the component:
-
-```ts
-app.use(convexEmail, {
-  env: { LETTERMINT_API_TOKEN: app.env.LETTERMINT_BROADCAST_TOKEN },
-});
-```
-
-Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at a different *declared* variable. Naming a variable the component does not declare throws an explicit error instead of silently resolving to nothing once deployed.
+The sender action reads only the names listed above. Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at another variable from that list. Naming any other variable throws an explicit error: adapter config can come from callers of `exposeApi()`, and the sender action can read every deployment secret, so an override must not be able to send an unrelated secret to a provider. To use a differently named secret, set it under the default name.
 
 Non-serializable Email SDK options such as custom `fetch`, SMTP `tls`, and function-valued Iterable `dataFields` are intentionally not exposed in component config.
 
@@ -281,13 +271,14 @@ If `testMode` is enabled without `sandboxTo`, sends fail before enqueueing so re
 For local or CI tests, use the memory adapter:
 
 ```ts
-export const email = new ConvexEmail(components.convexEmail, {
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
   adapters: [{ kind: "memory" }],
   defaultAdapter: "memory",
 });
 ```
 
-The package exports Convex test helpers from `@opencoredev/convex-email/test`.
+The package exports Convex test helpers from `@opencoredev/convex-email/test`. `registerConvexEmail(t)` registers the component's modules; your `convex/emailSender.ts` is one of your app's modules, so `convex-test` runs it like any other action.
 
 `exposeApi()` requires an authenticated Convex identity by default and stamps its `subject` as the email owner. Public status, events, cancellation, and retries only work for that owner; records queued through server-only `email.send()` are not exposed. Pass `authorize` to use a tenant id or operation-specific policy instead. It returns an owner id, or `null` to deny the request:
 
@@ -321,6 +312,29 @@ export const emailApi = email.exposeApi();
 
 Use the `authorize` example above when ownership should be a tenant or when individual operations need different access rules. Existing email rows have no trusted public owner, so records queued before this upgrade remain unavailable through `exposeApi()` rather than being guessed or backfilled. Server-side `email.status()`, `email.listEvents()`, and other application wrappers remain available for authorized operational migrations.
 
+## Upgrading From 5.x
+
+Versions 5.0.0 and earlier shipped `"use node"` modules inside the component, which the Convex CLI and backend reject, so no deployment could run them. Version 6 moves provider requests into the app's sender action:
+
+1. Drop the `env` option from `app.use(convexEmail, { env })`, plus any `defineApp({ env })` entries you added only for the component. Set each secret with `convex env set` under its default name.
+2. Add `convex/emailSender.ts` as shown above.
+3. Pass `sender: internal.emailSender.send` to `new ConvexEmail(...)` and annotate the export as `ConvexEmail`.
+
+```ts
+// Before (5.x)
+export const email = new ConvexEmail(components.convexEmail, {
+  adapters: [{ kind: "resend" }],
+});
+
+// After (6.x)
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
+  adapters: [{ kind: "resend" }],
+});
+```
+
+`ConvexEmail` now requires its options argument, because `sender` is required.
+
 ## Cleanup
 
 The component ships a five-minute cron sweep for missed queue work, stale `processing` recovery, and cleanup.
@@ -339,4 +353,4 @@ Convex Email Ops is not a campaign builder, contact database, template editor, h
 
 `sendBatch` accepts at most 100 messages per mutation. Split larger batches in your app so Convex mutation limits stay predictable.
 
-URL attachments are fetched server-side only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected. The component resolves the hostname before every request, refuses the fetch if any resolved address is private, loopback, link-local, or otherwise non-public, and connects only to the addresses it checked, so DNS rebinding cannot swap in an internal target. Redirects are followed manually, at most 3 hops, and each hop goes through the same checks. Downloads are capped at 10 MiB. Fetch the content in your app first if you need a custom attachment source.
+URL attachments are fetched server-side, by the sender action, only from public HTTPS hosts. Localhost, internal hostnames, IP literal hosts, and URLs with credentials are rejected. The sender resolves the hostname before every request, refuses the fetch if any resolved address is private, loopback, link-local, or otherwise non-public, and connects only to the addresses it checked, so DNS rebinding cannot swap in an internal target. Redirects are followed manually, at most 3 hops, and each hop goes through the same checks. Downloads are capped at 10 MiB. Fetch the content in your app first if you need a custom attachment source.

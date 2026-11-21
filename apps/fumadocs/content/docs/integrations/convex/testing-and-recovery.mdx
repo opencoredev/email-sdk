@@ -23,15 +23,16 @@ await email.setConfig(ctx, {
 ## Use in-memory delivery
 
 ```ts title="convex/email.ts"
-export const email = new ConvexEmail(components.convexEmail, {
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
   adapters: [{ kind: "memory" }],
   defaultAdapter: "memory",
 });
 ```
 
-The memory adapter exercises the real queue, scheduler, status, event, idempotency, cancellation, and cleanup behavior without a network call.
+The memory adapter exercises the real queue, scheduler, sender action, status, event, idempotency, cancellation, and cleanup behavior without a network call.
 
-For `convex-test`, register the packaged component helper:
+For `convex-test`, register the packaged component helper. Your `convex/emailSender.ts` is one of your app's modules, so `convex-test` runs it like any other action:
 
 ```ts title="convex/test.setup.ts"
 import convexEmailTest from "@opencoredev/convex-email/test";
