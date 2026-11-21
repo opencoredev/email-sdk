@@ -3,13 +3,12 @@
  *
  * Every adapter is described as data: which Email SDK option keys it takes, which Convex
  * environment variable supplies each one by default, and which ones may also be passed inline.
- * The wire validators (`shared/validators.ts`), the public config types (`shared/types.ts`),
- * the component's declared environment (`component/convex.config.ts`), and the runtime option
- * resolver (`component/providers.ts`) are all derived from this table, so adding an adapter is
- * one entry here plus one line in the factory map.
+ * The wire validators (`shared/validators.ts`), the public config types (`shared/types.ts`), and
+ * the runtime option resolver in the app-side sender (`node/providers.ts`) are all derived from
+ * this table, so adding an adapter is one entry here plus one line in the factory map.
  *
- * This module is imported by the Convex isolate, so it must stay free of Node and Email SDK
- * runtime imports.
+ * The component imports this module in Convex's default runtime, so it must stay free of Node and
+ * Email SDK runtime imports.
  */
 
 export type ConvexAdapterFieldType = "string" | "number" | "boolean" | "record";
@@ -26,7 +25,7 @@ export type ConvexAdapterField = {
   readonly restrictEnvToField?: boolean;
   /**
    * Whether the literal value may be written into adapter config. Credentials are never
-   * inline: they are read from the component's environment so config stays storable.
+   * inline: the sender action reads them from the deployment environment so config stays storable.
    */
   readonly inline?: boolean;
   /** Whether resolution fails when neither the inline value nor the environment provides one. */
@@ -202,16 +201,12 @@ type ConvexAdapterEnvName<TFields> = {
   [K in keyof TFields]: TFields[K] extends { env: infer TEnv extends string } ? TEnv : never;
 }[keyof TFields];
 
-/**
- * Literal union of every environment variable the registry can read. The component's declared
- * environment and the generated `Env` type are both checked against it at compile time, so a new
- * adapter cannot ship with an undeclared credential.
- */
+/** Literal union of every environment variable the registry can read. */
 export type ConvexEmailEnvVar = {
   [TKind in ConvexEmailAdapterKind]: ConvexAdapterEnvName<ConvexEmailAdapterRegistry[TKind]>;
 }[ConvexEmailAdapterKind];
 
-/** The same set at runtime, sorted so docs and the declared environment stay stable. */
+/** The same set at runtime, sorted so docs stay stable. */
 export const CONVEX_EMAIL_ENV_VARS = collectEnvVars();
 
 function collectEnvVars(): ConvexEmailEnvVar[] {
@@ -238,9 +233,9 @@ export function adapterFields(kind: string): ConvexAdapterFields | undefined {
 const declaredEnvVars = new Set<string>(CONVEX_EMAIL_ENV_VARS);
 
 /**
- * A Convex component only receives the environment variables its contract declares, so a
- * `<field>Env` override can only name one of them. Pointing at any other name would silently
- * resolve to nothing once deployed.
+ * Whether a `<field>Env` override names a credential the registry knows. Adapter config can come
+ * from callers of the public API while the app-side sender can read every deployment secret, so
+ * an override must not be able to point a provider request at an unrelated secret.
  */
 export function isDeclaredEnvVar(name: string) {
   return declaredEnvVars.has(name);

@@ -135,6 +135,28 @@ export const vSendBatchEmailsArgs = {
   messages: v.array(v.object(vSendEmailArgs)),
 };
 
+/**
+ * Function handle to the app's sender action. The app-side `ConvexEmail` client adds it to every
+ * enqueue; it is never part of the public send arguments.
+ */
+export const vSenderHandle = v.string();
+
+export const vEnqueueEmailArgs = { ...vSendEmailArgs, sender: vSenderHandle };
+
+export const vEnqueueBatchArgs = { ...vSendBatchEmailsArgs, sender: vSenderHandle };
+
+export const vEnqueueOwnedArgs = {
+  email: v.object(vSendEmailArgs),
+  ownerId: v.string(),
+  sender: vSenderHandle,
+};
+
+export const vEnqueueOwnedBatchArgs = {
+  messages: v.array(v.object(vSendEmailArgs)),
+  ownerId: v.string(),
+  sender: vSenderHandle,
+};
+
 export const vStatusArgs = {
   emailId: v.string(),
 };

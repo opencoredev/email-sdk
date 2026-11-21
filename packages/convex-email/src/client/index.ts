@@ -1,11 +1,12 @@
 import { verifyMailgunWebhook, verifyResendWebhook } from "@opencoredev/email-sdk/webhooks";
 import type {
+  FunctionReference,
   GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
 } from "convex/server";
-import { httpActionGeneric, mutationGeneric, queryGeneric } from "convex/server";
+import { createFunctionHandle, httpActionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 
 import type { ConvexEmailComponentApi } from "../shared/componentApi.js";
@@ -213,7 +214,23 @@ async function constantTimeEqual(actual: string, expected: string) {
   return difference === 0;
 }
 
+/**
+ * Reference to the app's sender action: the action `emailSender()` from
+ * `@opencoredev/convex-email/node` builds, exported from a `"use node"` file.
+ */
+export type ConvexEmailSenderReference = FunctionReference<
+  "action",
+  "internal" | "public",
+  { emailId: string },
+  null
+>;
+
 export type ConvexEmailOptions = {
+  /**
+   * The app's sender action, for example `internal.emailSender.send`. Convex does not allow Node
+   * code inside components, so provider requests run in this action instead of the component.
+   */
+  sender: ConvexEmailSenderReference;
   adapters?: ConvexEmailAdapterConfig[];
   defaultAdapter?: string;
   fallbackAdapters?: string[];
@@ -261,20 +278,24 @@ export type ConvexEmailConfigAuthorizer = (
 export class ConvexEmail {
   constructor(
     private readonly component: ConvexEmailComponentApi,
-    private readonly options: ConvexEmailOptions = {},
+    private readonly options: ConvexEmailOptions,
   ) {}
 
-  send(ctx: MutationCtx, args: ConvexEmailSendArgs) {
-    return ctx.runMutation(this.component.lib.enqueue, this.withDefaults(args));
+  async send(ctx: MutationCtx, args: ConvexEmailSendArgs) {
+    return await ctx.runMutation(this.component.lib.enqueue, {
+      ...this.withDefaults(args),
+      sender: await this.senderHandle(),
+    });
   }
 
-  sendBatch(ctx: MutationCtx, messages: ConvexEmailSendArgs[]) {
+  async sendBatch(ctx: MutationCtx, messages: ConvexEmailSendArgs[]) {
     if (messages.length > maxBatchSize) {
       throw new Error(`sendBatch accepts at most ${maxBatchSize} messages per mutation.`);
     }
 
-    return ctx.runMutation(this.component.lib.enqueueBatch, {
+    return await ctx.runMutation(this.component.lib.enqueueBatch, {
       messages: messages.map((message) => this.withDefaults(message)),
+      sender: await this.senderHandle(),
     });
   }
 
@@ -454,6 +475,11 @@ export class ConvexEmail {
     };
   }
 
+  /** The sender as a function handle, which the component stores and schedules. */
+  private async senderHandle(): Promise<string> {
+    return await createFunctionHandle(this.options.sender);
+  }
+
   private withDefaults(args: ConvexEmailSendArgs): ConvexEmailSendArgs {
     return {
       ...args,
@@ -473,6 +499,7 @@ export class ConvexEmail {
     return await ctx.runMutation(this.component.lib.enqueueOwned, {
       email: this.withDefaults(args),
       ownerId,
+      sender: await this.senderHandle(),
     });
   }
 
@@ -484,6 +511,7 @@ export class ConvexEmail {
     return await ctx.runMutation(this.component.lib.enqueueOwnedBatch, {
       messages: messages.map((message) => this.withDefaults(message)),
       ownerId,
+      sender: await this.senderHandle(),
     });
   }
 

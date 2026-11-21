@@ -3,9 +3,9 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient, gateDispatch } from "./component/providers.js";
+import { buildEmailClient, gateDispatch } from "./node/providers.js";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
-import { modules } from "./testing.js";
+import { modules, SENDER } from "../test-support/sender.js";
 
 function createTest() {
   return convexTest(schema, modules);
@@ -27,6 +27,7 @@ const message = {
 
 async function sendToSent(t: TestConvex<typeof schema>) {
   const emailId = await t.mutation(api.lib.enqueue, {
+    sender: SENDER,
     ...message,
     adapters: [{ kind: "memory" }],
     adapter: "memory",
@@ -59,6 +60,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -82,6 +84,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [],
       maxAttempts: 1,
@@ -103,6 +106,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [],
       maxAttempts: 1,
@@ -137,6 +141,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const firstId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       idempotencyKey: "welcome:ada@example.com",
       adapters: [{ kind: "memory" }],
@@ -144,6 +149,7 @@ describe("convex-email component", () => {
     });
 
     const secondId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       subject: "Duplicate",
       idempotencyKey: "welcome:ada@example.com",
@@ -165,9 +171,9 @@ describe("convex-email component", () => {
       adapter: "memory",
     };
 
-    const firstId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
-    const sameOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
-    const anotherOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_2" });
+    const firstId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_1" });
+    const sameOwnerId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_1" });
+    const anotherOwnerId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_2" });
 
     expect(sameOwnerId).toBe(firstId);
     expect(anotherOwnerId).not.toBe(firstId);
@@ -185,12 +191,14 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(enqueueOwnedBatch, {
+        sender: SENDER,
         ownerId: "user_1",
         messages: Array.from({ length: 101 }, () => email),
       }),
     ).rejects.toThrow("at most 100");
 
     const ids = await t.mutation(enqueueOwnedBatch, {
+      sender: SENDER,
       ownerId: "user_1",
       messages: [email, { ...email, to: "grace@example.com" }],
     });
@@ -207,6 +215,7 @@ describe("convex-email component", () => {
     });
 
     const ids = await t.mutation(api.lib.enqueueBatch, {
+      sender: SENDER,
       messages: [
         { to: "a@example.com", subject: "One", text: "1", adapters: [{ kind: "memory" }], adapter: "memory" },
         { to: "b@example.com", subject: "Two", text: "2", adapters: [{ kind: "memory" }], adapter: "memory" },
@@ -229,6 +238,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const ids = await t.mutation(api.lib.enqueueBatch, {
+      sender: SENDER,
       messages: [
         { ...message, idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
         { ...message, subject: "Duplicate", idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
@@ -243,6 +253,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueueBatch, {
+        sender: SENDER,
         messages: Array.from({ length: 101 }, () => ({
           ...message,
           adapters: [{ kind: "memory" }],
@@ -264,6 +275,7 @@ describe("convex-email component", () => {
     });
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       to: "real@example.com",
       cc: "cc@example.com",
       bcc: "bcc@example.com",
@@ -296,6 +308,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         to: "real@example.com",
         subject: "Sandbox",
         text: "This should not send.",
@@ -310,6 +323,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         to: "ada@example.com",
         subject: "No sender",
         text: "Missing from.",
@@ -323,6 +337,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -346,6 +361,7 @@ describe("convex-email component", () => {
     delete process.env.RESEND_API_KEY;
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }],
       adapter: "resend",
@@ -382,6 +398,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       to: ["ada@example.com", "linus@example.com"],
       adapters: [{ kind: "lettr" }],
@@ -439,6 +456,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "lettr" }],
       adapter: "lettr",
@@ -476,6 +494,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -507,6 +526,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -561,6 +581,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "resend" }, { kind: "memory" }],
         adapter: "resend",
@@ -626,6 +647,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "resend" }, { kind: "memory" }],
         adapter: "resend",
@@ -675,6 +697,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -725,6 +748,7 @@ describe("convex-email component", () => {
 
     // Resend is registered as "primary"; Postmark is registered under Resend's factory name.
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [
         { kind: "resend", name: "primary" },
@@ -751,6 +775,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [
         { kind: "resend", name: "primary" },
@@ -1132,6 +1157,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         idempotencyKey: "stale-processing:ada@example.com",
         adapters: [{ kind: "memory" }],
@@ -1166,6 +1192,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         idempotencyKey: "stale-lease:ada@example.com",
         adapters: [{ kind: "memory" }],
@@ -1238,6 +1265,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -1268,6 +1296,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1305,6 +1334,7 @@ describe("convex-email component", () => {
       });
 
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1339,6 +1369,7 @@ describe("convex-email component", () => {
       });
 
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1369,6 +1400,7 @@ describe("convex-email component", () => {
       });
 
       const terminalEmailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1379,6 +1411,7 @@ describe("convex-email component", () => {
 
       for (let index = 0; index < 60; index += 1) {
         await t.mutation(api.lib.enqueue, {
+          sender: SENDER,
           ...message,
           to: `active-${index}@example.com`,
           adapters: [{ kind: "memory" }],

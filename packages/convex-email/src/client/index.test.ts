@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { componentsGeneric, defineSchema, httpRouter, makeFunctionReference } from "convex/server";
 import type { ApiFromModules } from "convex/server";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 
+import { emailSender } from "../node/index.js";
 import { registerConvexEmail } from "../testing.js";
 import {
   ConvexEmail,
@@ -39,7 +40,12 @@ function convexEmailComponent() {
   return component;
 }
 
-const email = new ConvexEmail(convexEmailComponent());
+/** The app's own sender action, as an app would export it from a `"use node"` file. */
+const sender = emailSender(convexEmailComponent());
+
+const email = new ConvexEmail(convexEmailComponent(), {
+  sender: makeFunctionReference<"action", { emailId: string }, null>("emailSender:send"),
+});
 
 const publicApi = email.exposeApi();
 
@@ -75,8 +81,14 @@ const app: AppApi = {
 const appModules = {
   "./app/_generated/api.ts": async () => ({}),
   "./app/emails.ts": async () => publicApi,
+  "./app/emailSender.ts": async () => ({ send: sender }),
   "./app/http.ts": async () => ({ default: router }),
 };
+
+async function flushScheduled(t: TestConvex<ReturnType<typeof defineSchema>>) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await t.finishAllScheduledFunctions(() => {});
+}
 
 function createTest() {
   const t = convexTest(defineSchema({}), appModules);
@@ -260,6 +272,21 @@ describe("ConvexEmail.exposeApi", () => {
 
     expect(status?._id).toBe(emailId);
     expect(status?.ownerId).toBe("user_123");
+  });
+
+  test("sends through the app's sender action and records the result in the component", async () => {
+    const t = createTest();
+    const asAda = t.withIdentity({ subject: "user_123" });
+
+    const emailId = await asAda.mutation(app.send, message);
+    await flushScheduled(t);
+
+    const status = await asAda.query(app.status, { emailId });
+    const events = await asAda.query(app.listEvents, { emailId });
+
+    expect(status).toMatchObject({ status: "sent", attemptedAdapters: ["memory"] });
+    expect(status?.providerMessageId).toEqual(expect.any(String));
+    expect(events.map((event) => event.type)).toEqual(["queued", "processing", "provider_attempt", "sent"]);
   });
 
   test("queues public batches under one owner", async () => {

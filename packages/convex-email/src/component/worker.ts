@@ -1,110 +1,15 @@
-"use node";
-
-import {
-  EmailAdapterError,
-  EmailRouteError,
-  EmailSdkError,
-  type EmailSendResult,
-} from "@opencoredev/email-sdk";
+/**
+ * Webhook ingestion. Everything in the component directory runs in Convex's default runtime:
+ * Convex rejects `"use node"` modules inside components, so this file must not import Node
+ * built-ins or the Email SDK client. Sending happens in the app's Node action (`node/worker.ts`).
+ */
 import { normalizeWebhookEvent as normalizeSdkWebhook } from "@opencoredev/email-sdk/webhooks";
-import { v } from "convex/values";
-import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import { action, internalAction } from "./_generated/server.js";
-import {
-  handleWebhookArgs,
-  handleWebhookReturns,
-  internalFunctions,
-  processEmailArgs,
-} from "./functionRefs.js";
-import { buildEmailClient, hydrateAttachments } from "./providers.js";
-import type { ConvexEmailProviderFailure } from "../shared/types.js";
+import { action } from "./_generated/server.js";
+import { handleWebhookArgs, handleWebhookReturns, internalFunctions } from "./functionRefs.js";
 
 const lib = internalFunctions.lib;
-
-export const processEmail = internalAction({
-  args: processEmailArgs,
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const email = await ctx.runMutation(lib.markProcessing, { emailId: args.emailId });
-
-    if (!email) {
-      return null;
-    }
-
-    const processingLease = email.processingLease ?? 0;
-    // The adapter this run last sent a request to, set only after the attempt was recorded.
-    let lastDispatchedAdapter: string | undefined;
-
-    try {
-      if (email.adapters.length === 0) {
-        throw new Error("Convex Email requires at least one adapter configuration.");
-      }
-
-      // After an attempt whose outcome is unknown, retry only that adapter: another provider
-      // could deliver a second copy, and the idempotency key only deduplicates within one provider.
-      const pinnedAdapter = email.unknownDeliveryAdapter;
-      const adapter = pinnedAdapter ?? email.adapter;
-      const fallbackAdapters = pinnedAdapter ? [] : email.fallbackAdapters;
-
-      const client = buildEmailClient({
-        adapters: email.adapters,
-        defaultAdapter: adapter,
-        fallbackAdapters,
-        async recordAttempt(event) {
-          const recorded = await ctx.runMutation(lib.recordProviderAttempt, {
-            emailId: args.emailId,
-            processingLease,
-            adapter: event.adapter,
-            attempt: event.attempt,
-          });
-
-          if (!recorded) {
-            throw new Error("Convex Email lost the processing lease before sending.");
-          }
-
-          lastDispatchedAdapter = event.adapter;
-        },
-      });
-
-      const message = await hydrateAttachments(email.message);
-
-      const response = await client.send(message, {
-        adapter,
-        fallback: { adapters: fallbackAdapters, onUnknownDelivery: "stop" },
-        idempotencyKey: email.idempotencyKey,
-        metadata: email.sendMetadata,
-      });
-
-      await ctx.runMutation(lib.markSent, {
-        emailId: args.emailId,
-        processingLease,
-        response: sendResultRecord(response),
-      });
-    } catch (error) {
-      const providerFailure = providerFailureMetadata(error);
-
-      // Anything short of a proven not_sent may have delivered: an unknown provider failure, or an
-      // error with no provider metadata after a request went out (such as markSent failing after
-      // the provider accepted the message). Pin the registered name recorded at dispatch: a
-      // provider's error can carry its factory name, which may be another adapter's alias.
-      const unknownDeliveryAdapter =
-        providerFailure?.delivery === "not_sent" ? undefined : lastDispatchedAdapter;
-
-      await ctx.runMutation(lib.markFailedOrRetry, {
-        emailId: args.emailId,
-        processingLease,
-        error: stringifyError(error),
-        retryable: providerFailure?.retryable ?? isRetryableFailure(error),
-        providerFailure,
-        unknownDeliveryAdapter,
-      });
-    }
-
-    return null;
-  },
-});
 
 /**
  * Public inside the component so the host app can call it through `components.<name>`; component
@@ -127,57 +32,6 @@ export const handleWebhook = action({
   },
 });
 
-/** Keeps only the acknowledgement fields; the raw provider response is not stored. */
-function sendResultRecord(response: EmailSendResult) {
-  return {
-    adapter: response.adapter,
-    id: response.id,
-    accepted: response.accepted ? [...response.accepted] : undefined,
-    rejected: response.rejected ? [...response.rejected] : undefined,
-  };
-}
-
-function stringifyError(cause: unknown) {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
-function isRetryableFailure(cause: unknown) {
-  return cause instanceof EmailSdkError ? cause.retryable : true;
-}
-
-function providerFailureMetadata(cause: unknown): ConvexEmailProviderFailure | undefined {
-  const failure =
-    cause instanceof EmailRouteError
-      ? cause.failures.at(-1)
-      : cause instanceof EmailAdapterError
-        ? cause
-        : undefined;
-
-  if (!failure) {
-    return undefined;
-  }
-
-  const metadata: ConvexEmailProviderFailure = {
-    adapter: failure.adapter,
-    retryable: failure.retryable,
-    delivery: failure.delivery,
-  };
-
-  if (failure.requestId) {
-    metadata.requestId = failure.requestId;
-  }
-
-  if (failure.acceptedCount !== undefined) {
-    metadata.acceptedCount = failure.acceptedCount;
-  }
-
-  if (failure.rejectedCount !== undefined) {
-    metadata.rejectedCount = failure.rejectedCount;
-  }
-
-  return metadata;
-}
-
 async function parseProviderWebhook(provider: string, body: string, headers: Record<string, string>) {
   if (provider === "resend" || provider === "postmark" || provider === "mailgun") {
     const parsed = await normalizeSdkWebhook({ provider, body, headers });
@@ -190,7 +44,7 @@ async function parseProviderWebhook(provider: string, body: string, headers: Rec
     };
   }
 
-  return parseGenericWebhook(provider, body);
+  return await parseGenericWebhook(provider, body);
 }
 
 /** A field that is read only when it holds a string; anything else counts as absent. */
@@ -236,7 +90,7 @@ const genericWebhookFields = z
 
 const jsonPayload = z.json();
 
-function parseGenericWebhook(provider: string, body: string) {
+async function parseGenericWebhook(provider: string, body: string) {
   const payload = parseJsonPayload(body);
   const record = genericWebhookFields.parse(payload);
   const eventData = record["event-data"];
@@ -259,7 +113,7 @@ function parseGenericWebhook(provider: string, body: string) {
       record.webhookId ??
       record.deliveryId ??
       eventData?.id ??
-      deterministicDeliveryId(provider, body),
+      (await deterministicDeliveryId(provider, body)),
     providerMessageId:
       record.messageId ??
       record.message_id ??
@@ -334,6 +188,12 @@ function normalizeWebhookEvent(
   }
 }
 
-function deterministicDeliveryId(provider: string, body: string) {
-  return `body:${createHash("sha256").update(provider).update("\0").update(body).digest("hex")}`;
+const encoder = new TextEncoder();
+
+/** SHA-256 over `provider`, a NUL separator, and the raw body, as lowercase hex. */
+async function deterministicDeliveryId(provider: string, body: string) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${provider}\0${body}`));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+  return `body:${hex}`;
 }

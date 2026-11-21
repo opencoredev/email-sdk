@@ -4,14 +4,15 @@ import type { Doc } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import {
-  internalFunctions,
   markFailedOrRetryArgs,
   markProcessingArgs,
   markProcessingReturns,
   markSentArgs,
   recordProviderAttemptArgs,
   recordWebhookArgs,
+  senderHandle,
   sweepArgs,
+  type SenderHandle,
 } from "./functionRefs.js";
 import type {
   ConvexEmailConfig,
@@ -21,10 +22,12 @@ import type {
 import {
   vCancelEmailArgs,
   vEmailConfig,
+  vEnqueueBatchArgs,
+  vEnqueueEmailArgs,
+  vEnqueueOwnedArgs,
+  vEnqueueOwnedBatchArgs,
   vListEmailEventsArgs,
   vRetryEmailArgs,
-  vSendBatchEmailsArgs,
-  vSendEmailArgs,
   vStatusArgs,
   vEmailWebhookResult,
   vStoredEmail,
@@ -33,7 +36,7 @@ import {
 
 const configKey = "default";
 
-const processEmailRef = internalFunctions.worker.processEmail;
+const senderKey = "default";
 
 const processingTimeoutMs = 10 * 60 * 1_000;
 
@@ -42,25 +45,29 @@ const cleanupBatchSize = 50;
 const maxBatchSize = 100;
 
 export const enqueue = mutation({
-  args: vSendEmailArgs,
+  args: vEnqueueEmailArgs,
   returns: v.string(),
-  handler: async (ctx, args) => {
-    return await enqueueEmail(ctx, args);
+  handler: async (ctx, { sender, ...email }) => {
+    return await enqueueEmail(ctx, { email, sender: await registerSender(ctx, sender) });
   },
 });
 
 /** Only app-side wrappers should call this; it stamps ownership for public API access. */
 export const enqueueOwned = mutation({
-  args: { email: v.object(vSendEmailArgs), ownerId: v.string() },
+  args: vEnqueueOwnedArgs,
   returns: v.string(),
   handler: async (ctx, args) => {
-    return await enqueueEmail(ctx, args.email, undefined, args.ownerId);
+    return await enqueueEmail(ctx, {
+      email: args.email,
+      sender: await registerSender(ctx, args.sender),
+      ownerId: args.ownerId,
+    });
   },
 });
 
 /** Only app-side wrappers should call this; it atomically stamps ownership for public batch sends. */
 export const enqueueOwnedBatch = mutation({
-  args: { messages: v.array(v.object(vSendEmailArgs)), ownerId: v.string() },
+  args: vEnqueueOwnedBatchArgs,
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
     if (args.messages.length > maxBatchSize) {
@@ -71,10 +78,11 @@ export const enqueueOwnedBatch = mutation({
     }
 
     const config = await readConfig(ctx);
+    const sender = await registerSender(ctx, args.sender);
     const ids: string[] = [];
 
-    for (const message of args.messages) {
-      ids.push(await enqueueEmail(ctx, message, config, args.ownerId));
+    for (const email of args.messages) {
+      ids.push(await enqueueEmail(ctx, { email, sender, config, ownerId: args.ownerId }));
     }
 
     return ids;
@@ -82,7 +90,7 @@ export const enqueueOwnedBatch = mutation({
 });
 
 export const enqueueBatch = mutation({
-  args: vSendBatchEmailsArgs,
+  args: vEnqueueBatchArgs,
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
     if (args.messages.length > maxBatchSize) {
@@ -94,10 +102,11 @@ export const enqueueBatch = mutation({
 
     // Read the shared config once for the whole batch instead of once per message.
     const config = await readConfig(ctx);
+    const sender = await registerSender(ctx, args.sender);
     const ids: string[] = [];
 
-    for (const message of args.messages) {
-      ids.push(await enqueueEmail(ctx, message, config));
+    for (const email of args.messages) {
+      ids.push(await enqueueEmail(ctx, { email, sender, config }));
     }
 
     return ids;
@@ -200,7 +209,7 @@ export const retry = mutation({
       },
       createdAt: now,
     });
-    await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
+    await ctx.scheduler.runAfter(0, await requireSender(ctx), { emailId: email._id });
 
     return true;
   },
@@ -247,7 +256,11 @@ export const getConfig = query({
   },
 });
 
-export const markProcessing = internalMutation({
+// The four mutations below are the app-side sender's lease protocol. They are public inside the
+// component so the app's sender action can call them through `components.<name>`; component
+// functions are never reachable by browser clients directly.
+
+export const markProcessing = mutation({
   args: markProcessingArgs,
   returns: markProcessingReturns,
   handler: async (ctx, args) => {
@@ -285,7 +298,7 @@ export const markProcessing = internalMutation({
   },
 });
 
-export const recordProviderAttempt = internalMutation({
+export const recordProviderAttempt = mutation({
   args: recordProviderAttemptArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -325,7 +338,7 @@ export const recordProviderAttempt = internalMutation({
   },
 });
 
-export const markSent = internalMutation({
+export const markSent = mutation({
   args: markSentArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -367,7 +380,7 @@ export const markSent = internalMutation({
   },
 });
 
-export const markFailedOrRetry = internalMutation({
+export const markFailedOrRetry = mutation({
   args: markFailedOrRetryArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -397,6 +410,12 @@ export const processDueEmails = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     await cleanupExpiredEmailRecords(ctx, now, cleanupBatchSize);
+    const sender = await readSender(ctx);
+
+    // Every enqueue registers the sender first, so no sender means no email was ever queued.
+    if (!sender) {
+      return 0;
+    }
 
     const due = await ctx.db
       .query("emails")
@@ -413,7 +432,7 @@ export const processDueEmails = internalMutation({
       .take(args.limit ?? 25);
 
     for (const email of due) {
-      await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
+      await ctx.scheduler.runAfter(0, sender, { emailId: email._id });
     }
 
     for (const email of staleProcessing) {
@@ -497,12 +516,16 @@ export const recordWebhook = internalMutation({
   },
 });
 
-async function enqueueEmail(
-  ctx: MutationCtx,
-  args: ConvexEmailSendArgs,
-  preloadedConfig?: ConvexEmailConfig,
-  ownerId?: string,
-) {
+type EnqueueEmailOptions = {
+  email: ConvexEmailSendArgs;
+  sender: SenderHandle;
+  /** The shared config, when the caller already read it for a whole batch. */
+  config?: ConvexEmailConfig;
+  ownerId?: string;
+};
+
+async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
+  const { email: args, sender, ownerId } = options;
   const idempotencyKey = args.idempotencyKey;
 
   if (idempotencyKey) {
@@ -523,7 +546,7 @@ async function enqueueEmail(
     }
   }
 
-  const config = preloadedConfig ?? (await readConfig(ctx));
+  const config = options.config ?? (await readConfig(ctx));
   const now = Date.now();
   const message = applyConfigToMessage(args, config);
 
@@ -559,9 +582,56 @@ async function enqueueEmail(
     type: "queued",
     payload: redactMessage(message),
   });
-  await ctx.scheduler.runAfter(0, processEmailRef, { emailId });
+  await ctx.scheduler.runAfter(0, sender, { emailId });
 
   return emailId;
+}
+
+async function getSenderDoc(ctx: QueryCtx) {
+  return await ctx.db
+    .query("sender")
+    .withIndex("by_key", (q) => q.eq("key", senderKey))
+    .first();
+}
+
+/**
+ * Records the app's sender handle. Writes only when it changed, so concurrent sends with the same
+ * handle only read the row and never conflict on it.
+ */
+async function registerSender(ctx: MutationCtx, handle: string) {
+  const existing = await getSenderDoc(ctx);
+
+  if (existing?.handle !== handle) {
+    const now = Date.now();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { handle, updatedAt: now });
+    } else {
+      await ctx.db.insert("sender", { key: senderKey, handle, updatedAt: now });
+    }
+  }
+
+  return senderHandle(handle);
+}
+
+async function readSender(ctx: QueryCtx) {
+  const doc = await getSenderDoc(ctx);
+
+  return doc ? senderHandle(doc.handle) : undefined;
+}
+
+/** The registered sender. Only call this for an email that exists, which implies one was registered. */
+async function requireSender(ctx: QueryCtx) {
+  const sender = await readSender(ctx);
+
+  if (!sender) {
+    throw new ConvexError({
+      code: "MISSING_SENDER",
+      message: "Convex Email has no sender action registered. Send through the ConvexEmail client.",
+    });
+  }
+
+  return sender;
 }
 
 async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
@@ -702,10 +772,12 @@ async function markEmailFailedOrRetry(
       payload,
     });
 
+    const sender = await requireSender(ctx);
+
     if (options.immediate) {
-      await ctx.scheduler.runAfter(0, processEmailRef, { emailId: email._id });
+      await ctx.scheduler.runAfter(0, sender, { emailId: email._id });
     } else {
-      await ctx.scheduler.runAt(nextAttemptAt, processEmailRef, { emailId: email._id });
+      await ctx.scheduler.runAt(nextAttemptAt, sender, { emailId: email._id });
     }
 
     return;

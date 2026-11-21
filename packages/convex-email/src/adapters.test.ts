@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { convexTest } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
-import { buildEmailClient, resolveAdapterOptions } from "./component/providers.js";
+import { buildEmailClient, resolveAdapterOptions } from "./node/providers.js";
 import schema from "./component/schema.js";
-import { modules } from "./testing.js";
+import { modules, SENDER } from "../test-support/sender.js";
 import {
   CONVEX_EMAIL_ADAPTER_KINDS,
   CONVEX_EMAIL_ADAPTERS,
@@ -273,6 +273,7 @@ describe("adapter config wire format", () => {
     const t = convexTest(schema, modules);
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [
         { kind: "lettermint", name: "lettermint-transactional", route: "transactional" },
@@ -304,9 +305,11 @@ describe("adapter config wire format", () => {
       };
 
       await expect(t.mutation(api.lib.enqueueOwned, {
+        sender: SENDER,
         email, ownerId: "authenticated-user",
       })).rejects.toThrow("Validator error");
       await expect(t.mutation(api.lib.enqueueOwnedBatch, {
+        sender: SENDER,
         messages: [email], ownerId: "authenticated-user",
       })).rejects.toThrow("Validator error");
     }
@@ -316,7 +319,7 @@ describe("adapter config wire format", () => {
     const t = convexTest(schema, modules);
 
     await expect(
-      t.mutation(api.lib.enqueue, { ...message, adapters: [{ kind: "owl-post" }], adapter: "owl-post" }),
+      t.mutation(api.lib.enqueue, { sender: SENDER, ...message, adapters: [{ kind: "owl-post" }], adapter: "owl-post" }),
     ).rejects.toThrow("Validator error");
   });
 
@@ -325,6 +328,7 @@ describe("adapter config wire format", () => {
 
     await expect(
       t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "lettermint", apiToken: "lm_live_123" }],
         adapter: "lettermint",
