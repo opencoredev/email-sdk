@@ -20,15 +20,45 @@ function componentSources(dir: string): string[] {
   });
 }
 
+/** Static, side-effect, re-export, dynamic, and `require` module specifiers. */
+const specifierPatterns = [
+  /\bfrom\s+["']([^"']+)["']/g,
+  /^\s*import\s+["']([^"']+)["']/gm,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+  /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
+];
+
 function importSpecifiers(source: string): string[] {
-  return [...source.matchAll(/^\s*(?:import|export)\b[^"']*?from\s+["']([^"']+)["']/gm)].map(
-    (match) => match[1] ?? "",
+  return specifierPatterns.flatMap((pattern) =>
+    [...source.matchAll(pattern)].map((match) => match[1] ?? ""),
   );
 }
+
+/** A "use node" directive in either quote style, after any leading comments. */
+const useNodeDirective = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use node["']/;
 
 // Convex refuses to deploy a component that contains a "use node" module, in the CLI and again in
 // the backend. convex-test does not apply that rule, so this guard and `bun run
 // convex:deploy-check` are what keep Node-only code out of the component.
+describe("component runtime guard", () => {
+  test("recognizes every way a module can pull in Node code", () => {
+    const sample = [
+      "// header",
+      "/* block */ 'use node';",
+      'import "node:fs";',
+      'import { x } from "node:crypto";',
+      'export * from "@opencoredev/email-sdk";',
+      'const dns = await import("node:dns");',
+      'const net = require("net");',
+    ].join("\n");
+
+    expect(useNodeDirective.test(sample)).toBe(true);
+    expect(importSpecifiers(sample).sort()).toEqual(
+      ["@opencoredev/email-sdk", "net", "node:crypto", "node:dns", "node:fs"].sort(),
+    );
+  });
+});
+
 describe("component runtime", () => {
   const files = componentSources(componentDir);
 
@@ -41,7 +71,7 @@ describe("component runtime", () => {
     const source = readFileSync(file, "utf8");
 
     test(`${name} runs in Convex's default runtime`, () => {
-      expect(source.trimStart().startsWith('"use node"')).toBe(false);
+      expect(useNodeDirective.test(source)).toBe(false);
       expect(importSpecifiers(source).filter((specifier) => nodeBuiltins.has(specifier))).toEqual([]);
       expect(
         importSpecifiers(source).filter(

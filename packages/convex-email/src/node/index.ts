@@ -18,6 +18,7 @@ import { internalActionGeneric } from "convex/server";
 import { v } from "convex/values";
 
 import { senderArgs } from "../component/functionRefs.js";
+import type { ConvexEmailEnvVar } from "../shared/adapters.js";
 import type { ConvexEmailComponentApi } from "../shared/componentApi.js";
 import { processEmail } from "./worker.js";
 
@@ -27,6 +28,18 @@ export type ConvexEmailSenderOptions = {
    * follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
    */
   telemetry?: boolean;
+  /**
+   * Maps differently named secrets onto the credential names Convex Email reads, for example when
+   * two component instances use different Resend keys. Called on every send, so read
+   * `process.env` inside it. Variables it leaves out fall back to `process.env`.
+   *
+   * ```ts
+   * emailSender(components.marketingEmail, {
+   *   env: () => ({ RESEND_API_KEY: process.env.MARKETING_RESEND_API_KEY }),
+   * });
+   * ```
+   */
+  env?: () => Partial<Record<ConvexEmailEnvVar, string | undefined>>;
 };
 
 /**
@@ -46,6 +59,7 @@ export function emailSender(
         component,
         emailId: args.emailId,
         telemetry: options.telemetry,
+        env: options.env ? { ...process.env, ...options.env() } : undefined,
       });
 
       return null;

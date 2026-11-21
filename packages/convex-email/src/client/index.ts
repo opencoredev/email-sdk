@@ -311,8 +311,11 @@ export class ConvexEmail {
     return ctx.runMutation(this.component.lib.cancel, args);
   }
 
-  retry(ctx: MutationCtx, args: { emailId: string }) {
-    return ctx.runMutation(this.component.lib.retry, args);
+  async retry(ctx: MutationCtx, args: { emailId: string }) {
+    return await ctx.runMutation(this.component.lib.retry, {
+      emailId: args.emailId,
+      sender: await this.senderHandle(),
+    });
   }
 
   setConfig(ctx: MutationCtx, config: ConvexEmailConfig) {

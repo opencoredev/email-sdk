@@ -45,7 +45,7 @@ import { components } from "./_generated/api";
 export const send = emailSender(components.convexEmail);
 ```
 
-The component schedules this internal action once per attempt through a function handle, and the action records each provider attempt and its result back in the component. Each component instance uses one sender: the most recent one any `ConvexEmail` client passed, which also picks up a renamed sender action for emails already queued. To run two differently configured senders, mount the component twice with `app.use(convexEmail, { name: "..." })`. Pass `emailSender(components.convexEmail, { telemetry: false })` to turn off Email SDK telemetry for these sends; otherwise the SDK follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
+The component schedules this internal action once per attempt through a function handle, and the action records each provider attempt and its result back in the component. Each component instance uses one sender: the most recent one any `ConvexEmail` client passed, so a send or a manual `retry()` through the client registers a renamed sender action. When you rename or move the action, keep the old export until one send or retry has gone through on the new deployment: until then the five-minute sweep still schedules the old handle. To run two differently configured senders, mount the component twice with `app.use(convexEmail, { name: "..." })`. Pass `emailSender(components.convexEmail, { telemetry: false })` to turn off Email SDK telemetry for these sends; otherwise the SDK follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
 
 Set provider secrets as Convex environment variables. The sender action reads them from the deployment environment:
 
@@ -197,7 +197,19 @@ export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
 });
 ```
 
-The sender action reads only the names listed above. Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at another variable from that list. Naming any other variable throws an explicit error, because the sender action can read every deployment secret. To use a differently named secret, set it under the default name.
+The sender action reads only the names listed above. Environment-backed fields also accept an `Env` suffix — `apiKeyEnv`, `apiTokenEnv`, `tokenEnv`, `serverTokenEnv`, `domainEnv`, `accountIdEnv`, `projectIdEnv`, `regionEnv`, and so on — which repoints a field at another variable from that list. Naming any other variable throws an explicit error, because the sender action can read every deployment secret. To use a differently named secret, for example a second component instance with its own Resend key, map it in the sender with `env`. It runs on every send, and names it leaves out fall back to `process.env`:
+
+```ts
+// convex/marketingEmailSender.ts
+"use node";
+
+import { emailSender } from "@opencoredev/convex-email/node";
+import { components } from "./_generated/api";
+
+export const send = emailSender(components.marketingEmail, {
+  env: () => ({ RESEND_API_KEY: process.env.MARKETING_RESEND_API_KEY }),
+});
+```
 
 Adapter configuration is trusted input. `exposeApi()` refuses it from callers, and server-side `email.send()` and `email.sendBatch()` must only receive adapters your own code chose. A custom public mutation that forwards a caller's `adapters` to `email.send()` lets that caller set `baseUrl` and `apiKeyEnv` together and send any of the credentials above to their own server; the variable-name check cannot prevent that.
 
@@ -320,7 +332,7 @@ Use the `authorize` example above when ownership should be a tenant or when indi
 
 Versions 5.0.0 and earlier shipped `"use node"` modules inside the component, which the Convex CLI and backend reject, so no deployment could run them. Version 6 moves provider requests into the app's sender action:
 
-1. Drop the `env` option from `app.use(convexEmail, { env })`, plus any `defineApp({ env })` entries you added only for the component. Set each secret with `convex env set` under its default name.
+1. Drop the `env` option from `app.use(convexEmail, { env })`, plus any `defineApp({ env })` entries you added only for the component. Set each secret with `convex env set` under its default name, or move a renamed mapping into `emailSender(component, { env: () => ({ ... }) })`.
 2. Add `convex/emailSender.ts` as shown above.
 3. Pass `sender: internal.emailSender.send` to `new ConvexEmail(...)` and annotate the export as `ConvexEmail`.
 

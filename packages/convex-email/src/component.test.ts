@@ -5,7 +5,13 @@ import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
 import { buildEmailClient, gateDispatch } from "./node/providers.js";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
-import { modules, SENDER } from "../test-support/sender.js";
+import {
+  MAPPED_SENDER,
+  modules,
+  RENAMED_SENDER,
+  replacementSenderCalls,
+  SENDER,
+} from "../test-support/sender.js";
 
 function createTest() {
   return convexTest(schema, modules);
@@ -46,6 +52,58 @@ async function sendToSent(t: TestConvex<typeof schema>) {
 }
 
 describe("convex-email component", () => {
+  test("a sender's env mapping supplies the credential instead of the default variable", async () => {
+    const t = createTest();
+    const authorizations: (string | null)[] = [];
+
+    process.env.RESEND_API_KEY = "default-key";
+    process.env.MAPPED_RESEND_KEY = "mapped-key";
+    globalThis.fetch = async (_input, init) => {
+      authorizations.push(new Headers(init?.headers).get("authorization"));
+
+      return new Response(JSON.stringify({ id: "mapped-message" }), { status: 200 });
+    };
+
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        sender: MAPPED_SENDER,
+        ...message,
+        adapters: [{ kind: "resend", baseUrl: "https://resend.example.test" }],
+        adapter: "resend",
+        maxAttempts: 1,
+      });
+
+      await flushScheduled(t);
+
+      expect((await t.query(api.lib.status, { emailId }))?.status).toBe("sent");
+      expect(authorizations).toEqual(["Bearer mapped-key"]);
+    } finally {
+      delete process.env.MAPPED_RESEND_KEY;
+    }
+  });
+
+  test("a manual retry registers and uses the client's current sender", async () => {
+    const t = createTest();
+
+    // No LETTERMINT_API_TOKEN, so the only attempt fails and the email ends failed.
+    const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      adapters: [{ kind: "lettermint" }],
+      adapter: "lettermint",
+      maxAttempts: 1,
+    });
+
+    await flushScheduled(t);
+    expect((await t.query(api.lib.status, { emailId }))?.status).toBe("failed");
+
+    replacementSenderCalls.length = 0;
+    expect(await t.mutation(api.lib.retry, { emailId, sender: RENAMED_SENDER })).toBe(true);
+    await flushScheduled(t);
+
+    expect(replacementSenderCalls).toEqual([emailId]);
+  });
+
   afterEach(() => {
     globalThis.fetch = nativeFetch;
     delete process.env.LETTR_API_KEY;
@@ -114,7 +172,7 @@ describe("convex-email component", () => {
 
     await flushScheduled(t);
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
     await flushScheduled(t);
 
     const status = await t.query(api.lib.status, { emailId });
@@ -134,7 +192,7 @@ describe("convex-email component", () => {
       "failed",
     ]);
     const sent = await sendToSent(t);
-    expect(await t.mutation(api.lib.retry, { emailId: sent.emailId })).toBe(false);
+    expect(await t.mutation(api.lib.retry, { emailId: sent.emailId, sender: SENDER })).toBe(false);
   });
 
   test("returns the existing email id for duplicate idempotency keys", async () => {
@@ -672,7 +730,7 @@ describe("convex-email component", () => {
       });
 
       Date.now = originalNow;
-      expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+      expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
       await flushScheduled(t);
 
       const status = await t.query(api.lib.status, { emailId });
@@ -717,7 +775,7 @@ describe("convex-email component", () => {
       });
     });
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
     await flushScheduled(t);
 
     const status = await t.query(api.lib.status, { emailId });
@@ -797,7 +855,7 @@ describe("convex-email component", () => {
       });
     });
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(false);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(false);
     expect(await t.query(api.lib.status, { emailId })).toMatchObject({ status: "failed" });
   });
 
@@ -1280,7 +1338,7 @@ describe("convex-email component", () => {
       error: "first attempt failed",
       retryable: true,
     });
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
 
     const retriedWorker = await t.mutation(api.lib.markProcessing, { emailId });
     expect(firstWorker?.processingLease).toBe(1);

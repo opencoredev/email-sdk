@@ -65,7 +65,12 @@ export type BuildEmailClientOptions = {
   recordAttempt?: (event: { adapter: string; attempt: number }) => Promise<void>;
   /** `false` turns off Email SDK telemetry for this client. */
   telemetry?: boolean;
+  /** Where credentials are read from. Defaults to the deployment's `process.env`. */
+  env?: AdapterEnv;
 };
+
+/** Environment variables as the sender action sees them. */
+export type AdapterEnv = Readonly<Record<string, string | undefined>>;
 
 /** Copies symbol markers (such as the SDK's test-adapter marker) from one send function to another. */
 function keepSendMarkers<T extends EmailAdapter["send"]>(from: EmailAdapter["send"], to: T): T {
@@ -112,9 +117,10 @@ export function gateDispatch(
 
 export function buildEmailClient(options: BuildEmailClientOptions) {
   const { recordAttempt } = options;
+  const env = options.env ?? process.env;
 
   const adapters = options.adapters.map((config) => {
-    const adapter = buildAdapter(config);
+    const adapter = buildAdapter(config, env);
 
     return recordAttempt ? gateDispatch(adapter, recordAttempt) : adapter;
   });
@@ -221,21 +227,24 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   zeptomail: fromOptions(zeptomail),
 };
 
-function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
+function buildAdapter(config: ConvexEmailAdapterConfig, env: AdapterEnv): EmailAdapter {
   const factory = ADAPTER_FACTORIES[config.kind];
 
   if (!factory) {
     throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
   }
 
-  return withName(factory(resolveAdapterOptions(config), config), config.name);
+  return withName(factory(resolveAdapterOptions(config, env), config), config.name);
 }
 
 /**
  * Turns stored adapter config into Email SDK options: inline values win, otherwise the field is
  * read from the deployment environment under its configured or default variable name.
  */
-export function resolveAdapterOptions(config: ConvexEmailAdapterConfig) {
+export function resolveAdapterOptions(
+  config: ConvexEmailAdapterConfig,
+  env: AdapterEnv = process.env,
+) {
   const fields = adapterFields(config.kind);
 
   if (!fields) {
@@ -254,7 +263,7 @@ export function resolveAdapterOptions(config: ConvexEmailAdapterConfig) {
     }
 
     const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
-    const fromEnv = name ? readEnvField(name, field) : undefined;
+    const fromEnv = name ? readEnvField(env, name, field) : undefined;
 
     if (fromEnv !== undefined) {
       options.set(key, fromEnv);
@@ -319,8 +328,8 @@ function envNameFor(
   return override;
 }
 
-function readEnvField(name: string, field: ConvexAdapterField) {
-  const value = process.env[name];
+function readEnvField(env: AdapterEnv, name: string, field: ConvexAdapterField) {
+  const value = env[name];
 
   if (!value) {
     return undefined;

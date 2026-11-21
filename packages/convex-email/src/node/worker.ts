@@ -6,7 +6,7 @@ import {
 } from "@opencoredev/email-sdk";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 
-import { buildEmailClient, hydrateAttachments } from "./providers.js";
+import { buildEmailClient, hydrateAttachments, type AdapterEnv } from "./providers.js";
 import type { ConvexEmailComponentApi } from "../shared/componentApi.js";
 import type { ConvexEmailProviderFailure } from "../shared/types.js";
 
@@ -15,6 +15,7 @@ export type ProcessEmailOptions = {
   component: ConvexEmailComponentApi;
   emailId: string;
   telemetry?: boolean;
+  env?: AdapterEnv;
 };
 
 /**
@@ -50,6 +51,7 @@ export async function processEmail(options: ProcessEmailOptions) {
       defaultAdapter: adapter,
       fallbackAdapters,
       telemetry: options.telemetry,
+      env: options.env,
       async recordAttempt(event) {
         const recorded = await ctx.runMutation(lib.recordProviderAttempt, {
           emailId,

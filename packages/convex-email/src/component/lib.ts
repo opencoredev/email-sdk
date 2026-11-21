@@ -27,7 +27,7 @@ import {
   vEnqueueOwnedArgs,
   vEnqueueOwnedBatchArgs,
   vListEmailEventsArgs,
-  vRetryEmailArgs,
+  vRetryWithSenderArgs,
   vStatusArgs,
   vEmailWebhookResult,
   vStoredEmail,
@@ -165,7 +165,7 @@ export const cancel = mutation({
 });
 
 export const retry = mutation({
-  args: vRetryEmailArgs,
+  args: vRetryWithSenderArgs,
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const emailId = ctx.db.normalizeId("emails", args.emailId);
@@ -209,7 +209,7 @@ export const retry = mutation({
       },
       createdAt: now,
     });
-    await ctx.scheduler.runAfter(0, await requireSender(ctx), { emailId: email._id });
+    await ctx.scheduler.runAfter(0, await registerSender(ctx, args.sender), { emailId: email._id });
 
     return true;
   },

@@ -166,6 +166,9 @@ export const vEnqueueOwnedArgs = {
   sender: vSenderHandle,
 };
 
+/** A manual retry also refreshes the sender, so it works right after the app renames its action. */
+export const vRetryWithSenderArgs = { emailId: v.string(), sender: vSenderHandle };
+
 export const vEnqueueOwnedBatchArgs = {
   messages: v.array(v.object(vSendEmailArgs)),
   ownerId: v.string(),

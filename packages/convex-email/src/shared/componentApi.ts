@@ -27,7 +27,7 @@ import {
   vEnqueueOwnedArgs,
   vEnqueueOwnedBatchArgs,
   vListEmailEventsArgs,
-  vRetryEmailArgs,
+  vRetryWithSenderArgs,
   vStatusArgs,
 } from "./validators.js";
 
@@ -86,7 +86,7 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
       TName
     >;
     cancel: ComponentRef<"mutation", typeof vCancelEmailArgs, typeof vFlag, TName>;
-    retry: ComponentRef<"mutation", typeof vRetryEmailArgs, typeof vFlag, TName>;
+    retry: ComponentRef<"mutation", typeof vRetryWithSenderArgs, typeof vFlag, TName>;
     setConfig: ComponentRef<"mutation", typeof vSetConfigArgs, typeof vNull, TName>;
     getConfig: ComponentRef<"query", typeof vNoArgs, typeof vMaybeEmailConfig, TName>;
     markProcessing: ComponentRef<
