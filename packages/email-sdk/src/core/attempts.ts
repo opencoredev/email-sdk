@@ -6,7 +6,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
-import { isFunction } from "../internal/decode.js";
+import { cloneMetadataRecord, isFunction } from "../internal/decode.js";
 import { snapshotMessage } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
@@ -94,11 +94,15 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
 
+    const hookMetadata = input.options?.metadata
+      ? cloneMetadataRecord(input.options.metadata)
+      : undefined;
+
     const event = hookEvent(
       input.adapter.name,
       snapshotMessage(input.message),
       attempt,
-      input.options?.metadata,
+      hookMetadata,
     );
 
     const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
@@ -109,6 +113,10 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
 
     try {
       const attemptMessage = snapshotMessage(input.message);
+
+      const attemptMetadata = input.options?.metadata
+        ? cloneMetadataRecord(input.options.metadata)
+        : undefined;
 
       result = await input.measureAttempt(
         input.adapter,
@@ -123,7 +131,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
               attempt,
               signal: input.options?.signal,
               idempotencyKey: input.options?.idempotencyKey,
-              metadata: input.options?.metadata,
+              metadata: attemptMetadata,
             }),
           ),
       );

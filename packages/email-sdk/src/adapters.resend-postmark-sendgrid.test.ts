@@ -409,5 +409,17 @@ describe("legacy header objects", () => {
     expect(recipientReads).toBe(1);
     expect(sgResult.accepted).toEqual(["alice@example.com"]);
     expect(sgCapture.calls).toHaveLength(1);
+
+    // Direct sendgrid.sendPersonalized() rejects malformed recipient entries with EmailValidationError.
+    await expect(
+      sgAdapter.sendPersonalized!(
+        {
+          message: new ClassTemplate(),
+          // SAFETY: Intentionally passing malformed null recipient to test runtime validation.
+          recipients: [null as never],
+        },
+        { adapter: "sendgrid", operation: "personalized", attempt: 1 },
+      ),
+    ).rejects.toThrow(EmailValidationError);
   });
 });

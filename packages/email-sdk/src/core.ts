@@ -86,6 +86,7 @@ import type {
   EmailValidationResult,
 } from "./types.js";
 import {
+  cloneMetadataRecord,
   isFunction,
   isNonArrayObject,
   isObjectLike,
@@ -775,18 +776,24 @@ export function createEmailClient<
 
           const failure = normalizeAdapterFailure(name, error);
           failures.push(failure);
+
           await invokeErrorMiddleware(middleware, {
             adapter: name,
-            message: prepared.message,
+            message: snapshotMessage(prepared.message),
             attempt: failureAttempt(error),
-            metadata: safePreparedOptions?.metadata,
+            metadata: safePreparedOptions?.metadata
+              ? cloneMetadataRecord(safePreparedOptions.metadata)
+              : undefined,
             error: failure,
           });
+
           await invokeHooks(hooks, "onError", {
             adapter: name,
-            message: prepared.message,
+            message: snapshotMessage(prepared.message),
             attempt: failureAttempt(error),
-            metadata: safePreparedOptions?.metadata,
+            metadata: safePreparedOptions?.metadata
+              ? cloneMetadataRecord(safePreparedOptions.metadata)
+              : undefined,
             error: failure,
           });
 
@@ -889,11 +896,15 @@ export function createEmailClient<
       let itemOptions: EmailSendOptions | undefined;
 
       try {
-        itemOptions = readBoundary(() => item.options, "sendMany item options");
+        itemOptions = readBoundary(() => {
+          const rawOptions = item.options;
 
-        if (itemOptions !== undefined && !isNonArrayObject(itemOptions)) {
-          throw new EmailValidationError("sendMany item options must be an object.");
-        }
+          if (rawOptions !== undefined && !isNonArrayObject(rawOptions)) {
+            throw new EmailValidationError("sendMany item options must be an object.");
+          }
+
+          return rawOptions;
+        }, "sendMany item options");
 
         const resolvedOptions = readBoundary(
           () => itemSendOptions(index, itemOptions),
@@ -1354,7 +1365,12 @@ export function createEmailClient<
   for (const plugin of extensionPlugins) {
     const extension = plugin.extendClient?.(createPluginContext(adapters, defaultAdapter));
 
-    if (extension) applyClientExtension(client, plugin.id, extension);
+    if (extension) {
+      readBoundary(
+        () => applyClientExtension(client, plugin.id, extension),
+        `Plugin "${plugin.id}" extension`,
+      );
+    }
   }
 
   return client;

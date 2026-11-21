@@ -2755,5 +2755,133 @@ describe("audit hardening regressions", () => {
 
     await isoClient.send(baseMsg);
     expect(seenSubjects).toEqual(["s", "s"]);
+
+    // R28: [Symbol.toStringTag]: "Function" does not spoof callable check or skip cloning
+    let fnTagReads = 0;
+
+    const fnTagHeaders = {
+      [Symbol.toStringTag]: "Function",
+      get "X-Fn-Tag"() {
+        fnTagReads += 1;
+
+        return `v${fnTagReads}`;
+      },
+    };
+
+    // SAFETY: Testing runtime object spoofing Symbol.toStringTag as "Function".
+    await client.send({ ...baseMsg, headers: fnTagHeaders as never });
+    expect(fnTagReads).toBe(1);
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing runtime spoofed hook object.
+        hooks: { beforeSend: { [Symbol.toStringTag]: "Function" } as never },
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    expect(() =>
+      createEmailClient({
+        adapters: [adapter],
+        // SAFETY: Testing runtime revoked Proxy returned from plugin.extendClient.
+        plugins: [{ id: "rev-ext", extendClient: () => revokedObj as never }],
+        telemetry: false,
+      }),
+    ).toThrow(EmailValidationError);
+
+    // R28: sendMany per-item revoked Proxy options settles as EmailValidationError
+    // SAFETY: Testing runtime revoked Proxy in sendMany item options.
+    const revItemRes = await client.sendMany([{ message: baseMsg, options: revokedObj as never }]);
+    expect(revItemRes[0]?.ok).toBe(false);
+
+    if (revItemRes[0] && !revItemRes[0].ok) {
+      expect(revItemRes[0].error).toBeInstanceOf(EmailValidationError);
+    }
+
+    // R28: attachment byte buffers, sendOptions.metadata, and onError event.message are isolated across retries & fallback
+    const origBytes = new Uint8Array([104, 105]);
+    const seenFirstBytes: number[] = [];
+    const seenMetaTags: string[] = [];
+    const seenFbSubjects: string[] = [];
+    let mutCount = 0;
+
+    const fullIsoClient = createEmailClient({
+      adapters: [
+        {
+          name: "p1",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(m, ctx) {
+            mutCount += 1;
+            const first = m.attachments?.[0]?.content;
+
+            if (first instanceof Uint8Array) {
+              seenFirstBytes.push(first[0] ?? -1);
+              first[0] = 88;
+            }
+
+            // SAFETY: Test passes `{ tag: string }` metadata.
+            const meta = ctx.metadata as { tag: string };
+            seenMetaTags.push(meta.tag);
+            meta.tag = `adapter-${mutCount}`;
+
+            throw new EmailAdapterError("down", {
+              adapter: "p1",
+              retryable: true,
+              delivery: "not_sent",
+            });
+          },
+        },
+        {
+          name: "p2",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(m, ctx) {
+            const first = m.attachments?.[0]?.content;
+
+            if (first instanceof Uint8Array) seenFirstBytes.push(first[0] ?? -1);
+
+            // SAFETY: Test passes `{ tag: string }` metadata.
+            const meta = ctx.metadata as { tag: string };
+            seenMetaTags.push(meta.tag);
+            seenFbSubjects.push(m.subject);
+
+            return { adapter: "p2", id: "ok" };
+          },
+        },
+      ],
+      fallback: { adapters: ["p2"] },
+      retry: { maxAttempts: 2, delay: () => 0 },
+      hooks: {
+        beforeSend(ev) {
+          // SAFETY: Test passes `{ tag: string }` metadata.
+          const meta = ev.metadata as { tag: string };
+          meta.tag = "hook-mut";
+        },
+        onError(ev) {
+          ev.message.subject = "tampered-on-error";
+        },
+      },
+      telemetry: false,
+    });
+
+    await fullIsoClient.send(
+      { ...baseMsg, attachments: [{ filename: "a.bin", content: origBytes }] },
+      { metadata: { tag: "orig" } },
+    );
+
+    expect(origBytes[0]).toBe(104);
+    expect(seenFirstBytes).toEqual([104, 104, 104]);
+    expect(seenMetaTags).toEqual(["orig", "orig", "orig"]);
+    expect(seenFbSubjects).toEqual(["s"]);
   });
 });

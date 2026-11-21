@@ -1,6 +1,5 @@
-import { EmailValidationError } from "./errors.js";
+import { validatePersonalizedInput } from "./core/personalized.js";
 import { firstString, jsonProvider } from "./http.js";
-import { isNonArrayObject } from "./internal/decode.js";
 import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import {
   apiAddress,
@@ -63,14 +62,7 @@ export function sendgrid(
     ...provider,
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
-
-      if (
-        !isNonArrayObject(safeInput) ||
-        !isNonArrayObject(safeInput.message) ||
-        !Array.isArray(safeInput.recipients)
-      ) {
-        throw new EmailValidationError("sendPersonalized input must include a message and recipients.");
-      }
+      validatePersonalizedInput(safeInput);
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [

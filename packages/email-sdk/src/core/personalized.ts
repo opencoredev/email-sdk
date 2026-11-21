@@ -5,7 +5,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
-import { isNonArrayObject, isStringMember } from "../internal/decode.js";
+import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "../internal/decode.js";
 import { snapshotMessage, snapshotPersonalizedInputForSend } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
@@ -60,17 +60,25 @@ export async function attemptNativePersonalized(
   for (let attempt = 1; ; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
 
+    const hookMetadata = sendOptions?.metadata
+      ? cloneMetadataRecord(sendOptions.metadata)
+      : undefined;
+
     const event = hookEvent(
       adapter.name,
       snapshotMessage(hookMessage),
       attempt,
-      sendOptions?.metadata,
+      hookMetadata,
     );
 
     await invokeHooks(hooks, "beforeSend", event);
 
     try {
       const attemptInput = snapshotPersonalizedInputForSend(input);
+
+      const attemptMetadata = sendOptions?.metadata
+        ? cloneMetadataRecord(sendOptions.metadata)
+        : undefined;
 
       const personalized = await measureAttempt(
         adapter,
@@ -85,7 +93,7 @@ export async function attemptNativePersonalized(
               attempt,
               signal: sendOptions?.signal,
               idempotencyKey: sendOptions?.idempotencyKey,
-              metadata: sendOptions?.metadata,
+              metadata: attemptMetadata,
             }),
           ),
       );
@@ -233,9 +241,9 @@ export async function attemptExpandedPersonalized(
       failures.push(failure);
       await invokeSendFailureLifecycle(middleware, hooks, {
         adapter: adapter.name,
-        message,
+        message: snapshotMessage(message),
         attempt: failureAttempt(error),
-        metadata: sendOptions?.metadata,
+        metadata: sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
         error: failure,
       });
     }

@@ -2,6 +2,7 @@ import { EmailValidationError } from "../errors.js";
 import type { EmailAddress, EmailAttachment, EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.js";
 import {
   cloneMetadataRecord,
+  isBinaryBuffer,
   isDateLike,
   isNonArrayObject,
   isStringMember,
@@ -58,9 +59,17 @@ function snapshotAttachmentItem(attachment: EmailAttachment): EmailAttachment {
     "disposition",
     "contentEncoding",
   ] as const) {
-    const val = attachment[key];
+    const rawVal = attachment[key];
 
-    if (val === undefined) continue;
+    if (rawVal === undefined) continue;
+
+    const val =
+      key === "content" && ArrayBuffer.isView(rawVal)
+        ? new Uint8Array(rawVal.buffer, rawVal.byteOffset, rawVal.byteLength).slice()
+        : key === "content" && isBinaryBuffer(rawVal)
+          ? new Uint8Array(rawVal).slice().buffer
+          : rawVal;
+
     Object.defineProperty(copy, key, {
       value: val,
       enumerable: true,

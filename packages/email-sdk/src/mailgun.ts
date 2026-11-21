@@ -1,7 +1,8 @@
-import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { validatePersonalizedInput } from "./core/personalized.js";
+import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
-import { isNonArrayObject, jsonString } from "./internal/decode.js";
+import { jsonString } from "./internal/decode.js";
 import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
@@ -130,14 +131,7 @@ export function mailgun(
     send,
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
-
-      if (
-        !isNonArrayObject(safeInput) ||
-        !isNonArrayObject(safeInput.message) ||
-        !Array.isArray(safeInput.recipients)
-      ) {
-        throw new EmailValidationError("sendPersonalized input must include a message and recipients.");
-      }
+      validatePersonalizedInput(safeInput);
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [

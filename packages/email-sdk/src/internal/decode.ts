@@ -18,13 +18,6 @@ export type JsonObject = { readonly [key: string]: JsonValue };
 /** A callable value whose signature is not known until it is invoked. */
 export type UnknownFunction = (...args: never[]) => void;
 
-const FUNCTION_TAGS = new Set([
-  "[object Function]",
-  "[object AsyncFunction]",
-  "[object GeneratorFunction]",
-  "[object AsyncGeneratorFunction]",
-]);
-
 function tagOf<T>(value: T): string {
   return Object.prototype.toString.call(value);
 }
@@ -53,13 +46,25 @@ export function isBoolean(value: unknown): value is boolean {
   return value === true || value === false;
 }
 
+function isCallable<T>(value: T): boolean {
+  if (isPrimitive(value)) return false;
+
+  try {
+    Function.prototype.toString.call(value);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isFunction(value: unknown): value is UnknownFunction {
-  return FUNCTION_TAGS.has(tagOf(value));
+  return isCallable(value);
 }
 
 /** Narrow a statically typed union to its function members, such as a value-or-factory option. */
 export function isFunctionMember<T>(value: T): value is Extract<T, UnknownFunction> {
-  return FUNCTION_TAGS.has(tagOf(value));
+  return isCallable(value);
 }
 
 /** Non-null objects and functions: values that can carry properties. */

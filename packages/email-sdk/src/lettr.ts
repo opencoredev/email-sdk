@@ -73,7 +73,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
     name: "lettr",
     ...definition,
     raw: { baseUrl },
-    validate(message, context) {
+    validate(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       definition.validate?.(message, context);
       assertLettrMessage(message);
     },
