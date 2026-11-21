@@ -6,6 +6,7 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
+import { isFunction } from "../internal/decode.js";
 import type {
   EmailAdapter,
   EmailAfterSendEvent,
@@ -84,6 +85,10 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   // Once any attempt may have reached the provider, no later rejection can prove the message
   // was never sent, so the final failure must not report not_sent.
   let earlierOutcomeUnknown = false;
+
+  if (!isFunction(input.adapter.send)) {
+    throw new EmailValidationError(`${input.adapter.name} adapter does not support send().`);
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);

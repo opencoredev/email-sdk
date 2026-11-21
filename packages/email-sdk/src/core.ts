@@ -186,8 +186,8 @@ export function createEmailClient<
       throw new EmailValidationError("createEmailClient hooks must be an object.");
     }
 
-    if (rawTelemetry !== undefined && rawTelemetry !== false && !isNonArrayObject(rawTelemetry)) {
-      throw new EmailValidationError("createEmailClient telemetry must be false or an object.");
+    if (rawTelemetry !== undefined && rawTelemetry !== true && rawTelemetry !== false) {
+      throw new EmailValidationError("createEmailClient telemetry must be a boolean.");
     }
   } catch (error) {
     if (error instanceof EmailSdkError) throw error;
@@ -198,7 +198,7 @@ export function createEmailClient<
   const adapters = new Map<string, EmailAdapter>();
   const pluginHooks: EmailHooks[] = [];
   const middleware: EmailSendMiddleware[] = [];
-  const extensionPlugins: EmailPlugin[] = [];
+  const extensionPlugins: Array<Pick<EmailPlugin, "id" | "extendClient">> = [];
 
   try {
     for (const adapter of rawAdapters ?? []) addAdapter(adapters, adapter);
@@ -224,7 +224,7 @@ export function createEmailClient<
     let pluginId: string;
     let rawPluginHooks: EmailHooks | undefined;
     let rawPluginMiddleware: readonly EmailSendMiddleware[] | undefined;
-    let hasExtendClient = false;
+    let extendClient: EmailPlugin["extendClient"];
 
     try {
       if (!isNonArrayObject(plugin) || !isStringMember(plugin.id) || !plugin.id.trim()) {
@@ -253,14 +253,10 @@ export function createEmailClient<
         rawPluginMiddleware = copiedMiddleware;
       }
 
-      if (plugin.extendClient !== undefined) {
-        if (!isFunction(plugin.extendClient)) {
-          throw new EmailValidationError(
-            `Plugin "${pluginId}" extendClient must be a function.`,
-          );
-        }
+      extendClient = plugin.extendClient;
 
-        hasExtendClient = true;
+      if (extendClient !== undefined && !isFunction(extendClient)) {
+        throw new EmailValidationError(`Plugin "${pluginId}" extendClient must be a function.`);
       }
     } catch (error) {
       if (error instanceof EmailSdkError) throw error;
@@ -298,7 +294,9 @@ export function createEmailClient<
 
     if (rawPluginMiddleware) middleware.push(...rawPluginMiddleware);
 
-    if (hasExtendClient) extensionPlugins.push(plugin);
+    if (extendClient) {
+      extensionPlugins.push({ id: pluginId, extendClient: extendClient.bind(plugin) });
+    }
   }
 
   const defaultAdapter = rawDefaultAdapter ?? adapters.keys().next().value;
@@ -736,6 +734,11 @@ export function createEmailClient<
     }
 
     const itemCount = readBoundary(() => items.length, "sendMany items");
+
+    if (!Number.isSafeInteger(itemCount) || itemCount < 0 || itemCount > 0xffff_ffff) {
+      throw new EmailValidationError("sendMany items must be an array with a valid length.");
+    }
+
     const results: EmailSendSettledResult[] = Array.from({ length: itemCount });
     const usedAdapters = new Set<string>();
     let failed = 0;
@@ -908,13 +911,25 @@ export function createEmailClient<
         attemptedAdapter = safeInitialOptions.adapter;
       }
 
-      if (telemetry) facts = personalizedFacts(input);
-      readBoundary(() => validatePersonalizedInput(input), "sendPersonalized input");
+      const safeInput = readBoundary(() => {
+        if (!isNonArrayObject(input)) return input;
+
+        const rawRecipients = input.recipients;
+        const recipients = Array.isArray(rawRecipients) ? [...rawRecipients] : rawRecipients;
+
+        return {
+          ...input,
+          recipients,
+        };
+      }, "sendPersonalized input");
+
+      if (telemetry) facts = personalizedFacts(safeInput);
+      readBoundary(() => validatePersonalizedInput(safeInput), "sendPersonalized input");
       const initialSignal = safeInitialOptions?.signal;
       readBoundary(() => throwIfAborted(initialSignal), "Email send options");
 
       const initialMessage = readBoundary(
-        () => personalizedMiddlewareMessage(input),
+        () => personalizedMiddlewareMessage(safeInput),
         "sendPersonalized input",
       );
 
@@ -938,7 +953,7 @@ export function createEmailClient<
       readBoundary(() => throwIfAborted(preparedSignal ?? initialSignal), "Email send options");
 
       const preparedInput = readBoundary(
-        () => withPersonalizedMessage(input, prepared.message),
+        () => withPersonalizedMessage(safeInput, prepared.message),
         "sendPersonalized input",
       );
 
@@ -948,7 +963,7 @@ export function createEmailClient<
 
       const expanded = readBoundary(
         () =>
-          input.recipients.map((recipient) => ({
+          safeInput.recipients.map((recipient) => ({
             recipient,
             message: expandPersonalizedMessage(preparedInput, recipient.to, recipient.variables),
           })),
@@ -1014,7 +1029,9 @@ export function createEmailClient<
             });
           }
 
-          return result;
+          const { failures: _failures, ...publicResult } = result;
+
+          return publicResult;
         }
 
         routeFailures.push(...result.failures);

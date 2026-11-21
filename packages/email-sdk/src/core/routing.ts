@@ -248,6 +248,9 @@ export function mergeSendOptions(
 
   if (!override) return cloneNestedSendOptions(base);
 
+  base = cloneNestedSendOptions(base);
+  override = cloneNestedSendOptions(override);
+
   const merged: EmailSendOptions = { ...base, ...override };
 
   if (override.idempotencyKey === undefined && base.idempotencyKey !== undefined) {

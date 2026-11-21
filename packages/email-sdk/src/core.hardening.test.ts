@@ -1055,6 +1055,111 @@ describe("audit hardening regressions", () => {
         }),
       ).rejects.toBeInstanceOf(EmailValidationError);
 
+      // 8. telemetry: true is accepted; non-boolean telemetry is rejected
+      expect(() => createEmailClient({ adapters: [resend], telemetry: true })).not.toThrow();
+
+      expect(() =>
+        createEmailClient({
+          adapters: [resend],
+          // @ts-expect-error -- runtime invalid telemetry
+          telemetry: {},
+        }),
+      ).toThrow(EmailValidationError);
+
+      // 9. sendMany preserves class-instance retry and fallback when both shared and item options exist
+      class NoRetryPolicy {
+        maxAttempts = 3;
+        calls = 0;
+        shouldRetry() {
+          this.calls += 1;
+
+          return false;
+        }
+      }
+
+      let manyAttempts = 0;
+
+      const flakyMany = createEmailClient({
+        adapters: [
+          {
+            ...resend,
+            send: async () => {
+              manyAttempts += 1;
+
+              throw new EmailAdapterError("transient", {
+                adapter: "resend",
+                retryable: true,
+                delivery: "not_sent",
+              });
+            },
+          },
+        ],
+        telemetry: false,
+      });
+
+      const noRetry = new NoRetryPolicy();
+
+      const manyRes = await flakyMany.sendMany(
+        [{ message: msg, options: { metadata: { id: 1 } } }],
+        { retry: noRetry },
+      );
+
+      expect(manyRes[0]?.ok).toBe(false);
+      expect(manyAttempts).toBe(1);
+      expect(noRetry.calls).toBe(1);
+
+      // 10. plugin.extendClient is read once and bound cleanly
+      let extendReads = 0;
+
+      const extPlugin = {
+        id: "ext-once",
+        get extendClient() {
+          extendReads += 1;
+
+          return () => ({ ping: () => "pong" });
+        },
+      };
+
+      const extClient = createEmailClient({
+        adapters: [resend],
+        plugins: [extPlugin],
+        telemetry: false,
+      });
+
+      expect(extendReads).toBe(1);
+      expect(extClient.ping()).toBe("pong");
+
+      // 11. sendPersonalized snapshots recipients before beforeSend and omits internal failures on success
+      const mutRecipients = [{ to: "b@example.com" }];
+
+      const snapPersClient = createEmailClient({
+        adapters: [personalizedOnly],
+        plugins: [
+          {
+            id: "clear-recipients",
+            middleware: [
+              {
+                name: "clear",
+                beforeSend: () => {
+                  mutRecipients.length = 0;
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const snapPersResult = await snapPersClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "hi", text: "ok" },
+        recipients: mutRecipients,
+      });
+
+      expect(snapPersResult.accepted).toEqual(["b@example.com"]);
+      expect("failures" in snapPersResult).toBe(false);
+
+      // 12. Personalized-only adapter rejected cleanly by send() with EmailValidationError
+      await expect(persClient.send(msg)).rejects.toBeInstanceOf(EmailValidationError);
+
       expect(exceptions).toHaveLength(0);
     } finally {
       resetTelemetry();
