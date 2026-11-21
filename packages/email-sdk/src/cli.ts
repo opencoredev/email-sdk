@@ -5,7 +5,12 @@ import { basename } from "node:path";
 import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
 import { createEmailClient } from "./core.js";
-import { EmailSdkError } from "./errors.js";
+import {
+  EmailAdapterError,
+  EmailAllRecipientsFailedError,
+  EmailRouteError,
+  EmailSdkError,
+} from "./errors.js";
 import { isStringMember, jsonString, parseJsonStrict } from "./internal/decode.js";
 import { runDoctor } from "./doctor.js";
 import { graph } from "./graph.js";
@@ -329,16 +334,29 @@ async function main(command: string | undefined, flags: CliFlags, args: string[]
 
   const providerName = selectedAdapter(flags) ?? detectProvider();
   const message = await buildMessage(flags);
+  const fallbackNames = fallbackFlag(flags, providerName);
+  const maxAttempts = maxAttemptsFlag(flags);
+
+  const routing = {
+    fallback: fallbackNames.length > 0 ? { adapters: fallbackNames } : undefined,
+    retry: maxAttempts === undefined ? undefined : { maxAttempts },
+  };
 
   if (truthyFlag(flags, "dry-run")) {
     const adapter = createProvider(providerName, dryRunFlags(providerName, flags));
-    const client = createEmailClient({ adapters: [adapter] });
-    await client.validate(message);
+    const fallbacks = fallbackNames.map((name) => createProvider(name, dryRunFlags(name, {})));
+    const client = createEmailClient({ adapters: [adapter, ...fallbacks], ...routing });
+    // Validates the message against every adapter on the route, as a real send does first.
+    await client.validate(message, routing);
+
+    // JSON.stringify drops undefined keys, so a plain dry run prints exactly what it did before.
     console.log(
       JSON.stringify(
         {
           ok: true,
           adapter: providerName,
+          fallback: fallbackNames.length > 0 ? fallbackNames : undefined,
+          maxAttempts,
           message: redactMessageForDryRun(message),
         },
         null,
@@ -350,11 +368,83 @@ async function main(command: string | undefined, flags: CliFlags, args: string[]
   }
 
   const provider = createProvider(providerName, flags);
-  const client = createEmailClient({ adapters: [provider] });
+  // Credential and connection flags such as --api-key and --base-url belong to the primary
+  // adapter, so fallback adapters read only their own environment variables.
+  const fallbacks = fallbackNames.map((name) => createProvider(name, {}));
+  const client = createEmailClient({ adapters: [provider, ...fallbacks], ...routing });
   // setTelemetrySource("cli") at process start already tags this client's events.
   const response = await client.send(message);
 
-  console.log(JSON.stringify(response, null, 2));
+  console.log(
+    JSON.stringify(truthyFlag(flags, "json") ? { ok: true, result: response } : response, null, 2),
+  );
+}
+
+/** `--fallback resend,postmark` (repeatable): ordered, unique, and without the primary adapter. */
+function fallbackFlag(flags: CliFlags, primary: string): string[] {
+  if (flags.fallback === true) fail("--fallback needs comma-separated adapter names.");
+
+  const names = stringFlags(flags, "fallback")
+    .flatMap((value) => value.split(","))
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0 && name !== primary);
+
+  for (const name of names) {
+    if (!isProviderName(name)) {
+      fail(`Unsupported fallback adapter "${name}". Run \`email-sdk adapters\` to see supported adapters.`);
+    }
+  }
+
+  return [...new Set(names)];
+}
+
+function maxAttemptsFlag(flags: CliFlags): number | undefined {
+  const value = flags["max-attempts"];
+
+  if (value === undefined) return undefined;
+
+  const text = stringFlag(flags, "max-attempts");
+
+  if (text === undefined || !/^\d+$/.test(text) || Number(text) < 1) {
+    fail("--max-attempts must be a whole number of at least 1.");
+  }
+
+  return Number(text);
+}
+
+type CliErrorJson = {
+  name: string;
+  code: string;
+  message: string;
+  retryable?: boolean;
+  adapter?: string;
+  status?: number;
+  delivery?: EmailAdapterError["delivery"];
+  failures?: CliErrorJson[];
+};
+
+/** The machine-readable shape of a failed `send --json`, without causes or raw provider bodies. */
+function cliErrorJson(error: CliFailure | EmailSdkError): CliErrorJson {
+  if (error instanceof CliFailure) return { name: "CliError", code: "cli_error", message: error.message };
+
+  const json: CliErrorJson = {
+    name: error.name,
+    code: error.code,
+    message: error.message,
+    retryable: error.retryable,
+  };
+
+  if (error instanceof EmailAdapterError) {
+    json.adapter = error.adapter;
+    json.status = error.status;
+    json.delivery = error.delivery;
+  }
+
+  if (error instanceof EmailRouteError || error instanceof EmailAllRecipientsFailedError) {
+    json.failures = error.failures.map(cliErrorJson);
+  }
+
+  return json;
 }
 
 function createProvider(name: string, flags: CliFlags): EmailAdapter {
@@ -811,6 +901,10 @@ Send options:
   --message <path>             Read the EmailMessage JSON payload from a file.
   --send-at <rfc3339>          Schedule the message on capable adapters.
   --dry-run                    Validate input and print the send plan without sending.
+  --fallback <names>           Comma-separated adapters to try, in order, when the primary
+                               definitely did not send. They read only their environment.
+  --max-attempts <n>           Attempts per adapter, including the first (default 1).
+  --json                       Print { ok, result } or { ok: false, error } on stdout.
   --base-url <url>             Overrides supported adapter base URL variables.
 
 Cloudflare options:
@@ -964,7 +1058,12 @@ try {
   }
 
   if (error instanceof CliFailure || error instanceof EmailSdkError) {
-    console.error(error.message);
+    if (cliCommand === "send" && truthyFlag(cliFlags, "json")) {
+      console.log(JSON.stringify({ ok: false, error: cliErrorJson(error) }, null, 2));
+    } else {
+      console.error(error.message);
+    }
+
     process.exit(1);
   }
 

@@ -768,6 +768,200 @@ describe("email-sdk CLI", () => {
   });
 });
 
+describe("send routing flags", () => {
+  const sendArgs = [
+    "send",
+    "--from",
+    "hello@example.com",
+    "--to",
+    "user@example.com",
+    "--subject",
+    "Hello",
+    "--text",
+    "It works",
+  ];
+
+  /** Unosend at /uno answers with `unosendStatus`; Iterable at /it accepts the send. */
+  function providers(unosendStatus: number) {
+    const requests: string[] = [];
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const path = new URL(request.url).pathname;
+        requests.push(path);
+
+        if (path.startsWith("/uno")) {
+          return Response.json({ message: "nope" }, { status: unosendStatus });
+        }
+
+        return Response.json({ code: "Success", msg: "ok" });
+      },
+    });
+
+    const origin = `http://127.0.0.1:${server.port}`;
+
+    return {
+      requests,
+      args: ["--adapter", "unosend", "--api-key", "uno-key", "--base-url", `${origin}/uno`],
+      env: { ITERABLE_API_KEY: "it-key", ITERABLE_CAMPAIGN_ID: "7", ITERABLE_BASE_URL: `${origin}/it` },
+      stop: () => server.stop(true),
+    };
+  }
+
+  test("--fallback sends through the next adapter after a definite rejection", async () => {
+    const fixture = providers(401);
+
+    try {
+      const { stdout, stderr, exitCode } = await runCli(
+        [...sendArgs, ...fixture.args, "--fallback", "iterable", "--json"],
+        fixture.env,
+      );
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({ ok: true, result: { adapter: "iterable" } });
+      expect(fixture.requests).toEqual(["/uno/emails", "/it/api/email/target"]);
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test("without --json a successful send prints the bare result as before", async () => {
+    const fixture = providers(401);
+
+    try {
+      const { stdout, exitCode } = await runCli([...sendArgs, ...fixture.args, "--fallback", "iterable"], fixture.env);
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({ adapter: "iterable" });
+      expect(JSON.parse(stdout)).not.toHaveProperty("ok");
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test("--max-attempts retries the adapter, and --json reports the route failure on stdout", async () => {
+    const fixture = providers(503);
+
+    try {
+      const { stdout, stderr, exitCode } = await runCli(
+        [...sendArgs, ...fixture.args, "--max-attempts", "3", "--fallback", "iterable", "--json"],
+        fixture.env,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stderr).toBe("");
+      // A 503 leaves delivery unknown, so the default policy does not fall back to Iterable.
+      expect(fixture.requests).toEqual(["/uno/emails", "/uno/emails", "/uno/emails"]);
+      expect(JSON.parse(stdout)).toEqual({
+        ok: false,
+        error: {
+          name: "EmailRouteError",
+          code: "route_error",
+          message: "All configured email adapters failed.",
+          retryable: false,
+          failures: [
+            {
+              name: "EmailAdapterError",
+              code: "adapter_error",
+              message: "unosend failed with 503: nope",
+              retryable: true,
+              adapter: "unosend",
+              status: 503,
+              delivery: "unknown",
+            },
+          ],
+        },
+      });
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test.each([["0"], ["two"], ["1.5"]])("rejects --max-attempts %s as a usage error", async (value) => {
+    const { stdout, stderr, exitCode } = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--max-attempts",
+      value,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe("");
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+        message: "--max-attempts must be a whole number of at least 1.",
+      },
+    });
+  });
+
+  test("dry run validates the message against fallback adapters and shows the route", async () => {
+    const plan = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--fallback",
+      "postmark,resend,postmark",
+      "--max-attempts",
+      "2",
+      "--dry-run",
+    ]);
+
+    expect(plan.exitCode).toBe(0);
+    expect(JSON.parse(plan.stdout)).toMatchObject({ ok: true, adapter: "resend", fallback: ["postmark"], maxAttempts: 2 });
+
+    // Cloudflare accepts only plain recipient addresses, so the route fails before any send.
+    const rejected = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--fallback",
+      "cloudflare",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "Ada <ada@example.com>",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ]);
+
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toContain("cloudflare");
+  });
+
+  test("a plain dry run prints the same plan shape as before", async () => {
+    const { stdout, exitCode } = await runCli([...sendArgs, "--adapter", "resend", "--dry-run"]);
+
+    expect(exitCode).toBe(0);
+    expect(Object.keys(JSON.parse(stdout))).toEqual(["ok", "adapter", "message"]);
+  });
+
+  test("rejects an unknown fallback adapter", async () => {
+    const { stderr, exitCode } = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--fallback",
+      "nope",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Unsupported fallback adapter "nope"');
+  });
+});
+
 describe("telemetry command", () => {
   test("managing telemetry never reports events, while other commands do", async () => {
     const configHome = mkdtempSync(join(tmpdir(), "email-sdk-cli-telemetry-"));
