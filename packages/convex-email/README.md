@@ -45,7 +45,7 @@ import { components } from "./_generated/api";
 export const send = emailSender(components.convexEmail);
 ```
 
-The component schedules this internal action once per attempt through a function handle, and the action records each provider attempt and its result back in the component. Pass `emailSender(components.convexEmail, { telemetry: false })` to turn off Email SDK telemetry for these sends; otherwise the SDK follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
+The component schedules this internal action once per attempt through a function handle, and the action records each provider attempt and its result back in the component. Each component instance uses one sender: the most recent one any `ConvexEmail` client passed, which also picks up a renamed sender action for emails already queued. To run two differently configured senders, mount the component twice with `app.use(convexEmail, { name: "..." })`. Pass `emailSender(components.convexEmail, { telemetry: false })` to turn off Email SDK telemetry for these sends; otherwise the SDK follows `EMAIL_SDK_TELEMETRY` and `DO_NOT_TRACK` in the deployment environment.
 
 Set provider secrets as Convex environment variables. The sender action reads them from the deployment environment:
 

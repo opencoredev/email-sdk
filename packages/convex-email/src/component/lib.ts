@@ -597,6 +597,10 @@ async function getSenderDoc(ctx: QueryCtx) {
 /**
  * Records the app's sender handle. Writes only when it changed, so concurrent sends with the same
  * handle only read the row and never conflict on it.
+ *
+ * One sender per component instance, last writer wins. Storing the handle per email would leave
+ * queued and retrying emails pointing at a dead function once the app renames or moves its sender
+ * action. Apps that need two senders mount the component twice under different names.
  */
 async function registerSender(ctx: MutationCtx, handle: string) {
   const existing = await getSenderDoc(ctx);

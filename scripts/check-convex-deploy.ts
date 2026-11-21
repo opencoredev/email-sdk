@@ -248,8 +248,38 @@ export default http;
   );
 }
 
+/**
+ * The environment for every Convex CLI call. Deploy keys, deployment names, and self-hosted URLs
+ * take precedence over anonymous mode, so inheriting any of them could push this scratch app to a
+ * real deployment. Drop every CONVEX_* variable and select the anonymous local backend explicitly.
+ */
 function convexEnv(): NodeJS.ProcessEnv {
-  return { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_DEPLOYMENT: undefined, CONVEX_URL: undefined };
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("CONVEX_")));
+
+  return { ...env, CONVEX_AGENT_MODE: "anonymous" };
+}
+
+/** What a SIGINT or SIGTERM must clean up: the Convex process group and the scratch directory. */
+type OwnedResources = { convex?: ChildProcess; workDir?: string };
+
+const owned: OwnedResources = {};
+
+function cleanUpOwnedSync(): void {
+  if (owned.convex) signalGroup(owned.convex, "SIGKILL");
+
+  if (owned.workDir && process.env.KEEP_CONVEX_APP !== "1") {
+    rmSync(owned.workDir, { recursive: true, force: true });
+  }
+}
+
+for (const [signal, code] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+] as const) {
+  process.once(signal, () => {
+    cleanUpOwnedSync();
+    process.exit(code);
+  });
 }
 
 /** Starts `convex dev` and resolves once the first push succeeded, or rejects with its output. */
@@ -261,6 +291,8 @@ async function startConvexDev(appDir: string): Promise<{ child: ChildProcess; ou
     // Its own process group, so stopping it also stops the local backend it launches.
     detached: true,
   });
+
+  owned.convex = child;
 
   let output = "";
   child.stdout?.on("data", (chunk: Buffer) => (output += chunk.toString("utf8")));
@@ -410,9 +442,16 @@ async function postWebhook(url: string, headers: Record<string, string>, body: s
 const sentRequest = z.object({ subject: z.string(), to: z.array(z.string()), from: z.string() });
 
 async function verifyDeployment(appDir: string, fixture: Awaited<ReturnType<typeof startResendFixture>>): Promise<void> {
-  run("npx", ["convex", "env", "set", "RESEND_API_KEY", FIXTURE_API_KEY], appDir, convexEnv());
-
   const { CONVEX_URL: convexUrl, CONVEX_SITE_URL: siteUrl } = readDeploymentUrls(appDir);
+
+  // Never write to anything but the loopback backend this script started.
+  for (const url of [convexUrl, siteUrl]) {
+    if (!["127.0.0.1", "localhost"].includes(new URL(url).hostname)) {
+      throw new Error(`Refusing to continue: the scratch app is linked to ${url}, not a local backend.`);
+    }
+  }
+
+  run("npx", ["convex", "env", "set", "RESEND_API_KEY", FIXTURE_API_KEY], appDir, convexEnv());
 
   const emailId = z
     .string()
@@ -477,6 +516,7 @@ async function main(): Promise<void> {
   }
 
   const workDir = mkdtempSync(join(tmpdir(), "convex-email-deploy-"));
+  owned.workDir = workDir;
   const appDir = join(workDir, "app");
   const fixture = await startResendFixture();
   let convex: ChildProcess | undefined;
