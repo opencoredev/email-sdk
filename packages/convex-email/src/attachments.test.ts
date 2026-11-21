@@ -13,8 +13,8 @@ import {
   type AttachmentTransportRequest,
   type HostResolver,
   type ResolvedAddress,
-} from "./component/attachments.js";
-import { hydrateAttachments } from "./component/providers.js";
+} from "./node/attachments.js";
+import { hydrateAttachments } from "./node/providers.js";
 
 const publicV4: ResolvedAddress = { address: "93.184.215.14", family: 4 };
 

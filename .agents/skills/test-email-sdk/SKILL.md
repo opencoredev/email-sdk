@@ -81,7 +81,12 @@ Individual scripts and what each probe does are listed in `adapter-verification.
 ```bash
 bun run build                          # email-sdk must be built first
 cd packages/convex-email && bun test
+bun run convex:deploy-check            # from the repo root: real deploy to a local Convex backend
 ```
+
+`convex-test` does not apply Convex's deploy rules. It ran the component happily while every real deploy failed on `"use node"` modules inside the component (issue #340). Run `bun run convex:deploy-check` for any change under `packages/convex-email`. It packs both packages, deploys a scratch app to a local backend in `CONVEX_AGENT_MODE=anonymous` (no account; the first run downloads the backend binary), sends one email through the app's sender action to a loopback Resend fixture, posts signed and generic webhooks, and prints a JSON check list. It needs network for `npm install`, stops its own `convex dev` process group, and removes its temp dir unless `KEEP_CONVEX_APP=1`. CI runs it in the `convex-deploy` job.
+
+Never add `"use node"`, a Node built-in import, or an `@opencoredev/email-sdk` client import under `packages/convex-email/src/component/`. Node-only code belongs in `src/node/`, which runs in the app's sender action.
 
 `bun run codegen` needs a Convex deployment and is maintainer-only.
 

@@ -1,5 +1,3 @@
-"use node";
-
 /**
  * Fetches URL attachments for queued email without letting a caller point the worker at internal
  * infrastructure.

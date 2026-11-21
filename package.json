@@ -19,6 +19,7 @@
     "release:ci": "bun run lint && bun run check-types && bun run test && bun run verification:check && bun run community:check && bun run docs:versions:check && bun run docs:check && bun run build && bun run pack:check",
     "release": "changeset publish",
     "pack:check": "bun scripts/check-package-tarballs.ts",
+    "convex:deploy-check": "bun scripts/check-convex-deploy.ts",
     "live:resend": "bun scripts/check-resend-account.ts",
     "live:sequenzy": "bun scripts/check-sequenzy-account.ts",
     "live:lettermint": "bun scripts/check-lettermint-account.ts",

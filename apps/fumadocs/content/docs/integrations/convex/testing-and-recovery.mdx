@@ -23,15 +23,16 @@ await email.setConfig(ctx, {
 ## Use in-memory delivery
 
 ```ts title="convex/email.ts"
-export const email = new ConvexEmail(components.convexEmail, {
+export const email: ConvexEmail = new ConvexEmail(components.convexEmail, {
+  sender: internal.emailSender.send,
   adapters: [{ kind: "memory" }],
   defaultAdapter: "memory",
 });
 ```
 
-The memory adapter exercises the real queue, scheduler, status, event, idempotency, cancellation, and cleanup behavior without a network call.
+The memory adapter exercises the real queue, scheduler, sender action, status, event, idempotency, cancellation, and cleanup behavior without a network call.
 
-For `convex-test`, register the packaged component helper:
+For `convex-test`, register the packaged component helper. Your `convex/emailSender.ts` is one of your app's modules, so `convex-test` runs it like any other action:
 
 ```ts title="convex/test.setup.ts"
 import convexEmailTest from "@opencoredev/convex-email/test";
@@ -74,6 +75,8 @@ Use an idempotency key on the original message. Automatic recovery refuses to re
 ## Expose only authorized operations
 
 `exposeApi()` can generate app function definitions for send, batch, status, events, cancellation, and retry. It requires an authenticated Convex identity by default, records its `subject` as the email owner, and only returns or changes emails owned by that identity. Unauthenticated callers are rejected, and emails queued through server-only APIs remain private.
+
+Public `send` and `sendBatch` reject an `adapters` field and use the adapters configured on the `ConvexEmail` client. The sender action can read every credential in your deployment environment, so callers must not be able to choose `apiKeyEnv` or `baseUrl`. They can still pick a configured adapter by name with `adapter` and `fallbackAdapters`.
 
 Use `authorize` when your app needs tenant ownership or an operation-specific policy. It receives the Convex auth context and operation name, and must return a stable owner id or `null` to deny the request. Configuration functions stay excluded unless both `includeConfigApi: true` and an explicit `authorizeConfig` admin check are provided.
 

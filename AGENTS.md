@@ -151,6 +151,13 @@ includes its `npm pack --dry-run`. Running `bun test` directly inside the
 package requires `@opencoredev/email-sdk` to be built first (`bun run build`
 at the repo root); turbo handles that ordering for you.
 
+Convex rejects `"use node"` modules inside components, so everything under
+`src/component/` must run in the default Convex runtime: no Node built-ins and no
+`@opencoredev/email-sdk` client import (only `/webhooks`). Provider requests run in
+the app's sender action, built by `emailSender()` in `src/node/`. `convex-test`
+does not enforce this rule; `bun run convex:deploy-check` deploys a scratch app
+to a local Convex backend and does, and CI runs it.
+
 The Convex `_generated/` files under `src/component/_generated` are committed
 generic stubs whose types derive from `src/component/schema.ts`, so schema
 changes usually do not require regeneration. `bun run codegen` (in the package)

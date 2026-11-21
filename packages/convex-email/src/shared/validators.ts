@@ -119,7 +119,13 @@ function vAdapterFieldValue(field: ConvexAdapterField): GenericValidator {
   }
 }
 
-export const vSendEmailArgs = {
+/**
+ * What callers of `exposeApi()` may send. Adapter configuration is deliberately absent: the sender
+ * action reads credentials from the app's whole deployment environment, so a caller who could pick
+ * `apiKeyEnv` and `baseUrl` could send any registry-listed secret to their own server. Public
+ * callers can still choose among the server-configured adapters by name.
+ */
+export const vPublicSendEmailArgs = {
   ...vEmailMessage,
   from: v.optional(vEmailAddress),
   adapter: v.optional(v.string()),
@@ -127,12 +133,46 @@ export const vSendEmailArgs = {
   retries: v.optional(v.number()),
   maxAttempts: v.optional(v.number()),
   retryBaseMs: v.optional(v.number()),
-  adapters: v.optional(v.array(vAdapterConfig)),
   sendMetadata: v.optional(vEmailMetadata),
+};
+
+export const vPublicSendBatchEmailsArgs = {
+  messages: v.array(v.object(vPublicSendEmailArgs)),
+};
+
+/** Server-side send arguments, which may also carry adapter configuration. */
+export const vSendEmailArgs = {
+  ...vPublicSendEmailArgs,
+  adapters: v.optional(v.array(vAdapterConfig)),
 };
 
 export const vSendBatchEmailsArgs = {
   messages: v.array(v.object(vSendEmailArgs)),
+};
+
+/**
+ * Function handle to the app's sender action. The app-side `ConvexEmail` client adds it to every
+ * enqueue; it is never part of the public send arguments.
+ */
+export const vSenderHandle = v.string();
+
+export const vEnqueueEmailArgs = { ...vSendEmailArgs, sender: vSenderHandle };
+
+export const vEnqueueBatchArgs = { ...vSendBatchEmailsArgs, sender: vSenderHandle };
+
+export const vEnqueueOwnedArgs = {
+  email: v.object(vSendEmailArgs),
+  ownerId: v.string(),
+  sender: vSenderHandle,
+};
+
+/** A manual retry also refreshes the sender, so it works right after the app renames its action. */
+export const vRetryWithSenderArgs = { emailId: v.string(), sender: vSenderHandle };
+
+export const vEnqueueOwnedBatchArgs = {
+  messages: v.array(v.object(vSendEmailArgs)),
+  ownerId: v.string(),
+  sender: vSenderHandle,
 };
 
 export const vStatusArgs = {

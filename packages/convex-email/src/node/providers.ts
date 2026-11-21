@@ -1,5 +1,3 @@
-"use node";
-
 import {
   createEmailClient,
   type EmailAdapter,
@@ -41,14 +39,12 @@ import { unosend } from "@opencoredev/email-sdk/unosend";
 import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
 import { z } from "zod";
 
-import { env, type Env } from "./_generated/server.js";
 import { hydrateAttachment, type AttachmentFetchOptions } from "./attachments.js";
 import {
   adapterFields,
   CONVEX_EMAIL_ADAPTER_KINDS,
   isDeclaredEnvVar,
   type ConvexAdapterField,
-  type ConvexEmailEnvVar,
 } from "../shared/adapters.js";
 import type {
   ConvexEmailAdapterConfig,
@@ -67,7 +63,14 @@ export type BuildEmailClientOptions = {
    * enforce that, because the SDK isolates hook errors, so each adapter's send is wrapped instead.
    */
   recordAttempt?: (event: { adapter: string; attempt: number }) => Promise<void>;
+  /** `false` turns off Email SDK telemetry for this client. */
+  telemetry?: boolean;
+  /** Where credentials are read from. Defaults to the deployment's `process.env`. */
+  env?: AdapterEnv;
 };
+
+/** Environment variables as the sender action sees them. */
+export type AdapterEnv = Readonly<Record<string, string | undefined>>;
 
 /** Copies symbol markers (such as the SDK's test-adapter marker) from one send function to another. */
 function keepSendMarkers<T extends EmailAdapter["send"]>(from: EmailAdapter["send"], to: T): T {
@@ -114,9 +117,10 @@ export function gateDispatch(
 
 export function buildEmailClient(options: BuildEmailClientOptions) {
   const { recordAttempt } = options;
+  const env = options.env ?? process.env;
 
   const adapters = options.adapters.map((config) => {
-    const adapter = buildAdapter(config);
+    const adapter = buildAdapter(config, env);
 
     return recordAttempt ? gateDispatch(adapter, recordAttempt) : adapter;
   });
@@ -126,6 +130,7 @@ export function buildEmailClient(options: BuildEmailClientOptions) {
   return createEmailClient({
     adapters,
     defaultAdapter,
+    telemetry: options.telemetry,
     fallback: options.fallbackAdapters
       ? { adapters: options.fallbackAdapters, onUnknownDelivery: "stop" }
       : undefined,
@@ -222,21 +227,24 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   zeptomail: fromOptions(zeptomail),
 };
 
-function buildAdapter(config: ConvexEmailAdapterConfig): EmailAdapter {
+function buildAdapter(config: ConvexEmailAdapterConfig, env: AdapterEnv): EmailAdapter {
   const factory = ADAPTER_FACTORIES[config.kind];
 
   if (!factory) {
     throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
   }
 
-  return withName(factory(resolveAdapterOptions(config), config), config.name);
+  return withName(factory(resolveAdapterOptions(config, env), config), config.name);
 }
 
 /**
  * Turns stored adapter config into Email SDK options: inline values win, otherwise the field is
- * read from the component environment under its configured or default variable name.
+ * read from the deployment environment under its configured or default variable name.
  */
-export function resolveAdapterOptions(config: ConvexEmailAdapterConfig) {
+export function resolveAdapterOptions(
+  config: ConvexEmailAdapterConfig,
+  env: AdapterEnv = process.env,
+) {
   const fields = adapterFields(config.kind);
 
   if (!fields) {
@@ -255,7 +263,7 @@ export function resolveAdapterOptions(config: ConvexEmailAdapterConfig) {
     }
 
     const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
-    const fromEnv = name ? readEnvField(name, field) : undefined;
+    const fromEnv = name ? readEnvField(env, name, field) : undefined;
 
     if (fromEnv !== undefined) {
       options.set(key, fromEnv);
@@ -293,17 +301,18 @@ function envNameFor(
 
   // Graph URL and identity fields must not turn unrelated secrets into request URLs.
   if (kind === "graph" && override !== fallback) {
-    throw new Error(`Graph ${key}Env must use ${fallback}; map custom values in app.use(convexEmail, { env }).`);
+    throw new Error(`Graph ${key}Env must use ${fallback}; set ${fallback} in the deployment environment.`);
   }
 
-  // A deployed component only receives the variables its contract declares, so an override
-  // naming anything else would resolve to nothing. Fail with the mapping that does work.
+  // The sender action can read every deployment secret, so an override may only name a credential
+  // the adapter registry knows. This is defense in depth: adapter config must still come only from
+  // trusted server code, because a caller who also controls `baseUrl` can send any of these
+  // credentials to their own server. `exposeApi()` refuses caller-supplied adapters for that reason.
   if (!isDeclaredEnvVar(override)) {
     throw new Error(
-      `Convex Email adapter "${kind}" cannot read environment variable ${override}: a Convex ` +
-        `component only receives the variables declared in its contract, so ${key}Env must name ` +
-        `one of them (default ${fallback}). To use a different secret, map it onto ${fallback} ` +
-        `in app.use(convexEmail, { env }).`,
+      `Convex Email adapter "${kind}" cannot read environment variable ${override}: ${key}Env ` +
+        `must name one of the credential variables Convex Email reads (default ${fallback}). ` +
+        `To use a different secret, set it as ${fallback} in the deployment environment.`,
     );
   }
 
@@ -319,8 +328,8 @@ function envNameFor(
   return override;
 }
 
-function readEnvField(name: string, field: ConvexAdapterField) {
-  const value = componentEnv[name];
+function readEnvField(env: AdapterEnv, name: string, field: ConvexAdapterField) {
+  const value = env[name];
 
   if (!value) {
     return undefined;
@@ -394,12 +403,3 @@ function parseNumberEnv(name: string, value: string) {
 
   return parsed;
 }
-
-const componentEnv: Record<string, string | undefined> = env;
-
-// Compile-time assertion that the component's declared environment (`convex.config.ts`, and the
-// `Env` type generated from it) covers every credential the adapter registry can read. Adding an
-// adapter without declaring its variables fails the build here instead of at send time.
-type AssertNever<T extends never> = T;
-
-export type DeclaredEnvCoversRegistry = AssertNever<Exclude<ConvexEmailEnvVar, keyof Env>>;

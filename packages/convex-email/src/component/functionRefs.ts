@@ -9,7 +9,7 @@
  * This module runs in the default Convex runtime; it must not import Node or Email SDK code.
  */
 import { makeFunctionReference } from "convex/server";
-import type { FunctionReference, FunctionVisibility } from "convex/server";
+import type { FunctionHandle, FunctionReference, FunctionVisibility } from "convex/server";
 import { v } from "convex/values";
 import type { GenericValidator, Infer, ObjectType, PropertyValidators } from "convex/values";
 
@@ -58,7 +58,19 @@ export const recordWebhookArgs = {
 
 export const sweepArgs = { limit: v.optional(v.number()) };
 
-export const processEmailArgs = { emailId: v.id("emails") };
+/** Arguments of the app's sender action, which the component schedules once per send attempt. */
+export const senderArgs = { emailId: v.string() };
+
+/** A function handle to the app's sender action, created by the app-side `ConvexEmail` client. */
+export type SenderHandle = FunctionHandle<"action", ObjectType<typeof senderArgs>, null>;
+
+/** Turns the handle string stored on an email back into a schedulable reference. */
+export function senderHandle(handle: string): SenderHandle {
+  // SAFETY: the only writer of `emails.sender` is enqueue, whose `sender` argument comes from the
+  // app-side client's `createFunctionHandle(options.sender)`. That option is typed as an action
+  // taking `{ emailId: string }` and returning null, which is exactly SenderHandle.
+  return handle as SenderHandle;
+}
 
 export const handleWebhookArgs = vEmailWebhookArgs;
 
@@ -83,32 +95,14 @@ function internalRef<
   return makeFunctionReference<TType, ObjectType<TArgs>, Infer<TReturns>>(name);
 }
 
-type BooleanReturns = ReturnType<typeof v.boolean>;
-
 type NumberReturns = ReturnType<typeof v.number>;
 
-type NullReturns = ReturnType<typeof v.null>;
-
 /**
- * References to the internal functions in lib.ts and worker.ts. Each one is typed from the same
- * validators its function is registered with.
+ * References to the internal functions in lib.ts. Each one is typed from the same validators its
+ * function is registered with.
  */
 export const internalFunctions = {
   lib: {
-    markProcessing: internalRef<
-      "mutation",
-      typeof markProcessingArgs,
-      typeof markProcessingReturns
-    >("lib:markProcessing"),
-    recordProviderAttempt: internalRef<
-      "mutation",
-      typeof recordProviderAttemptArgs,
-      BooleanReturns
-    >("lib:recordProviderAttempt"),
-    markSent: internalRef<"mutation", typeof markSentArgs, BooleanReturns>("lib:markSent"),
-    markFailedOrRetry: internalRef<"mutation", typeof markFailedOrRetryArgs, BooleanReturns>(
-      "lib:markFailedOrRetry",
-    ),
     recordWebhook: internalRef<"mutation", typeof recordWebhookArgs, typeof handleWebhookReturns>(
       "lib:recordWebhook",
     ),
@@ -117,11 +111,6 @@ export const internalFunctions = {
     ),
     cleanupExpiredEmails: internalRef<"mutation", typeof sweepArgs, NumberReturns>(
       "lib:cleanupExpiredEmails",
-    ),
-  },
-  worker: {
-    processEmail: internalRef<"action", typeof processEmailArgs, NullReturns>(
-      "worker:processEmail",
     ),
   },
 };

@@ -11,22 +11,36 @@ import type { Infer, ObjectType, PropertyValidators, Validator } from "convex/va
 import { v } from "convex/values";
 
 import {
+  markFailedOrRetryArgs,
+  markSentArgs,
+  recordProviderAttemptArgs,
+} from "../component/functionRefs.js";
+import {
   vCancelEmailArgs,
   vEmailConfig,
   vEmailEventRecord,
   vEmailRecord,
   vEmailWebhookArgs,
   vEmailWebhookResult,
+  vEnqueueBatchArgs,
+  vEnqueueEmailArgs,
+  vEnqueueOwnedArgs,
+  vEnqueueOwnedBatchArgs,
   vListEmailEventsArgs,
-  vRetryEmailArgs,
-  vSendBatchEmailsArgs,
-  vSendEmailArgs,
+  vRetryWithSenderArgs,
   vStatusArgs,
 } from "./validators.js";
 
-const vOwnedEmailArgs = { email: v.object(vSendEmailArgs), ownerId: v.string() };
+// The lease mutations take the component's own `emails` id, which reaches the app as a string.
+const vAppEmailId = { emailId: v.string() };
 
-const vOwnedBatchArgs = { messages: v.array(v.object(vSendEmailArgs)), ownerId: v.string() };
+const vMarkProcessingArgs = vAppEmailId;
+
+const vRecordProviderAttemptArgs = { ...recordProviderAttemptArgs, ...vAppEmailId };
+
+const vMarkSentArgs = { ...markSentArgs, ...vAppEmailId };
+
+const vMarkFailedOrRetryArgs = { ...markFailedOrRetryArgs, ...vAppEmailId };
 
 const vSetConfigArgs = { config: vEmailConfig };
 
@@ -55,10 +69,15 @@ type ComponentRef<
 
 export type ConvexEmailComponentApi<TName extends string | undefined = string | undefined> = {
   lib: {
-    enqueue: ComponentRef<"mutation", typeof vSendEmailArgs, typeof vEmailId, TName>;
-    enqueueOwned: ComponentRef<"mutation", typeof vOwnedEmailArgs, typeof vEmailId, TName>;
-    enqueueOwnedBatch: ComponentRef<"mutation", typeof vOwnedBatchArgs, typeof vEmailIds, TName>;
-    enqueueBatch: ComponentRef<"mutation", typeof vSendBatchEmailsArgs, typeof vEmailIds, TName>;
+    enqueue: ComponentRef<"mutation", typeof vEnqueueEmailArgs, typeof vEmailId, TName>;
+    enqueueOwned: ComponentRef<"mutation", typeof vEnqueueOwnedArgs, typeof vEmailId, TName>;
+    enqueueOwnedBatch: ComponentRef<
+      "mutation",
+      typeof vEnqueueOwnedBatchArgs,
+      typeof vEmailIds,
+      TName
+    >;
+    enqueueBatch: ComponentRef<"mutation", typeof vEnqueueBatchArgs, typeof vEmailIds, TName>;
     status: ComponentRef<"query", typeof vStatusArgs, typeof vMaybeEmailRecord, TName>;
     listEvents: ComponentRef<
       "query",
@@ -67,9 +86,23 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
       TName
     >;
     cancel: ComponentRef<"mutation", typeof vCancelEmailArgs, typeof vFlag, TName>;
-    retry: ComponentRef<"mutation", typeof vRetryEmailArgs, typeof vFlag, TName>;
+    retry: ComponentRef<"mutation", typeof vRetryWithSenderArgs, typeof vFlag, TName>;
     setConfig: ComponentRef<"mutation", typeof vSetConfigArgs, typeof vNull, TName>;
     getConfig: ComponentRef<"query", typeof vNoArgs, typeof vMaybeEmailConfig, TName>;
+    markProcessing: ComponentRef<
+      "mutation",
+      typeof vMarkProcessingArgs,
+      typeof vMaybeEmailRecord,
+      TName
+    >;
+    recordProviderAttempt: ComponentRef<
+      "mutation",
+      typeof vRecordProviderAttemptArgs,
+      typeof vFlag,
+      TName
+    >;
+    markSent: ComponentRef<"mutation", typeof vMarkSentArgs, typeof vFlag, TName>;
+    markFailedOrRetry: ComponentRef<"mutation", typeof vMarkFailedOrRetryArgs, typeof vFlag, TName>;
   };
   worker: {
     handleWebhook: ComponentRef<
