@@ -345,6 +345,7 @@ export function createEmailClient<
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
     let facts = telemetry && messageFacts(message);
+    let attemptedAdapter = sendOptions?.adapter ?? defaultAdapter;
 
     try {
       throwIfAborted(sendOptions?.signal);
@@ -357,10 +358,13 @@ export function createEmailClient<
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
 
+      throwIfAborted(prepared.options?.signal ?? sendOptions?.signal);
+
       // Middleware such as defaultsPlugin can add or mutate recipients, attachments, or sendAt,
       // including in place, so recompute telemetry facts from the prepared message.
       if (facts) facts = messageFacts(prepared.message);
       const route = resolveCheckedRoute(prepared.options);
+      attemptedAdapter = route.primary;
       const validating = validateRoute(prepared.message, route, "send", prepared.options);
 
       if (validating) await validating;
@@ -436,7 +440,7 @@ export function createEmailClient<
           source: telemetrySource,
           startedAt,
           facts,
-          adapter: sendOptions?.adapter ?? defaultAdapter,
+          adapter: attemptedAdapter,
           messageCount: 1,
           error: normalized,
           isSdkOwned,
@@ -498,7 +502,14 @@ export function createEmailClient<
         next += 1;
         const item = items[index];
 
-        if (item) await settle(index, item);
+        if (item) {
+          await settle(index, item);
+        } else {
+          const error = new EmailValidationError("sendMany item is missing a message.");
+          failed += 1;
+          firstErrorCode ??= error.code;
+          results[index] = { ok: false, index, error };
+        }
       }
     };
 

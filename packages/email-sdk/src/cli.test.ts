@@ -1003,6 +1003,43 @@ describe("send routing flags", () => {
         code: "cli_error",
       },
     });
+
+    const bare = await runCli(["send", "--adapter", "resend", "--message", "--json"]);
+    expect(bare.exitCode).toBe(1);
+    expect(bare.stderr).toBe("");
+    expect(JSON.parse(bare.stdout)).toMatchObject({
+      ok: false,
+      error: { code: "cli_error" },
+    });
+
+    const badAttachmentPath = join(dir, "bad-attachment.json");
+    await Bun.write(
+      badAttachmentPath,
+      JSON.stringify({
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "hi",
+        text: "hi",
+        attachments: [null],
+      }),
+    );
+
+    const badAttachment = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      badAttachmentPath,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(badAttachment.exitCode).toBe(1);
+    expect(badAttachment.stderr).toBe("");
+    expect(JSON.parse(badAttachment.stdout)).toMatchObject({
+      ok: false,
+      error: { code: "validation_error" },
+    });
   });
 });
 

@@ -19,3 +19,13 @@ await email.send(message, {
 ```
 
 `createEmailTools` from `@opencoredev/email-sdk/ai` and the `@opencoredev/email-sdk/compat` client set a key on every send, so they pass `idempotency: "best-effort"` and keep working on every adapter.
+
+`client.adapters` and the `adapters` map in plugin contexts are now frozen read-only views at runtime instead of raw `Map` instances. They no longer expose `set`, `delete`, or `clear`, and `client.adapters instanceof Map` is now `false`. Reads, iteration (`forEach` with `thisArg`, `entries`, `keys`, `values`), and adapters added through `extendClient` keep working as before:
+
+```ts
+// Before: casting client.adapters to Map worked at runtime.
+const copy = client.adapters instanceof Map ? client.adapters : new Map();
+
+// After: copy into a new Map if you need a mutable snapshot.
+const copy = new Map(client.adapters);
+```

@@ -139,14 +139,24 @@ export function assertMessage(message: EmailMessage) {
     throw new EmailValidationError("Email message requires either html or text content.");
   }
 
-  for (const attachment of message.attachments ?? []) {
-    const hasContent = attachment.content !== undefined;
-    const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
+  if (message.attachments !== undefined) {
+    if (!Array.isArray(message.attachments)) {
+      throw new EmailValidationError("Email message attachments must be an array.");
+    }
 
-    if (hasContent === hasPath) {
-      throw new EmailValidationError(
-        `Attachment "${attachment.filename}" requires exactly one of content or path.`,
-      );
+    for (const attachment of message.attachments) {
+      if (!(attachment instanceof Object) || Array.isArray(attachment)) {
+        throw new EmailValidationError("Each email attachment must be an object.");
+      }
+
+      const hasContent = attachment.content !== undefined;
+      const hasPath = isStringMember(attachment.path) && attachment.path.length > 0;
+
+      if (hasContent === hasPath) {
+        throw new EmailValidationError(
+          `Attachment "${attachment.filename}" requires exactly one of content or path.`,
+        );
+      }
     }
   }
 

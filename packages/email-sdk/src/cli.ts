@@ -762,6 +762,10 @@ async function readMessageFile(messagePath: string): Promise<Partial<EmailMessag
 }
 
 async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
+  if (flags.message === true || flags.message === "") {
+    fail("--message needs a file path.");
+  }
+
   const messagePath = stringFlag(flags, "message");
   const fromFile = messagePath ? await readMessageFile(messagePath) : {};
 
@@ -1089,6 +1093,19 @@ try {
       console.error(error.message);
     }
 
+    process.exit(1);
+  }
+
+  if (cliCommand === "send" && truthyFlag(cliFlags, "json")) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.log(
+      JSON.stringify(
+        { ok: false, error: { name: "CliError", code: "cli_error", message } },
+        null,
+        2,
+      ),
+    );
     process.exit(1);
   }
 

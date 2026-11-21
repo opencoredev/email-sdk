@@ -123,7 +123,7 @@ describe("@opencoredev/email-sdk/cloudflare in a Workers-style bundle", () => {
       { adapter: "cloudflare", operation: "send", attempt: 1 },
     );
 
-    expect(sending).rejects.toThrow(
+    await expect(sending).rejects.toThrow(
       /Attachments given by path need a runtime with node:fs\/promises/,
     );
   });

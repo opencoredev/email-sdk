@@ -283,7 +283,9 @@ async function readBoundedBody(request: Request, maxBodyBytes: number, provider:
     total += value.byteLength;
 
     if (total > maxBodyBytes) {
-      await reader.cancel().catch(() => undefined);
+      // Do not await cancel(): on a cloned Request whose sibling branch is unread,
+      // awaiting tee-branch cancellation can hang until the other branch is read or cancelled.
+      void reader.cancel().catch(() => undefined);
       throw bodyTooLarge(provider, maxBodyBytes);
     }
 

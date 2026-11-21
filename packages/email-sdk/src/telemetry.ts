@@ -204,7 +204,7 @@ export type TelemetryStatus = {
 
 /** The stderr notifier when stderr is a terminal; otherwise no notifier, and no notice. */
 function defaultNotify(): ((message: string) => void) | undefined {
-  if (process.stderr.isTTY !== true) return undefined;
+  if (process.stderr?.isTTY !== true) return undefined;
 
   return (message) => {
     process.stderr.write(`${message}\n`);
@@ -214,7 +214,6 @@ function defaultNotify(): ((message: string) => void) | undefined {
 export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const env = options.env ?? process.env;
   const fetcher = options.fetch ?? fetch;
-  const notify = options.notify ?? defaultNotify();
 
   if (envOptOut(env)) return disabledTelemetry;
 
@@ -222,6 +221,8 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const loaded = loadTelemetryState(configDir);
 
   if (!loaded || loaded.state.disabled) return disabledTelemetry;
+
+  const notify = options.notify ?? defaultNotify();
 
   const { state } = loaded;
   let { installationIdSource } = loaded;

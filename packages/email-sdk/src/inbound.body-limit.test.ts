@@ -85,6 +85,20 @@ describe("handleInbound maxBodyBytes", () => {
     expect(stream.cancelled()).toBe(true);
   });
 
+  test("an oversized cloned request rejects immediately even when the original branch is never read", async () => {
+    const stream = streamingRequest(100, 1024);
+    const cloned = stream.request.clone();
+
+    const started = Date.now();
+
+    await expect(
+      handleInbound(cloned, { ...open, maxBodyBytes: 2048 }),
+    ).rejects.toMatchObject({ reason: "payload_too_large" });
+
+    expect(Date.now() - started).toBeLessThan(1_000);
+    await stream.request.body?.cancel();
+  });
+
   test("a Content-Length that understates the body does not get past the stream count", async () => {
     const oversized = JSON.stringify({ ...JSON.parse(postmarkBody), TextBody: "x".repeat(5000) });
 

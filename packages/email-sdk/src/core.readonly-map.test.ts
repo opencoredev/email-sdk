@@ -57,3 +57,78 @@ test("post-middleware telemetry reflects in-place message mutations", async () =
     resetTelemetry();
   }
 });
+
+test("send() aborts after beforeSend before validation and reports rerouted adapter on failure", async () => {
+  const controller = new AbortController();
+  let validated = false;
+
+  const client = createEmailClient({
+    adapters: [
+      {
+        ...adapter("resend", () => ({ adapter: "resend", id: "1" })),
+        validate() {
+          validated = true;
+        },
+      },
+    ],
+    plugins: [
+      {
+        id: "abort-in-before-send",
+        middleware: [
+          {
+            beforeSend() {
+              controller.abort("stopped");
+            },
+          },
+        ],
+      },
+    ],
+    telemetry: false,
+  });
+
+  await expect(
+    client.send(
+      { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" },
+      { signal: controller.signal },
+    ),
+  ).rejects.toMatchObject({ code: "aborted" });
+  expect(validated).toBe(false);
+
+  const capture = telemetryCapture();
+  setSharedTelemetry(capture.telemetry);
+
+  try {
+    const routed = createEmailClient({
+      adapters: [
+        adapter("resend", () => ({ adapter: "resend", id: "1" })),
+        adapter("postmark", () => {
+          throw new Error("boom");
+        }),
+      ],
+      plugins: [
+        {
+          id: "reroute",
+          middleware: [
+            {
+              beforeSend({ message, options }) {
+                return { message, options: { ...options, adapter: "postmark" } };
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      routed.send(
+        { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" },
+        { adapter: "resend" },
+      ),
+    ).rejects.toThrow();
+
+    const failedEvent = capture.events.find((item) => item.event === "email sent");
+    expect(failedEvent?.properties).toMatchObject({ adapter: "postmark", success: false });
+  } finally {
+    resetTelemetry();
+  }
+});

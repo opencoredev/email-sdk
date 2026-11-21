@@ -7,17 +7,38 @@ import { decodeBase64Strict } from "../inbound/shared.js";
  */
 export type SendGridSignatureResult = "verified" | "signature_invalid" | "secret_missing";
 
-/** Convert a DER ECDSA signature to the raw `r || s` form WebCrypto verifies. */
+/** Convert a strict DER ECDSA signature to the raw `r || s` form WebCrypto verifies. */
 function derToRaw(der: Uint8Array, size: number): Uint8Array<ArrayBuffer> | undefined {
-  if (der[0] !== 0x30) return undefined;
+  if (der.length < 8 || der[0] !== 0x30) return undefined;
 
-  let offset = der[1]! & 0x80 ? 2 + (der[1]! & 0x7f) : 2;
+  let offset = 2;
+  let seqLength = der[1]!;
+
+  if (seqLength & 0x80) {
+    const lengthBytes = seqLength & 0x7f;
+
+    if (lengthBytes === 0 || lengthBytes > 2 || offset + lengthBytes > der.length) return undefined;
+
+    seqLength = 0;
+
+    for (let index = 0; index < lengthBytes; index += 1) {
+      seqLength = (seqLength << 8) | der[offset + index]!;
+    }
+
+    offset += lengthBytes;
+  }
+
+  if (offset + seqLength !== der.length) return undefined;
+
   const raw = new Uint8Array(size * 2);
 
   for (let index = 0; index < 2; index += 1) {
-    if (der[offset] !== 0x02) return undefined;
+    if (offset + 2 > der.length || der[offset] !== 0x02) return undefined;
 
     const length = der[offset + 1]!;
+
+    if (length === 0 || (length & 0x80) !== 0 || offset + 2 + length > der.length) return undefined;
+
     let value = der.subarray(offset + 2, offset + 2 + length);
 
     while (value.length > size && value[0] === 0) value = value.subarray(1);
@@ -27,6 +48,8 @@ function derToRaw(der: Uint8Array, size: number): Uint8Array<ArrayBuffer> | unde
     raw.set(value, index * size + size - value.length);
     offset += 2 + length;
   }
+
+  if (offset !== der.length) return undefined;
 
   return raw;
 }

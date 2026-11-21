@@ -62,6 +62,8 @@ This helper accepts Mailgun's JSON event webhook envelope with a nested `signatu
 
 ### SendGrid
 
+SendGrid signature verification (`verifySendGridWebhook`) and multi-event normalization (`normalizeWebhookEvents`) are not in a published release yet; they ship in the next release after 3.0.1.
+
 ```ts
 import { normalizeWebhookEvents, verifySendGridWebhook } from "@opencoredev/email-sdk/webhooks";
 
@@ -82,7 +84,7 @@ Turn on Signed Event Webhook Requests in SendGrid and pass its verification key 
 
 ### SES
 
-SES posts delivery events through SNS. Verify the SNS message signature and topic before normalizing it, for example with `verifySnsMessage` from [`@opencoredev/email-sdk/inbound`](/docs/reference/inbound) (`/inbound` is not in a published release yet). `normalizeWebhookEvent({ provider: "ses", body })` refuses SNS subscription confirmations.
+SES event normalization (`provider: "ses"`) ships in the next release after 3.0.1. SES posts delivery events through SNS. Verify the SNS message signature and topic before normalizing it, for example with `verifySnsMessage` from [`@opencoredev/email-sdk/inbound`](/docs/reference/inbound) (`/inbound` is not in a published release yet). `normalizeWebhookEvent({ provider: "ses", body })` refuses SNS subscription confirmations.
 
 <Callout type="warn" title="Mailgun signatures do not bind event-data">
 Mailgun signs only timestamp concatenated with token, not the event body. Changing `event-data` does not invalidate that signature. Require HTTPS, protect signing tokens, and persist replay protection for the token as well as delivery ID; consider Mailgun's documented TLS client authentication where available. Do not describe this helper as proof of body integrity.

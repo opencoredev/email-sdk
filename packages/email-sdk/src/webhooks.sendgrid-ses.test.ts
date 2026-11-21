@@ -89,6 +89,19 @@ describe("verifySendGridWebhook", () => {
 
     expect(await verifySendGridWebhook({ ...valid, headers: garbage })).toBe(false);
     expect(await verifySendGridWebhook(signed("not json"))).toBe(false);
+
+    const derBytes = Buffer.from(valid.headers["x-twilio-email-event-webhook-signature"], "base64");
+
+    const withTrailing = Buffer.concat([derBytes, Buffer.from([0xde, 0xad, 0xbe, 0xef])]).toString(
+      "base64",
+    );
+
+    expect(
+      await verifySendGridWebhook({
+        ...valid,
+        headers: { ...valid.headers, "x-twilio-email-event-webhook-signature": withTrailing },
+      }),
+    ).toBe(false);
   });
 
   test("accepts Headers instances", async () => {
