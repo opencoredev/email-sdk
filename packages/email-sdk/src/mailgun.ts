@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { utf8ToBase64 } from "./internal/bytes.js";
 import { jsonString } from "./internal/decode.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
@@ -91,7 +92,7 @@ export function mailgun(
       method: "POST",
       signal: context.signal,
       headers: {
-        Authorization: `Basic ${Buffer.from(`api:${options.apiKey}`).toString("base64")}`,
+        Authorization: `Basic ${utf8ToBase64(`api:${options.apiKey}`)}`,
       },
       body,
     });

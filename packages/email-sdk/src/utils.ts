@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import {
   EmailAbortError,
   EmailAdapterError,
@@ -7,6 +5,8 @@ import {
   EmailValidationError,
 } from "./errors.js";
 import { mailboxAddress } from "./internal/address.js";
+import { readAttachmentFile } from "./internal/attachment-file.js";
+import { base64ToBytes, bytesToBase64, utf8ToBytes } from "./internal/bytes.js";
 import {
   causeString,
   isJsonObject,
@@ -366,20 +366,18 @@ export async function attachmentContentToString(
   }
 
   if (isStringMember(content)) {
-    return encoding === "base64" ? content : Buffer.from(content).toString("base64");
+    return encoding === "base64" ? content : bytesToBase64(utf8ToBytes(content));
   }
 
   if (content instanceof Blob) {
-    const arrayBuffer = await content.arrayBuffer();
-
-    return Buffer.from(arrayBuffer).toString("base64");
+    return bytesToBase64(new Uint8Array(await content.arrayBuffer()));
   }
 
   if (content instanceof ArrayBuffer) {
-    return Buffer.from(new Uint8Array(content)).toString("base64");
+    return bytesToBase64(new Uint8Array(content));
   }
 
-  return Buffer.from(content).toString("base64");
+  return bytesToBase64(content);
 }
 
 /** Maps attachments concurrently, without a promise round-trip when there are none. */
@@ -394,36 +392,39 @@ export function mapAttachments<T>(
 
 export async function attachmentToBase64(attachment: EmailAttachment) {
   if (attachment.path) {
-    return (await readFile(attachment.path)).toString("base64");
+    return bytesToBase64(await readAttachmentFile(attachment.path));
   }
 
   return attachmentContentToString(attachment.content, attachment.contentEncoding);
 }
 
-export async function attachmentToBytes(attachment: EmailAttachment) {
+/** Attachment bytes in a fresh, non-shared buffer that Blob and FormData accept. */
+export async function attachmentToBytes(
+  attachment: EmailAttachment,
+): Promise<Uint8Array<ArrayBuffer>> {
   if (attachment.path) {
-    return readFile(attachment.path);
+    return new Uint8Array(await readAttachmentFile(attachment.path));
   }
 
   const { content } = attachment;
 
   if (content === undefined) {
-    return Buffer.alloc(0);
+    return new Uint8Array(0);
   }
 
   if (isStringMember(content)) {
-    return Buffer.from(content, attachment.contentEncoding === "base64" ? "base64" : "utf8");
+    return attachment.contentEncoding === "base64" ? base64ToBytes(content) : utf8ToBytes(content);
   }
 
   if (content instanceof Blob) {
-    return Buffer.from(await content.arrayBuffer());
+    return new Uint8Array(await content.arrayBuffer());
   }
 
   if (content instanceof ArrayBuffer) {
-    return Buffer.from(new Uint8Array(content));
+    return new Uint8Array(content);
   }
 
-  return Buffer.from(content);
+  return new Uint8Array(content);
 }
 
 export type MessageFieldSupport = Partial<
