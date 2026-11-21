@@ -15,8 +15,9 @@ export type EmailMetadataValue =
 export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue };
 
 /**
- * Augment this interface to give send-option metadata your own shape. The SDK forwards it
- * unchanged to hooks, plugins, and adapter contexts.
+ * Augment this interface to give send-option metadata your own shape. The SDK clones plain
+ * objects, null-prototype chains, arrays, and built-in value types per hook, middleware item,
+ * and adapter attempt while passing custom class instances by reference.
  *
  * ```ts
  * import "@opencoredev/email-sdk";
@@ -31,7 +32,9 @@ export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue }
 export interface EmailMetadataRegister {}
 
 /** Send-option metadata: the registered shape, or `EmailMetadataRecord` when none is registered. */
-export type EmailSendMetadata = EmailMetadataRegister extends { metadata: infer Metadata extends object }
+export type EmailSendMetadata = EmailMetadataRegister extends {
+  metadata: infer Metadata extends object;
+}
   ? Metadata
   : EmailMetadataRecord;
 

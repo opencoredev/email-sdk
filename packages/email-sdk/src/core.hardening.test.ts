@@ -1438,12 +1438,9 @@ describe("audit hardening regressions", () => {
       const nestedClassPers = await persClient.sendPersonalized(new NestedClassPersInput());
       expect(nestedClassPers.accepted).toEqual(["u@example.com"]);
 
-      // 23. Class-instance metadata is deep-cloned across sendMany items
-      class MetaBox {
-        count = 0;
-      }
-
-      const sharedMetaBox = new MetaBox();
+      // 23. Plain-object and null-prototype metadata are deep-cloned across sendMany items,
+      // while top-level custom class instances stay by reference so private fields and methods work.
+      const sharedMetaPlain = { count: 0 };
       const seenBoxCounts: number[] = [];
 
       const metaIsoClient = createEmailClient({
@@ -1457,7 +1454,7 @@ describe("audit hardening regressions", () => {
               personalized: "expanded",
             },
             async send(_m, ctx) {
-              // SAFETY: Test fixture passes MetaBox with numeric count field.
+              // SAFETY: Test fixture passes plain metadata with numeric count field.
               const box = ctx.metadata as { count: number };
               seenBoxCounts.push(box.count);
               box.count += 1;
@@ -1470,12 +1467,11 @@ describe("audit hardening regressions", () => {
       });
 
       await metaIsoClient.sendMany([{ message: msg }, { message: msg }], {
-        // @ts-expect-error -- testing runtime class-instance metadata cloning
-        metadata: sharedMetaBox,
+        metadata: sharedMetaPlain,
       });
 
       expect(seenBoxCounts).toEqual([0, 0]);
-      expect(sharedMetaBox.count).toBe(0);
+      expect(sharedMetaPlain.count).toBe(0);
 
       // 24. Class-instance metadata with prototype getters is preserved across send & defaultsPlugin
       class ProtoMeta {
@@ -3503,5 +3499,101 @@ describe("audit hardening regressions", () => {
         headers: hugeMetaProxy as never,
       }),
     ).toThrow(EmailValidationError);
+
+    // R32: Top-level custom class metadata keeps private fields & methods, cyclic getPrototypeOf Proxy
+    // terminates cleanly, and afterSend response accepted/rejected arrays are isolated per callback.
+    class TopLevelRequestCtx {
+      #tenant: string;
+
+      constructor(tenant: string) {
+        this.#tenant = tenant;
+      }
+
+      tenant(): string {
+        return this.#tenant;
+      }
+    }
+
+    let seenTopLevelTenant: string | undefined;
+    const seenAcceptedLengths: number[] = [];
+
+    const r32Client = createEmailClient({
+      adapters: [
+        {
+          name: "r32",
+          capabilities: {
+            repeatedHeaders: false,
+            idempotency: "none",
+            scheduling: false,
+            personalized: "expanded",
+          },
+          async send(_m, ctx) {
+            if (ctx.metadata instanceof TopLevelRequestCtx) {
+              seenTopLevelTenant = ctx.metadata.tenant();
+            }
+
+            return {
+              adapter: "r32",
+              id: "r32-1",
+              accepted: ["to@example.com"],
+              rejected: [],
+            };
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "r32-after-send",
+          middleware: [
+            {
+              afterSend(ev) {
+                seenAcceptedLengths.push(ev.response.accepted?.length ?? 0);
+                ev.response.accepted?.push("leaked@example.com");
+                ev.response.rejected?.push("bad@example.com");
+              },
+            },
+            {
+              afterSend(ev) {
+                seenAcceptedLengths.push(ev.response.accepted?.length ?? 0);
+              },
+            },
+          ],
+        },
+      ],
+      hooks: {
+        afterSend(ev) {
+          seenAcceptedLengths.push(ev.response.accepted?.length ?? 0);
+          ev.response.accepted?.push("hook-leaked@example.com");
+        },
+      },
+      telemetry: false,
+    });
+
+    const r32Result = await r32Client.send(baseMsg, {
+      // SAFETY: Testing top-level custom class instance metadata with private field & method.
+      metadata: new TopLevelRequestCtx("acme") as never,
+    });
+
+    expect(seenTopLevelTenant).toBe("acme");
+    expect(seenAcceptedLengths).toEqual([1, 1, 1]);
+    expect(r32Result.accepted).toEqual(["to@example.com"]);
+    expect(r32Result.rejected).toEqual([]);
+
+    type CyclicTag = { tag: string };
+
+    const cyclicTarget: CyclicTag = { tag: "cyc" };
+
+    const cyclicProxy: CyclicTag = new Proxy(cyclicTarget, {
+      getPrototypeOf() {
+        return cyclicProxy;
+      },
+    });
+
+    const cyclicResult = await r32Client.send(baseMsg, {
+      // SAFETY: Testing self-referential getPrototypeOf Proxy does not hang metadata cloning.
+      metadata: { cyc: cyclicProxy } as never,
+    });
+
+    expect(cyclicResult.id).toBe("r32-1");
   });
 });

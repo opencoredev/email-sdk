@@ -105,7 +105,7 @@ export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin
       id,
       headers: safeHeaders,
       tags: safeTags,
-      metadata: metadata === undefined ? undefined : cloneMetadataRecord(metadata),
+      metadata: metadata === undefined ? undefined : cloneMetadataRecord(metadata, true),
       sendMetadata: sendMetadata === undefined ? undefined : cloneMetadataRecord(sendMetadata),
       replyTo: cloneReplyTo(replyTo),
       idempotencyKey,
@@ -395,8 +395,8 @@ function mergeMetadata(
     return value;
   }
 
-  const clonedDefaults = cloneMetadataRecord(defaults);
-  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value);
+  const clonedDefaults = cloneMetadataRecord(defaults, true);
+  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value, true);
 
   return {
     ...clonedDefaults,

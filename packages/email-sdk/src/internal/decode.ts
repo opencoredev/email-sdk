@@ -389,12 +389,20 @@ function isObjectPrototype<T>(proto: T): boolean {
   );
 }
 
+const MAX_PROTOTYPE_CHAIN_DEPTH = 64;
+
 function hasObjectPrototypeInChain<T>(proto: T): boolean {
+  const visited = new Set();
   let cursor = proto;
+  let depth = 0;
 
   while (cursor !== null && cursor !== undefined) {
     if (isObjectPrototype(cursor)) return true;
 
+    if (visited.has(cursor) || depth >= MAX_PROTOTYPE_CHAIN_DEPTH) return false;
+
+    visited.add(cursor);
+    depth += 1;
     cursor = Object.getPrototypeOf(cursor);
   }
 
@@ -408,7 +416,7 @@ function isArrayIndexKey(key: string, length: number): boolean {
 }
 
 /** Recursively clone plain objects, arrays, Dates, Maps, Sets, and binary views inside a metadata record. */
-export function cloneMetadataRecord<T>(metadata: T): T {
+export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false): T {
   const seen = new Map();
 
   function clone<V>(value: V, depth: number): V {
@@ -532,8 +540,14 @@ export function cloneMetadataRecord<T>(metadata: T): T {
     if (!isBuiltInValueObject(value)) {
       const objectProtoRoot = hasObjectPrototypeInChain(proto);
 
-      // Keep nested custom class instances by reference so ES private fields and methods work.
-      if (depth > 0 && proto !== null && !isObjectPrototype(proto) && objectProtoRoot) {
+      // Keep custom class instances by reference so ES private fields and methods work,
+      // unless the caller requested flattening a top-level class into a plain string record.
+      if (
+        (!flattenTopLevelClass || depth > 0) &&
+        proto !== null &&
+        !isObjectPrototype(proto) &&
+        objectProtoRoot
+      ) {
         return value;
       }
 
@@ -569,10 +583,17 @@ export function cloneMetadataRecord<T>(metadata: T): T {
       }
 
       // Materialize inherited getters and enumerable data properties from null-prototype
-      // parent chains or top-level class records so nested mutable data cannot leak.
+      // parent chains so nested mutable data cannot leak (guarded against cyclic proxies).
+      const visitedProtos = new Set();
       let cursor = proto;
+      let protoDepth = 0;
 
       while (cursor !== null && !isObjectPrototype(cursor)) {
+        if (visitedProtos.has(cursor) || protoDepth >= MAX_PROTOTYPE_CHAIN_DEPTH) break;
+
+        visitedProtos.add(cursor);
+        protoDepth += 1;
+
         for (const key of Object.getOwnPropertyNames(cursor)) {
           if (key === "constructor" || Object.prototype.hasOwnProperty.call(copy, key)) continue;
 

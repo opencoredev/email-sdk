@@ -1,5 +1,11 @@
 import { EmailValidationError } from "../errors.js";
-import type { EmailAddress, EmailAttachment, EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.js";
+import type {
+  EmailAddress,
+  EmailAttachment,
+  EmailMessage,
+  EmailPersonalizedInput,
+  OneOrMany,
+} from "../types.js";
 import {
   cloneMetadataRecord,
   isBinaryBuffer,
@@ -114,7 +120,9 @@ function snapshotHeaders(value: EmailMessage["headers"]): EmailMessage["headers"
   }
 
   // SAFETY: Legacy object headers are cloned via cloneMetadataRecord while keeping runtime shape.
-  return (isNonArrayObject(value) ? cloneMetadataRecord(value) : value) as EmailMessage["headers"];
+  return (
+    isNonArrayObject(value) ? cloneMetadataRecord(value, true) : value
+  ) as EmailMessage["headers"];
 }
 
 function snapshotTags(value: EmailMessage["tags"]): EmailMessage["tags"] {
@@ -188,7 +196,7 @@ export function snapshotMessageField(
 
     if (metadata === undefined) return undefined;
 
-    return isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
+    return isNonArrayObject(metadata) ? cloneMetadataRecord(metadata, true) : metadata;
   }
 
   if (key === "subject") return message.subject;
@@ -332,7 +340,7 @@ export function snapshotPersonalizedInputForSend(
 
           const variables =
             rawVars !== undefined && isNonArrayObject(rawVars)
-              ? cloneMetadataRecord(rawVars)
+              ? cloneMetadataRecord(rawVars, true)
               : rawVars;
 
           // SAFETY: `to` was snapshotted from `recipient.to` preserving the EmailAddress shape.

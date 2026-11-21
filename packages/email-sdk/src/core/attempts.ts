@@ -168,17 +168,27 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       continue;
     }
 
+    const snapshotResult = (): EmailSendResult => {
+      const copy: EmailSendResult = { ...result };
+
+      if (result.accepted) copy.accepted = [...result.accepted];
+
+      if (result.rejected) copy.rejected = [...result.rejected];
+
+      return copy;
+    };
+
     if (input.middleware.length > 0) {
       await invokeAfterSendMiddleware(input.middleware, () => ({
         ...freshEvent(),
-        response: { ...result },
+        response: snapshotResult(),
       }));
     }
 
     if (input.hooks.length > 0) {
       await invokeHooks(input.hooks, "afterSend", () => ({
         ...freshEvent(),
-        response: { ...result },
+        response: snapshotResult(),
       }));
     }
 
