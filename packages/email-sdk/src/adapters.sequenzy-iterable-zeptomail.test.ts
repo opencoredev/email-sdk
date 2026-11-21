@@ -308,3 +308,40 @@ describe("provider payloads", () => {
     ]);
   });
 });
+
+describe("ZeptoMail token option", () => {
+  // Plain JavaScript callers (or code behind a cast) can pass any token value,
+  // such as an un-awaited secret loader's Promise.
+  const invalidTokens: Array<[string, string | number | object | undefined]> = [
+    ["a Promise", Promise.resolve("key")],
+    ["a number", 42],
+    ["an object", { value: "key" }],
+    ["undefined", undefined],
+    ["an empty string", ""],
+  ];
+
+  test.each(invalidTokens)("rejects %s with EmailValidationError", (_label, token) => {
+    // SAFETY: deliberately wrong runtime type; this asserts the check that backs the string type.
+    const build = () => zeptomail({ token: token as string });
+
+    expect(build).toThrow(EmailValidationError);
+    expect(build).toThrow("zeptomail token must be a non-empty string.");
+  });
+
+  test("prefixes a plain token and keeps an already prefixed one", async () => {
+    const plain = jsonCapture({ request_id: "zoho_1" });
+    const prefixed = jsonCapture({ request_id: "zoho_2" });
+
+    await zeptomail({ token: "abc", fetch: plain.fetch }).send(
+      messageWithoutProviderSpecificFields,
+      context,
+    );
+    await zeptomail({ token: "Zoho-enczapikey abc", fetch: prefixed.fetch }).send(
+      messageWithoutProviderSpecificFields,
+      context,
+    );
+
+    expect(plain.calls[0]?.headers.get("authorization")).toBe("Zoho-enczapikey abc");
+    expect(prefixed.calls[0]?.headers.get("authorization")).toBe("Zoho-enczapikey abc");
+  });
+});
