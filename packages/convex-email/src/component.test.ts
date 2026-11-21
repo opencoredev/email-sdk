@@ -6,6 +6,7 @@ import schema from "./component/schema.js";
 import { buildEmailClient, gateDispatch } from "./node/providers.js";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
 import {
+  BROKEN_ENV_SENDER,
   MAPPED_SENDER,
   modules,
   RENAMED_SENDER,
@@ -80,6 +81,26 @@ describe("convex-email component", () => {
     } finally {
       delete process.env.MAPPED_RESEND_KEY;
     }
+  });
+
+  test("a throwing env mapping fails the attempt instead of leaving the email queued", async () => {
+    const t = createTest();
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      sender: BROKEN_ENV_SENDER,
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    await flushScheduled(t);
+
+    expect(await t.query(api.lib.status, { emailId })).toMatchObject({
+      status: "failed",
+      attemptCount: 1,
+      lastError: "Secret store unavailable.",
+    });
   });
 
   test("a manual retry registers and uses the client's current sender", async () => {

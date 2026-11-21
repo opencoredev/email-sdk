@@ -59,7 +59,7 @@ export function emailSender(
         component,
         emailId: args.emailId,
         telemetry: options.telemetry,
-        env: options.env ? { ...process.env, ...options.env() } : undefined,
+        env: options.env,
       });
 
       return null;

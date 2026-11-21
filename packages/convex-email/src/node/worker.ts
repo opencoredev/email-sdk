@@ -15,7 +15,11 @@ export type ProcessEmailOptions = {
   component: ConvexEmailComponentApi;
   emailId: string;
   telemetry?: boolean;
-  env?: AdapterEnv;
+  /**
+   * Overrides merged over `process.env`. Called inside the attempt, after the lease is taken, so a
+   * throw fails the attempt like any other send error instead of leaving the email queued.
+   */
+  env?: () => AdapterEnv;
 };
 
 /**
@@ -51,7 +55,7 @@ export async function processEmail(options: ProcessEmailOptions) {
       defaultAdapter: adapter,
       fallbackAdapters,
       telemetry: options.telemetry,
-      env: options.env,
+      env: options.env ? { ...process.env, ...options.env() } : undefined,
       async recordAttempt(event) {
         const recorded = await ctx.runMutation(lib.recordProviderAttempt, {
           emailId,

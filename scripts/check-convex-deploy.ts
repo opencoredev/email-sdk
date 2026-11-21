@@ -338,7 +338,11 @@ async function stopChild(child: ChildProcess): Promise<void> {
 
   signalGroup(child, "SIGINT");
 
-  const timedOut = await Promise.race([exited.then(() => false), sleep(10_000).then(() => true)]);
+  // An unref'd timer, so a clean exit does not wait out the ten seconds.
+  const timedOut = await Promise.race([
+    exited.then(() => false),
+    sleep(10_000, undefined, { ref: false }).then(() => true),
+  ]);
 
   // Children of the group (the local backend) can outlive the CLI, so always sweep the group.
   signalGroup(child, timedOut ? "SIGKILL" : "SIGTERM");

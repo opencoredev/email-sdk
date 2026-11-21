@@ -33,6 +33,13 @@ export const modules = {
   ...componentModules,
   "./component/testSender.ts": async () => ({ send: emailSender(rootComponent) }),
   "./component/renamedSender.ts": async () => ({ send: replacementSender }),
+  "./component/brokenEnvSender.ts": async () => ({
+    send: emailSender(rootComponent, {
+      env: () => {
+        throw new Error("Secret store unavailable.");
+      },
+    }),
+  }),
   "./component/mappedSender.ts": async () => ({
     send: emailSender(rootComponent, { env: () => ({ RESEND_API_KEY: process.env.MAPPED_RESEND_KEY }) }),
   }),
@@ -49,6 +56,9 @@ export const SENDER = await handleFor("testSender:send");
 
 /** The handle of the replacement sender, as a client would pass it after a rename. */
 export const RENAMED_SENDER = await handleFor("renamedSender:send");
+
+/** A sender whose `env` mapping throws on every send. */
+export const BROKEN_ENV_SENDER = await handleFor("brokenEnvSender:send");
 
 /** A sender that maps `MAPPED_RESEND_KEY` onto `RESEND_API_KEY`. */
 export const MAPPED_SENDER = await handleFor("mappedSender:send");
