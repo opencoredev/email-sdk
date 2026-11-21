@@ -8,6 +8,7 @@ export class ReadonlyMapView<K, V> implements ReadonlyMap<K, V> {
 
   constructor(source: ReadonlyMap<K, V>) {
     this.#source = source;
+    Object.freeze(this);
   }
 
   get size(): number {

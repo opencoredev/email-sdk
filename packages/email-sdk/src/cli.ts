@@ -730,15 +730,40 @@ function booleanEnv(name: string) {
   return value === "true" || value === "1";
 }
 
-async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
-  const messagePath = stringFlag(flags, "message");
+async function readMessageFile(messagePath: string): Promise<Partial<EmailMessage>> {
+  let raw: string;
+
+  try {
+    raw = await readFile(messagePath, "utf8");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+
+    fail(`Could not read message file "${messagePath}": ${detail}`);
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+
+    fail(`Invalid JSON in message file "${messagePath}": ${detail}`);
+  }
+
+  if (!(parsed instanceof Object) || Array.isArray(parsed)) {
+    fail(`Message file "${messagePath}" must contain a JSON object.`);
+  }
 
   // SAFETY: The message file is caller-authored input that is only shaped here. The client
   // validates the assembled message (sender, recipients, subject, content, and adapter fields)
   // before any adapter sends it.
-  const fromFile = messagePath
-    ? (JSON.parse(await readFile(messagePath, "utf8")) as Partial<EmailMessage>)
-    : {};
+  return parsed as Partial<EmailMessage>;
+}
+
+async function buildMessage(flags: CliFlags): Promise<EmailMessage> {
+  const messagePath = stringFlag(flags, "message");
+  const fromFile = messagePath ? await readMessageFile(messagePath) : {};
 
   const message: Partial<EmailMessage> = { ...fromFile };
 

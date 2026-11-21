@@ -3,10 +3,12 @@ import { createEmailClient } from "./core.js";
 import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 import { adapter, telemetryCapture } from "../test-support/core-fixtures.js";
 
-test("ReadonlyMapView.forEach preserves the standard thisArg contract", () => {
+test("ReadonlyMapView.forEach preserves the standard thisArg contract and freezes exposed views", () => {
   const client = createEmailClient({ adapters: [adapter("memory")], telemetry: false });
   const marker = { tag: "bound-context" };
   let observedTag: string | undefined;
+
+  expect(Object.isFrozen(client.adapters)).toBe(true);
 
   client.adapters.forEach(function (this: typeof marker) {
     observedTag = this.tag;

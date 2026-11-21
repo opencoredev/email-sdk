@@ -960,6 +960,50 @@ describe("send routing flags", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain('Unsupported fallback adapter "nope"');
   });
+
+  test("send --json reports missing and malformed --message files as JSON on stdout", async () => {
+    const missing = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      "/tmp/email-sdk-definitely-missing-message-file.json",
+      "--json",
+    ]);
+
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toBe("");
+    expect(JSON.parse(missing.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+      },
+    });
+
+    const dir = mkdtempSync(join(tmpdir(), "email-sdk-bad-message-"));
+    const invalidPath = join(dir, "bad.json");
+    await Bun.write(invalidPath, "{not-valid-json");
+
+    const malformed = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      invalidPath,
+      "--json",
+    ]);
+
+    expect(malformed.exitCode).toBe(1);
+    expect(malformed.stderr).toBe("");
+    expect(JSON.parse(malformed.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+      },
+    });
+  });
 });
 
 describe("telemetry command", () => {
