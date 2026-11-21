@@ -20,6 +20,7 @@ import {
   httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -53,6 +54,7 @@ export function ses(
     raw: { baseUrl, region: options.region },
     async send(message, context) {
       const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("ses", safeMessage, sesRules);
       const fetcher = options.fetch ?? fetch;
       // Built per send so an invalid baseUrl still fails the send, not the adapter factory.
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);

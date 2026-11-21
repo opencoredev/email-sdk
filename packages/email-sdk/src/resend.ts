@@ -4,7 +4,6 @@ import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
-  assertMessage,
   builtInAdapterDefinition,
   attachmentToBase64,
   formatAddress,
@@ -17,6 +16,7 @@ import {
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
   mapAttachments,
+  validateBuiltInAdapter,
 } from "./utils.js";
 
 export type ResendAdapterOptions = {
@@ -49,7 +49,7 @@ export function resend(
       }
 
       const safeMessage = snapshotMessageForSend(message);
-      assertMessage(safeMessage);
+      validateBuiltInAdapter("resend", safeMessage);
 
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",

@@ -886,6 +886,7 @@ export function createEmailClient<
         // Keep "no shared options" as undefined, so items without options send exactly as before.
         sendOptions = Object.keys(shared).length === 0 ? undefined : shared;
       } catch (error) {
+        if (error instanceof EmailSdkError) throw error;
         throw new EmailValidationError("sendMany options could not be read.", error);
       }
     }

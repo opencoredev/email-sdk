@@ -218,6 +218,11 @@ function withMessageDefaults(
 }
 
 const KNOWN_SEND_OPTION_KEYS: ReadonlySet<PropertyKey> = new Set([
+  "adapter",
+  "idempotency",
+  "signal",
+  "retry",
+  "fallback",
   "metadata",
   "idempotencyKey",
 ]);
@@ -246,6 +251,22 @@ function withSendOptionDefaults(
         configurable: true,
       });
     }
+
+    const adapter = sendOptions.adapter;
+    const idempotency = sendOptions.idempotency;
+    const signal = sendOptions.signal;
+    const retry = sendOptions.retry;
+    const fallback = sendOptions.fallback;
+
+    if (adapter !== undefined) extras.adapter = adapter;
+
+    if (idempotency !== undefined) extras.idempotency = idempotency;
+
+    if (signal !== undefined) extras.signal = signal;
+
+    if (retry !== undefined) extras.retry = retry;
+
+    if (fallback !== undefined) extras.fallback = fallback;
   }
 
   const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);

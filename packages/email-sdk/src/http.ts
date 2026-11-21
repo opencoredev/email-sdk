@@ -41,9 +41,9 @@ export type JsonProviderOptions<
 };
 
 export function snapshotMessageForSend(message: EmailMessage): EmailMessage {
-  if (!isNonArrayObject(message)) return message;
-
   try {
+    if (!isNonArrayObject(message)) return message;
+
     return snapshotMessage(message);
   } catch (error) {
     if (error instanceof EmailValidationError) throw error;

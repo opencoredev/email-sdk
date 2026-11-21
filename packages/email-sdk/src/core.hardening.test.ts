@@ -2510,4 +2510,142 @@ describe("audit hardening regressions", () => {
       expect(first.error.cause).toBe(itemBoom);
     }
   });
+
+  test("R26: middleware non-object returns, personalized non-string body, class sendOptions getters, missing adapter capabilities, revoked Proxy, and header/tag value types", async () => {
+    const { defaultsPlugin } = await import("./plugins-defaults.js");
+    const { snapshotMessageForSend } = await import("./http.js");
+
+    // 1. Revoked Proxy fails with EmailValidationError, not raw TypeError.
+    const { proxy: revoked, revoke } = Proxy.revocable(
+      { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" },
+      {},
+    );
+
+    revoke();
+    expect(() => snapshotMessageForSend(revoked)).toThrow(EmailValidationError);
+
+    // 2. Malformed middleware return values fail closed with EmailValidationError.
+    for (const badReturn of [42, false, "bad", [], { message: null }, { message: 0 }]) {
+      const adapter = memoryAdapter();
+
+      const client = createEmailClient({
+        adapters: [adapter],
+        telemetry: false,
+        plugins: [
+          {
+            id: "bad-mw",
+            middleware: [
+              {
+                // SAFETY: Intentionally testing malformed runtime return values from JS middleware.
+                beforeSend: (() => badReturn) as never,
+              },
+            ],
+          },
+        ],
+      });
+
+      await expect(
+        client.send({ from: "a@example.com", to: "b@example.com", subject: "s", text: "t" }),
+      ).rejects.toThrow(EmailMiddlewareError);
+      expect(adapter.raw.sent).toHaveLength(0);
+    }
+
+    // 3. sendPersonalized rejects non-string html mutated by beforeSend middleware.
+    const persAdapter = {
+      ...memoryAdapter(),
+      capabilities: { ...memoryAdapter().capabilities, personalized: true },
+      async sendPersonalized() {
+        return { adapter: "memory", id: "p_1" };
+      },
+    };
+
+    const persClient = createEmailClient({
+      adapters: [persAdapter],
+      telemetry: false,
+      plugins: [
+        {
+          id: "corrupt-html",
+          middleware: [
+            {
+              beforeSend(event) {
+                const mutated = { ...event.message };
+
+                Object.defineProperty(mutated, "html", {
+                  enumerable: true,
+                  configurable: true,
+                  value: 123,
+                });
+
+                return { message: mutated };
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      persClient.sendPersonalized({
+        message: { from: "a@example.com", subject: "Hi", text: "Hello" },
+        recipients: [{ to: "b@example.com" }],
+      }),
+    ).rejects.toThrow(EmailValidationError);
+
+    // 4. defaultsPlugin preserves prototype getters on class-instance sendOptions.
+    class CustomSendOptions {
+      get adapter() {
+        return "resend";
+      }
+      get idempotencyKey() {
+        return "k1";
+      }
+    }
+
+    const defPlugin = defaultsPlugin({ idempotencyKeyPrefix: "pfx:" });
+    const defBefore = defPlugin.middleware?.[0]?.beforeSend;
+
+    const prepared = await defBefore?.({
+      message: { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" },
+      options: new CustomSendOptions(),
+    });
+
+    expect(prepared?.options?.adapter).toBe("resend");
+    expect(prepared?.options?.idempotencyKey).toBe("pfx:k1");
+
+    // 5. Missing adapter capabilities reports EmailAdapterError, not message validation error.
+    const brokenClient = createEmailClient({
+      adapters: [
+        // SAFETY: Intentionally testing a runtime custom adapter missing `capabilities`.
+        { name: "broken", async send() { return { adapter: "broken" }; } } as never,
+      ],
+      telemetry: false,
+    });
+
+    await expect(
+      brokenClient.send({ from: "a@example.com", to: "b@example.com", subject: "s", text: "t" }),
+    ).rejects.toThrow(EmailAdapterError);
+
+    // 6. Non-string tag/header values are rejected by assertMessage.
+    const valClient = createEmailClient({ adapters: [memoryAdapter()], telemetry: false });
+
+    const badTagMsg = { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" };
+
+    Object.defineProperty(badTagMsg, "tags", {
+      enumerable: true,
+      configurable: true,
+      value: [{ name: 1, value: "x" }],
+    });
+
+    await expect(valClient.send(badTagMsg)).rejects.toThrow(EmailValidationError);
+
+    const badHdrMsg = { from: "a@example.com", to: "b@example.com", subject: "s", text: "t" };
+
+    Object.defineProperty(badHdrMsg, "headers", {
+      enumerable: true,
+      configurable: true,
+      value: [{ name: "X-Num", value: 5 }],
+    });
+
+    await expect(valClient.send(badHdrMsg)).rejects.toThrow(EmailValidationError);
+  });
 });

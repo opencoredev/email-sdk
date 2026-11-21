@@ -355,8 +355,14 @@ export function expandPersonalizedMessage(
     ...input.message,
     to,
     subject: render(input.message.subject) ?? input.message.subject,
-    html: render(input.message.html),
-    text: render(input.message.text),
+    html:
+      input.message.html === undefined
+        ? undefined
+        : (render(input.message.html) ?? input.message.html),
+    text:
+      input.message.text === undefined
+        ? undefined
+        : (render(input.message.text) ?? input.message.text),
   } as EmailMessage;
 }
 

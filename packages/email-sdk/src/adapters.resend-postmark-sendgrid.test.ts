@@ -324,5 +324,35 @@ describe("legacy header objects", () => {
 
     expect(toReads).toBe(1);
     expect(capture.calls[0]?.json.to).toEqual(["good@example.com"]);
+
+    // Direct resend enforces repeatedHeaders: false and direct postmark validates messages.
+    const repeatCapture = jsonCapture({ id: "res_rep" });
+
+    await expect(
+      resend({ apiKey: "key", fetch: repeatCapture.fetch }).send(
+        {
+          from: "a@example.com",
+          to: "b@example.com",
+          subject: "dup-hdr",
+          text: "hello",
+          headers: [
+            { name: "X-Foo", value: "1" },
+            { name: "x-foo", value: "2" },
+          ],
+        },
+        context,
+      ),
+    ).rejects.toThrow(EmailValidationError);
+    expect(repeatCapture.calls).toHaveLength(0);
+
+    const pmCapture = jsonCapture({ MessageID: "pm_bad" });
+
+    await expect(
+      postmark({ serverToken: "server", fetch: pmCapture.fetch }).send(
+        { from: "a@example.com", to: [], subject: "s", text: "t" },
+        context,
+      ),
+    ).rejects.toThrow(EmailValidationError);
+    expect(pmCapture.calls).toHaveLength(0);
   });
 });

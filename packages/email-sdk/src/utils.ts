@@ -346,18 +346,19 @@ export function assertMessage(message: EmailMessage) {
           if (
             !isNonArrayObject(header) ||
             !isStringMember(header.name) ||
-            header.name.length === 0
+            header.name.length === 0 ||
+            !isStringMember(header.value)
           ) {
             throw new EmailValidationError(
-              "Each email header must be an object with a string name.",
+              "Each email header must be an object with a non-empty string name and string value.",
             );
           }
-
-          void header.value;
         }
       } else if (isNonArrayObject(message.headers)) {
         for (const value of Object.values(message.headers)) {
-          void value;
+          if (!isStringMember(value)) {
+            throw new EmailValidationError("Each email header value must be a string.");
+          }
         }
       } else {
         throw new EmailValidationError(
@@ -372,12 +373,11 @@ export function assertMessage(message: EmailMessage) {
       }
 
       for (const tag of message.tags) {
-        if (!isNonArrayObject(tag)) {
-          throw new EmailValidationError("Each email tag must be an object.");
+        if (!isNonArrayObject(tag) || !isStringMember(tag.name) || !isStringMember(tag.value)) {
+          throw new EmailValidationError(
+            "Each email tag must be an object with string name and string value.",
+          );
         }
-
-        void tag.name;
-        void tag.value;
       }
     }
 

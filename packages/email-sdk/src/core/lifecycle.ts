@@ -97,10 +97,21 @@ async function runBeforeSendMiddleware(
   for (const item of middleware) {
     try {
       const result = await item.beforeSend?.({ message, options });
+
+      if (result !== undefined && !isNonArrayObject(result)) {
+        throw new EmailValidationError("beforeSend middleware must return an object or undefined.");
+      }
+
       const nextMessage = result?.message;
       const nextOptions = result?.options;
 
-      if (nextMessage) message = nextMessage;
+      if (nextMessage !== undefined) {
+        if (!isNonArrayObject(nextMessage)) {
+          throw new EmailValidationError("Email message must be an object.");
+        }
+
+        message = nextMessage;
+      }
 
       if (nextOptions !== undefined) {
         if (!isNonArrayObject(nextOptions)) {

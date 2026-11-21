@@ -26,6 +26,14 @@ export function validateCapabilities(
   sendOptions?: Pick<EmailSendOptions, "idempotencyKey" | "idempotency">,
 ) {
   try {
+    if (!isNonArrayObject(adapter.capabilities)) {
+      throw new EmailAdapterError(`Adapter "${adapter.name}" is missing capabilities.`, {
+        adapter: adapter.name,
+        delivery: "not_sent",
+        retryable: false,
+      });
+    }
+
     if (message.sendAt !== undefined && !adapter.capabilities.scheduling) {
       throw new EmailValidationError(`${adapter.name} does not support scheduled email.`);
     }

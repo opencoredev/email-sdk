@@ -1,4 +1,5 @@
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import {
   isJsonNumber,
   isJsonObject,
@@ -91,7 +92,8 @@ export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { bas
     name: "graph",
     ...builtInAdapterDefinition("graph", graphRules),
     raw: { baseUrl },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       validateBuiltInAdapter("graph", message, graphRules);
 
       let token = await resolveAccessToken(accessToken, context.signal);

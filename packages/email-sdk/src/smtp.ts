@@ -4,6 +4,7 @@ import type Mail from "nodemailer/lib/mailer/index.js";
 import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { isStringMember } from "./internal/decode.js";
 import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
@@ -92,7 +93,8 @@ export function smtp<const Name extends string = "smtp">(
       validateBuiltInAdapter("smtp", message, smtpRules);
     },
     raw: { host: options.host, port },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       validateBuiltInAdapter("smtp", message, smtpRules);
 
       let mail: SendMailOptions;

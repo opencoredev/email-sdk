@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
 import { jsonString } from "./internal/decode.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
@@ -17,6 +18,7 @@ import {
   isRetryableStatus,
   readErrorBody,
   httpErrorMessage,
+  validateBuiltInAdapter,
 } from "./utils.js";
 
 export type MailgunAdapterOptions = {
@@ -31,7 +33,10 @@ export function mailgun(
 ): EmailAdapter<"mailgun", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.mailgun.net";
 
-  const send: EmailAdapter<"mailgun">["send"] = async (message, context) => {
+  const send: EmailAdapter<"mailgun">["send"] = async (rawMessage, context) => {
+    const message = snapshotMessageForSend(rawMessage);
+    validateBuiltInAdapter("mailgun", message);
+
     const body = new FormData();
     body.set("from", formatAddress(message.from));
     body.set("subject", message.subject);

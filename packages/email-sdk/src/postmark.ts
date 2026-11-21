@@ -18,6 +18,7 @@ import {
   mapAttachments,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -45,6 +46,7 @@ export function postmark(
     raw: { baseUrl },
     async send(message, context) {
       const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("postmark", safeMessage, postmarkRules);
 
       const response = await fetcher(`${baseUrl}/email`, {
         method: "POST",

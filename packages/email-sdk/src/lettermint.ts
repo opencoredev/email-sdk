@@ -15,6 +15,7 @@ import {
   httpErrorDelivery,
   isRetryableStatus,
   readErrorBody,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -43,6 +44,7 @@ export function lettermint(
     raw: { baseUrl },
     async send(message, context) {
       const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("lettermint", safeMessage, lettermintRules);
 
       const headers = new Headers({
         Accept: "application/json",

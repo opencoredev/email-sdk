@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import {
   type JsonValue,
   isJsonNumber,
@@ -76,7 +77,8 @@ export function lettr(options: LettrAdapterOptions): EmailAdapter<"lettr", { bas
       definition.validate?.(message, context);
       assertLettrMessage(message);
     },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       definition.validate?.(message, context);
       assertLettrMessage(message);
       const scheduledAt = sendAtIso(message);
