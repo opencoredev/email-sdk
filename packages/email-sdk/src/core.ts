@@ -43,6 +43,7 @@ import {
   captureSendTelemetry,
   messageFacts,
   personalizedFacts,
+  recipientCount,
 } from "./core/send-telemetry.js";
 import {
   EmailAbortError,
@@ -79,7 +80,7 @@ import type {
   EmailValidationResult,
 } from "./types.js";
 import { isObjectLike } from "./internal/decode.js";
-import { arrayify, assertMessage, isBuiltInAdapter } from "./utils.js";
+import { assertMessage, isBuiltInAdapter } from "./utils.js";
 
 export function createEmailClient<
   const TAdapters extends readonly EmailAdapter[],
@@ -485,14 +486,7 @@ export function createEmailClient<
       measurement_scope: "batch_summary",
       succeeded: items.length - failed,
       failed,
-      recipients: items.reduce(
-        (total, item) =>
-          total +
-          arrayify(item.message.to).length +
-          arrayify(item.message.cc).length +
-          arrayify(item.message.bcc).length,
-        0,
-      ),
+      recipients: items.reduce((total, item) => total + recipientCount(item.message), 0),
       adapter,
       success: failed === 0,
       duration_ms: Date.now() - startedAt,
