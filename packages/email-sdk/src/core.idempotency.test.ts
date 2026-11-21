@@ -163,7 +163,9 @@ describe("idempotencyKey on an adapter that cannot deduplicate", () => {
     const none = recordingAdapter("none", "none");
     const client = createEmailClient({ adapters: [none.adapter], telemetry: false });
 
-    const error = await client.send(message, { idempotencyKey: "k" }).catch((cause: unknown) => cause);
+    const error = await client
+      .send(message, { idempotencyKey: "k" })
+      .catch((cause: unknown) => cause);
 
     expect(error).not.toBeInstanceOf(EmailRouteError);
   });

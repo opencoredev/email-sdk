@@ -12,8 +12,14 @@ describe("checkPublishedExports", () => {
       localExports: local,
       publishedExports: published,
       files: [
-        { path: "guide.mdx", content: 'import { handleInbound } from "@opencoredev/email-sdk/inbound";' },
-        { path: "webhooks.mdx", content: 'import { verify } from "@opencoredev/email-sdk/webhooks";' },
+        {
+          path: "guide.mdx",
+          content: 'import { handleInbound } from "@opencoredev/email-sdk/inbound";',
+        },
+        {
+          path: "webhooks.mdx",
+          content: 'import { verify } from "@opencoredev/email-sdk/webhooks";',
+        },
       ],
     });
 
@@ -41,7 +47,9 @@ describe("checkPublishedExports", () => {
     const report = checkPublishedExports({
       localExports: local,
       publishedExports: local,
-      files: [{ path: "guide.mdx", content: `@opencoredev/email-sdk/inbound ${UNRELEASED_MARKER}.` }],
+      files: [
+        { path: "guide.mdx", content: `@opencoredev/email-sdk/inbound ${UNRELEASED_MARKER}.` },
+      ],
     });
 
     expect(report.unmarked).toEqual([]);

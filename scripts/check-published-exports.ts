@@ -46,7 +46,9 @@ function importedSubpaths(content: string, subpaths: readonly string[]): string[
     const specifier = specifierOf(subpath);
 
     // Match the specifier only when it ends there, so `/react` does not match `/react-email`.
-    return specifier !== undefined && new RegExp(`${escapeRegExp(specifier)}(?![\\w/-])`).test(content);
+    return (
+      specifier !== undefined && new RegExp(`${escapeRegExp(specifier)}(?![\\w/-])`).test(content)
+    );
   });
 }
 
@@ -119,7 +121,9 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`NOT CHECKED: published export check could not reach the npm registry (${reason}).`);
+    console.log(
+      `NOT CHECKED: published export check could not reach the npm registry (${reason}).`,
+    );
 
     return;
   }
@@ -148,8 +152,12 @@ async function main() {
     process.exit(1);
   }
 
-  const pending = report.unpublished.length > 0 ? ` Unreleased: ${report.unpublished.join(", ")}.` : "";
-  console.log(`Published export check passed against ${PACKAGE_NAME}@${published.version}.${pending}`);
+  const pending =
+    report.unpublished.length > 0 ? ` Unreleased: ${report.unpublished.join(", ")}.` : "";
+
+  console.log(
+    `Published export check passed against ${PACKAGE_NAME}@${published.version}.${pending}`,
+  );
 }
 
 if (import.meta.main) await main();

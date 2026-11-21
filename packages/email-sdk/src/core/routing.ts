@@ -118,7 +118,8 @@ export function mergeSendOptions(
 
   if (base.retry && override.retry) merged.retry = { ...base.retry, ...override.retry };
 
-  if (base.fallback && override.fallback) merged.fallback = { ...base.fallback, ...override.fallback };
+  if (base.fallback && override.fallback)
+    merged.fallback = { ...base.fallback, ...override.fallback };
 
   return merged;
 }

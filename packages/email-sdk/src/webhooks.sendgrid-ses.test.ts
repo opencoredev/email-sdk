@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { generateKeyPairSync, sign } from "node:crypto";
 
-import { normalizeWebhookEvent, normalizeWebhookEvents, verifySendGridWebhook } from "./webhooks.js";
+import {
+  normalizeWebhookEvent,
+  normalizeWebhookEvents,
+  verifySendGridWebhook,
+} from "./webhooks.js";
 import type { JsonObject } from "./webhooks.js";
 
 const now = 1731705121000;
@@ -45,7 +49,11 @@ function signed(body = sendGridBody, time = timestamp, key = privateKey) {
     now,
     publicKey: spki,
     headers: {
-      "x-twilio-email-event-webhook-signature": sign("sha256", Buffer.concat([Buffer.from(time), Buffer.from(body)]), key).toString("base64"),
+      "x-twilio-email-event-webhook-signature": sign(
+        "sha256",
+        Buffer.concat([Buffer.from(time), Buffer.from(body)]),
+        key,
+      ).toString("base64"),
       "x-twilio-email-event-webhook-timestamp": time,
     },
   };
@@ -58,13 +66,17 @@ describe("verifySendGridWebhook", () => {
 
   test("accepts PEM keys and a rotation list with one malformed entry", async () => {
     expect(await verifySendGridWebhook({ ...signed(), publicKey: pem })).toBe(true);
-    expect(await verifySendGridWebhook({ ...signed(), publicKey: ["not-a-key", otherSpki, spki] })).toBe(true);
+    expect(
+      await verifySendGridWebhook({ ...signed(), publicKey: ["not-a-key", otherSpki, spki] }),
+    ).toBe(true);
   });
 
   test("rejects a changed body, a wrong key, a stale timestamp, and missing headers", async () => {
     const valid = signed();
 
-    expect(await verifySendGridWebhook({ ...valid, body: valid.body.replace("delivered", "bounce") })).toBe(false);
+    expect(
+      await verifySendGridWebhook({ ...valid, body: valid.body.replace("delivered", "bounce") }),
+    ).toBe(false);
     expect(await verifySendGridWebhook({ ...valid, publicKey: otherSpki })).toBe(false);
     expect(await verifySendGridWebhook(signed(sendGridBody, String(now / 1000 - 301)))).toBe(false);
     expect(await verifySendGridWebhook({ ...valid, headers: {} })).toBe(false);
@@ -82,7 +94,9 @@ describe("verifySendGridWebhook", () => {
   test("accepts Headers instances", async () => {
     const valid = signed();
 
-    expect(await verifySendGridWebhook({ ...valid, headers: new Headers(valid.headers) })).toBe(true);
+    expect(await verifySendGridWebhook({ ...valid, headers: new Headers(valid.headers) })).toBe(
+      true,
+    );
   });
 });
 
@@ -90,12 +104,44 @@ describe("SendGrid event normalization", () => {
   test("normalizes every event in a batch, mapping only final outcomes to a status", async () => {
     const events = await normalizeWebhookEvents({ provider: "sendgrid", body: sendGridBody });
 
-    expect(events.map(({ deliveryId, type, status, providerMessageId }) => ({ deliveryId, type, status, providerMessageId }))).toEqual([
-      { deliveryId: "evt_delivered", type: "delivered", status: "delivered", providerMessageId: "14c5d75ce93" },
-      { deliveryId: "evt_bounce", type: "bounce", status: "bounced", providerMessageId: "14c5d75ce93" },
-      { deliveryId: "evt_blocked", type: "bounce", status: undefined, providerMessageId: undefined },
-      { deliveryId: "evt_spam", type: "spamreport", status: "complained", providerMessageId: undefined },
-      { deliveryId: "evt_dropped", type: "dropped", status: undefined, providerMessageId: undefined },
+    expect(
+      events.map(({ deliveryId, type, status, providerMessageId }) => ({
+        deliveryId,
+        type,
+        status,
+        providerMessageId,
+      })),
+    ).toEqual([
+      {
+        deliveryId: "evt_delivered",
+        type: "delivered",
+        status: "delivered",
+        providerMessageId: "14c5d75ce93",
+      },
+      {
+        deliveryId: "evt_bounce",
+        type: "bounce",
+        status: "bounced",
+        providerMessageId: "14c5d75ce93",
+      },
+      {
+        deliveryId: "evt_blocked",
+        type: "bounce",
+        status: undefined,
+        providerMessageId: undefined,
+      },
+      {
+        deliveryId: "evt_spam",
+        type: "spamreport",
+        status: "complained",
+        providerMessageId: undefined,
+      },
+      {
+        deliveryId: "evt_dropped",
+        type: "dropped",
+        status: undefined,
+        providerMessageId: undefined,
+      },
     ]);
     expect(events[0]?.payload).toMatchObject({ email: "ada@example.com" });
   });
@@ -103,10 +149,12 @@ describe("SendGrid event normalization", () => {
   test("normalizeWebhookEvent takes a one-event body and refuses a batch", async () => {
     const single = JSON.stringify([{ event: "delivered", sg_event_id: "only" }]);
 
-    expect((await normalizeWebhookEvent({ provider: "sendgrid", body: single })).deliveryId).toBe("only");
-    await expect(normalizeWebhookEvent({ provider: "sendgrid", body: sendGridBody })).rejects.toThrow(
-      "SendGrid posted 5 events in one request; use normalizeWebhookEvents.",
+    expect((await normalizeWebhookEvent({ provider: "sendgrid", body: single })).deliveryId).toBe(
+      "only",
     );
+    await expect(
+      normalizeWebhookEvent({ provider: "sendgrid", body: sendGridBody }),
+    ).rejects.toThrow("SendGrid posted 5 events in one request; use normalizeWebhookEvents.");
   });
 
   test("events without sg_event_id get a stable content-derived id", async () => {
@@ -133,10 +181,18 @@ describe("SES event normalization", () => {
   });
 
   const sns = (message: JsonObject, messageId = "sns-delivery-1") =>
-    JSON.stringify({ Type: "Notification", MessageId: messageId, TopicArn: "arn:aws:sns:us-east-1:1:ses", Message: JSON.stringify(message) });
+    JSON.stringify({
+      Type: "Notification",
+      MessageId: messageId,
+      TopicArn: "arn:aws:sns:us-east-1:1:ses",
+      Message: JSON.stringify(message),
+    });
 
   test("unwraps an SNS notification and maps delivery, complaint, and permanent bounce", async () => {
-    const delivered = await normalizeWebhookEvent({ provider: "ses", body: sns(sesEvent("Delivery")) });
+    const delivered = await normalizeWebhookEvent({
+      provider: "ses",
+      body: sns(sesEvent("Delivery")),
+    });
 
     expect(delivered).toMatchObject({
       provider: "ses",
@@ -147,7 +203,11 @@ describe("SES event normalization", () => {
       payload: { eventType: "Delivery" },
     });
 
-    const complaint = await normalizeWebhookEvent({ provider: "ses", body: sns(sesEvent("Complaint"), "sns-2") });
+    const complaint = await normalizeWebhookEvent({
+      provider: "ses",
+      body: sns(sesEvent("Complaint"), "sns-2"),
+    });
+
     expect(complaint.status).toBe("complained");
 
     const permanent = await normalizeWebhookEvent({
@@ -179,10 +239,17 @@ describe("SES event normalization", () => {
 
     const eventBridge = await normalizeWebhookEvent({
       provider: "ses",
-      body: JSON.stringify({ id: "eb-1", "detail-type": "Email Delivered", detail: sesEvent("Delivery") }),
+      body: JSON.stringify({
+        id: "eb-1",
+        "detail-type": "Email Delivered",
+        detail: sesEvent("Delivery"),
+      }),
     });
 
-    const bare = await normalizeWebhookEvent({ provider: "ses", body: JSON.stringify(sesEvent("Complaint")) });
+    const bare = await normalizeWebhookEvent({
+      provider: "ses",
+      body: JSON.stringify(sesEvent("Complaint")),
+    });
 
     expect(identity).toMatchObject({ status: "delivered", providerMessageId: "m-identity" });
     expect(eventBridge).toMatchObject({ deliveryId: "eb-1", status: "delivered" });
@@ -192,15 +259,23 @@ describe("SES event normalization", () => {
 
   test("refuses SNS subscription confirmations and malformed notifications", async () => {
     await expect(
-      normalizeWebhookEvent({ provider: "ses", body: JSON.stringify({ Type: "SubscriptionConfirmation", SubscribeURL: "https://x" }) }),
+      normalizeWebhookEvent({
+        provider: "ses",
+        body: JSON.stringify({ Type: "SubscriptionConfirmation", SubscribeURL: "https://x" }),
+      }),
     ).rejects.toThrow("SubscriptionConfirmation");
 
     await expect(
-      normalizeWebhookEvent({ provider: "ses", body: JSON.stringify({ Type: "Notification", Message: "not json" }) }),
+      normalizeWebhookEvent({
+        provider: "ses",
+        body: JSON.stringify({ Type: "Notification", Message: "not json" }),
+      }),
     ).rejects.toThrow("SNS notification Message must be SES event JSON.");
   });
 
   test("normalizeWebhookEvents returns one event for single-event providers", async () => {
-    expect(await normalizeWebhookEvents({ provider: "ses", body: sns(sesEvent("Delivery")) })).toHaveLength(1);
+    expect(
+      await normalizeWebhookEvents({ provider: "ses", body: sns(sesEvent("Delivery")) }),
+    ).toHaveLength(1);
   });
 });

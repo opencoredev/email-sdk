@@ -52,111 +52,212 @@ const raw = (key: string) => key;
 const cases: RotationCase[] = [
   {
     name: "sendgrid",
-    build: (key, fetch) => sendgrid({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      sendgrid({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     responseInit: { headers: { "x-message-id": "sg_1" } },
   },
   {
     name: "brevo",
-    build: (key, fetch) => brevo({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      brevo({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("api-key"),
     expected: raw,
     response: { messageId: "b_1" },
   },
   {
     name: "mailersend",
-    build: (key, fetch) => mailersend({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      mailersend({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
   },
   {
     name: "cloudflare",
-    build: (key, fetch) => cloudflare({ get apiToken() { return key(); }, accountId: "acct", fetch }),
+    build: (key, fetch) =>
+      cloudflare({
+        get apiToken() {
+          return key();
+        },
+        accountId: "acct",
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     response: { success: true, result: { delivered: ["ada@example.com"] } },
   },
   {
     name: "iterable",
-    build: (key, fetch) => iterable({ get apiKey() { return key(); }, campaignId: 1, fetch }),
+    build: (key, fetch) =>
+      iterable({
+        get apiKey() {
+          return key();
+        },
+        campaignId: 1,
+        fetch,
+      }),
     read: header("api-key"),
     expected: raw,
     response: { code: "Success" },
   },
   {
     name: "loops",
-    build: (key, fetch) => loops({ get apiKey() { return key(); }, transactionalId: "t", fetch }),
+    build: (key, fetch) =>
+      loops({
+        get apiKey() {
+          return key();
+        },
+        transactionalId: "t",
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     response: { success: true },
   },
   {
     name: "mailpace",
-    build: (key, fetch) => mailpace({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      mailpace({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("mailpace-server-token"),
     expected: raw,
     response: { id: 1, status: "queued" },
   },
   {
     name: "plunk",
-    build: (key, fetch) => plunk({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      plunk({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     response: { success: true, emails: [] },
   },
   {
     name: "sparkpost",
-    build: (key, fetch) => sparkpost({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      sparkpost({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: raw,
     response: { results: { id: "sp_1" } },
   },
   {
     name: "scaleway",
-    build: (key, fetch) => scaleway({ get secretKey() { return key(); }, projectId: "p", fetch }),
+    build: (key, fetch) =>
+      scaleway({
+        get secretKey() {
+          return key();
+        },
+        projectId: "p",
+        fetch,
+      }),
     read: header("x-auth-token"),
     expected: raw,
     response: { emails: [{ id: "sc_1" }] },
   },
   {
     name: "mailtrap",
-    build: (key, fetch) => mailtrap({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      mailtrap({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("api-token"),
     expected: raw,
     response: { success: true, message_ids: ["mt_1"] },
   },
   {
     name: "unosend",
-    build: (key, fetch) => unosend({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      unosend({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     response: { success: true, data: { id: "u_1" } },
   },
   {
     name: "sequenzy",
-    build: (key, fetch) => sequenzy({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      sequenzy({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: bearer,
     response: { success: true },
   },
   {
     name: "zeptomail",
-    build: (key, fetch) => zeptomail({ get token() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      zeptomail({
+        get token() {
+          return key();
+        },
+        fetch,
+      }),
     read: header("authorization"),
     expected: (key) => `Zoho-enczapikey ${key}`,
     response: { data: [{ code: "EM_104" }], request_id: "z_1" },
   },
   {
     name: "mailchimp",
-    build: (key, fetch) => mailchimp({ get apiKey() { return key(); }, fetch }),
+    build: (key, fetch) =>
+      mailchimp({
+        get apiKey() {
+          return key();
+        },
+        fetch,
+      }),
     read: (call) => call.key,
     expected: raw,
     response: [{ _id: "mc_1", email: "ada@example.com", status: "sent" }],
   },
   {
     name: "mailgun",
-    build: (key, fetch) => mailgun({ get apiKey() { return key(); }, domain: "mg.example.com", fetch }),
+    build: (key, fetch) =>
+      mailgun({
+        get apiKey() {
+          return key();
+        },
+        domain: "mg.example.com",
+        fetch,
+      }),
     read: header("authorization"),
     expected: (key) => `Basic ${btoa(`api:${key}`)}`,
     response: { id: "<mg_1>" },

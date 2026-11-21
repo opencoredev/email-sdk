@@ -545,7 +545,9 @@ describe("sendMany concurrency", () => {
 
     const client = createEmailClient({
       adapters: [adapter("memory")],
-      plugins: [{ id: "spy", middleware: [{ beforeSend: (event) => void seen.push(event.options) }] }],
+      plugins: [
+        { id: "spy", middleware: [{ beforeSend: (event) => void seen.push(event.options) }] },
+      ],
       telemetry: false,
     });
 

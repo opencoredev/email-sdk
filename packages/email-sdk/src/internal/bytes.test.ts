@@ -32,9 +32,9 @@ describe("Web API byte helpers match the Buffer behavior they replaced", () => {
     expect(new TextDecoder().decode(await attachmentToBytes(base64))).toBe("héllo");
     expect(await attachmentToBase64({ filename: "b", content: new Blob(["hi"]) })).toBe("aGk=");
 
-    expect(await attachmentToBase64({ filename: "c", content: new Uint8Array([1, 2]).buffer })).toBe(
-      "AQI=",
-    );
+    expect(
+      await attachmentToBase64({ filename: "c", content: new Uint8Array([1, 2]).buffer }),
+    ).toBe("AQI=");
   });
 
   test("path attachments still read from disk on Node and Bun", async () => {

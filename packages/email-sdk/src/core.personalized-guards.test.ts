@@ -37,7 +37,9 @@ function untypedResult<const Name extends string>(result: { adapter: Name; id?: 
 describe("native personalized results", () => {
   test("a result without accepted fails as an adapter error, not a TypeError", async () => {
     const client = createEmailClient({
-      adapters: [nativeAdapter("native", () => untypedResult({ adapter: "native", id: "batch_1" }))],
+      adapters: [
+        nativeAdapter("native", () => untypedResult({ adapter: "native", id: "batch_1" })),
+      ],
       telemetry: false,
     });
 
@@ -48,7 +50,9 @@ describe("native personalized results", () => {
 
     const [failure] = error instanceof EmailAllRecipientsFailedError ? error.failures : [];
     expect(failure).toBeInstanceOf(EmailAdapterError);
-    expect(failure?.message).toBe("native.sendPersonalized resolved without an accepted recipient list.");
+    expect(failure?.message).toBe(
+      "native.sendPersonalized resolved without an accepted recipient list.",
+    );
   });
 
   test("the missing list counts as unknown delivery, so fallback does not risk a duplicate", async () => {

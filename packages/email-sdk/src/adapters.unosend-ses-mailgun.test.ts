@@ -85,7 +85,9 @@ describe("provider payloads", () => {
 
     // The client's validation pass and a direct adapter.send both enforce the SES v2 limit.
     expect(() => adapter.validate?.(tooMany, context)).toThrow(EmailValidationError);
-    await expect(adapter.send(tooMany, context)).rejects.toThrow("ses only supports 15 headers per message.");
+    await expect(adapter.send(tooMany, context)).rejects.toThrow(
+      "ses only supports 15 headers per message.",
+    );
     expect(capture.calls).toHaveLength(0);
 
     await adapter.send({ ...messageWithoutMetadata, headers: headers(15) }, context);

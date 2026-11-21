@@ -55,7 +55,11 @@ describe("createEmailAgentTools (deprecated /agent-tools)", () => {
 
   test("routes to the named adapter and strips routing fields from the message", async () => {
     const setup = client();
-    const result = await createEmailAgentTools(setup.client).sendEmail.execute({ ...input, adapter: "backup" });
+
+    const result = await createEmailAgentTools(setup.client).sendEmail.execute({
+      ...input,
+      adapter: "backup",
+    });
 
     expect(result.adapter).toBe("backup");
     expect(setup.backup.raw.sent[0]?.message).toEqual(input);

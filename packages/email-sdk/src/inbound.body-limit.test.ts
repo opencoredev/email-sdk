@@ -4,7 +4,12 @@ import { DEFAULT_INBOUND_MAX_BODY_BYTES, InboundError, handleInbound } from "./i
 
 const encoder = new TextEncoder();
 
-const postmarkBody = JSON.stringify({ MessageID: "pm-1", Subject: "Hi", Headers: [], Attachments: [] });
+const postmarkBody = JSON.stringify({
+  MessageID: "pm-1",
+  Subject: "Hi",
+  Headers: [],
+  Attachments: [],
+});
 
 const open = { provider: "postmark", auth: { none: true } } as const;
 
@@ -69,7 +74,9 @@ describe("handleInbound maxBodyBytes", () => {
   test("a chunked body without Content-Length is cancelled once it passes the limit", async () => {
     const stream = streamingRequest(1000, 1024);
 
-    await expect(handleInbound(stream.request, { ...open, maxBodyBytes: 4096 })).rejects.toMatchObject({
+    await expect(
+      handleInbound(stream.request, { ...open, maxBodyBytes: 4096 }),
+    ).rejects.toMatchObject({
       reason: "payload_too_large",
     });
 
@@ -80,7 +87,12 @@ describe("handleInbound maxBodyBytes", () => {
 
   test("a Content-Length that understates the body does not get past the stream count", async () => {
     const oversized = JSON.stringify({ ...JSON.parse(postmarkBody), TextBody: "x".repeat(5000) });
-    const request = new Request("https://example.test/inbound", { method: "POST", body: oversized });
+
+    const request = new Request("https://example.test/inbound", {
+      method: "POST",
+      body: oversized,
+    });
+
     // Some runtimes pass a client's Content-Length through unchecked; simulate one that lies.
     const lying = new Request(request, { headers: { "content-length": "10" } });
 
@@ -100,12 +112,14 @@ describe("handleInbound maxBodyBytes", () => {
   });
 
   test("Infinity disables the limit and invalid limits are rejected", async () => {
-    expect((await handleInbound(post(postmarkBody), { ...open, maxBodyBytes: Infinity })).type).toBe(
-      "emails",
-    );
+    expect(
+      (await handleInbound(post(postmarkBody), { ...open, maxBodyBytes: Infinity })).type,
+    ).toBe("emails");
 
     for (const maxBodyBytes of [0, -1, Number.NaN]) {
-      await expect(handleInbound(post(postmarkBody), { ...open, maxBodyBytes })).rejects.toThrow(RangeError);
+      await expect(handleInbound(post(postmarkBody), { ...open, maxBodyBytes })).rejects.toThrow(
+        RangeError,
+      );
     }
   });
 });

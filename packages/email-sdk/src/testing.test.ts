@@ -34,7 +34,14 @@ describe("memoryAdapter", () => {
     const client = createEmailClient({ adapters: [memory], telemetry: false });
 
     await client.send(
-      { ...message, sendAt: "2030-01-01T00:00:00Z", headers: [{ name: "X", value: "1" }, { name: "X", value: "2" }] },
+      {
+        ...message,
+        sendAt: "2030-01-01T00:00:00Z",
+        headers: [
+          { name: "X", value: "1" },
+          { name: "X", value: "2" },
+        ],
+      },
       { idempotencyKey: "k" },
     );
 
