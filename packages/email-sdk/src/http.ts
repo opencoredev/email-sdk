@@ -1,7 +1,7 @@
 import { EmailProviderError } from "./errors.js";
 import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
-import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
+import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
   httpErrorDelivery,
@@ -12,14 +12,9 @@ import {
   validateBuiltInMessage,
   type AdapterRulesOption,
   type BuiltInAdapterName,
+  type LegacyEmailSendResult,
   type MessageRules,
 } from "./utils.js";
-
-type LegacyAdapterResult = Omit<EmailSendResult, "adapter"> & {
-  adapter?: string;
-  provider?: string;
-  messageId?: string;
-};
 
 export type JsonProviderOptions<Name extends BuiltInAdapterName, TPayload> = AdapterRulesOption<Name> & {
   name: Name;
@@ -33,7 +28,7 @@ export type JsonProviderOptions<Name extends BuiltInAdapterName, TPayload> = Ada
     body: JsonValue,
     message: EmailMessage,
     response: Response,
-  ) => LegacyAdapterResult;
+  ) => LegacyEmailSendResult;
 };
 
 export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(

@@ -4,12 +4,12 @@ import type { ModelMessage, ToolApprovalResponse, ToolExecutionOptions } from "a
 import { MockLanguageModelV4 } from "ai/test";
 
 import { createEmailTools, emailToolApproval } from "./ai.js";
-import type { EmailClient, EmailMessage, SendOptions } from "./types.js";
+import type { EmailClient, EmailMessage, EmailSendOptions } from "./types.js";
 import type { JsonObject } from "../test-support/json.js";
 
 type SendCall = {
   message: EmailMessage;
-  options?: SendOptions;
+  options?: EmailSendOptions;
 };
 
 const usage = {
@@ -54,7 +54,7 @@ function recordingClient(
   const calls: SendCall[] = [];
 
   const client = {
-    async send(message: EmailMessage, options?: SendOptions) {
+    async send(message: EmailMessage, options?: EmailSendOptions) {
       calls.push({ message, options });
 
       return result;

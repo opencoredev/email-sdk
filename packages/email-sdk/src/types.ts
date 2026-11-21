@@ -337,34 +337,3 @@ export type EmailClient<
     name: Name,
   ): Pick<EmailClient<Routes>, "validate" | "send" | "sendMany" | "sendPersonalized">;
 } & Extension;
-
-/** @deprecated Internal migration alias. Import v1 names from the package root. */
-export type EmailProvider<TRaw = unknown> = EmailAdapter<string, TRaw> & {
-  sendBulk?(
-    message: EmailMessage & {
-      recipientVariables?: RecipientVariables;
-      idempotencyKey?: string;
-    },
-    context: EmailAdapterContext,
-  ): MaybePromise<EmailSendResult>;
-};
-
-/** @deprecated Internal migration alias. */
-export type EmailProviderContext = EmailAdapterContext;
-
-/** @deprecated Internal migration alias. */
-export type EmailProviderResponse = EmailSendResult;
-
-/** @deprecated Internal migration alias. */
-export type SendOptions = EmailSendOptions & {
-  provider?: string;
-  fallbackAdapters?: readonly string[];
-  fallbackProviders?: readonly string[];
-  retries?: number;
-};
-
-/** @deprecated Internal migration alias. */
-export type SendBatchItem = EmailSendItem;
-
-/** @deprecated Internal migration alias. */
-export type SendBatchResult = EmailSendSettledResult;

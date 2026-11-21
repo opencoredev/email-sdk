@@ -28,7 +28,8 @@ import type {
   RecipientVariables,
 } from "./types.js";
 
-type LegacyEmailSendResult = Omit<EmailSendResult, "adapter"> & {
+/** What legacy adapters return: the adapter name may be missing or reported as `provider`. */
+export type LegacyEmailSendResult = Omit<EmailSendResult, "adapter"> & {
   adapter?: string;
   provider?: string;
   messageId?: string;
@@ -193,60 +194,6 @@ export function hasRecipientVariables(message: EmailMessage): boolean {
   const recipientVariables = recipientVariablesOf(message);
 
   return Boolean(recipientVariables && Object.keys(recipientVariables).length > 0);
-}
-
-export function assertRecipientVariables(message: EmailMessage) {
-  const recipientVariables = recipientVariablesOf(message);
-
-  if (!hasRecipientVariables(message)) {
-    return;
-  }
-
-  if (message.cc || message.bcc) {
-    throw new EmailValidationError(
-      "recipientVariables cannot be combined with cc or bcc because each recipient receives an individualized message.",
-    );
-  }
-
-  const recipients = new Set<string>();
-
-  for (const recipient of arrayify(message.to)) {
-    const address = emailAddressOf(recipient);
-    const normalized = address.toLowerCase();
-
-    if (recipients.has(normalized)) {
-      throw new EmailValidationError(
-        `recipientVariables require unique "to" addresses, but "${address}" appears more than once.`,
-      );
-    }
-
-    recipients.add(normalized);
-  }
-
-  const unknown = Object.keys(recipientVariables ?? {}).filter(
-    (address) => !recipients.has(address.toLowerCase()),
-  );
-
-  if (unknown.length > 0) {
-    throw new EmailValidationError(
-      `recipientVariables reference addresses that are not in "to": ${unknown.join(", ")}.`,
-      { unknown },
-    );
-  }
-
-  // 2026-07-06: variable keys must match the fallback substitution token `%recipient.<key>%`
-  // (regex [\w-]+). Keys like "user.name" would personalize on native provider routes but
-  // silently stay literal in the client-side fallback, so reject them everywhere instead.
-  for (const [address, variables] of Object.entries(recipientVariables ?? {})) {
-    for (const key of Object.keys(variables)) {
-      if (!/^[\w-]+$/.test(key)) {
-        throw new EmailValidationError(
-          `recipientVariables keys may only contain letters, numbers, underscores, and hyphens, but "${address}" has "${key}".`,
-          { address, key },
-        );
-      }
-    }
-  }
 }
 
 /**

@@ -12,10 +12,6 @@ import {
   toSendAtDate,
 } from "./utils.js";
 
-export function simpleAddress(address: string) {
-  return { email: address };
-}
-
 const NAMED_ADDRESS = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/;
 
 export function emailParts(address: string | { email: string; name?: string }) {
@@ -114,18 +110,7 @@ export type RecipientEntry = {
 
 type LegacyRecipientMessage = EmailMessage & {
   recipientVariables?: RecipientVariables;
-  idempotencyKey?: string;
 };
-
-/** Replace `%recipient.key%` tokens; unknown keys are left intact to match native providers. */
-export function substituteRecipientVariables(
-  text: string,
-  variables: Record<string, string | number | boolean>,
-): string {
-  return text.replace(/%recipient\.([\w-]+)%/g, (token, key) =>
-    Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key]) : token,
-  );
-}
 
 function recipientVariablesLookup(recipientVariables: RecipientVariables | undefined) {
   const lookup = new Map<string, Record<string, string | number | boolean>>();
@@ -157,28 +142,6 @@ export function recipientVariablesMap(message: LegacyRecipientMessage): Recipien
   }
 
   return map;
-}
-
-/** Render one single-recipient message with its variables substituted into the content. */
-export function expandRecipientMessage(
-  message: LegacyRecipientMessage,
-  entry: RecipientEntry,
-): EmailMessage {
-  const {
-    recipientVariables: _recipientVariables,
-    idempotencyKey: _idempotencyKey,
-    ...base
-  } = message;
-
-  // SAFETY: `message` is an EmailMessage, so it has html or text. Each is substituted only
-  // when present, so the result keeps the same html-or-text shape.
-  return {
-    ...base,
-    to: entry.to,
-    subject: substituteRecipientVariables(message.subject, entry.variables),
-    html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
-    text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
-  } as EmailMessage;
 }
 
 export function sendAtDate(message: EmailMessage) {
