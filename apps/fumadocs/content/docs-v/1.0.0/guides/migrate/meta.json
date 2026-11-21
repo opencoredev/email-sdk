@@ -1,5 +1,0 @@
-{
-  "title": "Migration guides",
-  "icon": "GitCompare",
-  "pages": ["v0-to-v1", "resend", "nodemailer", "sendgrid"]
-}

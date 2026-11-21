@@ -1,0 +1,50 @@
+---
+title: Guides
+description: Task-based guides for operating and extending Email SDK.
+sidebar:
+  icon: "book-open"
+---
+
+Use these guides when you are operating a production send path or building something that should live outside one send call: fallback routes, tests, reusable plugins, custom provider adapters, or community packages.
+
+If you want to support a provider that Email SDK does not officially maintain, start with [Publish a community adapter](/v0.6.0/docs/guides/authoring/publish-community-adapter). Community adapters live in their own npm packages and can be listed in the docs without becoming official.
+
+## Operate
+
+<CardGroup cols={2}>
+  <Card title="Production send pipeline" href="/v0.6.0/docs/guides/production-send-pipeline">
+    Combine adapters, validation, retries, fallback routes, observability, tests, and CLI checks.
+  </Card>
+  <Card title="Test email behavior" href="/v0.6.0/docs/guides/test-email-behavior">
+    Use memory providers and capture plugins to assert send behavior.
+  </Card>
+</CardGroup>
+
+## Build
+
+<CardGroup cols={2}>
+  <Card title="Create your first plugin" href="/v0.6.0/docs/guides/authoring/create-first-plugin">
+    Build a policy plugin that blocks sends missing required metadata.
+  </Card>
+  <Card title="Create an adapter" href="/v0.6.0/docs/guides/authoring/create-adapter">
+    Implement a provider adapter and expose it as a plugin.
+  </Card>
+  <Card
+    title="Publish a community adapter"
+    href="/v0.6.0/docs/guides/authoring/publish-community-adapter"
+  >
+    Publish a third-party provider package and list it without making it official.
+  </Card>
+</CardGroup>
+
+## Where reference lives
+
+Guides are procedural. Use the reference pages when you need exact fields and contracts:
+
+| Need                       | Page                                                        |
+| -------------------------- | ----------------------------------------------------------- |
+| Client options             | [Client](/v0.6.0/docs/reference/client)                     |
+| Message shape              | [Message](/v0.6.0/docs/reference/message)                   |
+| Adapter contract           | [Adapter contract](/v0.6.0/docs/reference/adapter-contract) |
+| Plugin types and lifecycle | [Plugin API](/v0.6.0/docs/plugins/api)                      |
+| Provider field limits      | [Field support](/v0.6.0/docs/adapters/field-support)        |

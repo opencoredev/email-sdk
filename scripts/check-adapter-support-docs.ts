@@ -1,4 +1,4 @@
-import { ADAPTER_SUPPORT_ENTRIES, ADAPTER_SUPPORT_FIELDS } from "../apps/fumadocs/src/lib/adapter-support";
+import { ADAPTER_SUPPORT_ENTRIES, ADAPTER_SUPPORT_FIELDS } from "../apps/docs/lib/adapter-support";
 import { BUILT_IN_ADAPTER_CAPABILITIES, SUPPORTED_MESSAGE_FIELDS } from "../packages/email-sdk/src/utils";
 
 type DocsEntry = (typeof ADAPTER_SUPPORT_ENTRIES)[number];

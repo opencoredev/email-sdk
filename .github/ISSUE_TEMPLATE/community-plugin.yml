@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Community packages are listed from `apps/fumadocs/content/community/plugins.json`.
+        Community packages are listed from `apps/docs/content/community/plugins.json`.
         The fastest path is a pull request that updates that file and passes `bun run community:check`.
 
   - type: input

@@ -1,0 +1,27 @@
+---
+title: MailerSend
+description: Configure the MailerSend Email API adapter.
+sidebar:
+  icon: "https://www.google.com/s2/favicons?domain=mailersend.com&sz=64"
+---
+
+<ProviderBadge adapter="mailersend" />
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { mailersend } from "@opencoredev/email-sdk/mailersend";
+
+const email = createEmailClient({
+  adapters: [mailersend({ apiKey: process.env.MAILERSEND_API_KEY! })],
+});
+```
+
+## Options
+
+| Option    | Type           | Required | Notes                                     |
+| --------- | -------------- | -------- | ----------------------------------------- |
+| `apiKey`  | `string`       | Yes      | MailerSend API token.                     |
+| `baseUrl` | `string`       | No       | Defaults to `https://api.mailersend.com`. |
+| `fetch`   | `typeof fetch` | No       | Useful for tests or custom runtimes.      |
+
+See <a href="/v0.2.1/docs/adapters/field-support">field support</a> for supported message fields.

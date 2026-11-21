@@ -1,0 +1,267 @@
+---
+// Landing page, ported from the Fumadocs site's src/routes/index.tsx. The
+// markup and styles/landing.css follow the Paper design "Email SDK — Landing"
+// (1440px artboard). The page wears Blume's document shell (head, analytics,
+// Open Graph, JSON-LD) but keeps its own nav, so Blume's header is hidden here.
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+
+import { otherOpenCoreSites } from "../lib/opencore-sites";
+import { gitConfig, siteUrl } from "../lib/shared";
+import { sponsorHref, sponsors } from "../lib/sponsors";
+import "../styles/landing.css";
+
+const { config } = data;
+
+const githubUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
+
+// Plain followed links on purpose: they share authority between our sites.
+const openCoreSites = otherOpenCoreSites(siteUrl);
+
+// The Paper design shows these sponsor slots in this order.
+const sponsorNames = [
+  "Resend",
+  "Sequenzy",
+  "JetEmail",
+  "Primitive",
+  "Lettermint",
+  "Instatus",
+  "Neon",
+  "Notra",
+  "Customer.io",
+  "Context.dev",
+  "Helo",
+] as const;
+
+const adapterNames = ["Resend", "Sequenzy", "JetEmail", "Primitive", "Lettermint"] as const;
+
+function sponsorByName(name: string) {
+  const sponsor = sponsors.find((entry) => entry.name === name);
+
+  if (!sponsor) throw new Error(`Unknown sponsor "${name}" referenced by the landing page`);
+
+  return sponsor;
+}
+
+type FooterLink = { label: string; href: string; external?: boolean };
+
+const footerGroups: readonly { label: string; links: readonly FooterLink[] }[] = [
+  {
+    label: "Product",
+    links: [
+      { label: "Docs", href: "/docs" },
+      { label: "Adapters", href: "/docs/adapters" },
+      { label: "Compare providers", href: "/compare" },
+    ],
+  },
+  {
+    label: "Package",
+    links: [
+      { label: "npm", href: "https://www.npmjs.com/package/@opencoredev/email-sdk", external: true },
+      { label: "MIT license", href: `${githubUrl}/blob/main/LICENSE`, external: true },
+      { label: "Changelog", href: `${githubUrl}/releases`, external: true },
+    ],
+  },
+  {
+    label: "Project",
+    links: [
+      { label: "GitHub", href: githubUrl, external: true },
+      { label: "Sponsor", href: sponsorHref, external: true },
+      { label: "Blog", href: "/blog" },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    label: "Guides",
+    links: [
+      { label: "Send email from Node.js", href: "/blog/send-email-nodejs-typescript" },
+      { label: "Resend API guide", href: "/blog/resend-api-nodejs-typescript" },
+      { label: "SendGrid API guide", href: "/blog/sendgrid-api-nodejs-typescript" },
+      { label: "Send email from Next.js", href: "/blog/nextjs-server-action-send-email" },
+    ],
+  },
+  {
+    label: "Choosing a provider",
+    links: [
+      { label: "Resend pricing", href: "/blog/resend-pricing" },
+      { label: "SendGrid pricing", href: "/blog/sendgrid-pricing" },
+      { label: "Mailgun pricing", href: "/blog/mailgun-pricing" },
+      { label: "Email API pricing compared", href: "/blog/email-api-pricing" },
+    ],
+  },
+  {
+    label: "Legal",
+    links: [
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+    ],
+  },
+];
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode="dark"
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  ogImage="/og/email-sdk.png"
+  ogImageAlt="Email SDK: email for TypeScript apps"
+  ogImageSize={{ width: 1200, height: 630 }}
+  page={{ title: "Email SDK: Email for TypeScript apps", description: config.description, route: "/" }}
+>
+  <div class="email-landing">
+    <div aria-hidden="true" class="landing-grid-rule landing-grid-rule-left"></div>
+    <div aria-hidden="true" class="landing-grid-rule landing-grid-rule-right"></div>
+
+    <nav class="landing-nav" aria-label="Primary navigation">
+      <a class="landing-brand" href="/">Email SDK</a>
+      <div class="landing-nav-links">
+        <a href="/docs">Docs</a>
+        <a href="/docs/adapters">Adapters</a>
+        <a href="/compare">Compare</a>
+        <a href={githubUrl} rel="noreferrer" target="_blank">GitHub</a>
+        <a class="landing-nav-cta" href="/docs/getting-started/quickstart">Get started</a>
+      </div>
+      <a aria-label="Open documentation" class="landing-mobile-menu" href="/docs">Docs</a>
+    </nav>
+
+    <section class="landing-hero" aria-labelledby="landing-heading">
+      <h1 id="landing-heading">Email for TypeScript apps.</h1>
+      <p id="landing-summary">One typed send() call. Use the provider account you already have.</p>
+      <div class="landing-hero-actions">
+        <a class="landing-button landing-button-primary" href="/docs/getting-started/quickstart">
+          Start sending
+        </a>
+        <a class="landing-button landing-button-secondary" href="/docs/adapters">Browse adapters</a>
+      </div>
+    </section>
+
+    <div aria-hidden="true" class="landing-nav-rule"></div>
+
+    <section class="landing-section landing-sponsors" aria-labelledby="landing-sponsors-heading">
+      <div class="landing-section-label">
+        <h2 id="landing-sponsors-heading">Sponsors</h2>
+        <p>They pay for the maintenance. Four slots are open.</p>
+      </div>
+      <div class="landing-sponsor-grid">
+        {
+          sponsorNames.map((name) => {
+            const sponsor = sponsorByName(name);
+
+            return (
+              <a class="landing-sponsor" href={sponsor.href} rel="noreferrer" target="_blank">
+                <span class="landing-sponsor-mark">
+                  <img alt="" aria-hidden="true" src={sponsor.logo} />
+                </span>
+                <span>{sponsor.name}</span>
+              </a>
+            );
+          })
+        }
+        <a class="landing-sponsor landing-sponsor-open" href={sponsorHref} rel="noreferrer" target="_blank">
+          <span class="landing-sponsor-mark">+</span>
+          <span>Sponsor</span>
+        </a>
+      </div>
+    </section>
+
+    <div aria-hidden="true" class="landing-flock">
+      <div class="landing-engraving"></div>
+    </div>
+
+    <section class="landing-section landing-one-call" aria-labelledby="landing-one-call-heading">
+      <div class="landing-section-label">
+        <h2 id="landing-one-call-heading">One call</h2>
+        <p>Write the email once. Any of the 27 adapters sends it.</p>
+        <a class="landing-section-link" href="/docs/getting-started/quickstart">Run the quickstart →</a>
+      </div>
+      <div class="landing-code-panel">
+        <div class="landing-code-header">
+          <span>src/email.ts</span>
+          <span>TypeScript</span>
+        </div>
+        <pre class="landing-code" aria-label="TypeScript email send example"><code><span class="landing-code-line"><b>import </b><em>{"{ createEmailClient } "}</em><b>from </b><i>'@opencoredev/email-sdk'</i>;</span><span class="landing-code-line"><b>import </b><em>{"{ resend } "}</em><b>from </b><i>'@opencoredev/email-sdk/resend'</i>;</span><span class="landing-code-gap"></span><span class="landing-code-line"><b>const </b><em>email </em>= createEmailClient({"{"}</span><span class="landing-code-line">{"  adapters: ["}<em>resend</em>{"({ apiKey: process.env."}<em>RESEND_API_KEY</em>{"! })],"}</span><span class="landing-code-line">{"});"}</span><span class="landing-code-gap"></span><span class="landing-code-line"><b>const </b><em>result </em>= <b>await </b><em>email</em>.send({"{"}</span><span class="landing-code-line">{"  from: "}<i>{"'Acme <hello@acme.dev>'"}</i>,</span><span class="landing-code-line">{"  to: "}<i>'ada@example.com'</i>,</span><span class="landing-code-line">{"  subject: "}<i>'Welcome'</i>,</span><span class="landing-code-line">{"  text: "}<i>'Hi Ada, your account is ready.'</i>,</span><span class="landing-code-line">{"});"}</span><span class="landing-code-line">console.log(<em>result</em>.adapter, <em>result</em>.id);</span></code></pre>
+      </div>
+    </section>
+
+    <section class="landing-section landing-adapters" aria-labelledby="landing-adapters-heading">
+      <div class="landing-section-label">
+        <h2 id="landing-adapters-heading">Adapters</h2>
+        <p>Keep your provider account and API key. Your send calls stay the same when you switch.</p>
+        <a class="landing-section-link" href="/compare">Compare providers →</a>
+      </div>
+      <div class="landing-adapter-list">
+        {
+          adapterNames.map((name) => (
+            <a href={`/docs/adapters/${name.toLowerCase()}`}>
+              <img alt="" aria-hidden="true" src={sponsorByName(name).logo} />
+              <span>{name}</span>
+            </a>
+          ))
+        }
+        <a class="landing-adapter-more" href="/docs/adapters">+ 22 more in the registry →</a>
+      </div>
+      <div aria-hidden="true" class="landing-art landing-art-globe">
+        <div class="landing-engraving"></div>
+      </div>
+    </section>
+
+    <footer class="landing-footer">
+      <div aria-hidden="true" class="landing-footer-rule"></div>
+      <div class="landing-footer-columns">
+        <div class="landing-footer-brand">
+          <a href="/">Email SDK</a>
+          <p>Open-source email tools for TypeScript apps.</p>
+          <span>© 2026 OpenCore. MIT.</span>
+        </div>
+        {
+          footerGroups.map((group) => (
+            <nav aria-label={`${group.label} links`} class="landing-footer-group">
+              <span class="landing-footer-label">{group.label}</span>
+              {group.links.map((item) =>
+                item.external ? (
+                  <a href={item.href} rel="noreferrer" target="_blank">
+                    {item.label}
+                  </a>
+                ) : (
+                  <a href={item.href}>{item.label}</a>
+                ),
+              )}
+            </nav>
+          ))
+        }
+      </div>
+      <nav aria-labelledby="landing-footer-family-label" class="landing-footer-family">
+        <span class="landing-footer-label" id="landing-footer-family-label">More from OpenCore</span>
+        <ul>
+          {
+            openCoreSites.map((site) => (
+              <li>
+                <a href={site.url}>
+                  <span>{site.name}</span> {site.description}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+      <div aria-hidden="true" class="landing-mountains">
+        <div class="landing-engraving"></div>
+      </div>
+    </footer>
+
+    <div aria-hidden="true" class="landing-hero-art">
+      <div class="landing-engraving"></div>
+    </div>
+  </div>
+  <Fragment slot="footer" />
+</PageLayout>

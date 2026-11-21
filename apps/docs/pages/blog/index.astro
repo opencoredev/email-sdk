@@ -1,0 +1,158 @@
+---
+// Blog index. Posts are the `type: blog` pages in content/blog (the committed
+// posts plus any fetched from Notra at build time into content/blog/(notra)).
+// Blume renders each post, adds BlogPosting JSON-LD, and builds
+// /blog/rss.xml; this page lists them newest first.
+import { getCollection } from "astro:content";
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import { getBlumeCollection } from "blume/runtime";
+
+const { config } = data;
+
+const pageTitle = "Email SDK Blog";
+
+const pageDescription =
+  "Guides for developers sending email from TypeScript: provider APIs, pricing, local testing, and switching providers without rewriting your send code.";
+
+// getBlumeCollection drops drafts and hidden pages, so a post is listed only
+// when Blume also publishes it.
+const routeByEntry = new Map(
+  getBlumeCollection(data, { locale: config.i18n?.defaultLocale }).map((route) => [route.entryId, route.path]),
+);
+
+const posts = (await getCollection("docs"))
+  .filter((entry) => entry.data.type === "blog")
+  .flatMap((entry) => {
+    const href = routeByEntry.get(entry.id);
+
+    if (href === undefined) return [];
+    const { date, description, title } = entry.data;
+
+    // A post without these would have no feed date and no summary.
+    if (date === undefined || description === undefined) {
+      throw new Error(`[blog] ${entry.id} needs a date and a description in its frontmatter.`);
+    }
+
+    return [{ date: new Date(date), description, href, title }];
+  })
+  .toSorted((a, b) => b.date.getTime() - a.date.getTime());
+
+const formatDate = (date: Date): string =>
+  date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  page={{ title: pageTitle, description: pageDescription, route: "/blog" }}
+>
+  <div class="blog-index">
+    <header class="intro">
+      <p class="eyebrow">Blog</p>
+      <h1>Email SDK Blog</h1>
+      <p class="lede">
+        Notes for developers sending email from TypeScript: provider APIs, pricing, local testing, and switching
+        providers without rewriting your send code. For the API itself, read the <a href="/docs">docs</a>.
+      </p>
+      <p class="feed"><a href="/blog/rss.xml">RSS feed</a></p>
+    </header>
+
+    <ol class="posts">
+      {
+        posts.map((post) => (
+          <li class="post">
+            <time datetime={post.date.toISOString().slice(0, 10)}>{formatDate(post.date)}</time>
+            <h2>
+              <a href={post.href}>{post.title}</a>
+            </h2>
+            <p>{post.description}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</PageLayout>
+
+<style>
+  .blog-index {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 4rem 1rem 6rem;
+    overflow-wrap: anywhere;
+  }
+  .eyebrow {
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  h1 {
+    margin: 0.75rem 0 1rem;
+    font-size: clamp(2.25rem, 5vw, 3rem);
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    max-width: 40rem;
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
+  .lede a,
+  .feed a {
+    color: var(--blume-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--blume-accent);
+    text-underline-offset: 3px;
+  }
+  .feed {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+  }
+  .posts {
+    margin: 3rem 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--blume-border);
+  }
+  .post {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--blume-border);
+  }
+  time {
+    color: var(--blume-muted-foreground);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.8125rem;
+  }
+  h2 {
+    margin: 0.35rem 0 0.4rem;
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  h2 a {
+    color: var(--blume-foreground);
+    text-decoration: none;
+  }
+  h2 a:hover {
+    color: var(--blume-accent);
+  }
+  .post p {
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    line-height: 1.65;
+  }
+</style>

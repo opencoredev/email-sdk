@@ -1,7 +1,7 @@
 name: Refresh blog posts from Notra
 
 # Triggers a Vercel rebuild, which re-fetches published posts from Notra and bakes
-# them into the static blog. apps/fumadocs build caching is off (apps/fumadocs/turbo.json)
+# them into the static blog. apps/docs build caching is off (apps/docs/turbo.json)
 # so each rebuild actually re-runs the fetch instead of serving a cached build.
 on:
   workflow_dispatch:

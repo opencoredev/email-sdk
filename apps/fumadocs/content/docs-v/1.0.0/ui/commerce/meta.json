@@ -1,5 +1,0 @@
-{
-  "title": "Commerce",
-  "icon": "ReceiptText",
-  "pages": ["receipt", "invoice-due", "refund-confirmed"]
-}

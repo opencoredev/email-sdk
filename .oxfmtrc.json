@@ -1,3 +1,9 @@
 {
-  "ignorePatterns": ["apps/fumadocs/src/routeTree.gen.ts"]
+  "ignorePatterns": [
+    "apps/docs/content/compare/**",
+    "apps/docs/public/**",
+    "apps/docs/.blume/**",
+    "apps/docs/dist/**",
+    "apps/docs/.vercel/**"
+  ]
 }

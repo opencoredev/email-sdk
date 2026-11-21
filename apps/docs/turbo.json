@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", ".vercel/output/**"],
+      "cache": false,
+      "passThroughEnv": ["NOTRA_API_KEY", "VERCEL_*"]
+    }
+  }
+}

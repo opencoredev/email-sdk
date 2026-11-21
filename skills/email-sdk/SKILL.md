@@ -17,7 +17,7 @@ Before changing code, inspect the most relevant current sources:
    - `README.md`
    - `packages/email-sdk/README.md`
    - `packages/email-sdk/package.json`
-   - `apps/fumadocs/content/docs/**/*.mdx`
+   - `apps/docs/content/docs/**/*.mdx`
    - `packages/email-sdk/src/index.ts`
    - the specific adapter file in `packages/email-sdk/src/<adapter>.ts`
    - `packages/email-sdk/src/types.ts`, `core.ts`, and `errors.ts` when message shape, routing, retries, hooks, or error handling matter.
@@ -99,9 +99,9 @@ export const email = createEmailClient({
 
 Inside this repo, the main public docs for this pattern are:
 
-- `apps/fumadocs/content/docs/guides/production-send-pipeline.mdx`
-- `apps/fumadocs/content/docs/concepts/fallbacks-and-retries.mdx`
-- `apps/fumadocs/content/docs/adapters/field-support.mdx`
+- `apps/docs/content/docs/guides/production-send-pipeline.mdx`
+- `apps/docs/content/docs/concepts/fallbacks-and-retries.mdx`
+- `apps/docs/content/docs/adapters/field-support.mdx`
 
 ## Validation
 
