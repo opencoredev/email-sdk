@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { brevo } from "./brevo.js";
 import { cloudflare } from "./cloudflare.js";
+import { graph } from "./graph.js";
 import { iterable } from "./iterable.js";
 import { loops } from "./loops.js";
 import { mailchimp } from "./mailchimp.js";
@@ -289,4 +290,53 @@ describe("adapters read credentials on every send", () => {
       ]);
     },
   );
+
+  test("graph reads rotated clientSecret on token refresh", async () => {
+    let secret = "secret-1";
+    const seenSecrets: string[] = [];
+    let mailCalls = 0;
+
+    const fetcher: typeof fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : String(input);
+
+        if (url.includes("/oauth2/v2.0/token")) {
+          const params = new URLSearchParams(String(init?.body ?? ""));
+          seenSecrets.push(params.get("client_secret") ?? "");
+
+          return new Response(
+            JSON.stringify({ access_token: `tok-${seenSecrets.length}`, expires_in: 3600 }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        mailCalls += 1;
+
+        if (mailCalls === 2) {
+          return new Response(JSON.stringify({ error: { message: "expired" } }), {
+            status: 401,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        return new Response(null, { status: 202 });
+      },
+      { preconnect: fetch.preconnect },
+    );
+
+    const adapter = graph({
+      tenantId: "tenant-1",
+      clientId: "client-1",
+      get clientSecret() {
+        return secret;
+      },
+      fetch: fetcher,
+    });
+
+    await adapter.send(message, context);
+    secret = "secret-2";
+    await adapter.send(message, context);
+
+    expect(seenSecrets).toEqual(["secret-1", "secret-2"]);
+  });
 });

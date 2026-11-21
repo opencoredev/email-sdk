@@ -201,9 +201,7 @@ export function createEmailClient<
       const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
       const unknownRecipients = notSent ? 0 : Math.max(0, recipients - accepted - rejected);
       void telemetry.capture("email adapter attempted", {
-        failure_kind: resolved
-          ? undefined
-          : classifyAttemptFailure(adapter.name, failure),
+        failure_kind: resolved ? undefined : classifyAttemptFailure(adapter.name, failure),
         http_status: resolved ? undefined : attemptStatus(adapter.name, failure),
         measurement_schema_version: 2,
         measurement_scope: "adapter_attempt",
@@ -256,7 +254,8 @@ export function createEmailClient<
 
     return {
       ...retry,
-      shouldRetry: shouldRetry && ((error, attempt) => callerOwned(() => shouldRetry(error, attempt))),
+      shouldRetry:
+        shouldRetry && ((error, attempt) => callerOwned(() => shouldRetry(error, attempt))),
       delay: delay && ((attempt, error) => callerOwned(() => delay(attempt, error))),
     };
   };
@@ -357,6 +356,7 @@ export function createEmailClient<
 
       // The lifecycle helpers return a native promise only when there is work to wait for.
       const prepared = preparing instanceof Promise ? await preparing : preparing;
+      attemptedAdapter = prepared.options?.adapter ?? defaultAdapter;
 
       throwIfAborted(prepared.options?.signal ?? sendOptions?.signal);
 
@@ -463,7 +463,9 @@ export function createEmailClient<
       manyOptions === undefined || Object.keys(shared).length === 0 ? undefined : shared;
 
     if (!Number.isInteger(concurrency) || concurrency < 1) {
-      throw new EmailValidationError("sendMany concurrency must be an integer greater than or equal to 1.");
+      throw new EmailValidationError(
+        "sendMany concurrency must be an integer greater than or equal to 1.",
+      );
     }
 
     const results: EmailSendSettledResult[] = Array.from({ length: items.length });
@@ -496,13 +498,21 @@ export function createEmailClient<
     // default concurrency of 1 this is the same ordered, one-at-a-time loop as before.
     let next = 0;
 
+    const itemMessage = (item: (typeof items)[number] | undefined): EmailMessage | undefined =>
+      item instanceof Object &&
+      !Array.isArray(item) &&
+      item.message instanceof Object &&
+      !Array.isArray(item.message)
+        ? item.message
+        : undefined;
+
     const worker = async () => {
       while (next < items.length) {
         const index = next;
         next += 1;
         const item = items[index];
 
-        if (item) {
+        if (item && itemMessage(item)) {
           await settle(index, item);
         } else {
           const error = new EmailValidationError("sendMany item is missing a message.");
@@ -530,14 +540,13 @@ export function createEmailClient<
       measurement_scope: "batch_summary",
       succeeded: items.length - failed,
       failed,
-      recipients: items.reduce(
-        (total, item) =>
-          total +
-          arrayify(item.message.to).length +
-          arrayify(item.message.cc).length +
-          arrayify(item.message.bcc).length,
-        0,
-      ),
+      recipients: items.reduce((total, item) => {
+        const msg = itemMessage(item);
+
+        if (!msg) return total;
+
+        return total + arrayify(msg.to).length + arrayify(msg.cc).length + arrayify(msg.bcc).length;
+      }, 0),
       adapter,
       success: failed === 0,
       duration_ms: Date.now() - startedAt,

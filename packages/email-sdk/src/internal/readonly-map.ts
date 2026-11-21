@@ -55,3 +55,5 @@ export class ReadonlyMapView<K, V> implements ReadonlyMap<K, V> {
     return "ReadonlyMap";
   }
 }
+
+Object.freeze(ReadonlyMapView.prototype);

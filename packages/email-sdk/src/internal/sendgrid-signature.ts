@@ -17,13 +17,22 @@ function derToRaw(der: Uint8Array, size: number): Uint8Array<ArrayBuffer> | unde
   if (seqLength & 0x80) {
     const lengthBytes = seqLength & 0x7f;
 
-    if (lengthBytes === 0 || lengthBytes > 2 || offset + lengthBytes > der.length) return undefined;
+    if (
+      lengthBytes === 0 ||
+      lengthBytes > 2 ||
+      offset + lengthBytes > der.length ||
+      der[offset] === 0
+    ) {
+      return undefined;
+    }
 
     seqLength = 0;
 
     for (let index = 0; index < lengthBytes; index += 1) {
       seqLength = (seqLength << 8) | der[offset + index]!;
     }
+
+    if (seqLength < 128) return undefined;
 
     offset += lengthBytes;
   }
@@ -41,9 +50,15 @@ function derToRaw(der: Uint8Array, size: number): Uint8Array<ArrayBuffer> | unde
 
     let value = der.subarray(offset + 2, offset + 2 + length);
 
-    while (value.length > size && value[0] === 0) value = value.subarray(1);
+    // Reject negative DER INTEGERs and non-minimal leading 0x00 padding.
+    if ((value[0]! & 0x80) !== 0) return undefined;
 
-    if (value.length > size) return undefined;
+    if (value.length > 1 && value[0] === 0) {
+      if ((value[1]! & 0x80) === 0) return undefined;
+      value = value.subarray(1);
+    }
+
+    if (value.length === 0 || value.length > size) return undefined;
 
     raw.set(value, index * size + size - value.length);
     offset += 2 + length;

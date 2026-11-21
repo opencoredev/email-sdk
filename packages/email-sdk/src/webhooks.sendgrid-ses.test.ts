@@ -102,6 +102,48 @@ describe("verifySendGridWebhook", () => {
         headers: { ...valid.headers, "x-twilio-email-event-webhook-signature": withTrailing },
       }),
     ).toBe(false);
+
+    // Non-canonical DER encodings must also be rejected.
+    const bodyBytes = derBytes.subarray(2);
+
+    const longFormShortLen = Buffer.concat([
+      Buffer.from([0x30, 0x81, bodyBytes.length]),
+      bodyBytes,
+    ]).toString("base64");
+
+    const leadingZeroLen = Buffer.concat([
+      Buffer.from([0x30, 0x82, 0x00, bodyBytes.length]),
+      bodyBytes,
+    ]).toString("base64");
+
+    const rLen = bodyBytes[1]!;
+    const rVal = bodyBytes.subarray(2, 2 + rLen);
+    const restAfterR = bodyBytes.subarray(2 + rLen);
+
+    const paddedR = Buffer.concat([
+      Buffer.from([0x00, 0x00]),
+      rVal.subarray(rVal[0] === 0 ? 1 : 0),
+    ]);
+
+    const redundantZeroBody = Buffer.concat([
+      Buffer.from([0x02, paddedR.length]),
+      paddedR,
+      restAfterR,
+    ]);
+
+    const redundantZeroDer = Buffer.concat([
+      Buffer.from([0x30, redundantZeroBody.length]),
+      redundantZeroBody,
+    ]).toString("base64");
+
+    for (const bad of [longFormShortLen, leadingZeroLen, redundantZeroDer]) {
+      expect(
+        await verifySendGridWebhook({
+          ...valid,
+          headers: { ...valid.headers, "x-twilio-email-event-webhook-signature": bad },
+        }),
+      ).toBe(false);
+    }
   });
 
   test("accepts Headers instances", async () => {

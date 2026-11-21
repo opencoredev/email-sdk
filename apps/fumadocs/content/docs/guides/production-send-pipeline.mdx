@@ -38,6 +38,7 @@ Use the same public no-network boundary as `send` before committing a job to you
 
 ```ts title="src/jobs/enqueue-email.ts"
 await email.validate(message, {
+  idempotencyKey,
   fallback: { adapters: ["backup"] },
 });
 

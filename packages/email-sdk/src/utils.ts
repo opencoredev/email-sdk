@@ -123,6 +123,10 @@ export function headersToArray(headers: HeaderInput): EmailHeader[] | undefined 
 }
 
 export function assertMessage(message: EmailMessage) {
+  if (!(message instanceof Object) || Array.isArray(message)) {
+    throw new EmailValidationError("Email message must be an object.");
+  }
+
   if (!message.from) {
     throw new EmailValidationError("Email message requires a from address.");
   }
@@ -170,10 +174,7 @@ const RFC_3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[
 // Past sendAt values are intentionally allowed: providers either send immediately or reject
 // with their own scheduling-window errors, and clock skew makes a client-side cutoff unreliable.
 export function toSendAtDate(sendAt: NonNullable<EmailMessage["sendAt"]>): Date {
-  if (
-    isStringMember(sendAt) &&
-    !RFC_3339_TIMESTAMP.test(sendAt)
-  ) {
+  if (isStringMember(sendAt) && !RFC_3339_TIMESTAMP.test(sendAt)) {
     throw new EmailValidationError(
       `Email message sendAt must be an RFC 3339 timestamp with Z or an explicit offset: "${sendAt}".`,
       { sendAt },
@@ -302,10 +303,7 @@ function isRetryableRuntimeError(error: Error) {
 
   const code = causeString(error, "code");
 
-  if (
-    code !== undefined &&
-    /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE)$/i.test(code)
-  ) {
+  if (code !== undefined && /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE)$/i.test(code)) {
     return true;
   }
 
@@ -527,7 +525,14 @@ export const SUPPORTED_MESSAGE_FIELDS = {
   },
 } satisfies Record<string, MessageFieldSupport>;
 
-const NATIVE_IDEMPOTENCY = new Set(["resend", "jetemail", "lettermint", "primitive", "sendheron", "helo"]);
+const NATIVE_IDEMPOTENCY = new Set([
+  "resend",
+  "jetemail",
+  "lettermint",
+  "primitive",
+  "sendheron",
+  "helo",
+]);
 
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
 

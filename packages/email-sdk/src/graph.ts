@@ -1,5 +1,11 @@
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
-import { isJsonNumber, isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
+import {
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  jsonField,
+  jsonString,
+} from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersArray, emailParts } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
@@ -61,7 +67,10 @@ type TokenProvider = {
 
 const graphRules: MessageRules = (message) => {
   const headers = headerList(message.headers);
-  const invalidHeaders = headers.flatMap((header) => (/^x-/i.test(header.name) ? [] : [header.name]));
+
+  const invalidHeaders = headers.flatMap((header) =>
+    /^x-/i.test(header.name) ? [] : [header.name],
+  );
 
   if (invalidHeaders.length > 0) {
     throw new EmailValidationError(
@@ -204,13 +213,6 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
   const tokenUrl =
     options.tokenUrl ?? `https://login.microsoftonline.com/${options.tenantId}/oauth2/v2.0/token`;
 
-  const body = new URLSearchParams({
-    client_id: options.clientId,
-    client_secret: options.clientSecret,
-    scope: options.scope ?? "https://graph.microsoft.com/.default",
-    grant_type: "client_credentials",
-  });
-
   let cached: { accessToken: string; refreshAt: number } | undefined;
   let refreshing: Promise<NonNullable<typeof cached>> | undefined;
   const tokenTimeoutMs = options.tokenTimeoutMs ?? DEFAULT_TOKEN_TIMEOUT_MS;
@@ -230,6 +232,13 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
       if (cached && cached.refreshAt > Date.now()) {
         return cached.accessToken;
       }
+
+      const body = new URLSearchParams({
+        client_id: options.clientId,
+        client_secret: options.clientSecret,
+        scope: options.scope ?? "https://graph.microsoft.com/.default",
+        grant_type: "client_credentials",
+      });
 
       refreshing ??= requestAccessToken(fetcher, tokenUrl, body, tokenTimeoutMs)
         .then((token) => (cached = token))
@@ -302,7 +311,10 @@ async function requestAccessToken(
 
   return {
     accessToken,
-    refreshAt: Date.now() + tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000 - TOKEN_REFRESH_SKEW_MS,
+    refreshAt:
+      Date.now() +
+      tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000 -
+      TOKEN_REFRESH_SKEW_MS,
   };
 }
 

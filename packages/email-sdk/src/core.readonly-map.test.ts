@@ -9,6 +9,7 @@ test("ReadonlyMapView.forEach preserves the standard thisArg contract and freeze
   let observedTag: string | undefined;
 
   expect(Object.isFrozen(client.adapters)).toBe(true);
+  expect(Object.isFrozen(Object.getPrototypeOf(client.adapters))).toBe(true);
 
   client.adapters.forEach(function (this: typeof marker) {
     observedTag = this.tag;
@@ -128,6 +129,55 @@ test("send() aborts after beforeSend before validation and reports rerouted adap
 
     const failedEvent = capture.events.find((item) => item.event === "email sent");
     expect(failedEvent?.properties).toMatchObject({ adapter: "postmark", success: false });
+
+    // Rerouting to an unknown adapter in beforeSend reports the rerouted adapter in telemetry.
+    capture.events.length = 0;
+
+    const badRoute = createEmailClient({
+      adapters: [adapter("resend", () => ({ adapter: "resend", id: "1" }))],
+      plugins: [
+        {
+          id: "reroute-missing",
+          middleware: [
+            {
+              beforeSend({ message, options }) {
+                return { message, options: { ...options, adapter: "postmark" } };
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      badRoute.send({ from: "a@example.com", to: "b@example.com", subject: "s", text: "t" }),
+    ).rejects.toThrow();
+    expect(capture.events.find((item) => item.event === "email sent")?.properties).toMatchObject({
+      adapter: "postmark",
+      success: false,
+    });
+
+    // sendMany with sparse/malformed items must not throw TypeError even when telemetry is enabled.
+    capture.events.length = 0;
+
+    const batchClient = createEmailClient({
+      adapters: [adapter("resend", () => ({ adapter: "resend", id: "ok" }))],
+    });
+
+    const malformed = JSON.parse(
+      '[null,{},{"message":null},{"message":{"from":"a@example.com","to":"b@example.com","subject":"s","text":"t"}}]',
+    );
+
+    const batchResults = await batchClient.sendMany(malformed);
+
+    expect(batchResults).toHaveLength(4);
+    expect(batchResults[0]?.ok).toBe(false);
+    expect(batchResults[1]?.ok).toBe(false);
+    expect(batchResults[2]?.ok).toBe(false);
+    expect(batchResults[3]?.ok).toBe(true);
+    expect(
+      capture.events.find((item) => item.event === "email batch sent")?.properties,
+    ).toMatchObject({ message_count: 4, succeeded: 1, failed: 3, recipients: 1 });
   } finally {
     resetTelemetry();
   }
