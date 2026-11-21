@@ -696,7 +696,7 @@ The following are outside v1 and must not enter implementation without a contrac
 - Exactly-once delivery claims or a durable queue in the core SDK
 - A redesign of the Convex component beyond v1 compatibility and documentation
 - Browser support or client-side provider credentials
-- Concurrent `sendMany` execution or a general workflow engine
+- Concurrent `sendMany` execution or a general workflow engine (amended: opt-in bounded concurrency, section 13)
 - Automatic field dropping to make incompatible adapters appear portable
 - Core client pooling, `close`, async disposal, or async construction
 - A separate Chat SDK package or a core dependency on Chat SDK
@@ -729,3 +729,4 @@ Each entry names the change, its migration consequence, and where it is enforced
 | 2.0.0, unreleased | Delivery webhooks (`/webhooks`, since 2.0.0) and inbound email (`/inbound`, in the next minor after 3.0.1) ship as separate subpaths, never from the root entry. | No change for send-only users; `/inbound` uses only Web APIs. | Package exports; `scripts/check-published-exports.ts` keeps docs from showing unpublished subpaths without a note |
 | 2026-11-21 | `idempotencyKey` on a route with an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` unless the send passes `idempotency: "best-effort"`. | Sends that relied on the key being ignored must opt into `"best-effort"` or drop the key. | `validateCapabilities` in `src/core/routing.ts`; `src/core.idempotency.test.ts` |
 | 2026-11-21 | HTTP adapter entry points, including `/cloudflare`, bundle for Cloudflare Workers without `nodejs_compat`. Only attachments given by `path` need `node:fs`. The root entry still needs Node or Bun because of telemetry. | No change on Node or Bun. | `src/cloudflare.workers-bundle.test.ts` |
+| 2026-11-21 | `sendMany` accepts `concurrency` (default `1`). Above 1 it runs that many sends at once; results stay in input order and keep the settled shape. | Default behavior is unchanged. Concurrency is opt-in and bounded; there is still no queue or workflow engine. | `src/core.ts`; `src/core.batch.test.ts` |

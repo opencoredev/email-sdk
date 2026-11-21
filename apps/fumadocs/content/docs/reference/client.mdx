@@ -114,7 +114,7 @@ type EmailSendSettledResult<Name extends string> =
   | { ok: false; index: number; error: EmailSdkError };
 ```
 
-Items run sequentially in input order. Item options shallowly override method options. The method always returns one settled result per item.
+Items run one at a time in input order unless the method options set `concurrency` (a positive integer, default `1`), which caps how many items send at once. Results are always in input order. `concurrency` applies to the batch only and is not passed to each send. Item options shallowly override method options. The method always returns one settled result per item.
 
 ## `sendPersonalized(input, options?)`
 

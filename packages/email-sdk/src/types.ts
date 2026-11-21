@@ -185,6 +185,16 @@ export type EmailSendOptions<Name extends string = string> = {
   metadata?: EmailSendMetadata;
 };
 
+/** Options for `sendMany`: send options shared by every item, plus batch-only settings. */
+export type EmailSendManyOptions<Name extends string = string> = EmailSendOptions<Name> & {
+  /**
+   * How many items send at once. Defaults to `1`, which sends one after another in input order.
+   * Results always come back in input order, whatever the concurrency. Must be a positive
+   * integer; keep it within your provider's rate limit, since each item is its own request.
+   */
+  concurrency?: number;
+};
+
 export type EmailValidationWarning = {
   code: string;
   message: string;
@@ -318,7 +328,7 @@ export type EmailClient<
   ): Promise<EmailSendResult<RouteName<Routes>>>;
   sendMany(
     items: readonly EmailSendItem<RouteName<Routes>>[],
-    options?: EmailSendOptions<RouteName<Routes>>,
+    options?: EmailSendManyOptions<RouteName<Routes>>,
   ): Promise<readonly EmailSendSettledResult<RouteName<Routes>>[]>;
   sendPersonalized(
     input: EmailPersonalizedInput,

@@ -8,7 +8,13 @@ Email SDK separates independent messages from one message personalized across re
 
 ## Independent sends
 
-Use `sendMany` when every item is a complete message with its own outcome. Execution is sequential and preserves input order.
+Use `sendMany` when every item is a complete message with its own outcome. By default items send one at a time in input order. Pass `concurrency` to send several at once; results still come back in input order:
+
+```ts title="src/send-batch.ts"
+const results = await email.sendMany(items, { concurrency: 5 });
+```
+
+Each item is its own provider request, so keep `concurrency` within your provider's rate limit.
 
 ```ts title="src/send-notifications.ts"
 const results = await email.sendMany([

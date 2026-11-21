@@ -71,6 +71,7 @@ import type {
   EmailPlugin,
   EmailPluginClientExtensions,
   EmailSendItem,
+  EmailSendManyOptions,
   EmailSendMiddleware,
   EmailSendOptions,
   EmailSendResult,
@@ -447,20 +448,30 @@ export function createEmailClient<
 
   const sendMany = async (
     items: readonly EmailSendItem[],
-    sendOptions?: EmailSendOptions,
+    manyOptions?: EmailSendManyOptions,
   ): Promise<readonly EmailSendSettledResult[]> => {
     const startedAt = Date.now();
-    const results: EmailSendSettledResult[] = [];
+    const { concurrency = 1, ...shared } = manyOptions ?? {};
+
+    // Keep "no shared options" as undefined, so items without options send exactly as before.
+    const sendOptions: EmailSendOptions | undefined =
+      manyOptions === undefined || Object.keys(shared).length === 0 ? undefined : shared;
+
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new EmailValidationError("sendMany concurrency must be an integer greater than or equal to 1.");
+    }
+
+    const results: EmailSendSettledResult[] = Array.from({ length: items.length });
     const usedAdapters = new Set<string>();
     let failed = 0;
     let firstErrorCode: string | undefined;
 
-    for (const [index, item] of items.entries()) {
+    const settle = async (index: number, item: EmailSendItem) => {
       try {
         const result = await send(item.message, mergeSendOptions(sendOptions, item.options));
 
         if (telemetry) usedAdapters.add(normalizeAdapterName(result.adapter));
-        results.push({ ok: true, index, result });
+        results[index] = { ok: true, index, result };
       } catch (error) {
         const normalized = normalizeOwnedError(error);
 
@@ -470,10 +481,27 @@ export function createEmailClient<
         }
 
         failed += 1;
+        // With concurrency the first failure to settle may not be the lowest index.
         firstErrorCode ??= normalized.code;
-        results.push({ ok: false, index, error: normalized });
+        results[index] = { ok: false, index, error: normalized };
       }
-    }
+    };
+
+    // A bounded pool: each worker takes the next unsent index until none are left. With the
+    // default concurrency of 1 this is the same ordered, one-at-a-time loop as before.
+    let next = 0;
+
+    const worker = async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        const item = items[index];
+
+        if (item) await settle(index, item);
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
 
     if (!telemetry) return results;
 
@@ -665,7 +693,7 @@ export function createEmailClient<
         send(message: EmailMessage, sendOptions?: EmailSendOptions) {
           return send(message, routeOptions(sendOptions));
         },
-        sendMany(items: readonly EmailSendItem[], sendOptions?: EmailSendOptions) {
+        sendMany(items: readonly EmailSendItem[], sendOptions?: EmailSendManyOptions) {
           return sendMany(items, routeOptions(sendOptions));
         },
         sendPersonalized(input: EmailPersonalizedInput, sendOptions?: EmailSendOptions) {
