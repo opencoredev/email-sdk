@@ -58,7 +58,7 @@ For an app that sends receipts, resets and invites, a few plan limits affect you
 - **Activity retention.** Free and Hobby keep 24 hours of activity data. If a user writes in on Monday about a Friday email that never arrived, the record is gone. Starter keeps 7 days and Professional 30. On a smaller plan, store MailerSend's webhook events yourself.
 - **Custom headers need Professional.** MailerSend accepts custom email headers only on Professional and Enterprise. Code that sets a `List-Unsubscribe` or tracking header works during the Professional trial and stops working after you move to Starter or Hobby.
 - **The daily API cap.** Free allows 100 API requests a day and Hobby 1,000. A signup spike or a backfill script can hit that before the monthly email quota. Starter raises it to 100,000.
-- **Approval and Sandbox mode.** A new account that skips the trial lands in Sandbox mode: 100 emails a month, sent to at most 2 recipients until MailerSend approves the account. The Free plan's 500 a month applies once you're approved ([Sandbox mode and the Professional trial](https://www.mailersend.com/help/sandbox-mode-and-the-professional-trial), checked Nov 2026). Verify your sending domain early. The [email DNS checker](/tools/email-dns-checker) shows whether its SPF, DKIM and DMARC records resolve.
+- **Approval and Sandbox mode.** A new account that skips the trial lands in Sandbox mode: 100 emails a month, sent to at most 2 recipients until MailerSend approves the account. Approval lifts the recipient limit but keeps the 100 a month ([Sandbox mode and the Professional trial](https://www.mailersend.com/help/sandbox-mode-and-the-professional-trial), checked Nov 2026). To get the Free plan's 500 a month, subscribe to Free on the Plan and billing page with your organization's address and a credit card. Verify your sending domain early. The [email DNS checker](/tools/email-dns-checker) shows whether its SPF, DKIM and DMARC records resolve.
 - **The 14-day trial isn't Professional at full size.** It has Professional's features, but only 500 emails a month, 100 API requests a day and no overage. When it ends without a subscription, the account moves to Free and any domains over the limit are paused.
 
 ## MailerSend vs Resend, SendGrid, Mailgun and Amazon SES on price
@@ -71,7 +71,7 @@ Here is the same monthly volume on each provider's own pricing page, all checked
 - **500,000 a month:** MailerSend Starter is $325, Resend $350, SendGrid $386.95 and Mailgun $400. SES is $51.92.
 - **1,000,000 a month:** MailerSend Starter is $600, Resend $650, Mailgun $700 and SendGrid $733. SES is $103.84.
 
-MailerSend is the cheapest of these API providers at 10,000 and from 500,000 up, and costs 75% to 95% more than SendGrid and Resend at 50,000 and 100,000. Its free plan is the smallest: 500 a month, where Resend Free sends 3,000 and Mailgun Free 100 a day. SES is cheapest at every volume and leaves bounce handling, event delivery and logging to your own AWS setup. [Email API pricing compared](/blog/email-api-pricing) puts SES, Resend, SendGrid, Mailgun and Postmark side by side, and [Resend vs MailerSend](/compare/resend-vs-mailersend) compares the fields each API accepts.
+Among MailerSend, Resend, SendGrid and Mailgun, MailerSend is cheapest at 10,000, 500,000 and 1 million, and costs 75% to 95% more than SendGrid and Resend at 50,000 and 100,000. Its free plan is the smallest: 500 a month, where Resend Free sends 3,000 and Mailgun Free 100 a day. SES is cheapest at every volume and leaves bounce handling, event delivery and logging to your own AWS setup. [Email API pricing compared](/blog/email-api-pricing) puts SES, Resend, SendGrid, Mailgun and Postmark side by side, and [Resend vs MailerSend](/compare/resend-vs-mailersend) compares the fields each API accepts.
 
 ## Send through MailerSend from Node.js
 
@@ -138,17 +138,17 @@ export const email = createEmailClient({
 });
 ```
 
-MailerSend accepts only one reply-to address and has no `metadata` field, so a message with either fails validation before any provider is called; use `tags` instead of metadata. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [MailerSend adapter reference](/docs/adapters/mailersend) lists every option.
+MailerSend accepts only one reply-to address and has no `metadata` field, so a message containing `metadata` or more than one reply-to address fails validation before any provider is called; use `tags` instead of metadata. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [MailerSend adapter reference](/docs/adapters/mailersend) lists every option.
 
 The code on this page was typechecked against `@opencoredev/email-sdk` 3.1.0, and the test ran with `bun test`. No real email was sent.
 
 ## FAQ
 
-**Does MailerSend have a free plan?** Yes. Free sends 500 emails a month, at most 100 a day, with 1 sending domain, 1 API token, 100 API requests a day and 24 hours of activity data. MailerSend approves the account first; before that, Sandbox mode sends 100 a month to at most 2 recipients.
+**Does MailerSend have a free plan?** Yes. Free sends 500 emails a month, at most 100 a day, with 1 sending domain, 1 API token, 100 API requests a day and 24 hours of activity data. You subscribe to it from the Plan and billing page with an address and a credit card. Without that, an account stays in Sandbox mode: 100 emails a month, to at most 2 recipients until MailerSend approves it.
 
 **How much does MailerSend cost per 1,000 emails?** Hobby includes 5,000 emails for $7, then extra emails cost $1.50 per 1,000. Starter's overage starts at $1.30 and falls to $1.00 on the 1 million plan. Professional's falls from $1.30 to $0.50.
 
-**Which MailerSend plan should I pick?** Hobby up to about 23,700 emails a month, then the Starter size that covers your sending. Pick Starter sooner if you need more than 24 hours of activity data or a second sending domain, and Professional if you need custom headers, 30 days of activity data or request logs.
+**Which MailerSend plan should I pick?** Hobby up to about 23,700 emails a month, then Starter. Move to a bigger Starter size only past the break-even points above (about 75,400 emails for 100K), because a smaller size plus overage is cheaper until then. Pick Starter sooner if you need more than 24 hours of activity data or a second sending domain, and Professional if you need custom headers, 30 days of activity data or request logs.
 
 **Is MailerSend cheaper than Resend?** At 10,000, 500,000 and 1 million emails a month, yes. At 50,000 and 100,000, Resend Pro ($20 and $35) costs less than MailerSend Starter ($35 and $68).
 
