@@ -2,12 +2,24 @@ import type { BlogPost } from "./blog-types";
 
 export const localBlogPosts: readonly BlogPost[] = [
   {
+    slug: "mailersend-pricing",
+    title: "MailerSend Pricing in 2026: Plans, Overage and Free Plan",
+    description:
+      "MailerSend pricing, checked November 2026: Free, Hobby, Starter and Professional plans, overage per 1,000, the cheapest plan by volume, and how it compares.",
+    publishedAt: "2026-11-22",
+    updatedAt: "2026-11-22",
+    readTime: "8 min read",
+    image: "/og/blog/mailersend-pricing.svg",
+    imageAlt: "MailerSend pricing card: Hobby, Starter and Professional plans with overage per 1,000 emails",
+    tags: ["MailerSend", "Pricing", "Transactional email"],
+  },
+  {
     slug: "email-api-pricing",
     title: "Email API Pricing Compared: Cheapest Options in 2026",
     description:
       "Email API pricing compared, checked November 2026: Amazon SES, Resend, SendGrid, Mailgun and Postmark from 3,000 to 1 million emails a month, plus free tiers.",
     publishedAt: "2026-11-17",
-    updatedAt: "2026-11-17",
+    updatedAt: "2026-11-22",
     readTime: "8 min read",
     image: "/og/blog/email-api-pricing.svg",
     imageAlt: "Email API pricing card: monthly cost of SES, Resend, SendGrid, Mailgun and Postmark by volume",
@@ -31,7 +43,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Mailgun pricing, checked November 2026: Free, Basic, Foundation and Scale plans, overage per 1,000, the cheapest plan by volume, and Mailgun vs Resend and SES.",
     publishedAt: "2026-11-15",
-    updatedAt: "2026-11-17",
+    updatedAt: "2026-11-22",
     readTime: "7 min read",
     image: "/og/blog/mailgun-pricing.svg",
     imageAlt: "Mailgun pricing card: Basic, Foundation and Scale plans with overage per 1,000 emails",
