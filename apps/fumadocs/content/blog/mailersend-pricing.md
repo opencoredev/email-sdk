@@ -49,7 +49,7 @@ This table applies the monthly prices and overage rates above, with no add-ons o
 | 500,000 | Starter 500K | $325 |
 | 1,000,000 | Starter 1M | $600 |
 
-Hobby overtakes Starter at about 23,700 emails a month: $7 plus 18.7 thousand extra emails at $1.50 comes to $35. Above that, Starter 50K is cheaper and brings 7 days of activity data. Each Starter size then beats the size below it plus overage: 100K wins above about 75,400 emails (50K plus $1.30 per extra 1,000 passes $68), 250K above about 172,700, 500K above about 397,700 (at $1.10 overage) and 1M above 750,000. Below 2 million emails a month, Professional always costs more than Starter. You pay for its 30-day activity data, request logs, custom headers and higher limits.
+Free covers you up to 500 emails a month and 100 a day. Starter 50K becomes cheaper than Hobby at about 23,700 emails a month: $7 plus 18.7 thousand extra emails at $1.50 comes to $35. Above that, Starter 50K is cheaper and brings 7 days of activity data. Each Starter size then beats the size below it plus overage: 100K wins above about 75,400 emails (50K plus $1.30 per extra 1,000 passes $68), 250K above about 172,700, 500K above about 397,700 (at $1.10 overage) and 1M above 750,000. Below 2 million emails a month, Professional always costs more than Starter. You pay for its 30-day activity data, request logs, custom headers and higher limits.
 
 ## The limits that matter more than price
 
@@ -138,7 +138,7 @@ export const email = createEmailClient({
 });
 ```
 
-MailerSend accepts only one reply-to address and has no `metadata` field, so a message containing `metadata` or more than one reply-to address fails validation before any provider is called; use `tags` instead of metadata. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [MailerSend adapter reference](/docs/adapters/mailersend) lists every option.
+MailerSend accepts only one reply-to address and has no `metadata` field, so a message containing `metadata` or more than one reply-to address fails validation before any provider is called; use `tags` instead of metadata. Verify your sending domain with Resend as well before you rely on the fallback, because Resend rejects mail from a domain it hasn't verified. [Retries and fallback](/docs/concepts/fallbacks-and-retries) explains the trade-off, and the [MailerSend adapter reference](/docs/adapters/mailersend) lists every option.
 
 The code on this page was typechecked against `@opencoredev/email-sdk` 3.1.0, and the test ran with `bun test`. No real email was sent.
 
@@ -148,7 +148,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.1.0, an
 
 **How much does MailerSend cost per 1,000 emails?** Hobby includes 5,000 emails for $7, then extra emails cost $1.50 per 1,000. Starter's overage starts at $1.30 and falls to $1.00 on the 1 million plan. Professional's falls from $1.30 to $0.50.
 
-**Which MailerSend plan should I pick?** Hobby up to about 23,700 emails a month, then Starter. Move to a bigger Starter size only past the break-even points above (about 75,400 emails for 100K), because a smaller size plus overage is cheaper until then. Pick Starter sooner if you need more than 24 hours of activity data or a second sending domain, and Professional if you need custom headers, 30 days of activity data or request logs.
+**Which MailerSend plan should I pick?** Free if you stay under 500 emails a month and 100 a day, Hobby up to about 23,700 a month, then Starter. Move to a bigger Starter size only past the break-even points above (about 75,400 emails for 100K), because a smaller size plus overage is cheaper until then. Pick Starter sooner if you need more than 24 hours of activity data or a second sending domain, and Professional if you need custom headers, 30 days of activity data or request logs.
 
 **Is MailerSend cheaper than Resend?** At 10,000, 500,000 and 1 million emails a month, yes. At 50,000 and 100,000, Resend Pro ($20 and $35) costs less than MailerSend Starter ($35 and $68).
 
