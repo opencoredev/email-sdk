@@ -153,6 +153,7 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 
 ## Related
 
+- [MailerSend pricing](/blog/mailersend-pricing): Free, Hobby, Starter and Professional plans, and the cheapest MailerSend plan at each volume.
 - [Amazon SES pricing](/blog/amazon-ses-pricing): Essentials, Pro and à la carte rates, and what grows an SES bill.
 - [Resend pricing](/blog/resend-pricing): every Resend tier, the free plan's daily cap and overage.
 - [SendGrid pricing](/blog/sendgrid-pricing): the trial, Essentials and Pro plans, and break-even points.

@@ -4,6 +4,7 @@ import emailApiPricingMarkdown from "../../content/blog/email-api-pricing.md?raw
 import articleMarkdown from "../../content/blog/email-sdk-v1-safer-typescript-transactional-email.md?raw";
 import mailgunAlternativesMarkdown from "../../content/blog/mailgun-alternatives.md?raw";
 import mailgunPricingMarkdown from "../../content/blog/mailgun-pricing.md?raw";
+import mailersendPricingMarkdown from "../../content/blog/mailersend-pricing.md?raw";
 import mailgunApiMarkdown from "../../content/blog/mailgun-api-nodejs-typescript.md?raw";
 import mailpitMailhogMarkdown from "../../content/blog/mailpit-mailhog-nodejs.md?raw";
 import nextjsServerActionMarkdown from "../../content/blog/nextjs-server-action-send-email.md?raw";
@@ -37,6 +38,7 @@ const localBlogMarkdown = new Map([
   ["nextjs-server-action-send-email", nextjsServerActionMarkdown],
   ["amazon-ses-pricing", amazonSesPricingMarkdown],
   ["mailgun-pricing", mailgunPricingMarkdown],
+  ["mailersend-pricing", mailersendPricingMarkdown],
   ["sendgrid-pricing", sendgridPricingMarkdown],
   ["email-api-pricing", emailApiPricingMarkdown],
 ]);

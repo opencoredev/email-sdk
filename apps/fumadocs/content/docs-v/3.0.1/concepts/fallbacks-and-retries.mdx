@@ -1,0 +1,80 @@
+---
+title: Retries and fallback
+sidebarTitle: Retries & fallback
+description: Retry one provider, then decide when it is safe to try another.
+---
+
+Retries stay on the current adapter. Fallback starts only after that adapter reaches a terminal failure.
+
+## Configure a route
+
+`maxAttempts` counts total calls, so `1` means one call and no retry.
+
+```ts title="src/email.ts"
+const email = createEmailClient({
+  adapters: [primary, backup],
+  defaultAdapter: "primary",
+  retry: { maxAttempts: 3 },
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "stop",
+  },
+});
+```
+
+The default retry policy makes one attempt. The default delay uses capped exponential backoff. Override `delay` or `shouldRetry` when your application has a specific policy.
+
+## Delivery certainty
+
+`EmailAdapterError.delivery` is either `not_sent` or `unknown`.
+
+| Delivery value | Meaning | Default fallback behavior |
+| --- | --- | --- |
+| `not_sent` | The adapter can prove the provider did not accept the message. | Continue to the next configured adapter. |
+| `unknown` | Dispatch may have started, so delivery cannot be ruled out. | Stop to avoid an automatic duplicate. |
+
+Network timeouts and failures after dispatch begins are conservatively classified as `unknown` unless the adapter can prove otherwise.
+
+Opt into continuation only when the duplicate-delivery risk is acceptable.
+
+```ts title="src/send-critical.ts"
+await email.send(message, {
+  fallback: {
+    adapters: ["backup"],
+    onUnknownDelivery: "continue",
+  },
+});
+```
+
+The SDK never claims exactly-once delivery across adapters. Use idempotency where the adapter supports it, and keep durable workflow state in your application.
+
+## Override one send
+
+Per-send policy replaces the client fallback object and retry object.
+
+```ts title="src/send.ts"
+await email.send(message, {
+  adapter: "primary",
+  retry: { maxAttempts: 1 },
+  fallback: { adapters: [] },
+});
+```
+
+## Abort the whole route
+
+An `AbortSignal` stops active work or backoff and prevents every later retry and fallback.
+
+```ts title="src/send.ts"
+const controller = new AbortController();
+
+const pending = email.send(message, { signal: controller.signal });
+controller.abort();
+await pending; // throws EmailAbortError
+```
+
+## Route exhaustion
+
+When no route succeeds, the client throws `EmailRouteError`. Its `failures` array preserves adapter order and contains typed `EmailAdapterError` values.
+
+<Card title="Error reference" href="/docs/reference/errors" description="Match on closed error codes and typed fields." />
+<Card title="Production pipeline" href="/docs/guides/production-send-pipeline" description="Combine routing with idempotency, queues, and observability." />

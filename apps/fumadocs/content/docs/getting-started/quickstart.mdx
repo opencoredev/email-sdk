@@ -3,6 +3,10 @@ title: Quickstart
 description: "Send your first email from TypeScript or Node.js with Email SDK: set a Resend API key, create a client, send, and check messages without sending."
 ---
 
+Install the package:
+
+<PackageInstallTabs />
+
 Set a server-only Resend key:
 
 ```bash title=".env.local"
@@ -27,6 +31,18 @@ const result = await email.send({
 });
 
 console.log(result.adapter, result.id);
+```
+
+Replace `from` with an address on a domain you verified in Resend, and `to` with your own inbox. Then run it. Bun loads `.env.local` on its own:
+
+```bash
+bun src/send-welcome.ts
+```
+
+On Node.js 20.6 or later, load the file with `--env-file`, for example through `tsx`. The sample uses top-level `await`, so the project needs `"type": "module"` in `package.json`:
+
+```bash
+npx tsx --env-file=.env.local src/send-welcome.ts
 ```
 
 That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.

@@ -410,14 +410,15 @@ export function assertMessage(message: EmailMessage) {
       }
     }
 
-    if (message.attachments !== undefined) {
+    // null stays an empty list, as it always was; only other non-array values are rejected.
+    if (message.attachments !== undefined && message.attachments !== null) {
       if (!Array.isArray(message.attachments)) {
         throw new EmailValidationError("Email message attachments must be an array.");
       }
 
-      for (const attachment of message.attachments) {
+      for (const [index, attachment] of message.attachments.entries()) {
         if (!isNonArrayObject(attachment)) {
-          throw new EmailValidationError("Each email attachment must be an object.");
+          throw new EmailValidationError(`Email message attachments[${index}] must be an object.`);
         }
 
         if (!isStringMember(attachment.filename) || attachment.filename.length === 0) {

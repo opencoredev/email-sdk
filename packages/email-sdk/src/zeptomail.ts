@@ -1,4 +1,6 @@
+import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
+import { isString } from "./internal/decode.js";
 import { base64Attachments, emailParts } from "./payloads.js";
 import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
@@ -12,15 +14,14 @@ export type ZeptoMailAdapterOptions = {
 export function zeptomail(
   options: ZeptoMailAdapterOptions,
 ): EmailAdapter<"zeptomail", { baseUrl: string }> {
+  // Fail at construction for a bad token, then read it again on every send so rotation works.
+  zeptoAuthorization(options.token);
+
   return jsonProvider({
     name: "zeptomail",
     baseUrl: options.baseUrl ?? "https://api.zeptomail.com",
     endpoint: "/v1.1/email",
-    headers: () => ({
-      Authorization: options.token.startsWith("Zoho-enczapikey ")
-        ? options.token
-        : `Zoho-enczapikey ${options.token}`,
-    }),
+    headers: () => ({ Authorization: zeptoAuthorization(options.token) }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("zeptomail", message, SUPPORTED_MESSAGE_FIELDS.zeptomail);
@@ -50,6 +51,19 @@ export function zeptomail(
       };
     },
   });
+}
+
+const TOKEN_PREFIX = "Zoho-enczapikey ";
+
+// The token is typed as a string, but untyped callers can pass anything (an
+// un-awaited secret loader's Promise, a number), and calling startsWith on that
+// threw a bare TypeError. Check it at runtime and name the bad option instead.
+function zeptoAuthorization(token: string) {
+  if (!isString(token) || token === "") {
+    throw new EmailValidationError("zeptomail token must be a non-empty string.");
+  }
+
+  return token.startsWith(TOKEN_PREFIX) ? token : `${TOKEN_PREFIX}${token}`;
 }
 
 function zeptoAddress(address: EmailAddress) {

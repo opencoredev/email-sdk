@@ -1,0 +1,90 @@
+---
+title: Webhooks
+description: Verify Resend and Mailgun webhook requests and normalize Resend, Postmark, and Mailgun delivery events.
+---
+
+Import webhook helpers from `@opencoredev/email-sdk/webhooks`, not the root SDK. They use Web Crypto and do not create an email client, send email, or emit telemetry.
+
+## Verify before processing
+
+```ts
+import {
+  normalizeWebhookEvent,
+  verifyResendWebhook,
+} from "@opencoredev/email-sdk/webhooks";
+
+export async function POST(request: Request) {
+  const body = await request.text();
+  const valid = await verifyResendWebhook({
+    body,
+    headers: request.headers,
+    secret: process.env.RESEND_WEBHOOK_SECRET!,
+  });
+  if (!valid) return new Response("Invalid webhook", { status: 401 });
+
+  const event = await normalizeWebhookEvent({
+    provider: "resend",
+    body,
+    headers: request.headers,
+  });
+  return Response.json({ deliveryId: event.deliveryId });
+}
+```
+
+The example verifies and normalizes only. In production, atomically persist the event and deduplicate by provider plus `deliveryId` before acknowledging it. Apply request-size limits, avoid logging payloads or credentials, and process side effects through durable storage. Timestamp checks alone do not stop replay within the acceptance window.
+
+## Verification support
+
+| Provider | Helper | Authenticated content |
+| --- | --- | --- |
+| Resend | `verifyResendWebhook` | Svix ID, timestamp, and original raw UTF-8 body |
+| Mailgun | `verifyMailgunWebhook` | Timestamp and token only |
+| Postmark | None | Configure authentication separately in your application |
+
+Both helpers return `Promise<boolean>` and fail closed (`false`) on missing secrets, invalid signatures, malformed data, non-object JSON, or timestamps outside the tolerance. They accept `secret: string | readonly string[]` for key rotation, `toleranceSeconds` (default `300`), and `now` (epoch milliseconds, default `Date.now()`). Both stale and future timestamps are checked; tolerance must be finite and nonnegative. Keep clocks synchronized. A larger tolerance may be needed for delayed Mailgun processing, but increases replay exposure.
+
+Resend accepts `headers: Headers | Readonly<Record<string, string | undefined>>` with case-insensitive `svix-id`, `svix-timestamp`, and `svix-signature` names. Pass the signing secret (`whsec_…`), not an API key. Multiple space-separated versioned Svix signatures are supported; a valid v1 signature from any configured key succeeds. Never parse and reserialize the body before verifying it.
+
+### Mailgun
+
+```ts
+import { verifyMailgunWebhook } from "@opencoredev/email-sdk/webhooks";
+
+const valid = await verifyMailgunWebhook({
+  body: await request.text(),
+  secret: process.env.MAILGUN_WEBHOOK_SIGNING_KEY!,
+});
+```
+
+This helper accepts Mailgun's JSON event webhook envelope with a nested `signature` object containing `timestamp`, `token`, and hexadecimal `signature`. It does not handle inbound multipart/form-data routes. For subaccount events, explicitly select `signatureField: "parent-signature"` when using the parent account's signing key.
+
+<Callout type="warn" title="Mailgun signatures do not bind event-data">
+Mailgun signs only timestamp concatenated with token, not the event body. Changing `event-data` does not invalidate that signature. Require HTTPS, protect signing tokens, and persist replay protection for the token as well as delivery ID; consider Mailgun's documented TLS client authentication where available. Do not describe this helper as proof of body integrity.
+</Callout>
+
+## Normalize delivery events
+
+`normalizeWebhookEvent({ provider, body, headers? })` returns `Promise<NormalizedWebhookEvent>`. It does **not** authenticate the request. Supported normalization providers are exactly `"resend" | "postmark" | "mailgun"`; other providers throw, even if the SDK can send through them. Invalid JSON, `null`, arrays, and primitive JSON also throw.
+
+| Result field | Meaning |
+| --- | --- |
+| `provider` | Supported provider name |
+| `deliveryId` | Stable delivery identity; use with provider for deduplication |
+| `providerMessageId?` | Original provider message identity, when present |
+| `type?` | Lowercased event name, with Resend's `email.` prefix removed |
+| `status?` | `"delivered"`, `"bounced"`, or `"complained"` only |
+| `payload` | Original parsed JSON object; may contain personal data |
+
+Unknown events retain their `type` and payload without assigning delivery state. Mailgun `failed` maps to `bounced` only with permanent severity. Postmark `Bounce` with `HardBounce`, `BadEmailAddress`, or `ManuallyDeactivated` maps to `bounced`; transient and other supplied bounce classes do not. For compatibility, a bounce without a class maps to `bounced`. Postmark numeric `ID` values are converted to strings.
+
+Resend prefers a payload ID, then the `svix-id` header. Other supported providers use their event IDs, including Postmark `ID` and Mailgun `event-data.id`. Without an ID, the helper hashes provider plus the raw body using SHA-256. This fallback deduplicates **byte-identical retries only**: whitespace changes, field reordering, or changed timestamps yield different IDs. It does not deduplicate semantically equivalent events.
+
+Exported types: `WebhookHeaders`, `WebhookProvider`, `WebhookDeliveryStatus`, `WebhookVerificationOptions`, `ResendWebhookVerificationOptions`, `MailgunWebhookVerificationOptions`, `NormalizeWebhookOptions`, and `NormalizedWebhookEvent`.
+
+## Provider documentation
+
+- [Resend verification](https://resend.com/docs/dashboard/webhooks/verify-webhooks-requests)
+- [Svix manual signature verification](https://docs.svix.com/receiving/verifying-payloads/how-manual)
+- [Mailgun securing webhooks](https://documentation.mailgun.com/docs/mailgun/user-manual/webhooks/securing-webhooks)
+
+For managed persistence and delivery state, see [Convex webhooks](/docs/integrations/convex/webhooks).

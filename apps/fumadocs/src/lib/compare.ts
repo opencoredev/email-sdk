@@ -166,7 +166,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailersend",
     a: "resend",
     b: "mailersend",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-22",
     intro:
       "MailerSend is the transactional arm of the MailerLite family, and it inherits that lineage: a generous free tier, a template gallery with a drag-and-drop editor, and team-friendly features like domain-level permissions that appeal to mixed marketing-and-engineering orgs. Its API covers the full common surface — CC, BCC, reply-to, headers, attachments, tags, and scheduled sending — making it structurally one of the closest matches to Resend in the SDK's capability matrix; neither exposes per-message metadata. Resend differentiates on developer experience instead: React Email integration, a minimal API, and fast domain verification. Costs diverge with volume and features, so the practical decision is usually whether you want MailerSend's built-in template tooling or prefer owning templates in code with Resend and React Email.",
   },
@@ -280,7 +280,7 @@ export const comparePairs: ComparePair[] = [
     slug: "brevo-vs-mailersend",
     a: "brevo",
     b: "mailersend",
-    lastmod: "2026-11-02",
+    lastmod: "2026-11-22",
     search: {
       title: "Brevo vs MailerSend: Transactional Email API Compared",
       description:
@@ -295,7 +295,7 @@ export const comparePairs: ComparePair[] = [
     slug: "mailersend-vs-ses",
     a: "mailersend",
     b: "ses",
-    lastmod: "2026-11-10",
+    lastmod: "2026-11-22",
     intro:
       "MailerSend and Amazon SES are the managed-service-versus-infrastructure trade in its purest form. SES keeps costs near the floor at scale — à-la-carte outbound at $0.10 per 1K sends — and sits inside the AWS ecosystem — IAM credentials, CloudWatch metrics, regional endpoints — in exchange for you owning deliverability: dedicated IPs, configuration sets, and bounce processing are all your job, and the console is unmistakably AWS. MailerSend, the transactional arm of the MailerLite family, wraps sending in a product instead: a template gallery with a drag-and-drop editor, a 500-send free tier, and a clean REST API, at a higher per-message price. In the unified message shape MailerSend covers the full common surface except per-message metadata, including native scheduled sending; SES supports neither scheduling nor metadata, so a MailerSend-to-SES fallback drops sendAt and Email SDK's field checks flag it before the send.",
   },
@@ -334,6 +334,13 @@ export type ProviderBlogGuide = {
 
 /** Blog guides about a provider, linked from every compare page that includes the provider. */
 export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBlogGuide[]>> = {
+  mailersend: [
+    {
+      slug: "mailersend-pricing",
+      title: "MailerSend pricing guide",
+      lead: "Estimating the bill?",
+    },
+  ],
   brevo: [
     {
       slug: "brevo-api-nodejs-typescript",
