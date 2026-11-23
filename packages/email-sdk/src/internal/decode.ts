@@ -438,6 +438,9 @@ export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false
     const clonedDate = cloneDateValue(value);
 
     if (clonedDate !== undefined) {
+      // Cache the copy so repeated references (such as a Map key) stay one object.
+      seen.set(value, clonedDate);
+
       // SAFETY: Input passed Date brand check; returning a cloned Date matches V.
       return clonedDate as V;
     }
@@ -495,13 +498,18 @@ export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false
     }
 
     if (ArrayBuffer.isView(value)) {
+      const view = cloneArrayBufferView(value);
+      seen.set(value, view);
+
       // SAFETY: Input is an ArrayBufferView; returning a copied view of the same kind preserves V.
-      return cloneArrayBufferView(value) as V;
+      return view as V;
     }
 
     const clonedBuffer = cloneBinaryBufferValue(value);
 
     if (clonedBuffer !== undefined) {
+      seen.set(value, clonedBuffer);
+
       // SAFETY: Input passed ArrayBuffer/SharedArrayBuffer brand check; slicing bytes isolates it.
       return clonedBuffer as V;
     }
@@ -533,13 +541,18 @@ export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false
     const clonedRegExp = cloneRegExpValue(value);
 
     if (clonedRegExp !== undefined) {
+      seen.set(value, clonedRegExp);
+
       // SAFETY: Input passed RegExp brand check; returning a cloned RegExp preserves V.
       return clonedRegExp as V;
     }
 
     if (hasGetterBrand(urlHrefGetter, value) && urlHrefGetter) {
+      const url = new URL(String(urlHrefGetter.call(value)));
+      seen.set(value, url);
+
       // SAFETY: Input passed URL brand check; returning a cloned URL preserves V.
-      return new URL(String(urlHrefGetter.call(value))) as V;
+      return url as V;
     }
 
     const proto = Object.getPrototypeOf(value);

@@ -724,6 +724,37 @@ describe("email-sdk CLI", () => {
     expect(JSON.parse(stdout).message.sendAt).toBe("2026-07-21T01:00:00Z");
   });
 
+  test("dry run with --json wraps the plan as { ok: true, result }", async () => {
+    const args = [
+      "send",
+      "--adapter",
+      "resend",
+      "--from",
+      "Acme <hello@example.com>",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ];
+
+    const wrapped = await runCli([...args, "--json"]);
+
+    expect(wrapped.stderr).toBe("");
+    expect(wrapped.exitCode).toBe(0);
+    expect(JSON.parse(wrapped.stdout)).toMatchObject({
+      ok: true,
+      result: { adapter: "resend", message: { subject: "Hello" } },
+    });
+
+    const plain = await runCli(args);
+
+    expect(JSON.parse(plain.stdout)).toMatchObject({ ok: true, adapter: "resend" });
+    expect(JSON.parse(plain.stdout)).not.toHaveProperty("result");
+  });
+
   test("Iterable keeps adapter scheduling separate from message scheduling", async () => {
     const adapterSchedule = await runCli([
       "send",

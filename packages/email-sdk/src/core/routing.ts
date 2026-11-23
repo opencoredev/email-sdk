@@ -255,39 +255,47 @@ export function validateFallback(
   for (const name of list ?? []) requireAdapter(adapters, name);
 }
 
+/**
+ * Copies send options, keeping an own key whose value is `undefined`: spreading the copy over
+ * batch or middleware options must still clear that setting, as spreading the raw object did.
+ */
 export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
   const copy: EmailSendOptions = {};
+
+  const present = (key: keyof EmailSendOptions, value: EmailSendOptions[keyof EmailSendOptions]) =>
+    value !== undefined || Object.hasOwn(options, key);
+
   const adapter = options.adapter;
 
-  if (adapter !== undefined) copy.adapter = adapter;
+  if (present("adapter", adapter)) copy.adapter = adapter;
 
   const idempotencyKey = options.idempotencyKey;
 
-  if (idempotencyKey !== undefined) copy.idempotencyKey = idempotencyKey;
+  if (present("idempotencyKey", idempotencyKey)) copy.idempotencyKey = idempotencyKey;
 
   const idempotency = options.idempotency;
 
-  if (idempotency !== undefined) copy.idempotency = idempotency;
+  if (present("idempotency", idempotency)) copy.idempotency = idempotency;
 
   const signal = options.signal;
 
-  if (signal !== undefined) copy.signal = signal;
+  if (present("signal", signal)) copy.signal = signal;
 
   const retry = options.retry;
 
-  if (retry !== undefined) {
+  if (present("retry", retry)) {
     copy.retry = isNonArrayObject(retry) ? snapshotRetryConfig(retry) : retry;
   }
 
   const fallback = options.fallback;
 
-  if (fallback !== undefined) {
+  if (present("fallback", fallback)) {
     copy.fallback = isNonArrayObject(fallback) ? snapshotFallbackConfig(fallback) : fallback;
   }
 
   const metadata = options.metadata;
 
-  if (metadata !== undefined) {
+  if (present("metadata", metadata)) {
     copy.metadata = isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
   }
 

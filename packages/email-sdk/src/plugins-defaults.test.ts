@@ -86,3 +86,65 @@ describe("defaultsPlugin headers", () => {
     ]);
   });
 });
+
+describe("defaultsPlugin sendMetadata", () => {
+  test("class-instance send metadata keeps its methods and private fields", async () => {
+    class RequestContext {
+      readonly #tenant: string;
+
+      constructor(tenant: string) {
+        this.#tenant = tenant;
+      }
+
+      tenant() {
+        return this.#tenant;
+      }
+    }
+
+    const context = new RequestContext("acme");
+    let seen: object | undefined;
+
+    const client = createEmailClient({
+      adapters: [
+        {
+          ...memoryAdapter(),
+          send(_message, sendContext) {
+            seen = sendContext.metadata;
+
+            return { adapter: "memory", id: "m_1" };
+          },
+        },
+      ],
+      plugins: [defaultsPlugin({ sendMetadata: { source: "queue" } })],
+      telemetry: false,
+    });
+
+    await client.send(message, { metadata: context });
+
+    expect(seen).toBe(context);
+    expect(seen instanceof RequestContext && seen.tenant()).toBe("acme");
+  });
+
+  test("plain send metadata still merges over the defaults", async () => {
+    let seen: object | undefined;
+
+    const client = createEmailClient({
+      adapters: [
+        {
+          ...memoryAdapter(),
+          send(_message, sendContext) {
+            seen = sendContext.metadata;
+
+            return { adapter: "memory", id: "m_1" };
+          },
+        },
+      ],
+      plugins: [defaultsPlugin({ sendMetadata: { source: "queue", trace: "default" } })],
+      telemetry: false,
+    });
+
+    await client.send(message, { metadata: { trace: "abc" } });
+
+    expect(seen).toEqual({ source: "queue", trace: "abc" });
+  });
+});

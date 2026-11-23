@@ -48,7 +48,7 @@ Run `email-sdk help` for the current list.
 | `--fallback name,name` | Adapters to try in order after the primary definitely did not send. Repeated names and the primary are dropped. |
 | `--max-attempts n` | Attempts per adapter, including the first. Defaults to `1`. |
 
-Fallback adapters read their configuration only from environment variables. Credential and connection flags such as `--api-key` and `--base-url` apply to the primary adapter. With `--dry-run`, the message is validated against every adapter on the route and the plan includes `fallback` and `maxAttempts` when set.
+Fallback adapters read their configuration only from environment variables. Credential and connection flags such as `--api-key` and `--base-url` apply to the primary adapter. With `--dry-run`, the message is validated against every adapter on the route and the plan includes `fallback` and `maxAttempts` when set. With `--dry-run --json`, the plan is wrapped as `{ ok: true, result }` like a real send.
 
 ```bash
 EMAIL_SDK_TELEMETRY=0 email-sdk send \

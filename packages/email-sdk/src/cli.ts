@@ -350,15 +350,16 @@ async function main(command: string | undefined, flags: CliFlags, args: string[]
     await client.validate(message, routing);
 
     // JSON.stringify drops undefined keys, so a plain dry run prints exactly what it did before.
+    const plan = {
+      adapter: providerName,
+      fallback: fallbackNames.length > 0 ? fallbackNames : undefined,
+      maxAttempts,
+      message: redactMessageForDryRun(message),
+    };
+
     console.log(
       JSON.stringify(
-        {
-          ok: true,
-          adapter: providerName,
-          fallback: fallbackNames.length > 0 ? fallbackNames : undefined,
-          maxAttempts,
-          message: redactMessageForDryRun(message),
-        },
+        truthyFlag(flags, "json") ? { ok: true, result: plan } : { ok: true, ...plan },
         null,
         2,
       ),

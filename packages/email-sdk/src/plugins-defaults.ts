@@ -428,6 +428,13 @@ function mergeSendMetadata(
 
   const clonedValue = cloneMetadataRecord(value);
 
+  // cloneMetadataRecord copies plain records and keeps class instances by reference. Spreading an
+  // instance would drop its methods and private fields, so per-send class metadata replaces the
+  // defaults instead of merging with them.
+  if (clonedValue === value) {
+    return value;
+  }
+
   return {
     ...clonedDefaults,
     ...clonedValue,

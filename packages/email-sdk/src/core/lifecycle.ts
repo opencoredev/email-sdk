@@ -138,22 +138,9 @@ async function runBeforeSendMiddleware(
           throw new EmailValidationError("Email send options must be an object.");
         }
 
-        const cloned = cloneNestedSendOptions(nextOptions);
-        const merged: EmailSendOptions = { ...options, ...cloned };
-
-        for (const key of [
-          "adapter",
-          "idempotencyKey",
-          "idempotency",
-          "signal",
-          "retry",
-          "fallback",
-          "metadata",
-        ] as const) {
-          if (Object.hasOwn(nextOptions, key) && !(key in cloned)) {
-            merged[key] = undefined;
-          }
-        }
+        // A fresh object per middleware, never the caller's options. The clone keeps own keys set
+        // to undefined, so middleware can still clear a setting.
+        const merged: EmailSendOptions = { ...options, ...cloneNestedSendOptions(nextOptions) };
 
         options = merged;
       }

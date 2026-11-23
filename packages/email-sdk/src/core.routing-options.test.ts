@@ -84,6 +84,52 @@ describe("sendMany item options", () => {
   });
 });
 
+describe("sendMany explicit undefined item options", () => {
+  test("an item's adapter: undefined clears the batch adapter", async () => {
+    const used: string[] = [];
+
+    const primary = adapter("primary", () => {
+      used.push("primary");
+
+      return { adapter: "primary", id: "p_1" };
+    });
+
+    const batch = adapter("batch", () => {
+      used.push("batch");
+
+      return { adapter: "batch", id: "b_1" };
+    });
+
+    const client = createEmailClient({ adapters: [primary, batch], telemetry: false });
+
+    await client.sendMany(
+      [{ message, options: { adapter: undefined } }, { message }],
+      { adapter: "batch" },
+    );
+
+    // The first item clears the batch adapter and uses the client default, as a plain spread did.
+    expect(used).toEqual(["primary", "batch"]);
+  });
+
+  test("an item's retry: undefined clears the batch retry", async () => {
+    let calls = 0;
+
+    const flaky = adapter("flaky", () => {
+      calls += 1;
+
+      throw new EmailAdapterError("try again", { adapter: "flaky", retryable: true });
+    });
+
+    const client = createEmailClient({ adapters: [flaky], telemetry: false });
+
+    await client.sendMany([{ message, options: { retry: undefined } }], {
+      retry: { maxAttempts: 3, delay: () => 0 },
+    });
+
+    expect(calls).toBe(1);
+  });
+});
+
 describe("client.adapters", () => {
   test("is read-only at runtime, not only in its type", () => {
     const client = createEmailClient({ adapters: [adapter("primary")], telemetry: false });
