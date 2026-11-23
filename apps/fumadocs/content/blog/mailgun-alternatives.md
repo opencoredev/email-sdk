@@ -34,7 +34,7 @@ Every price below comes from the provider's own pricing page, checked October 29
 
 **Postmark** is built for transactional mail and keeps 45 days of history on Basic. It has no tier between 100 and 10,000 emails a month, and it has no scheduled send.
 
-**SendGrid** supports every field in the table, so it's the smallest code change. The one gap: Email SDK accepts repeated header names on Mailgun but rejects them on SendGrid. Its [free plan was retired in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan), and Essentials keeps 3 days of activity.
+**SendGrid** supports every field in the table, so it's the smallest code change. Two gaps the table doesn't show: Email SDK accepts repeated header names on Mailgun but rejects them on SendGrid, and SendGrid holds a scheduled send for up to 72 hours, against up to 3 days on most Mailgun plans (7 with extended storage). Its [free plan was retired in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan), and Essentials keeps 3 days of activity.
 
 **Amazon SES** is cheapest at volume, and you manage more yourself: bounce handling, reputation, and logging through configuration sets. AWS [moved new accounts to pricing plans](https://aws.amazon.com/blogs/messaging-and-targeting/introducing-amazon-simple-email-service-ses-pricing-plans/) on July 21, 2026, and the old 3,000-message SES free tier doesn't apply to them.
 

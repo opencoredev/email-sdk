@@ -73,7 +73,7 @@ Overage changes which plan wins, because Pro charges the same $0.90 per extra 1,
 | 500,000 | Scale $350 | $350 |
 | 1,000,000 | Scale $650 | $650 |
 
-Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: a dedicated IP, SSO, more than 5 webhook endpoints, or more than 110 domains. Pro includes 10 domains, and its $20-a-month add-on raises that to 110, which is cheaper than Scale if domains are the only reason to upgrade.
+Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: a dedicated IP, SSO, more than 5 webhook endpoints, or more than 110 domains. Pro includes 10 domains, and its $20-a-month add-on raises that to 110. If domains are your only reason to upgrade, compare Pro plus the add-on with Scale at your monthly volume: near the crossover, the extra $20 can make Scale the cheaper plan.
 
 ## Marketing plans
 
