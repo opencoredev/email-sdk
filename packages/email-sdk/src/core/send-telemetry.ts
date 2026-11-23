@@ -1,4 +1,5 @@
 import type { EmailAdapterError, EmailSdkError } from "../errors.js";
+import { isNonArrayObject } from "../internal/decode.js";
 import {
   getTelemetry,
   normalizeAdapterName,
@@ -8,7 +9,7 @@ import type { EmailMessage, EmailPersonalizedInput, OneOrMany } from "../types.j
 import { classifySendFailure, findSdkDefect, type FailureKind } from "./failure-kind.js";
 
 function listLength<T>(value: OneOrMany<T> | undefined) {
-  if (value === undefined) return 0;
+  if (value === undefined || value === null) return 0;
 
   return Array.isArray(value) ? value.length : 1;
 }
@@ -24,24 +25,69 @@ export function recipientCount(message: EmailMessage | null | undefined) {
 }
 
 export function messageFacts(message: EmailMessage | null | undefined) {
-  return {
-    recipients: recipientCount(message),
-    has_attachments: (message?.attachments?.length ?? 0) > 0,
-    used_recipient_variables: false,
-    used_send_at: message?.sendAt !== undefined,
-  };
+  // `!message` narrows out null and undefined; isNonArrayObject also rejects arrays and primitives.
+  if (!message || !isNonArrayObject(message)) {
+    return {
+      recipients: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
+
+  try {
+    return {
+      recipients: recipientCount(message),
+      has_attachments: Array.isArray(message.attachments) && message.attachments.length > 0,
+      used_recipient_variables: false,
+      used_send_at: message.sendAt !== undefined,
+    };
+  } catch {
+    return {
+      recipients: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
 }
 
 export function personalizedFacts(input: EmailPersonalizedInput) {
-  return {
-    recipients: input.recipients.length,
-    personalized_recipient_count: input.recipients.length,
-    has_attachments: (input.message.attachments?.length ?? 0) > 0,
-    used_recipient_variables: input.recipients.some(
-      (recipient) => Object.keys(recipient.variables).length > 0,
-    ),
-    used_send_at: input.message.sendAt !== undefined,
-  };
+  if (!isNonArrayObject(input)) {
+    return {
+      recipients: 0,
+      personalized_recipient_count: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
+
+  try {
+    const recipients = Array.isArray(input.recipients) ? input.recipients : [];
+    const message = isNonArrayObject(input.message) ? input.message : undefined;
+
+    return {
+      recipients: recipients.length,
+      personalized_recipient_count: recipients.length,
+      has_attachments: Array.isArray(message?.attachments) && message.attachments.length > 0,
+      used_recipient_variables: recipients.some(
+        (recipient) =>
+          isNonArrayObject(recipient) &&
+          isNonArrayObject(recipient.variables) &&
+          Object.keys(recipient.variables).length > 0,
+      ),
+      used_send_at: message?.sendAt !== undefined,
+    };
+  } catch {
+    return {
+      recipients: 0,
+      personalized_recipient_count: 0,
+      has_attachments: false,
+      used_recipient_variables: false,
+      used_send_at: false,
+    };
+  }
 }
 
 export type SendTelemetryInput = {

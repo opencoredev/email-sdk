@@ -1,14 +1,16 @@
 # Email SDK v1 design contract
 
-Status: **implemented and release-validated; versioning and publication remain pending explicit approval**  
-Date: 2026-07-21  
-Target release: `@opencoredev/email-sdk@1.0.0`
+Status: **historical. Shipped as `@opencoredev/email-sdk@1.0.0`; the package is now on the 3.x line.**  
+Date: 2026-07-21, amended 2026-11-21 (see [section 13](#13-amendments-since-100))  
+Original target release: `@opencoredev/email-sdk@1.0.0`
+
+Sections 1 to 12 record the v1 decisions as made. Where later releases changed a decision, section 13 records the amendment and the affected line says so. Read section 13 before treating any v1 rule as current.
 
 This document records the implementation contract for Email SDK v1. It supersedes the individual discovery recommendations where they conflict. A scope change requires an explicit contract amendment with its API, migration, test, documentation, package, and release consequences recorded together.
 
 ## 1. Source artifacts and decision traceability
 
-The contract synthesizes exactly five read-only discovery artifacts recovered in `/Users/leo/.jcode/scratch/email-sdk-v1-discovery-artifacts.md`:
+The contract synthesizes exactly five read-only discovery artifacts. They lived in a maintainer's local scratch directory and were never committed, so the table below is the surviving record of what each one contributed:
 
 | Artifact | Worker | Contract decisions derived from it |
 |---|---|---|
@@ -24,14 +26,14 @@ Resolved cross-artifact choices:
 - Repeated headers use a lossless array representation and capability-aware validation. The SDK never collapses duplicates silently.
 - The clean v1 root does not carry legacy aliases. Legacy source compatibility is isolated in `@opencoredev/email-sdk/compat` for the v1 major only.
 - `@opencoredev/email-sdk/agent-tools` remains available but deprecated. The first-class AI surface is `/ai`.
-- The core SDK remains ESM-only and dependency-free at runtime. The optional `/ai` peer does not load from the root.
+- The core SDK remains ESM-only and dependency-free at runtime. The optional `/ai` peer does not load from the root. *Amended: every entry point now also ships CommonJS, and Nodemailer is the one runtime dependency (section 13).*
 - Core SDK and CLI telemetry remain enabled by default with the existing environment and client opt-outs.
 - `sendAt` accepts `Date` or RFC 3339 timestamps with an explicit `Z` or numeric offset. Offset-less and implementation-dependent date strings are rejected.
 - Existing unreleased minor work is folded into v1. Do not cut v0.7.0 unless the v1 initiative is explicitly descoped.
 
 ## 2. Product boundary
 
-Email SDK v1 is a server-side, ESM-only TypeScript SDK for normalized transactional email sending through named adapters. It owns validation, routing, retry/fallback policy, hooks/plugins, normalized results, and adapter capability enforcement.
+Email SDK v1 is a server-side, ESM-only (amended: ESM and CommonJS, section 13) TypeScript SDK for normalized transactional email sending through named adapters. It owns validation, routing, retry/fallback policy, hooks/plugins, normalized results, and adapter capability enforcement.
 
 It does not own durable delivery. Applications or `@opencoredev/convex-email` own queues, persisted idempotency, recovery, and long-running workflow state.
 
@@ -39,7 +41,7 @@ The supported runtime floor is unchanged:
 
 - Node.js `>=20`
 - Bun `>=1.1`
-- ESM imports only
+- ESM imports only (amended: `require()` works too, section 13)
 - No browser or client-side credential use
 
 ## 3. Chosen public API
@@ -400,7 +402,7 @@ Export:
 | Fallback continues after any terminal error | Unknown delivery stops by default | Opt into `onUnknownDelivery: "continue"` only after accepting duplicate-delivery risk. |
 | Arbitrary plugin errors may escape | `EmailMiddlewareError` | Match on the typed error code/class. |
 | Implementation-dependent `sendAt` strings | `Date` or RFC 3339 with zone | Add `Z` or an explicit numeric offset. |
-| CommonJS expectation | ESM-only is explicit | Migrate consumers to ESM or dynamic `import()`. No CJS build is planned. |
+| CommonJS expectation | ESM-only is explicit | Migrate consumers to ESM or dynamic `import()`. No CJS build is planned. *(Amended: a CJS build now ships; section 13.)* |
 
 Compatibility policy:
 
@@ -690,16 +692,16 @@ Required sequence:
 
 The following are outside v1 and must not enter implementation without a contract amendment:
 
-- Contacts, templates, broadcasts, inbound email, webhooks, or provider account management in the core SDK
+- Contacts, templates, broadcasts, inbound email, webhooks, or provider account management in the core SDK (amended: webhooks and inbound ship as separate subpaths, section 13)
 - Exactly-once delivery claims or a durable queue in the core SDK
 - A redesign of the Convex component beyond v1 compatibility and documentation
 - Browser support or client-side provider credentials
-- Concurrent `sendMany` execution or a general workflow engine
+- Concurrent `sendMany` execution or a general workflow engine (amended: opt-in bounded concurrency, section 13)
 - Automatic field dropping to make incompatible adapters appear portable
 - Core client pooling, `close`, async disposal, or async construction
 - A separate Chat SDK package or a core dependency on Chat SDK
 - Removal of deprecated `/agent-tools` during the v1 major
-- CommonJS output
+- CommonJS output (amended, section 13)
 - Rewriting historical documentation snapshots
 - Publishing v1, opening a release PR, or changing Git state as part of contract synthesis
 
@@ -715,3 +717,16 @@ Implementation is authorized only when the coordinator accepts this document as 
 6. security and release consequences
 
 Unrecorded deviations are defects, not implementation discretion.
+
+## 13. Amendments since 1.0.0
+
+Each entry names the change, its migration consequence, and where it is enforced.
+
+| Date | Decision | Consequence | Enforced by |
+| --- | --- | --- | --- |
+| 2.0.0 | Every entry point ships CommonJS (`require`) next to ESM. A single shared `errors.cjs` keeps `instanceof` working across entry points. `require()` needs Node.js 20.19+ or 22.12+; ESM still supports Node.js 20+. | ESM consumers are unaffected; CJS consumers no longer need `import()`. | `scripts/build-email-sdk-cjs.mjs`; CI `commonjs` job on Node 20, 22, 24 |
+| 2.0.0 | SMTP runs on Nodemailer, the package's only runtime dependency. Every other adapter uses the SDK's own `fetch` code. The root entry does not import it; `/smtp` and the CLI do. | "Dependency-free at runtime" no longer holds. Do not add a second runtime dependency without an amendment. | `packages/email-sdk/package.json` `dependencies`; `AGENTS.md` |
+| 2.0.0, unreleased | Delivery webhooks (`/webhooks`, since 2.0.0) and inbound email (`/inbound`, in the next release after 3.0.1) ship as separate subpaths, never from the root entry. | No change for send-only users; `/inbound` uses only Web APIs. | Package exports; `scripts/check-published-exports.ts` keeps docs from showing unpublished subpaths without a note |
+| 2026-11-21 | `idempotencyKey` on a route with an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` unless the send passes `idempotency: "best-effort"`. | Sends that relied on the key being ignored must opt into `"best-effort"` or drop the key. | `validateCapabilities` in `src/core/routing.ts`; `src/core.idempotency.test.ts` |
+| 2026-11-21 | HTTP adapter entry points, including `/cloudflare`, bundle for Cloudflare Workers without `nodejs_compat`. Only attachments given by `path` need `node:fs`. The root entry still needs Node or Bun because of telemetry. | No change on Node or Bun. | `src/cloudflare.workers-bundle.test.ts` |
+| 2026-11-21 | `sendMany` accepts `concurrency` (default `1`). Above 1 it runs that many sends at once; results stay in input order and keep the settled shape. | Default behavior is unchanged. Concurrency is opt-in and bounded; there is still no queue or workflow engine. | `src/core.ts`; `src/core.batch.test.ts` |

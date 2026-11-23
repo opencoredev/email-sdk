@@ -43,9 +43,9 @@ export function scaleway(
     rules: scalewayRules,
     baseUrl: options.baseUrl ?? "https://api.scaleway.com",
     endpoint: `/transactional-email/v1alpha1/regions/${region}/emails`,
-    headers: {
+    headers: () => ({
       "X-Auth-Token": options.secretKey,
-    },
+    }),
     async buildPayload(message) {
       assertSupportedMessageFields("scaleway", message, SUPPORTED_MESSAGE_FIELDS.scaleway);
       const attachments = await base64Attachments(message);

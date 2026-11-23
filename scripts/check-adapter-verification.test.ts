@@ -57,9 +57,11 @@ test("contract test membership in the docs table matches packages/email-sdk/src 
     "adapters.scheduling.test.ts",
     "core.fallback-delivery.test.ts",
     "core.telemetry-volume.test.ts",
+    "plugins-defaults.test.ts",
   ]);
   expect(onDisk.get("smtp")).toEqual(["smtp.test.ts"]);
   expect(onDisk.get("brevo")).toEqual([
+    "adapters.credential-rotation.test.ts",
     "adapters.field-support.test.ts",
     "adapters.http-delivery.test.ts",
     "adapters.json-providers.test.ts",

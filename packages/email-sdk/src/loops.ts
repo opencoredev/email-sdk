@@ -31,9 +31,9 @@ export function loops(options: LoopsAdapterOptions): EmailAdapter<"loops", { bas
     rules: loopsRules,
     baseUrl: options.baseUrl ?? "https://app.loops.so",
     endpoint: "/api/v1/transactional",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     async buildPayload(message) {
       assertSupportedMessageFields("loops", message, SUPPORTED_MESSAGE_FIELDS.loops);
       const recipients = formatAddresses(message.to);

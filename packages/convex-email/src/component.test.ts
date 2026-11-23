@@ -156,7 +156,12 @@ describe("convex-email component", () => {
       attemptedAdapters: ["memory"],
       providerMessageId: expect.any(String),
     });
-    expect(events.map((event) => event.type)).toEqual(["queued", "processing", "provider_attempt", "sent"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "queued",
+      "processing",
+      "provider_attempt",
+      "sent",
+    ]);
   });
 
   test("marks emails failed when no adapter can be built", async () => {
@@ -251,8 +256,18 @@ describe("convex-email component", () => {
     };
 
     const firstId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_1" });
-    const sameOwnerId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_1" });
-    const anotherOwnerId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_2" });
+
+    const sameOwnerId = await t.mutation(enqueueOwned, {
+      sender: SENDER,
+      email,
+      ownerId: "user_1",
+    });
+
+    const anotherOwnerId = await t.mutation(enqueueOwned, {
+      sender: SENDER,
+      email,
+      ownerId: "user_2",
+    });
 
     expect(sameOwnerId).toBe(firstId);
     expect(anotherOwnerId).not.toBe(firstId);
@@ -296,8 +311,20 @@ describe("convex-email component", () => {
     const ids = await t.mutation(api.lib.enqueueBatch, {
       sender: SENDER,
       messages: [
-        { to: "a@example.com", subject: "One", text: "1", adapters: [{ kind: "memory" }], adapter: "memory" },
-        { to: "b@example.com", subject: "Two", text: "2", adapters: [{ kind: "memory" }], adapter: "memory" },
+        {
+          to: "a@example.com",
+          subject: "One",
+          text: "1",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
+        {
+          to: "b@example.com",
+          subject: "Two",
+          text: "2",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
       ],
     });
 
@@ -319,8 +346,19 @@ describe("convex-email component", () => {
     const ids = await t.mutation(api.lib.enqueueBatch, {
       sender: SENDER,
       messages: [
-        { ...message, idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
-        { ...message, subject: "Duplicate", idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
+        {
+          ...message,
+          idempotencyKey: "batch:ada",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
+        {
+          ...message,
+          subject: "Duplicate",
+          idempotencyKey: "batch:ada",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
       ],
     });
 
@@ -911,21 +949,38 @@ describe("convex-email component", () => {
 
     for (const provider of ["resend", "postmark", "mailgun"]) {
       for (const body of ["null", "[]", "true", "malformed"]) {
-        await expect(t.action(api.worker.handleWebhook, { provider, body, headers: {} })).rejects.toThrow();
+        await expect(
+          t.action(api.worker.handleWebhook, { provider, body, headers: {} }),
+        ).rejects.toThrow();
       }
     }
   });
 
   test("deduplicates Resend delivery headers case-insensitively", async () => {
     const t = createTest();
-    const args = { provider: "resend", headers: { "Svix-Id": "case-id" }, body: '{"type":"email.opened"}' };
+
+    const args = {
+      provider: "resend",
+      headers: { "Svix-Id": "case-id" },
+      body: '{"type":"email.opened"}',
+    };
+
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
-    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({ ok: true, duplicate: true });
+    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({
+      ok: true,
+      duplicate: true,
+    });
   });
 
   test("retains generic provider compatibility", async () => {
     const t = createTest();
-    const args = { provider: "custom", headers: {}, body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}' };
+
+    const args = {
+      provider: "custom",
+      headers: {},
+      body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}',
+    };
+
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true, duplicate: true });
   });
@@ -1334,7 +1389,9 @@ describe("convex-email component", () => {
       });
       expect(events.filter((event) => event.type === "sent")).toHaveLength(1);
       expect(events.some((event) => event.error === "late stale worker failure")).toBe(false);
-      expect(events.some((event) => event.adapter === "memory" && event.type === "provider_attempt")).toBe(false);
+      expect(
+        events.some((event) => event.adapter === "memory" && event.type === "provider_attempt"),
+      ).toBe(false);
     } finally {
       Date.now = originalNow;
     }
@@ -1392,7 +1449,9 @@ describe("convex-email component", () => {
       expect(recovered).toBe(1);
       expect(status).toMatchObject({
         status: "failed",
-        lastError: expect.stringContaining("will not retry stale processing sends without an idempotencyKey"),
+        lastError: expect.stringContaining(
+          "will not retry stale processing sends without an idempotencyKey",
+        ),
       });
       expect(events.map((event) => event.type)).toContain("failed");
     } finally {
@@ -1508,5 +1567,45 @@ describe("convex-email component", () => {
     } finally {
       Date.now = originalNow;
     }
+  });
+
+  test("normalizes blank and whitespace idempotencyKey at enqueue, stored message, recovery, and send", async () => {
+    const t = createTest();
+
+    const firstId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      idempotencyKey: "   ",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    const secondId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      idempotencyKey: "",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    expect(secondId).not.toBe(firstId);
+
+    const firstStatus = await t.query(api.lib.status, { emailId: firstId });
+    const secondStatus = await t.query(api.lib.status, { emailId: secondId });
+
+    expect(firstStatus?.idempotencyKey).toBeUndefined();
+    expect(firstStatus?.message.idempotencyKey).toBeUndefined();
+    expect(secondStatus?.idempotencyKey).toBeUndefined();
+    expect(secondStatus?.message.idempotencyKey).toBeUndefined();
+
+    await flushScheduled(t);
+
+    const sentFirst = await t.query(api.lib.status, { emailId: firstId });
+    const sentSecond = await t.query(api.lib.status, { emailId: secondId });
+
+    expect(sentFirst?.status).toBe("sent");
+    expect(sentSecond?.status).toBe("sent");
   });
 });

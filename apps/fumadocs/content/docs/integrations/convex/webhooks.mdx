@@ -66,7 +66,7 @@ Bounces and complaints remain sticky against a late delivered event. When both a
 
 The component reuses the SDK's [webhook normalizer](/docs/reference/webhooks) for Resend, Postmark, and Mailgun JSON objects. Invalid JSON, `null`, arrays, and primitive payloads from these providers are rejected. Other providers retain the component's generic compatibility path when they expose a provider message id and event name; test their exact payload shape before relying on normalized `deliveryStatus`.
 
-Normalization support is not verification support. The SDK exports Resend and Mailgun signature verifiers. Postmark does not sign webhooks, so protect its URL with Basic auth credentials and `postmarkBasicAuthVerifier`. Mailgun authenticates only timestamp plus token, not the event body; use HTTPS and persistent token replay protection. See the [verification reference](/docs/reference/webhooks) for key rotation, timestamp tolerance, and Mailgun's body-integrity limitation.
+Normalization support is not verification support. The SDK exports Resend, Mailgun, and SendGrid signature verifiers. Postmark does not sign webhooks, so protect its URL with Basic auth credentials and `postmarkBasicAuthVerifier`. Mailgun authenticates only timestamp plus token, not the event body; use HTTPS and persistent token replay protection. See the [verification reference](/docs/reference/webhooks) for key rotation, timestamp tolerance, and Mailgun's body-integrity limitation.
 
 ## Test locally
 

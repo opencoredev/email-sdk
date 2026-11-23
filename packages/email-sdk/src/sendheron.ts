@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -86,7 +87,8 @@ export function sendheron(
     name: "sendheron",
     ...builtInAdapterDefinition("sendheron", sendheronRules),
     raw: { baseUrl },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       validateBuiltInAdapter("sendheron", message, sendheronRules);
 
       // Read per send so a rotated apiKey or edited headers apply to the next request.

@@ -33,6 +33,7 @@ Dry run creates the real adapter with placeholder credentials where needed, call
 | `--message path` | Start from an `EmailMessage` JSON file; explicit flags override fields |
 | `--send-at` | RFC 3339 schedule for capable adapters |
 | `--dry-run` | Validate and print without sending |
+| `--json` | Print `{ ok: true, result }` on success and `{ ok: false, error }` on failure, both on stdout |
 
 ## Adapter flags
 
@@ -40,9 +41,32 @@ Common credential flags include `--api-key`, `--server-token`, and `--base-url`.
 
 Run `email-sdk help` for the current list.
 
+## Routing flags
+
+| Flag | Behavior |
+| --- | --- |
+| `--fallback name,name` | Adapters to try in order after the primary definitely did not send. Repeated names and the primary are dropped. |
+| `--max-attempts n` | Attempts per adapter, including the first. Defaults to `1`. |
+
+Fallback adapters read their configuration only from environment variables. Credential and connection flags such as `--api-key` and `--base-url` apply to the primary adapter. With `--dry-run`, the message is validated against every adapter on the route and the plan includes `fallback` and `maxAttempts` when set. With `--dry-run --json`, the plan is wrapped as `{ ok: true, result }` like a real send.
+
+```bash
+EMAIL_SDK_TELEMETRY=0 email-sdk send \
+  --adapter resend \
+  --fallback postmark \
+  --max-attempts 3 \
+  --from "Acme <hello@example.com>" \
+  --to user@example.com \
+  --subject "Welcome" \
+  --text "Your account is ready." \
+  --dry-run
+```
+
+As in the SDK, fallback runs only when the failure proves nothing was sent, such as a 401 or 422. A timeout or 5xx stops the route.
+
 ## Live sends
 
-Without `--dry-run`, the command constructs one adapter, calls `client.send`, and prints the normalized result as JSON. There is no CLI fallback route or retry flag.
+Without `--dry-run`, the command builds the primary adapter and any fallbacks, calls `client.send`, and prints the normalized result as JSON. With `--json`, the result is wrapped as `{ ok: true, result }`, and a failure prints `{ ok: false, error }` with the error `code`, `message`, and, for route failures, one entry per adapter in `failures`, instead of a line on stderr. The exit code is `1` on failure either way.
 
 Do not run a live command against an external recipient without approval.
 

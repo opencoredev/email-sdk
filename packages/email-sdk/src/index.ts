@@ -55,6 +55,7 @@ export type {
   EmailPluginContext,
   EmailRetryConfig,
   EmailSendItem,
+  EmailSendManyOptions,
   EmailSendMiddleware,
   EmailSendOptions,
   EmailSendResult,

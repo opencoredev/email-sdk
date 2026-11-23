@@ -26,7 +26,8 @@ const email = createEmailClient({
 ## Merge rules
 
 - Explicit `replyTo` wins over the default.
-- Header and tag arrays append message values after defaults.
+- A message header replaces a default header with the same name, compared case-insensitively. Other default headers come first, then the message's headers, including any the message repeats on purpose.
+- Tag arrays append message tags after the default tags.
 - Message metadata and send metadata merge by key, with explicit values winning.
 - An explicit send-option idempotency key wins over `idempotencyKey`.
 - `idempotencyKeyPrefix` is prepended once unless the key already starts with it.

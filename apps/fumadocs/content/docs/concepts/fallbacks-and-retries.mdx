@@ -36,7 +36,8 @@ const result = await email.send(
     subject: "Your receipt",
     text: "Thanks for your order.",
   },
-  { idempotencyKey: "receipt-order-1042" },
+  // Postmark cannot deduplicate, so the key protects only the Resend attempts.
+  { idempotencyKey: "receipt-order-1042", idempotency: "best-effort" },
 );
 
 console.log(result.adapter, result.id); // "resend" or "postmark"
@@ -53,7 +54,7 @@ fallback: {
 },
 ```
 
-`continue` accepts a duplicate risk: if Resend accepted the message but the response was lost, Postmark sends a second copy. The idempotency key protects only the Resend retries, because Resend honors `Idempotency-Key` and Postmark has no idempotency support. Use `continue` for messages where a rare duplicate is better than no email, such as password resets, and keep the default for receipts or anything a customer would notice twice.
+`continue` accepts a duplicate risk: if Resend accepted the message but the response was lost, Postmark sends a second copy. The idempotency key protects only the Resend retries, because Resend honors `Idempotency-Key` and Postmark has no idempotency support. That is why the example passes `idempotency: "best-effort"`: without it, the client refuses a key on a route that includes Postmark and throws `EmailValidationError` before sending. Use `continue` for messages where a rare duplicate is better than no email, such as password resets, and keep the default for receipts or anything a customer would notice twice.
 
 Before the first request, the client checks the message against every adapter in the route. A message that the backup can't carry fails with `EmailValidationError` and nothing is sent: Postmark takes one tag and has no scheduled sending, and Resend rejects repeated header names. Check a pair on its compare page, such as [Resend vs Postmark](/compare/resend-vs-postmark).
 

@@ -142,6 +142,8 @@ requireIncludes(entry("graph"), "x- prefixed custom headers");
 
 requireIncludes(entry("graph"), "5 custom headers");
 
+requireIncludes(entry("ses"), "15 headers");
+
 requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
 
 requireIncludes(entry("sendheron"), "without display names");

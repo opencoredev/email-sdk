@@ -1,4 +1,5 @@
-import { EmailMiddlewareError, EmailValidationError } from "../errors.js";
+import { ReadonlyMapView } from "../internal/readonly-map.js";
+import { EmailAdapterError, EmailMiddlewareError, EmailValidationError } from "../errors.js";
 import type {
   EmailAdapter,
   EmailAfterSendEvent,
@@ -11,16 +12,18 @@ import type {
   EmailPlugin,
   EmailPluginContext,
   EmailSendMiddleware,
+  EmailSendOptions,
   MaybePromise,
 } from "../types.js";
-import { addAdapter } from "./routing.js";
+import { isFunction, isNonArrayObject } from "../internal/decode.js";
+import { addAdapter, cloneNestedSendOptions } from "./routing.js";
 
 export function createPluginContext(
   adapters: Map<string, EmailAdapter>,
   defaultAdapter: string,
 ): EmailPluginContext {
   return {
-    adapters,
+    adapters: new ReadonlyMapView(adapters),
     defaultAdapter,
     addAdapter(adapter) {
       addAdapter(adapters, adapter);
@@ -31,14 +34,28 @@ export function createPluginContext(
 export function resolvePluginAdapters(
   plugin: EmailPlugin,
   context: EmailPluginContext,
+  pluginId?: string,
 ): EmailAdapter[] {
-  if (!plugin.adapters) return [];
-  const adapters = Array.isArray(plugin.adapters) ? plugin.adapters : plugin.adapters(context);
+  const configured = plugin.adapters;
+
+  if (configured === undefined) return [];
+
+  let adapters: unknown;
+
+  if (Array.isArray(configured)) {
+    adapters = configured;
+  } else if (isFunction(configured)) {
+    adapters = Function.prototype.call.call(configured, plugin, context);
+  } else {
+    throw new EmailValidationError(
+      `Email plugin "${pluginId ?? plugin.id}" adapters must be an array or function.`,
+    );
+  }
 
   // JavaScript callers can pass an async factory; its promise is the only non-array result.
   if (!Array.isArray(adapters)) {
     throw new EmailValidationError(
-      `Email plugin "${plugin.id}" returned async adapters. createEmailClient requires synchronous plugin adapters.`,
+      `Email plugin "${pluginId ?? plugin.id}" returned async adapters. createEmailClient requires synchronous plugin adapters.`,
     );
   }
 
@@ -50,7 +67,15 @@ export function applyClientExtension<TClient extends object, TExtension extends 
   pluginId: string,
   extension: TExtension,
 ) {
-  for (const key of Object.keys(extension)) {
+  if (!isNonArrayObject(extension)) {
+    throw new EmailValidationError(
+      `Email plugin "${pluginId}" extendClient must return an object.`,
+    );
+  }
+
+  const entries = Object.entries(extension);
+
+  for (const [key] of entries) {
     if (Object.hasOwn(client, key)) {
       throw new EmailValidationError(
         `Email plugin "${pluginId}" tried to extend the client with reserved key "${key}".`,
@@ -58,7 +83,14 @@ export function applyClientExtension<TClient extends object, TExtension extends 
     }
   }
 
-  Object.assign(client, extension);
+  for (const [key, value] of entries) {
+    Object.defineProperty(client, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
 }
 
 // The lifecycle helpers below return synchronously when there is nothing to run, so a client
@@ -67,15 +99,17 @@ export function applyClientExtension<TClient extends object, TExtension extends 
 export function applyBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
+  onOptions?: (options: EmailSendOptions | undefined) => void,
 ): MaybePromise<EmailBeforeSendEvent> {
   if (middleware.length === 0) return event;
 
-  return runBeforeSendMiddleware(middleware, event);
+  return runBeforeSendMiddleware(middleware, event, onOptions);
 }
 
 async function runBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
+  onOptions?: (options: EmailSendOptions | undefined) => void,
 ): Promise<EmailBeforeSendEvent> {
   let message = event.message;
   let options = event.options;
@@ -84,10 +118,36 @@ async function runBeforeSendMiddleware(
     try {
       const result = await item.beforeSend?.({ message, options });
 
-      if (result?.message) message = result.message;
+      if (result !== undefined && !isNonArrayObject(result)) {
+        throw new EmailValidationError("beforeSend middleware must return an object or undefined.");
+      }
 
-      if (result?.options) options = Object.assign({}, options, result.options);
+      const nextMessage = result?.message;
+      const nextOptions = result?.options;
+
+      if (nextMessage !== undefined) {
+        if (!isNonArrayObject(nextMessage)) {
+          throw new EmailValidationError("Email message must be an object.");
+        }
+
+        message = nextMessage;
+      }
+
+      if (nextOptions !== undefined) {
+        if (!isNonArrayObject(nextOptions)) {
+          throw new EmailValidationError("Email send options must be an object.");
+        }
+
+        // A fresh object per middleware, never the caller's options. The clone keeps own keys set
+        // to undefined, so middleware can still clear a setting.
+        const merged: EmailSendOptions = { ...options, ...cloneNestedSendOptions(nextOptions) };
+
+        options = merged;
+      }
+
+      onOptions?.(options);
     } catch (error) {
+      onOptions?.(options);
       throw new EmailMiddlewareError("before_send", error);
     }
   }
@@ -95,22 +155,41 @@ async function runBeforeSendMiddleware(
   return { message, options };
 }
 
+export function cloneAdapterError(error: EmailAdapterError): EmailAdapterError {
+  const copy = new EmailAdapterError(error.message, {
+    adapter: error.adapter,
+    status: error.status,
+    requestId: error.requestId,
+    retryable: error.retryable,
+    delivery: error.delivery,
+    acceptedCount: error.acceptedCount,
+    rejectedCount: error.rejectedCount,
+    cause: error.cause,
+  });
+
+  copy.stack = error.stack;
+
+  return copy;
+}
+
 export function invokeAfterSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailAfterSendEvent,
+  createEvent: () => EmailAfterSendEvent,
 ): Promise<void> | undefined {
   if (middleware.length === 0) return undefined;
 
-  return runAfterSendMiddleware(middleware, event);
+  return runAfterSendMiddleware(middleware, createEvent);
 }
 
 async function runAfterSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailAfterSendEvent,
+  createEvent: () => EmailAfterSendEvent,
 ) {
   for (const item of middleware) {
+    if (!item.afterSend) continue;
+
     try {
-      await item.afterSend?.(event);
+      await item.afterSend(createEvent());
     } catch (error) {
       throw new EmailMiddlewareError("after_send", error);
     }
@@ -119,33 +198,26 @@ async function runAfterSendMiddleware(
 
 export function invokeErrorMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailErrorEvent,
+  createEvent: () => EmailErrorEvent,
 ): Promise<void> | undefined {
   if (middleware.length === 0) return undefined;
 
-  return runErrorMiddleware(middleware, event);
+  return runErrorMiddleware(middleware, createEvent);
 }
 
 async function runErrorMiddleware(
   middleware: readonly EmailSendMiddleware[],
-  event: EmailErrorEvent,
+  createEvent: () => EmailErrorEvent,
 ) {
   for (const item of middleware) {
+    if (!item.onError) continue;
+
     try {
-      await item.onError?.(event);
+      await item.onError(createEvent());
     } catch (error) {
       throw new EmailMiddlewareError("on_error", error);
     }
   }
-}
-
-export async function invokeSendFailureLifecycle(
-  middleware: readonly EmailSendMiddleware[],
-  hooks: readonly EmailHooks[],
-  event: EmailErrorEvent,
-) {
-  await invokeErrorMiddleware(middleware, event);
-  await invokeHooks(hooks, "onError", event);
 }
 
 type EmailHookEvents = {
@@ -160,23 +232,26 @@ type EmailHookHandlers = {
 export function invokeHooks<K extends keyof EmailHooks>(
   hooks: readonly EmailHooks[],
   name: K,
-  event: EmailHookEvents[K],
+  createEvent: () => EmailHookEvents[K],
 ): Promise<void> | undefined {
   if (hooks.length === 0) return undefined;
 
-  return runHooks(hooks, name, event);
+  return runHooks(hooks, name, createEvent);
 }
 
 async function runHooks<K extends keyof EmailHooks>(
   hooks: readonly EmailHooks[],
   name: K,
-  event: EmailHookEvents[K],
+  createEvent: () => EmailHookEvents[K],
 ) {
   for (const hook of hooks) {
     try {
       const handlers: EmailHookHandlers = hook;
+      const handler = handlers[name];
 
-      await handlers[name]?.(event);
+      if (!handler) continue;
+
+      await handler(createEvent());
     } catch {
       // Hooks are observability callbacks and never change delivery behavior.
     }

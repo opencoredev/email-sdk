@@ -22,7 +22,7 @@ export function mailchimp(
     name: "mailchimp",
     baseUrl: options.baseUrl ?? "https://mandrillapp.com/api/1.0",
     endpoint: "/messages/send",
-    headers: {},
+    headers: () => ({}),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("mailchimp", message, SUPPORTED_MESSAGE_FIELDS.mailchimp);

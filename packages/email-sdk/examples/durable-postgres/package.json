@@ -13,7 +13,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencoredev/email-sdk": "^1.3.0",
+    "@opencoredev/email-sdk": "^3.0.1",
     "dotenv": "^16.6.1",
     "pg": "^8.16.3"
   },

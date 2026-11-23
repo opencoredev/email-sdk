@@ -81,6 +81,7 @@ export const ADAPTER_SUPPORT_ENTRIES = [
     setupHref: "/docs/adapters/ses",
     fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
     capabilities: { repeatedHeaders: true, idempotency: "none", scheduling: false, personalized: "expanded" },
+    limits: ["Accepts at most 15 headers per message."],
   },
   {
     id: "mailgun",

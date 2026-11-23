@@ -724,6 +724,37 @@ describe("email-sdk CLI", () => {
     expect(JSON.parse(stdout).message.sendAt).toBe("2026-07-21T01:00:00Z");
   });
 
+  test("dry run with --json wraps the plan as { ok: true, result }", async () => {
+    const args = [
+      "send",
+      "--adapter",
+      "resend",
+      "--from",
+      "Acme <hello@example.com>",
+      "--to",
+      "user@example.com",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ];
+
+    const wrapped = await runCli([...args, "--json"]);
+
+    expect(wrapped.stderr).toBe("");
+    expect(wrapped.exitCode).toBe(0);
+    expect(JSON.parse(wrapped.stdout)).toMatchObject({
+      ok: true,
+      result: { adapter: "resend", message: { subject: "Hello" } },
+    });
+
+    const plain = await runCli(args);
+
+    expect(JSON.parse(plain.stdout)).toMatchObject({ ok: true, adapter: "resend" });
+    expect(JSON.parse(plain.stdout)).not.toHaveProperty("result");
+  });
+
   test("Iterable keeps adapter scheduling separate from message scheduling", async () => {
     const adapterSchedule = await runCli([
       "send",
@@ -765,6 +796,281 @@ describe("email-sdk CLI", () => {
 
     expect(messageSchedule.exitCode).toBe(1);
     expect(messageSchedule.stderr).toContain("does not support scheduled email");
+  });
+});
+
+describe("send routing flags", () => {
+  const sendArgs = [
+    "send",
+    "--from",
+    "hello@example.com",
+    "--to",
+    "user@example.com",
+    "--subject",
+    "Hello",
+    "--text",
+    "It works",
+  ];
+
+  /** Unosend at /uno answers with `unosendStatus`; Iterable at /it accepts the send. */
+  function providers(unosendStatus: number) {
+    const requests: string[] = [];
+
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const path = new URL(request.url).pathname;
+        requests.push(path);
+
+        if (path.startsWith("/uno")) {
+          return Response.json({ message: "nope" }, { status: unosendStatus });
+        }
+
+        return Response.json({ code: "Success", msg: "ok" });
+      },
+    });
+
+    const origin = `http://127.0.0.1:${server.port}`;
+
+    return {
+      requests,
+      args: ["--adapter", "unosend", "--api-key", "uno-key", "--base-url", `${origin}/uno`],
+      env: { ITERABLE_API_KEY: "it-key", ITERABLE_CAMPAIGN_ID: "7", ITERABLE_BASE_URL: `${origin}/it` },
+      stop: () => server.stop(true),
+    };
+  }
+
+  test("--fallback sends through the next adapter after a definite rejection", async () => {
+    const fixture = providers(401);
+
+    try {
+      const { stdout, stderr, exitCode } = await runCli(
+        [...sendArgs, ...fixture.args, "--fallback", "iterable", "--json"],
+        fixture.env,
+      );
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({ ok: true, result: { adapter: "iterable" } });
+      expect(fixture.requests).toEqual(["/uno/emails", "/it/api/email/target"]);
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test("without --json a successful send prints the bare result as before", async () => {
+    const fixture = providers(401);
+
+    try {
+      const { stdout, exitCode } = await runCli([...sendArgs, ...fixture.args, "--fallback", "iterable"], fixture.env);
+
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({ adapter: "iterable" });
+      expect(JSON.parse(stdout)).not.toHaveProperty("ok");
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test("--max-attempts retries the adapter, and --json reports the route failure on stdout", async () => {
+    const fixture = providers(503);
+
+    try {
+      const { stdout, stderr, exitCode } = await runCli(
+        [...sendArgs, ...fixture.args, "--max-attempts", "3", "--fallback", "iterable", "--json"],
+        fixture.env,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stderr).toBe("");
+      // A 503 leaves delivery unknown, so the default policy does not fall back to Iterable.
+      expect(fixture.requests).toEqual(["/uno/emails", "/uno/emails", "/uno/emails"]);
+      expect(JSON.parse(stdout)).toEqual({
+        ok: false,
+        error: {
+          name: "EmailRouteError",
+          code: "route_error",
+          message: "All configured email adapters failed.",
+          retryable: false,
+          failures: [
+            {
+              name: "EmailAdapterError",
+              code: "adapter_error",
+              message: "unosend failed with 503: nope",
+              retryable: true,
+              adapter: "unosend",
+              status: 503,
+              delivery: "unknown",
+            },
+          ],
+        },
+      });
+    } finally {
+      fixture.stop();
+    }
+  });
+
+  test.each([["0"], ["two"], ["1.5"]])("rejects --max-attempts %s as a usage error", async (value) => {
+    const { stdout, stderr, exitCode } = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--max-attempts",
+      value,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe("");
+    expect(JSON.parse(stdout)).toEqual({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+        message: "--max-attempts must be a whole number of at least 1.",
+      },
+    });
+  });
+
+  test("dry run validates the message against fallback adapters and shows the route", async () => {
+    const plan = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--fallback",
+      "postmark,resend,postmark",
+      "--max-attempts",
+      "2",
+      "--dry-run",
+    ]);
+
+    expect(plan.exitCode).toBe(0);
+    expect(JSON.parse(plan.stdout)).toMatchObject({ ok: true, adapter: "resend", fallback: ["postmark"], maxAttempts: 2 });
+
+    // Cloudflare accepts only plain recipient addresses, so the route fails before any send.
+    const rejected = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--fallback",
+      "cloudflare",
+      "--from",
+      "hello@example.com",
+      "--to",
+      "Ada <ada@example.com>",
+      "--subject",
+      "Hello",
+      "--text",
+      "It works",
+      "--dry-run",
+    ]);
+
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toContain("cloudflare");
+  });
+
+  test("a plain dry run prints the same plan shape as before", async () => {
+    const { stdout, exitCode } = await runCli([...sendArgs, "--adapter", "resend", "--dry-run"]);
+
+    expect(exitCode).toBe(0);
+    expect(Object.keys(JSON.parse(stdout))).toEqual(["ok", "adapter", "message"]);
+  });
+
+  test("rejects an unknown fallback adapter", async () => {
+    const { stderr, exitCode } = await runCli([
+      ...sendArgs,
+      "--adapter",
+      "resend",
+      "--fallback",
+      "nope",
+      "--dry-run",
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('Unsupported fallback adapter "nope"');
+  });
+
+  test("send --json reports missing and malformed --message files as JSON on stdout", async () => {
+    const missing = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      "/tmp/email-sdk-definitely-missing-message-file.json",
+      "--json",
+    ]);
+
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toBe("");
+    expect(JSON.parse(missing.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+      },
+    });
+
+    const dir = mkdtempSync(join(tmpdir(), "email-sdk-bad-message-"));
+    const invalidPath = join(dir, "bad.json");
+    await Bun.write(invalidPath, "{not-valid-json");
+
+    const malformed = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      invalidPath,
+      "--json",
+    ]);
+
+    expect(malformed.exitCode).toBe(1);
+    expect(malformed.stderr).toBe("");
+    expect(JSON.parse(malformed.stdout)).toMatchObject({
+      ok: false,
+      error: {
+        name: "CliError",
+        code: "cli_error",
+      },
+    });
+
+    const bare = await runCli(["send", "--adapter", "resend", "--message", "--json"]);
+    expect(bare.exitCode).toBe(1);
+    expect(bare.stderr).toBe("");
+    expect(JSON.parse(bare.stdout)).toMatchObject({
+      ok: false,
+      error: { code: "cli_error" },
+    });
+
+    const badAttachmentPath = join(dir, "bad-attachment.json");
+    await Bun.write(
+      badAttachmentPath,
+      JSON.stringify({
+        from: "a@example.com",
+        to: "b@example.com",
+        subject: "hi",
+        text: "hi",
+        attachments: [null],
+      }),
+    );
+
+    const badAttachment = await runCli([
+      "send",
+      "--adapter",
+      "resend",
+      "--message",
+      badAttachmentPath,
+      "--dry-run",
+      "--json",
+    ]);
+
+    expect(badAttachment.exitCode).toBe(1);
+    expect(badAttachment.stderr).toBe("");
+    expect(JSON.parse(badAttachment.stdout)).toMatchObject({
+      ok: false,
+      error: { code: "validation_error" },
+    });
   });
 });
 

@@ -1,5 +1,12 @@
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
-import { isJsonObject, isJsonString, jsonField, jsonString } from "./internal/decode.js";
+import { snapshotMessageForSend } from "./http.js";
+import {
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  jsonField,
+  jsonString,
+} from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersArray, emailParts } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
@@ -61,7 +68,10 @@ type TokenProvider = {
 
 const graphRules: MessageRules = (message) => {
   const headers = headerList(message.headers);
-  const invalidHeaders = headers.flatMap((header) => (/^x-/i.test(header.name) ? [] : [header.name]));
+
+  const invalidHeaders = headers.flatMap((header) =>
+    /^x-/i.test(header.name) ? [] : [header.name],
+  );
 
   if (invalidHeaders.length > 0) {
     throw new EmailValidationError(
@@ -82,7 +92,8 @@ export function graph(options: GraphAdapterOptions): EmailAdapter<"graph", { bas
     name: "graph",
     ...builtInAdapterDefinition("graph", graphRules),
     raw: { baseUrl },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       validateBuiltInAdapter("graph", message, graphRules);
 
       let token = await resolveAccessToken(accessToken, context.signal);
@@ -204,13 +215,6 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
   const tokenUrl =
     options.tokenUrl ?? `https://login.microsoftonline.com/${options.tenantId}/oauth2/v2.0/token`;
 
-  const body = new URLSearchParams({
-    client_id: options.clientId,
-    client_secret: options.clientSecret,
-    scope: options.scope ?? "https://graph.microsoft.com/.default",
-    grant_type: "client_credentials",
-  });
-
   let cached: { accessToken: string; refreshAt: number } | undefined;
   let refreshing: Promise<NonNullable<typeof cached>> | undefined;
   const tokenTimeoutMs = options.tokenTimeoutMs ?? DEFAULT_TOKEN_TIMEOUT_MS;
@@ -231,11 +235,20 @@ function createTokenProvider(options: GraphAdapterOptions, fetcher: typeof fetch
         return cached.accessToken;
       }
 
-      refreshing ??= requestAccessToken(fetcher, tokenUrl, body, tokenTimeoutMs)
-        .then((token) => (cached = token))
-        .finally(() => {
-          refreshing = undefined;
+      if (!refreshing) {
+        const body = new URLSearchParams({
+          client_id: options.clientId,
+          client_secret: options.clientSecret,
+          scope: options.scope ?? "https://graph.microsoft.com/.default",
+          grant_type: "client_credentials",
         });
+
+        refreshing = requestAccessToken(fetcher, tokenUrl, body, tokenTimeoutMs)
+          .then((token) => (cached = token))
+          .finally(() => {
+            refreshing = undefined;
+          });
+      }
 
       return (await refreshing).accessToken;
     },
@@ -300,14 +313,29 @@ async function requestAccessToken(
     });
   }
 
+  const lifetimeMs = tokenLifetimeSeconds(jsonField(responseBody, "expires_in")) * 1_000;
+
   return {
     accessToken,
-    // Some Microsoft identity endpoints send expires_in as a numeric string.
-    refreshAt:
-      Date.now() +
-      Number(jsonField(responseBody, "expires_in") ?? 3_600) * 1_000 -
-      TOKEN_REFRESH_SKEW_MS,
+    refreshAt: Date.now() + Math.max(lifetimeMs - TOKEN_REFRESH_SKEW_MS, 0),
   };
+}
+
+const DEFAULT_TOKEN_LIFETIME_SECONDS = 3_600;
+
+/**
+ * Some Microsoft identity endpoints send expires_in as a numeric string. Anything else that is
+ * not a positive finite number (missing, null, "", "soon") falls back to one hour; otherwise NaN
+ * or 0 would make every cached token look expired and every send would exchange a new one.
+ */
+function tokenLifetimeSeconds(expiresIn: JsonValue | undefined): number {
+  const seconds = isJsonNumber(expiresIn)
+    ? expiresIn
+    : isJsonString(expiresIn) && expiresIn.trim() !== ""
+      ? Number(expiresIn)
+      : Number.NaN;
+
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_TOKEN_LIFETIME_SECONDS;
 }
 
 async function toGraphPayload(message: EmailMessage, saveToSentItems?: boolean) {

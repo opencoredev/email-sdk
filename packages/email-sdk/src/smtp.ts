@@ -4,12 +4,14 @@ import type Mail from "nodemailer/lib/mailer/index.js";
 import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 
 import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { isStringMember } from "./internal/decode.js";
 import { isRetryableSmtpError, smtpDeliveryState } from "./smtp-errors.js";
 import type { EmailAdapter, EmailAttachment, EmailMessage } from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
   arrayify,
+  attachmentToBytes,
   emailAddressOf,
   formatAddress,
   formatAddresses,
@@ -91,7 +93,8 @@ export function smtp<const Name extends string = "smtp">(
       validateBuiltInAdapter("smtp", message, smtpRules);
     },
     raw: { host: options.host, port },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
       validateBuiltInAdapter("smtp", message, smtpRules);
 
       let mail: SendMailOptions;
@@ -99,6 +102,7 @@ export function smtp<const Name extends string = "smtp">(
       try {
         mail = await toNodemailerMessage(message, options.defaults, context.idempotencyKey);
       } catch (error) {
+        if (error instanceof EmailValidationError) throw error;
         throw new EmailAdapterError(
           error instanceof Error ? error.message : "SMTP message preparation failed.",
           { adapter: name, delivery: "not_sent", retryable: false, cause: error },
@@ -215,38 +219,27 @@ async function toNodemailerMessage(
 }
 
 async function toNodemailerAttachment(attachment: EmailAttachment): Promise<Mail.Attachment> {
-  const content = "content" in attachment ? await nodemailerContent(attachment.content) : undefined;
+  const content = await nodemailerContent(attachment);
 
-  const result: Mail.Attachment = {
+  return {
     filename: attachment.filename,
     contentType: attachment.contentType,
     cid: attachment.contentId,
     contentDisposition: attachment.disposition,
+    content,
   };
-
-  if (content === undefined) {
-    result.path = attachment.path;
-  } else {
-    result.content = content;
-  }
-
-  if (attachment.contentEncoding === "base64") {
-    result.encoding = "base64";
-  }
-
-  return result;
 }
 
 async function nodemailerContent(
-  content: EmailAttachment["content"],
-): Promise<string | Buffer | undefined> {
-  if (isStringMember(content)) return content;
+  attachment: EmailAttachment,
+): Promise<string | Buffer> {
+  if (
+    attachment.path === undefined &&
+    isStringMember(attachment.content) &&
+    attachment.contentEncoding !== "base64"
+  ) {
+    return attachment.content;
+  }
 
-  if (content instanceof ArrayBuffer) return Buffer.from(new Uint8Array(content));
-
-  if (content instanceof Uint8Array) return Buffer.from(content);
-
-  if (content instanceof Blob) return Buffer.from(await content.arrayBuffer());
-
-  return undefined;
+  return Buffer.from(await attachmentToBytes(attachment));
 }

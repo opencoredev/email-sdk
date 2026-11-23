@@ -16,9 +16,9 @@ export function mailpace(
     name: "mailpace",
     baseUrl: options.baseUrl ?? "https://app.mailpace.com/api/v1",
     endpoint: "/send",
-    headers: {
+    headers: () => ({
       "MailPace-Server-Token": options.apiKey,
-    },
+    }),
     buildPayload(message) {
       assertSupportedMessageFields("mailpace", message, SUPPORTED_MESSAGE_FIELDS.mailpace);
 

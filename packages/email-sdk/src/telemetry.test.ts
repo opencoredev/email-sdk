@@ -504,6 +504,67 @@ describe("telemetry notice", () => {
   });
 });
 
+describe("telemetry notice without a notify option", () => {
+  /** Runs `run` with process.stderr.isTTY forced to `isTTY` and captures what reaches stderr. */
+  function withStderr(isTTY: boolean, run: () => void) {
+    const written: string[] = [];
+    const stderr = process.stderr;
+    const original = Object.getOwnPropertyDescriptor(stderr, "isTTY");
+    const write = stderr.write;
+
+    Object.defineProperty(stderr, "isTTY", { value: isTTY, configurable: true });
+    stderr.write = (chunk: string | Uint8Array) => {
+      written.push(String(chunk));
+
+      return true;
+    };
+
+    try {
+      run();
+    } finally {
+      stderr.write = write;
+
+      if (original) Object.defineProperty(stderr, "isTTY", original);
+      else Reflect.deleteProperty(stderr, "isTTY");
+    }
+
+    return written;
+  }
+
+  function noticeShown(configDir: string) {
+    // SAFETY: createTelemetry writes this state file, and it always records noticeShown.
+    const state = JSON.parse(readFileSync(join(configDir, "telemetry.json"), "utf8")) as {
+      noticeShown: boolean;
+    };
+
+    return state.noticeShown;
+  }
+
+  test("prints nothing when stderr is not a terminal and keeps the notice pending", () => {
+    const configDir = tempConfigDir();
+
+    const written = withStderr(false, () => {
+      createTelemetry({ env: {}, fetch: fetchCapture().fetchFn, configDir });
+    });
+
+    expect(written).toEqual([]);
+    expect(noticeShown(configDir)).toBe(false);
+  });
+
+  test("prints the notice once on a terminal, including after a non-terminal run", () => {
+    const configDir = tempConfigDir();
+    const options = { env: {}, fetch: fetchCapture().fetchFn, configDir };
+
+    withStderr(false, () => createTelemetry(options));
+    const first = withStderr(true, () => createTelemetry(options));
+    const second = withStderr(true, () => createTelemetry(options));
+
+    expect(first).toEqual([`${TELEMETRY_NOTICE}\n`]);
+    expect(second).toEqual([]);
+    expect(noticeShown(configDir)).toBe(true);
+  });
+});
+
 function exceptionTelemetry() {
   const { calls, fetchFn } = fetchCapture();
 

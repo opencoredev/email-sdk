@@ -251,3 +251,34 @@ describe("createEmailClient v1", () => {
     await expect(hookClient.send(message)).resolves.toMatchObject({ adapter: "primary" });
   });
 });
+
+describe("send metadata cloning", () => {
+  test("a repeated Date or URL reference stays one object, so Map lookups still work", async () => {
+    const date = new Date("2026-11-23T00:00:00Z");
+    const link = new URL("https://example.com/receipt");
+    let seen: { date: Date; link: URL; labels: Map<Date | URL, string> } | undefined;
+
+    const client = createEmailClient({
+      adapters: [
+        adapter("primary", (_message, context) => {
+          // SAFETY: the test sends exactly this metadata shape below.
+          seen = context.metadata as typeof seen;
+
+          return { adapter: "primary", id: "p_1" };
+        }),
+      ],
+      telemetry: false,
+    });
+
+    const labels = new Map<Date | URL, string>([
+      [date, "receipt"],
+      [link, "link"],
+    ]);
+
+    await client.send(message, { metadata: { date, link, labels } });
+
+    expect(seen?.date).not.toBe(date);
+    expect(seen?.date && seen.labels.get(seen.date)).toBe("receipt");
+    expect(seen?.link && seen.labels.get(seen.link)).toBe("link");
+  });
+});

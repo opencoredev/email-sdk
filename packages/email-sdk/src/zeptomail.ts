@@ -14,13 +14,14 @@ export type ZeptoMailAdapterOptions = {
 export function zeptomail(
   options: ZeptoMailAdapterOptions,
 ): EmailAdapter<"zeptomail", { baseUrl: string }> {
+  // Fail at construction for a bad token, then read it again on every send so rotation works.
+  zeptoAuthorization(options.token);
+
   return jsonProvider({
     name: "zeptomail",
     baseUrl: options.baseUrl ?? "https://api.zeptomail.com",
     endpoint: "/v1.1/email",
-    headers: {
-      Authorization: zeptoAuthorization(options.token),
-    },
+    headers: () => ({ Authorization: zeptoAuthorization(options.token) }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("zeptomail", message, SUPPORTED_MESSAGE_FIELDS.zeptomail);

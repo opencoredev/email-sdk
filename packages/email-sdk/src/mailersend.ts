@@ -35,9 +35,9 @@ export function mailersend(
     rules: mailersendRules,
     baseUrl: options.baseUrl ?? "https://api.mailersend.com",
     endpoint: "/v1/email",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("mailersend", message, SUPPORTED_MESSAGE_FIELDS.mailersend);
