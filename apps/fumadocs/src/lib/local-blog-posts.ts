@@ -91,7 +91,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the SendGrid API from Node.js and TypeScript with fetch: API keys, v3 Mail Send, templates, scheduling, sandbox mode, rate limits, and signed webhooks.",
     publishedAt: "2026-11-03",
-    updatedAt: "2026-11-16",
+    updatedAt: "2026-11-23",
     readTime: "13 min read",
     image: "/og/blog/sendgrid-api-nodejs-typescript.svg",
     imageAlt: "SendGrid API guide card: API keys, Mail Send, sandbox mode, and signed webhooks in TypeScript",
@@ -103,7 +103,7 @@ export const localBlogPosts: readonly BlogPost[] = [
     description:
       "Use the Brevo API from Node.js and TypeScript with fetch: the api-key header, templates, scheduling, batch sends, idempotency keys, rate limits, and webhooks.",
     publishedAt: "2026-11-02",
-    updatedAt: "2026-11-12",
+    updatedAt: "2026-11-23",
     readTime: "14 min read",
     image: "/og/blog/brevo-api-nodejs-typescript.svg",
     imageAlt: "Brevo API guide card: fetch, batch sends, idempotency, and webhooks in TypeScript",
