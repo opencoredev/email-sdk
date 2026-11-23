@@ -1,6 +1,8 @@
-# Mailgun Alternatives for Developers, and How to Switch
+# Mailgun Alternatives in 2026: 5 APIs and How to Switch
 
 Mailgun is a capable API, and it still supports every message field Email SDK models. Teams usually look elsewhere for narrower reasons: the free plan and Basic keep [one day of logs](https://www.mailgun.com/pricing/), the free plan caps you at 100 emails a day, or they want a different deliverability or support experience. The switch itself is the risky part, because a half-finished migration loses mail.
+
+The five Mailgun alternatives compared here are Resend, Postmark, SendGrid, Amazon SES and Lettermint. Resend has the largest free tier and native idempotency keys, Postmark keeps 45 days of history on its entry plan, SendGrid accepts the same message fields as Mailgun, SES costs the least at volume, and Lettermint keeps data in the EU.
 
 This post covers what to check in a replacement, a short sourced comparison, and a migration that keeps Mailgun as the fallback until the new provider has proven itself. It ends with complete code that passes its own tests.
 

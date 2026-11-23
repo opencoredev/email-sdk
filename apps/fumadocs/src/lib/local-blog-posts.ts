@@ -135,11 +135,11 @@ export const localBlogPosts: readonly BlogPost[] = [
   },
   {
     slug: "resend-pricing",
-    title: "Resend Pricing: Free Tier, Pro, Scale and Overage",
+    title: "Resend Pricing in 2026: Free Tier, Limits and Overage",
     description:
-      "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume.",
+      "Resend pricing in 2026: the free tier's 3,000 emails a month (100 a day), Pro from $20, Scale from $90, overage, rate limits, and the cheapest plan by volume.",
     publishedAt: "2026-10-30",
-    updatedAt: "2026-11-17",
+    updatedAt: "2026-11-23",
     readTime: "8 min read",
     image: "/og/blog/resend-pricing.svg",
     imageAlt: "Resend pricing card: free tier, Pro and Scale plans, and overage rates",
@@ -183,11 +183,11 @@ export const localBlogPosts: readonly BlogPost[] = [
   },
   {
     slug: "mailgun-alternatives",
-    title: "Mailgun Alternatives for Developers, and How to Switch",
+    title: "Mailgun Alternatives in 2026: 5 APIs and How to Switch",
     description:
-      "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback.",
+      "Mailgun alternatives in 2026: Resend, Postmark, SendGrid, Amazon SES and Lettermint by price, log retention and fields, plus a TypeScript switch with fallback.",
     publishedAt: "2026-10-29",
-    updatedAt: "2026-11-15",
+    updatedAt: "2026-11-23",
     readTime: "11 min read",
     image: "/og/blog/mailgun-alternatives.svg",
     imageAlt: "Mailgun alternatives card: sourced prices, log retention, and a fallback migration in TypeScript",

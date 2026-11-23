@@ -1,12 +1,12 @@
-# Resend Pricing: Free Tier, Pro, Scale and Overage
+# Resend Pricing in 2026: Free Tier, Limits and Overage
 
-Resend's free plan costs $0 and includes 3,000 transactional emails a month, capped at 100 a day. Paid sending plans start at $20 a month for 50,000 emails (Pro), and Scale starts at $90 a month for 100,000. Paid plans can keep sending past their quota at $0.46 to $0.90 per extra 1,000 emails, depending on the tier. Every number on this page comes from [resend.com/pricing](https://resend.com/pricing) and Resend's [usage limits docs](https://resend.com/docs/api-reference/rate-limit), checked October 2026. Prices change, so confirm them there before you buy.
+Resend's free plan costs $0 and includes 3,000 transactional emails a month, capped at 100 a day. Paid sending plans start at $20 a month for 50,000 emails (Pro), and Scale starts at $90 a month for 100,000. Paid plans can keep sending past their quota at $0.46 to $0.90 per extra 1,000 emails, depending on the tier. Every number on this page comes from [resend.com/pricing](https://resend.com/pricing) and Resend's [usage limits docs](https://resend.com/docs/api-reference/rate-limit), checked November 2026. Prices change, so confirm them there before you buy.
 
 This page covers what each plan includes, what counts against the quota, what happens when you run out, and how to keep tests and CI from spending it. Want code? The [Resend API guide for Node.js and TypeScript](/blog/resend-api-nodejs-typescript) shows the API calls.
 
 ## Transactional plans
 
-Resend bills transactional email (the `/emails` API) separately from marketing email (Broadcasts). This table lists the transactional tiers ([Resend pricing](https://resend.com/pricing), checked Oct 2026):
+Resend bills transactional email (the `/emails` API) separately from marketing email (Broadcasts). This table lists the transactional tiers ([Resend pricing](https://resend.com/pricing), checked Nov 2026):
 
 | Plan | Price per month | Emails per month | Extra emails, per 1,000 | Daily limit | Domains |
 | --- | --- | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ Resend's pricing page and usage-limits docs list what draws from the transaction
 
 ## What happens when you run out
 
-When you pass a limit, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Oct 2026):
+When you pass a limit, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Nov 2026):
 
 | Error | When | What to do |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a
 
 ## Marketing plans
 
-Broadcasts are priced by stored contacts, not by emails sent ([Resend pricing](https://resend.com/pricing), checked Oct 2026):
+Broadcasts are priced by stored contacts, not by emails sent ([Resend pricing](https://resend.com/pricing), checked Nov 2026):
 
 | Plan | Price per month | Contacts |
 | --- | --- | --- |
