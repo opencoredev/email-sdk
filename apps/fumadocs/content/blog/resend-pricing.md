@@ -21,7 +21,7 @@ Resend bills transactional email (the `/emails` API) separately from marketing e
 | Scale | $1,150 | 2,500,000 | $0.46 | none | 1,000 |
 | Enterprise | custom | custom | custom | none | by contract |
 
-Free, Pro and Scale keep 30 days of email logs; Enterprise retention is set by contract. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Billing is monthly only: Resend has no annual plans and no annual discount. Registered nonprofits can apply for 50% off paid plans.
+Free, Pro and Scale keep 30 days of email logs; Enterprise retention is set by contract. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Self-serve plans are billed monthly only, with no annual plans and no annual discount; annual commitments at high volume go through Resend's sales team. Registered nonprofits can apply for 50% off paid plans.
 
 Every plan includes the REST API, the SMTP relay, the official SDKs, inbound email, scheduled sending, batch sending, open and link tracking, and DKIM, SPF and DMARC authentication. Open and click tracking also work on Free.
 
@@ -46,7 +46,7 @@ Resend's pricing page and usage-limits docs list what draws from the transaction
 
 ## What happens when you run out
 
-When you pass a limit, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Nov 2026):
+When you pass a sending quota, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Nov 2026):
 
 | Error | When | What to do |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ On a paid plan, pay-as-you-go lets you keep sending past the quota. Resend charg
 
 The API also sets two headers on every response, so you can watch usage before you hit the wall: `x-resend-monthly-quota` (used monthly quota) and, on Free only, `x-resend-daily-quota` (used daily quota).
 
-Upgrading doesn't change the API rate limit. It's 10 requests per second per team on every plan, shared by all of the team's API keys, and returns `429 rate_limit_exceeded` when you pass it. The batch endpoint sends up to 100 emails per request and counts as one request, which is the usual way to stay under it. Resend raises the limit for trusted senders on request.
+Upgrading doesn't change the API rate limit. The default is 10 requests per second per team on every plan, shared by all of the team's API keys, and returns `429 rate_limit_exceeded` when you pass it. The batch endpoint sends up to 100 emails per request and counts as one request, which is the usual way to stay under it. Resend raises the limit for trusted senders on request.
 
 ## Which plan is cheapest at your volume
 
@@ -73,7 +73,7 @@ Overage changes which plan wins, because Pro charges the same $0.90 per extra 1,
 | 500,000 | Scale $350 | $350 |
 | 1,000,000 | Scale $650 | $650 |
 
-Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: more than 10 domains, a dedicated IP, SSO, or more webhook endpoints. Pro and Scale can also add 100 domains for $20 a month.
+Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: a dedicated IP, SSO, more than 5 webhook endpoints, or more than 110 domains. Pro includes 10 domains, and its $20-a-month add-on raises that to 110, which is cheaper than Scale if domains are the only reason to upgrade.
 
 ## Marketing plans
 

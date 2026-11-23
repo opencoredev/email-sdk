@@ -33,6 +33,18 @@ const result = await email.send({
 console.log(result.adapter, result.id);
 ```
 
+Run it. Bun loads `.env.local` on its own:
+
+```bash
+bun src/send-welcome.ts
+```
+
+On Node.js 20.6 or later, load the file with `--env-file`, for example through `tsx`:
+
+```bash
+npx tsx --env-file=.env.local src/send-welcome.ts
+```
+
 That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.
 
 ## Check a message without sending
