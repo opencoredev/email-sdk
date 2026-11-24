@@ -348,6 +348,37 @@ describe("graph payloads", () => {
 });
 
 describe("graph authentication", () => {
+  test.each([
+    ["missing", undefined],
+    ["null", null],
+    ["non-numeric string", "soon"],
+    ["empty string", ""],
+    ["zero", 0],
+    ["negative", -5],
+  ])("reuses the token for an hour when expires_in is %s", async (_label, expiresIn) => {
+    const tokenBody: JsonValue =
+      expiresIn === undefined ? { access_token: "t" } : { access_token: "t", expires_in: expiresIn };
+
+    const capture = graphCapture({ tokenBody });
+    const adapter = graphAdapter(capture.fetch);
+
+    await adapter.send(message, context);
+    await adapter.send(message, context);
+
+    // One token exchange and two sends; before the fix NaN or 0 forced a new exchange per send.
+    expect(capture.calls.filter((call) => call.url === tokenUrl)).toHaveLength(1);
+  });
+
+  test("honors expires_in sent as a numeric string", async () => {
+    const capture = graphCapture({ tokenBody: { access_token: "t", expires_in: "3600" } });
+    const adapter = graphAdapter(capture.fetch);
+
+    await adapter.send(message, context);
+    await adapter.send(message, context);
+
+    expect(capture.calls.filter((call) => call.url === tokenUrl)).toHaveLength(1);
+  });
+
   test.each([0, -1, NaN, Infinity, 2_147_483_648])(
     "rejects invalid token timeout %s",
     (tokenTimeoutMs) => {

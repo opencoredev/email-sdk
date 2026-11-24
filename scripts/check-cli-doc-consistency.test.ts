@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const docsRoot = new URL("../apps/fumadocs/content/docs/", import.meta.url).pathname;
+const docsRoot = new URL("../apps/docs/content/docs/", import.meta.url).pathname;
 
 function unscopedCommandLines(source: string): number[] {
   const violations: number[] = [];

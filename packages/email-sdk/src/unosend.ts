@@ -37,9 +37,9 @@ export function unosend(
     rules: unosendRules,
     baseUrl: options.baseUrl ?? "https://api.unosend.co",
     endpoint: "/emails",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertUnosendMessage(message);
@@ -55,7 +55,7 @@ export function unosend(
         html: message.html,
         text: message.text,
         headers: commonHeadersObject(message),
-        tags: message.tags,
+        tags: message.tags?.map((tag) => ({ name: tag.name, value: tag.value })),
         attachments: attachments?.map((attachment) => ({
           filename: attachment.filename,
           content: attachment.content,

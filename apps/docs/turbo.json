@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "check-types": {
+      "dependsOn": ["$TURBO_EXTENDS$", "@opencoredev/email-sdk#build"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", ".vercel/output/**"],
+      "cache": false,
+      "passThroughEnv": ["NOTRA_API_KEY", "VERCEL_*"]
+    }
+  }
+}

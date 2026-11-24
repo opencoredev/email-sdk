@@ -12,15 +12,13 @@ import {
   toSendAtDate,
 } from "./utils.js";
 
-export function simpleAddress(address: string) {
-  return { email: address };
-}
-
 const NAMED_ADDRESS = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/;
 
 export function emailParts(address: string | { email: string; name?: string }) {
   if (!isStringMember(address)) {
-    return address;
+    return address.name === undefined
+      ? { email: address.email }
+      : { email: address.email, name: address.name };
   }
 
   // Bare addresses are the common case, and NAMED_ADDRESS cannot match without "<".
@@ -114,18 +112,7 @@ export type RecipientEntry = {
 
 type LegacyRecipientMessage = EmailMessage & {
   recipientVariables?: RecipientVariables;
-  idempotencyKey?: string;
 };
-
-/** Replace `%recipient.key%` tokens; unknown keys are left intact to match native providers. */
-export function substituteRecipientVariables(
-  text: string,
-  variables: Record<string, string | number | boolean>,
-): string {
-  return text.replace(/%recipient\.([\w-]+)%/g, (token, key) =>
-    Object.prototype.hasOwnProperty.call(variables, key) ? String(variables[key]) : token,
-  );
-}
 
 function recipientVariablesLookup(recipientVariables: RecipientVariables | undefined) {
   const lookup = new Map<string, Record<string, string | number | boolean>>();
@@ -159,28 +146,6 @@ export function recipientVariablesMap(message: LegacyRecipientMessage): Recipien
   return map;
 }
 
-/** Render one single-recipient message with its variables substituted into the content. */
-export function expandRecipientMessage(
-  message: LegacyRecipientMessage,
-  entry: RecipientEntry,
-): EmailMessage {
-  const {
-    recipientVariables: _recipientVariables,
-    idempotencyKey: _idempotencyKey,
-    ...base
-  } = message;
-
-  // SAFETY: `message` is an EmailMessage, so it has html or text. Each is substituted only
-  // when present, so the result keeps the same html-or-text shape.
-  return {
-    ...base,
-    to: entry.to,
-    subject: substituteRecipientVariables(message.subject, entry.variables),
-    html: message.html ? substituteRecipientVariables(message.html, entry.variables) : undefined,
-    text: message.text ? substituteRecipientVariables(message.text, entry.variables) : undefined,
-  } as EmailMessage;
-}
-
 export function sendAtDate(message: EmailMessage) {
   return message.sendAt === undefined ? undefined : toSendAtDate(message.sendAt);
 }
@@ -212,6 +177,33 @@ export function sendAtUtcDateTime(message: EmailMessage) {
   const date = sendAtDate(message);
 
   return date === undefined ? undefined : date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+/**
+ * Metadata as string values, for providers whose custom-argument fields accept only strings
+ * (SendGrid `custom_args`, Mailtrap `custom_variables`). `null` becomes `""`. Returns undefined
+ * when there is no metadata, so the field is left out of the payload.
+ */
+export function stringMetadata(
+  metadata: EmailMessage["metadata"],
+): Record<string, string> | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+
+  const entries: Array<[string, string]> = [];
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === undefined) continue;
+
+    entries.push([key, value === null ? "" : String(value)]);
+  }
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries);
 }
 
 export function commonHeadersObject(message: EmailMessage) {

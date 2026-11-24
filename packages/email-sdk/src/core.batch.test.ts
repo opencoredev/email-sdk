@@ -450,3 +450,110 @@ describe("createEmailClient v1", () => {
     ).rejects.toBeInstanceOf(EmailAllRecipientsFailedError);
   });
 });
+
+describe("sendMany concurrency", () => {
+  /** An adapter that records how many sends are in flight; each send waits for its release. */
+  function gatedAdapter() {
+    let inFlight = 0;
+    let peak = 0;
+    const order: string[] = [];
+    const waiting: Array<() => void> = [];
+
+    const gated = adapter("gated", async (value) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      order.push(value.subject);
+      await new Promise<void>((resolve) => waiting.push(resolve));
+      inFlight -= 1;
+
+      if (value.subject === "fail") {
+        throw new EmailAdapterError("no", { adapter: "gated", delivery: "not_sent" });
+      }
+
+      return { adapter: "gated", id: value.subject };
+    });
+
+    // Release sends one at a time, newest first, so completion order differs from input order.
+    const drain = async () => {
+      while (waiting.length > 0 || inFlight > 0) {
+        waiting.pop()?.();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    };
+
+    return { gated, order, drain, peak: () => peak };
+  }
+
+  const items = ["a", "b", "fail", "d", "e", "f", "g"].map((subject) => ({
+    message: { ...message, subject },
+  }));
+
+  test("defaults to one send at a time", async () => {
+    const setup = gatedAdapter();
+    const client = createEmailClient({ adapters: [setup.gated], telemetry: false });
+
+    const sending = client.sendMany(items);
+    await setup.drain();
+    await sending;
+
+    expect(setup.peak()).toBe(1);
+    expect(setup.order).toEqual(["a", "b", "fail", "d", "e", "f", "g"]);
+  });
+
+  test("runs at most `concurrency` sends at once and returns results in input order", async () => {
+    const setup = gatedAdapter();
+    const client = createEmailClient({ adapters: [setup.gated], telemetry: false });
+
+    const sending = client.sendMany(items, { concurrency: 3 });
+    await setup.drain();
+    const results = await sending;
+
+    expect(setup.peak()).toBe(3);
+    expect(results.map((result) => result.index)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(results.map((result) => (result.ok ? result.result.id : "failed"))).toEqual([
+      "a",
+      "b",
+      "failed",
+      "d",
+      "e",
+      "f",
+      "g",
+    ]);
+  });
+
+  test("a concurrency above the item count starts each item once", async () => {
+    const setup = gatedAdapter();
+    const client = createEmailClient({ adapters: [setup.gated], telemetry: false });
+
+    const sending = client.sendMany(items.slice(0, 2), { concurrency: 50 });
+    await setup.drain();
+
+    expect((await sending).map((result) => result.ok)).toEqual([true, true]);
+    expect(setup.order).toEqual(["a", "b"]);
+  });
+
+  test("rejects a concurrency that is not a positive integer", async () => {
+    const client = createEmailClient({ adapters: [adapter("memory")], telemetry: false });
+
+    for (const concurrency of [0, -1, 1.5, Number.NaN, Infinity]) {
+      await expect(client.sendMany(items, { concurrency })).rejects.toThrow("sendMany concurrency");
+    }
+  });
+
+  test("concurrency is a batch setting and never reaches per-send options", async () => {
+    const seen: Array<object | undefined> = [];
+
+    const client = createEmailClient({
+      adapters: [adapter("memory")],
+      plugins: [
+        { id: "spy", middleware: [{ beforeSend: (event) => void seen.push(event.options) }] },
+      ],
+      telemetry: false,
+    });
+
+    await client.sendMany([{ message }], { concurrency: 2 });
+    await client.sendMany([{ message }], { concurrency: 2, metadata: { batch: "b1" } });
+
+    expect(seen).toEqual([undefined, { metadata: { batch: "b1" } }]);
+  });
+});

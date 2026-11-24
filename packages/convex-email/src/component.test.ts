@@ -3,9 +3,16 @@ import { convexTest, type TestConvex } from "convex-test";
 
 import { api } from "./component/_generated/api.js";
 import schema from "./component/schema.js";
-import { buildEmailClient, gateDispatch } from "./component/providers.js";
+import { buildEmailClient, gateDispatch } from "./node/providers.js";
 import { memoryAdapter } from "@opencoredev/email-sdk/testing";
-import { modules } from "./testing.js";
+import {
+  BROKEN_ENV_SENDER,
+  MAPPED_SENDER,
+  modules,
+  RENAMED_SENDER,
+  replacementSenderCalls,
+  SENDER,
+} from "../test-support/sender.js";
 
 function createTest() {
   return convexTest(schema, modules);
@@ -27,6 +34,7 @@ const message = {
 
 async function sendToSent(t: TestConvex<typeof schema>) {
   const emailId = await t.mutation(api.lib.enqueue, {
+    sender: SENDER,
     ...message,
     adapters: [{ kind: "memory" }],
     adapter: "memory",
@@ -45,6 +53,78 @@ async function sendToSent(t: TestConvex<typeof schema>) {
 }
 
 describe("convex-email component", () => {
+  test("a sender's env mapping supplies the credential instead of the default variable", async () => {
+    const t = createTest();
+    const authorizations: (string | null)[] = [];
+
+    process.env.RESEND_API_KEY = "default-key";
+    process.env.MAPPED_RESEND_KEY = "mapped-key";
+    globalThis.fetch = async (_input, init) => {
+      authorizations.push(new Headers(init?.headers).get("authorization"));
+
+      return new Response(JSON.stringify({ id: "mapped-message" }), { status: 200 });
+    };
+
+    try {
+      const emailId = await t.mutation(api.lib.enqueue, {
+        sender: MAPPED_SENDER,
+        ...message,
+        adapters: [{ kind: "resend", baseUrl: "https://resend.example.test" }],
+        adapter: "resend",
+        maxAttempts: 1,
+      });
+
+      await flushScheduled(t);
+
+      expect((await t.query(api.lib.status, { emailId }))?.status).toBe("sent");
+      expect(authorizations).toEqual(["Bearer mapped-key"]);
+    } finally {
+      delete process.env.MAPPED_RESEND_KEY;
+    }
+  });
+
+  test("a throwing env mapping fails the attempt instead of leaving the email queued", async () => {
+    const t = createTest();
+
+    const emailId = await t.mutation(api.lib.enqueue, {
+      sender: BROKEN_ENV_SENDER,
+      ...message,
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    await flushScheduled(t);
+
+    expect(await t.query(api.lib.status, { emailId })).toMatchObject({
+      status: "failed",
+      attemptCount: 1,
+      lastError: "Secret store unavailable.",
+    });
+  });
+
+  test("a manual retry registers and uses the client's current sender", async () => {
+    const t = createTest();
+
+    // No LETTERMINT_API_TOKEN, so the only attempt fails and the email ends failed.
+    const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      adapters: [{ kind: "lettermint" }],
+      adapter: "lettermint",
+      maxAttempts: 1,
+    });
+
+    await flushScheduled(t);
+    expect((await t.query(api.lib.status, { emailId }))?.status).toBe("failed");
+
+    replacementSenderCalls.length = 0;
+    expect(await t.mutation(api.lib.retry, { emailId, sender: RENAMED_SENDER })).toBe(true);
+    await flushScheduled(t);
+
+    expect(replacementSenderCalls).toEqual([emailId]);
+  });
+
   afterEach(() => {
     globalThis.fetch = nativeFetch;
     delete process.env.LETTR_API_KEY;
@@ -59,6 +139,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -75,13 +156,19 @@ describe("convex-email component", () => {
       attemptedAdapters: ["memory"],
       providerMessageId: expect.any(String),
     });
-    expect(events.map((event) => event.type)).toEqual(["queued", "processing", "provider_attempt", "sent"]);
+    expect(events.map((event) => event.type)).toEqual([
+      "queued",
+      "processing",
+      "provider_attempt",
+      "sent",
+    ]);
   });
 
   test("marks emails failed when no adapter can be built", async () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [],
       maxAttempts: 1,
@@ -103,6 +190,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [],
       maxAttempts: 1,
@@ -110,7 +198,7 @@ describe("convex-email component", () => {
 
     await flushScheduled(t);
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
     await flushScheduled(t);
 
     const status = await t.query(api.lib.status, { emailId });
@@ -130,13 +218,14 @@ describe("convex-email component", () => {
       "failed",
     ]);
     const sent = await sendToSent(t);
-    expect(await t.mutation(api.lib.retry, { emailId: sent.emailId })).toBe(false);
+    expect(await t.mutation(api.lib.retry, { emailId: sent.emailId, sender: SENDER })).toBe(false);
   });
 
   test("returns the existing email id for duplicate idempotency keys", async () => {
     const t = createTest();
 
     const firstId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       idempotencyKey: "welcome:ada@example.com",
       adapters: [{ kind: "memory" }],
@@ -144,6 +233,7 @@ describe("convex-email component", () => {
     });
 
     const secondId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       subject: "Duplicate",
       idempotencyKey: "welcome:ada@example.com",
@@ -165,9 +255,19 @@ describe("convex-email component", () => {
       adapter: "memory",
     };
 
-    const firstId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
-    const sameOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_1" });
-    const anotherOwnerId = await t.mutation(enqueueOwned, { email, ownerId: "user_2" });
+    const firstId = await t.mutation(enqueueOwned, { sender: SENDER, email, ownerId: "user_1" });
+
+    const sameOwnerId = await t.mutation(enqueueOwned, {
+      sender: SENDER,
+      email,
+      ownerId: "user_1",
+    });
+
+    const anotherOwnerId = await t.mutation(enqueueOwned, {
+      sender: SENDER,
+      email,
+      ownerId: "user_2",
+    });
 
     expect(sameOwnerId).toBe(firstId);
     expect(anotherOwnerId).not.toBe(firstId);
@@ -185,12 +285,14 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(enqueueOwnedBatch, {
+        sender: SENDER,
         ownerId: "user_1",
         messages: Array.from({ length: 101 }, () => email),
       }),
     ).rejects.toThrow("at most 100");
 
     const ids = await t.mutation(enqueueOwnedBatch, {
+      sender: SENDER,
       ownerId: "user_1",
       messages: [email, { ...email, to: "grace@example.com" }],
     });
@@ -207,9 +309,22 @@ describe("convex-email component", () => {
     });
 
     const ids = await t.mutation(api.lib.enqueueBatch, {
+      sender: SENDER,
       messages: [
-        { to: "a@example.com", subject: "One", text: "1", adapters: [{ kind: "memory" }], adapter: "memory" },
-        { to: "b@example.com", subject: "Two", text: "2", adapters: [{ kind: "memory" }], adapter: "memory" },
+        {
+          to: "a@example.com",
+          subject: "One",
+          text: "1",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
+        {
+          to: "b@example.com",
+          subject: "Two",
+          text: "2",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
       ],
     });
 
@@ -229,9 +344,21 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const ids = await t.mutation(api.lib.enqueueBatch, {
+      sender: SENDER,
       messages: [
-        { ...message, idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
-        { ...message, subject: "Duplicate", idempotencyKey: "batch:ada", adapters: [{ kind: "memory" }], adapter: "memory" },
+        {
+          ...message,
+          idempotencyKey: "batch:ada",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
+        {
+          ...message,
+          subject: "Duplicate",
+          idempotencyKey: "batch:ada",
+          adapters: [{ kind: "memory" }],
+          adapter: "memory",
+        },
       ],
     });
 
@@ -243,6 +370,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueueBatch, {
+        sender: SENDER,
         messages: Array.from({ length: 101 }, () => ({
           ...message,
           adapters: [{ kind: "memory" }],
@@ -264,6 +392,7 @@ describe("convex-email component", () => {
     });
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       to: "real@example.com",
       cc: "cc@example.com",
       bcc: "bcc@example.com",
@@ -296,6 +425,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         to: "real@example.com",
         subject: "Sandbox",
         text: "This should not send.",
@@ -310,6 +440,7 @@ describe("convex-email component", () => {
 
     await expect(
       t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         to: "ada@example.com",
         subject: "No sender",
         text: "Missing from.",
@@ -323,6 +454,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -346,6 +478,7 @@ describe("convex-email component", () => {
     delete process.env.RESEND_API_KEY;
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }],
       adapter: "resend",
@@ -382,6 +515,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       to: ["ada@example.com", "linus@example.com"],
       adapters: [{ kind: "lettr" }],
@@ -439,6 +573,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "lettr" }],
       adapter: "lettr",
@@ -476,6 +611,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -507,6 +643,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -561,6 +698,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "resend" }, { kind: "memory" }],
         adapter: "resend",
@@ -626,6 +764,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "resend" }, { kind: "memory" }],
         adapter: "resend",
@@ -650,7 +789,7 @@ describe("convex-email component", () => {
       });
 
       Date.now = originalNow;
-      expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+      expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
       await flushScheduled(t);
 
       const status = await t.query(api.lib.status, { emailId });
@@ -675,6 +814,7 @@ describe("convex-email component", () => {
     };
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "resend" }, { kind: "memory" }],
       adapter: "resend",
@@ -694,7 +834,7 @@ describe("convex-email component", () => {
       });
     });
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
     await flushScheduled(t);
 
     const status = await t.query(api.lib.status, { emailId });
@@ -725,6 +865,7 @@ describe("convex-email component", () => {
 
     // Resend is registered as "primary"; Postmark is registered under Resend's factory name.
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [
         { kind: "resend", name: "primary" },
@@ -751,6 +892,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [
         { kind: "resend", name: "primary" },
@@ -772,7 +914,7 @@ describe("convex-email component", () => {
       });
     });
 
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(false);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(false);
     expect(await t.query(api.lib.status, { emailId })).toMatchObject({ status: "failed" });
   });
 
@@ -807,21 +949,38 @@ describe("convex-email component", () => {
 
     for (const provider of ["resend", "postmark", "mailgun"]) {
       for (const body of ["null", "[]", "true", "malformed"]) {
-        await expect(t.action(api.worker.handleWebhook, { provider, body, headers: {} })).rejects.toThrow();
+        await expect(
+          t.action(api.worker.handleWebhook, { provider, body, headers: {} }),
+        ).rejects.toThrow();
       }
     }
   });
 
   test("deduplicates Resend delivery headers case-insensitively", async () => {
     const t = createTest();
-    const args = { provider: "resend", headers: { "Svix-Id": "case-id" }, body: '{"type":"email.opened"}' };
+
+    const args = {
+      provider: "resend",
+      headers: { "Svix-Id": "case-id" },
+      body: '{"type":"email.opened"}',
+    };
+
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
-    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({ ok: true, duplicate: true });
+    expect(await t.action(api.worker.handleWebhook, { ...args, body: args.body + " " })).toEqual({
+      ok: true,
+      duplicate: true,
+    });
   });
 
   test("retains generic provider compatibility", async () => {
     const t = createTest();
-    const args = { provider: "custom", headers: {}, body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}' };
+
+    const args = {
+      provider: "custom",
+      headers: {},
+      body: '{"eventId":"custom-event","event":"delivered","messageId":"m"}',
+    };
+
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true });
     expect(await t.action(api.worker.handleWebhook, args)).toEqual({ ok: true, duplicate: true });
   });
@@ -1132,6 +1291,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         idempotencyKey: "stale-processing:ada@example.com",
         adapters: [{ kind: "memory" }],
@@ -1166,6 +1326,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         idempotencyKey: "stale-lease:ada@example.com",
         adapters: [{ kind: "memory" }],
@@ -1228,7 +1389,9 @@ describe("convex-email component", () => {
       });
       expect(events.filter((event) => event.type === "sent")).toHaveLength(1);
       expect(events.some((event) => event.error === "late stale worker failure")).toBe(false);
-      expect(events.some((event) => event.adapter === "memory" && event.type === "provider_attempt")).toBe(false);
+      expect(
+        events.some((event) => event.adapter === "memory" && event.type === "provider_attempt"),
+      ).toBe(false);
     } finally {
       Date.now = originalNow;
     }
@@ -1238,6 +1401,7 @@ describe("convex-email component", () => {
     const t = createTest();
 
     const emailId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
       ...message,
       adapters: [{ kind: "memory" }],
       adapter: "memory",
@@ -1252,7 +1416,7 @@ describe("convex-email component", () => {
       error: "first attempt failed",
       retryable: true,
     });
-    expect(await t.mutation(api.lib.retry, { emailId })).toBe(true);
+    expect(await t.mutation(api.lib.retry, { emailId, sender: SENDER })).toBe(true);
 
     const retriedWorker = await t.mutation(api.lib.markProcessing, { emailId });
     expect(firstWorker?.processingLease).toBe(1);
@@ -1268,6 +1432,7 @@ describe("convex-email component", () => {
 
     try {
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1284,7 +1449,9 @@ describe("convex-email component", () => {
       expect(recovered).toBe(1);
       expect(status).toMatchObject({
         status: "failed",
-        lastError: expect.stringContaining("will not retry stale processing sends without an idempotencyKey"),
+        lastError: expect.stringContaining(
+          "will not retry stale processing sends without an idempotencyKey",
+        ),
       });
       expect(events.map((event) => event.type)).toContain("failed");
     } finally {
@@ -1305,6 +1472,7 @@ describe("convex-email component", () => {
       });
 
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1339,6 +1507,7 @@ describe("convex-email component", () => {
       });
 
       const emailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1369,6 +1538,7 @@ describe("convex-email component", () => {
       });
 
       const terminalEmailId = await t.mutation(api.lib.enqueue, {
+        sender: SENDER,
         ...message,
         adapters: [{ kind: "memory" }],
         adapter: "memory",
@@ -1379,6 +1549,7 @@ describe("convex-email component", () => {
 
       for (let index = 0; index < 60; index += 1) {
         await t.mutation(api.lib.enqueue, {
+          sender: SENDER,
           ...message,
           to: `active-${index}@example.com`,
           adapters: [{ kind: "memory" }],
@@ -1396,5 +1567,45 @@ describe("convex-email component", () => {
     } finally {
       Date.now = originalNow;
     }
+  });
+
+  test("normalizes blank and whitespace idempotencyKey at enqueue, stored message, recovery, and send", async () => {
+    const t = createTest();
+
+    const firstId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      idempotencyKey: "   ",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    const secondId = await t.mutation(api.lib.enqueue, {
+      sender: SENDER,
+      ...message,
+      idempotencyKey: "",
+      adapters: [{ kind: "memory" }],
+      adapter: "memory",
+      maxAttempts: 1,
+    });
+
+    expect(secondId).not.toBe(firstId);
+
+    const firstStatus = await t.query(api.lib.status, { emailId: firstId });
+    const secondStatus = await t.query(api.lib.status, { emailId: secondId });
+
+    expect(firstStatus?.idempotencyKey).toBeUndefined();
+    expect(firstStatus?.message.idempotencyKey).toBeUndefined();
+    expect(secondStatus?.idempotencyKey).toBeUndefined();
+    expect(secondStatus?.message.idempotencyKey).toBeUndefined();
+
+    await flushScheduled(t);
+
+    const sentFirst = await t.query(api.lib.status, { emailId: firstId });
+    const sentSecond = await t.query(api.lib.status, { emailId: secondId });
+
+    expect(sentFirst?.status).toBe("sent");
+    expect(sentSecond?.status).toBe("sent");
   });
 });

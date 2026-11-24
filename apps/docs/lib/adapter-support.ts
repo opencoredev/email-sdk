@@ -1,0 +1,533 @@
+export const ADAPTER_SUPPORT_FIELDS = [
+  "cc",
+  "bcc",
+  "replyTo",
+  "headers",
+  "attachments",
+  "tags",
+  "metadata",
+  "sendAt",
+] as const;
+
+export type AdapterSupportField = (typeof ADAPTER_SUPPORT_FIELDS)[number];
+
+export type AdapterSupportCapabilities = {
+  repeatedHeaders: boolean;
+  idempotency: "native" | "message_id" | "none";
+  scheduling: boolean;
+  personalized: "native" | "expanded";
+};
+
+/** Capability columns in display order. */
+export const ADAPTER_CAPABILITY_KEYS = [
+  "repeatedHeaders",
+  "idempotency",
+  "scheduling",
+  "personalized",
+] as const satisfies readonly (keyof AdapterSupportCapabilities)[];
+
+export type AdapterSupportEntry = {
+  id: string;
+  label: string;
+  setupHref: string;
+  fields: Partial<Record<AdapterSupportField, true>>;
+  capabilities: AdapterSupportCapabilities;
+  limits?: readonly string[];
+};
+
+export const ADAPTER_SUPPORT_ENTRIES = [
+  {
+    id: "resend",
+    label: "Resend",
+    setupHref: "/docs/adapters/resend",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: true,
+      personalized: "expanded",
+    },
+  },
+  {
+    id: "postmark",
+    label: "Postmark",
+    setupHref: "/docs/adapters/postmark",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+    },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one tag and flattens one name:value tag for the provider payload."],
+  },
+  {
+    id: "sendgrid",
+    label: "SendGrid",
+    setupHref: "/docs/adapters/sendgrid",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "native",
+    },
+    limits: [
+      "Native personalized delivery caps one request at 1,000 recipients.",
+      "Tag names are discarded; tag values are sent as categories.",
+    ],
+  },
+  {
+    id: "cloudflare",
+    label: "Cloudflare",
+    setupHref: "/docs/adapters/cloudflare",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: [
+      "Accepts at most 50 combined to, cc, and bcc recipients.",
+      "Recipient display names are not supported; plain strings and {email} objects are valid.",
+      "Accepts one reply-to address.",
+    ],
+  },
+  {
+    id: "unosend",
+    label: "Unosend",
+    setupHref: "/docs/adapters/unosend",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one reply-to address."],
+  },
+  {
+    id: "ses",
+    label: "AWS SES",
+    setupHref: "/docs/adapters/ses",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, tags: true },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts at most 15 headers per message."],
+  },
+  {
+    id: "mailgun",
+    label: "Mailgun",
+    setupHref: "/docs/adapters/mailgun",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "native",
+    },
+    limits: [
+      "Native personalized delivery caps one request at 1,000 recipients.",
+      "Tag names are discarded; tag values are sent as o:tag values.",
+    ],
+  },
+  {
+    id: "mailersend",
+    label: "MailerSend",
+    setupHref: "/docs/adapters/mailersend",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: [
+      "Accepts one reply-to address.",
+      "Tag names are discarded; tag values are sent as tags.",
+    ],
+  },
+  {
+    id: "brevo",
+    label: "Brevo",
+    setupHref: "/docs/adapters/brevo",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one reply-to address."],
+  },
+  {
+    id: "mailchimp",
+    label: "Mailchimp Transactional",
+    setupHref: "/docs/adapters/mailchimp",
+    fields: {
+      cc: true,
+      bcc: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: ["Scheduling sends provider UTC strings in yyyy-mm-dd HH:MM:ss grammar."],
+  },
+  {
+    id: "sparkpost",
+    label: "SparkPost",
+    setupHref: "/docs/adapters/sparkpost",
+    fields: {
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: ["Scheduling sends provider UTC strings in YYYY-MM-DDTHH:mm:ss±HH:mm grammar."],
+  },
+  {
+    id: "iterable",
+    label: "Iterable",
+    setupHref: "/docs/adapters/iterable",
+    fields: { metadata: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Normal send accepts one to recipient."],
+  },
+  {
+    id: "loops",
+    label: "Loops",
+    setupHref: "/docs/adapters/loops",
+    fields: { attachments: true, metadata: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Normal send accepts one to recipient."],
+  },
+  {
+    id: "sequenzy",
+    label: "Sequenzy",
+    setupHref: "/docs/adapters/sequenzy",
+    fields: { replyTo: true, attachments: true, metadata: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts at most 50 to recipients.", "Accepts one reply-to address."],
+  },
+  {
+    id: "jetemail",
+    label: "JetEmail",
+    setupHref: "/docs/adapters/jetemail",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: [
+      "Requires a from display name.",
+      "Accepts at most 50 to, 50 cc, 50 bcc, and 50 reply-to addresses.",
+    ],
+  },
+  {
+    id: "lettermint",
+    label: "Lettermint",
+    setupHref: "/docs/adapters/lettermint",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one tag."],
+  },
+  {
+    id: "lettr",
+    label: "Lettr",
+    setupHref: "/docs/adapters/lettr",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: [
+      "Accepts at most 50 combined to, cc, and bcc recipients.",
+      "Recipient display names are not supported; plain strings and {email} objects are valid.",
+      "Accepts one reply-to address.",
+      "Accepts one tag.",
+      "Rejects inline attachments.",
+      "Accepts at most 10 custom headers.",
+    ],
+  },
+  {
+    id: "primitive",
+    label: "Primitive",
+    setupHref: "/docs/adapters/primitive",
+    fields: { attachments: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Normal send accepts one to recipient."],
+  },
+  {
+    id: "plunk",
+    label: "Plunk",
+    setupHref: "/docs/adapters/plunk",
+    fields: { replyTo: true, headers: true, attachments: true, metadata: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one reply-to address."],
+  },
+  {
+    id: "mailtrap",
+    label: "Mailtrap",
+    setupHref: "/docs/adapters/mailtrap",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Accepts one tag.", "Accepts one reply-to address."],
+  },
+  {
+    id: "scaleway",
+    label: "Scaleway",
+    setupHref: "/docs/adapters/scaleway",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Rejects replyTo when headers already include Reply-To."],
+  },
+  {
+    id: "zeptomail",
+    label: "ZeptoMail",
+    setupHref: "/docs/adapters/zeptomail",
+    fields: { cc: true, bcc: true, replyTo: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+  },
+  {
+    id: "mailpace",
+    label: "MailPace",
+    setupHref: "/docs/adapters/mailpace",
+    fields: { cc: true, bcc: true, replyTo: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+  },
+  {
+    id: "smtp",
+    label: "SMTP",
+    setupHref: "/docs/adapters/smtp",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "message_id",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: ["Validates ASCII envelope addresses and header names before opening a connection."],
+  },
+  {
+    id: "graph",
+    label: "Microsoft Graph",
+    setupHref: "/docs/adapters/graph",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true },
+    capabilities: {
+      repeatedHeaders: true,
+      idempotency: "none",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: [
+      "Only x- prefixed custom headers are supported.",
+      "Accepts at most 5 custom headers per message.",
+      "Accepts at most 1,000 combined to, cc, and bcc recipients.",
+    ],
+  },
+  {
+    id: "sendheron",
+    label: "SendHeron",
+    setupHref: "/docs/adapters/sendheron",
+    fields: { cc: true, bcc: true, replyTo: true, headers: true, attachments: true, sendAt: true },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: [
+      "Normal send accepts one to recipient, up to 50 cc and 50 bcc, and one reply-to.",
+      "Recipient and reply-to addresses must be plain addresses without display names.",
+      "Sends html only; a text-only message is escaped into html and text is dropped when html is present.",
+      "Up to 10 attachments from an allowlist of content types; no inline attachments and no attachments with sendAt.",
+    ],
+  },
+  {
+    id: "helo",
+    label: "Helo",
+    setupHref: "/docs/adapters/helo",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      tags: true,
+      metadata: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: false,
+      personalized: "expanded",
+    },
+    limits: [
+      "Accepts at most 50 combined to, cc, and bcc recipients.",
+      "Accepts at most 5 tags with values of 100 characters or fewer.",
+      "Tag names are discarded; tag values are sent as plain strings.",
+      "Accepts at most 10 metadata fields with keys of 50 characters or fewer and values of 100 characters or fewer; values are sent as strings.",
+      "Subjects must be 256 characters or fewer.",
+      "Idempotency keys longer than 36 characters are hashed to a UUID-shaped SHA-256 digest.",
+    ],
+  },
+] as const satisfies readonly AdapterSupportEntry[];
+
+export type AdapterSupportId = (typeof ADAPTER_SUPPORT_ENTRIES)[number]["id"];
+
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "26 provider APIs plus SMTP, 27 adapters total";
+
+export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
+  return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);
+}

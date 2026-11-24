@@ -1,4 +1,4 @@
-import { ADAPTER_SUPPORT_ENTRIES, ADAPTER_SUPPORT_FIELDS } from "../apps/fumadocs/src/lib/adapter-support";
+import { ADAPTER_SUPPORT_ENTRIES, ADAPTER_SUPPORT_FIELDS } from "../apps/docs/lib/adapter-support";
 import { BUILT_IN_ADAPTER_CAPABILITIES, SUPPORTED_MESSAGE_FIELDS } from "../packages/email-sdk/src/utils";
 
 type DocsEntry = (typeof ADAPTER_SUPPORT_ENTRIES)[number];
@@ -141,6 +141,8 @@ requireIncludes(entry("smtp"), "ASCII envelope addresses and header names");
 requireIncludes(entry("graph"), "x- prefixed custom headers");
 
 requireIncludes(entry("graph"), "5 custom headers");
+
+requireIncludes(entry("ses"), "15 headers");
 
 requireIncludes(entry("graph"), "1,000 combined to, cc, and bcc");
 

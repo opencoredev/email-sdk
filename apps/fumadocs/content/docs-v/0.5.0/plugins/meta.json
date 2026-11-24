@@ -1,5 +1,0 @@
-{
-  "title": "Plugins",
-  "icon": "Plug",
-  "pages": ["built-in", "community", "writing-plugins", "api"]
-}

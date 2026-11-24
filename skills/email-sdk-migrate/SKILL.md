@@ -11,7 +11,7 @@ Migrate an application from its installed Email SDK API to the target version us
 ## Establish the migration boundary
 
 1. Read the application package manifest and lockfile to identify the installed `@opencoredev/email-sdk` version.
-2. Inspect the installed package exports, README, and `dist/*.d.ts`. When working inside the Email SDK repository, inspect `packages/email-sdk/src/index.ts`, `types.ts`, `core.ts`, `errors.ts`, and `apps/fumadocs/content/docs/guides/migrate/` instead.
+2. Inspect the installed package exports, README, and `dist/*.d.ts`. When working inside the Email SDK repository, inspect `packages/email-sdk/src/index.ts`, `types.ts`, `core.ts`, `errors.ts`, and `apps/docs/content/docs/guides/migrate/` instead.
 3. Identify the target version requested by the user. Default to the latest stable version, not an unreleased local tree, unless the task explicitly targets repository source.
 4. Read the migration guide for every crossed major version. Prefer the exact installed declarations when prose and code disagree.
 

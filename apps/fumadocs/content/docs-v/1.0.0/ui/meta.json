@@ -1,6 +1,0 @@
-{
-  "title": "UI",
-  "icon": "Blocks",
-  "pagesIndex": "index",
-  "pages": ["account", "product", "commerce", "components"]
-}

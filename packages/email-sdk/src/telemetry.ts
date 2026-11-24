@@ -84,6 +84,11 @@ export type TelemetryOptions = {
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   configDir?: string;
+  /**
+   * Receives the one-time opt-out notice. Defaults to writing to stderr, but only when stderr is
+   * a terminal, so servers, CI logs, and test harnesses that assert on stderr get no unsolicited
+   * output. A supplied `notify` is always called.
+   */
   notify?: (message: string) => void;
   sdkVersion?: string;
 };
@@ -197,10 +202,18 @@ export type TelemetryStatus = {
   configPath: string;
 };
 
+/** The stderr notifier when stderr is a terminal; otherwise no notifier, and no notice. */
+function defaultNotify(): ((message: string) => void) | undefined {
+  if (process.stderr?.isTTY !== true) return undefined;
+
+  return (message) => {
+    process.stderr.write(`${message}\n`);
+  };
+}
+
 export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
   const env = options.env ?? process.env;
   const fetcher = options.fetch ?? fetch;
-  const notify = options.notify ?? ((message: string) => process.stderr.write(`${message}\n`));
 
   if (envOptOut(env)) return disabledTelemetry;
 
@@ -209,10 +222,13 @@ export function createTelemetry(options: TelemetryOptions = {}): Telemetry {
 
   if (!loaded || loaded.state.disabled) return disabledTelemetry;
 
+  const notify = options.notify ?? defaultNotify();
+
   const { state } = loaded;
   let { installationIdSource } = loaded;
 
-  if (!state.noticeShown) {
+  // A notice that was not shown is not marked shown, so the first interactive run still prints it.
+  if (!state.noticeShown && notify) {
     notify(TELEMETRY_NOTICE);
 
     // This save can succeed where the first one failed, and the next process

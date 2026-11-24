@@ -28,9 +28,9 @@ export function sparkpost(
     name: "sparkpost",
     baseUrl: options.baseUrl ?? "https://api.sparkpost.com/api/v1",
     endpoint: "/transmissions",
-    headers: {
+    headers: () => ({
       Authorization: options.apiKey,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       assertSupportedMessageFields("sparkpost", message, SUPPORTED_MESSAGE_FIELDS.sparkpost);

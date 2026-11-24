@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import registry from "../adapter-verification.json";
-import type { JsonValue } from "../apps/fumadocs/src/lib/json";
+import type { JsonValue } from "../apps/docs/lib/json";
 import { contractTestFilesOnDisk, validateAdapterVerification } from "./check-adapter-verification";
 
 const record = {
@@ -57,9 +57,11 @@ test("contract test membership in the docs table matches packages/email-sdk/src 
     "adapters.scheduling.test.ts",
     "core.fallback-delivery.test.ts",
     "core.telemetry-volume.test.ts",
+    "plugins-defaults.test.ts",
   ]);
   expect(onDisk.get("smtp")).toEqual(["smtp.test.ts"]);
   expect(onDisk.get("brevo")).toEqual([
+    "adapters.credential-rotation.test.ts",
     "adapters.field-support.test.ts",
     "adapters.http-delivery.test.ts",
     "adapters.json-providers.test.ts",

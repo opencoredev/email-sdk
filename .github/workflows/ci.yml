@@ -9,21 +9,53 @@ on:
 permissions:
   contents: read
 
+# Tenki runners only pick up jobs from this repository, so a pull request from a fork would queue
+# forever. Those runs fall back to GitHub-hosted ubuntu-latest; everything else stays on Tenki.
+
 jobs:
   verify:
     name: Verify (Bun)
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The docs build dates each page from its last commit (Blume
+          # lastModified: "git"), which a shallow clone can't answer.
+          fetch-depth: 0
+      # The docs site builds with Blume, which needs Node 22.19 or later.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run release:ci
 
+  convex-deploy:
+    name: Convex component deploys
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx turbo run build --filter=@opencoredev/convex-email
+      # convex-test does not apply Convex's deploy rules, so this deploys a scratch app to a
+      # local Convex backend and sends through a loopback provider fixture.
+      - run: bun run convex:deploy-check
+        env:
+          EMAIL_SDK_TELEMETRY: "0"
+
   ai-compatibility:
     name: ${{ matrix.name }}
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +81,7 @@ jobs:
 
   node:
     name: Node ${{ matrix.node }} public-package coverage
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     strategy:
       fail-fast: false
       matrix:
@@ -69,7 +101,7 @@ jobs:
 
   commonjs:
     name: CommonJS on Node ${{ matrix.node }}
-    runs-on: tenki-standard-small-2c-4g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-small-2c-4g' }}
     strategy:
       fail-fast: false
       matrix:

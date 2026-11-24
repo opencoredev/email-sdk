@@ -1,10 +1,11 @@
+import { isObjectLike } from "./internal/decode.js";
 import type { EmailAdapter, EmailMessage, EmailSendResult } from "./types.js";
 
 const TEST_ADAPTER_SEND = Symbol.for("@opencoredev/email-sdk/test-adapter-send");
 
 /** @internal The function marker survives adapter object spread and renaming. */
 export function isTestAdapter(adapter: EmailAdapter): boolean {
-  return TEST_ADAPTER_SEND in adapter.send;
+  return isObjectLike(adapter.send) && TEST_ADAPTER_SEND in adapter.send;
 }
 
 function markTestSend<T extends EmailAdapter["send"]>(send: T): T {

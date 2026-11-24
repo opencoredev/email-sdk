@@ -24,8 +24,6 @@ const checksumPath = join(root, pluginDir, "checksums.json");
 // Every ignore pattern must be listed here. Ignoring source to dodge
 // findings is not allowed; only third-party, generated, and agent-tool paths.
 const allowedIgnorePatterns = new Set([
-  "apps/fumadocs/src/components/dither-kit/**",
-  "apps/fumadocs/src/routeTree.gen.ts",
   "**/_generated/**",
   ".agent/**",
   ".agents/**",
@@ -42,7 +40,7 @@ const allowedIgnorePatterns = new Set([
 ]);
 
 // Generated files that ship their own disable banner and are lint-ignored.
-const allowedDirectiveFiles = new Set(["apps/fumadocs/src/routeTree.gen.ts"]);
+const allowedDirectiveFiles = new Set<string>([]);
 
 const requiredNativeRules = ["oxc/no-accumulating-spread"];
 

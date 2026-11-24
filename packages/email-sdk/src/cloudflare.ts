@@ -1,5 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
-import { jsonProvider } from "./http.js";
+import { jsonProvider, snapshotMessageForSend } from "./http.js";
 import { causeString, isJsonString, jsonArray, jsonField, jsonString } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { base64Attachments, commonHeadersObject, emailParts, stringAddresses } from "./payloads.js";
@@ -12,6 +12,7 @@ import {
   builtInAdapterDefinition,
   allRecipients,
   hasDisplayName,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -110,7 +111,9 @@ function fromBinding(
     name: "cloudflare",
     ...builtInAdapterDefinition("cloudflare", cloudflareRules),
     raw: { binding },
-    async send(message) {
+    async send(rawMessage) {
+      const message = snapshotMessageForSend(rawMessage);
+      validateBuiltInAdapter("cloudflare", message, cloudflareRules);
       assertCloudflareMessage(message);
 
       const attachments = await base64Attachments(message);
@@ -185,9 +188,9 @@ function fromHttp(
       rules: cloudflareRules,
       baseUrl,
       endpoint: `/accounts/${encodeURIComponent(options.accountId)}/email/sending/send`,
-      headers: {
+      headers: () => ({
         Authorization: `Bearer ${options.apiToken}`,
-      },
+      }),
       fetch: options.fetch,
       async buildPayload(message) {
         assertCloudflareMessage(message);

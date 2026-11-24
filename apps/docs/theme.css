@@ -1,0 +1,135 @@
+/* Email SDK theme. Fonts and the accent come from blume.config.ts; this file
+   sets the full palette, the hard-cornered look, and styles for the docs
+   components in components/. The landing page keeps its own styles in
+   pages/_landing/landing.css. */
+
+/* Tailwind scans the React docs components for utility classes. */
+@source "./components";
+@source "./pages";
+
+/* The docs components were written against Fumadocs' token names
+   (text-fd-muted-foreground, border-fd-border, ...). Map them onto Blume's
+   tokens so they follow the theme in both modes. */
+@theme inline {
+  --color-fd-background: var(--blume-background);
+  --color-fd-foreground: var(--blume-foreground);
+  --color-fd-muted: var(--blume-muted);
+  --color-fd-muted-foreground: var(--blume-muted-foreground);
+  --color-fd-popover: var(--email-panel);
+  --color-fd-popover-foreground: var(--blume-foreground);
+  --color-fd-card: var(--email-panel);
+  --color-fd-card-foreground: var(--blume-foreground);
+  --color-fd-border: var(--blume-border);
+  --color-fd-primary: var(--blume-accent);
+  --color-fd-primary-foreground: var(--blume-accent-foreground);
+  --color-fd-secondary: var(--blume-muted);
+  --color-fd-secondary-foreground: var(--blume-foreground);
+  --color-fd-accent: var(--email-hover);
+  --color-fd-accent-foreground: var(--blume-foreground);
+  --color-fd-ring: var(--blume-accent);
+  --color-popover: var(--email-panel);
+  --color-popover-foreground: var(--blume-foreground);
+}
+
+/* Colors ------------------------------------------------------------------- */
+
+/* Mirrors the landing page: warm near-black ink, parchment text, and a single
+   gold accent. Light mode is the same hues on paper. Every text pair meets
+   4.5:1 against its background. */
+:root {
+  --blume-background: #f4f1e8;
+  --blume-foreground: #14130f;
+  --blume-muted: #ebe7dc;
+  --blume-muted-foreground: #5f5d55;
+  --blume-border: rgb(20 19 15 / 14%);
+  --blume-accent: #7f6410;
+  --blume-accent-foreground: #fbf6e6;
+  --blume-action: #7f6410;
+  --blume-action-foreground: #fbf6e6;
+  --blume-code-background: #faf8f2;
+  --email-panel: #faf8f2;
+  --email-hover: #e4dfd1;
+}
+
+:root[data-theme="dark"] {
+  --blume-background: #090906;
+  --blume-foreground: #eceae3;
+  --blume-muted: #131310;
+  --blume-muted-foreground: #8f8d85;
+  --blume-border: rgb(242 233 216 / 14%);
+  --blume-accent: #c9a227;
+  --blume-accent-foreground: #1a1403;
+  --blume-action: #c9a227;
+  --blume-action-foreground: #1a1403;
+  --blume-code-background: #131310;
+  --email-panel: #0f0f0c;
+  --email-hover: #1b1a15;
+}
+
+/* Provider marks --------------------------------------------------------- */
+
+/* The Resend and Unosend marks are black; flip them on the dark palette, as
+   the Fumadocs sidebar did (providers flagged invertOnDark in lib/providers.ts). */
+:root[data-theme="dark"]
+  :is(img[src$="/resend-mark.svg"], img[src$="/provider-logos/unosend.svg"]) {
+  filter: invert(1);
+}
+
+/* Hard corners ------------------------------------------------------------ */
+
+/* The landing uses hard corners, and the docs follow it: cards, buttons,
+   inputs, and code blocks read as one system. (theme.radius is "none" for
+   Blume's own chrome; this covers the React docs components too.) */
+body :not(.email-landing *):is([class*="rounded"], button, input, select, textarea, pre, figure, aside a) {
+  border-radius: 0;
+}
+
+/* Links ------------------------------------------------------------------- */
+
+.prose a:not(.not-prose a) {
+  text-decoration-color: var(--blume-accent);
+  text-decoration-style: solid;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.prose .not-prose a:not(.underline) {
+  text-decoration: none;
+}
+
+/* Component headings ------------------------------------------------------ */
+
+/* Blume's prose heading styles also reach headings inside the React
+   components (stats cards, DNS checker results), which size themselves with
+   utility classes. Give those back their own sizes. */
+.prose .not-prose :is(h2, h3) {
+  margin: 0;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.prose .not-prose :is(h2, h3).text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.prose .not-prose :is(h2, h3).text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.prose .not-prose :is(h2, h3).text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+/* Step headings ----------------------------------------------------------- */
+
+/* Keep markdown headings inside <Step> blocks at step-title scale so numbered
+   steps align with their 24px badge and stay visually distinct from section H2s. */
+.prose [data-blume-step] > div > :is(h2, h3, h4):first-child {
+  font-size: 1.0625rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}

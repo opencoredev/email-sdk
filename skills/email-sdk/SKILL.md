@@ -17,7 +17,7 @@ Before changing code, inspect the most relevant current sources:
    - `README.md`
    - `packages/email-sdk/README.md`
    - `packages/email-sdk/package.json`
-   - `apps/fumadocs/content/docs/**/*.mdx`
+   - `apps/docs/content/docs/**/*.mdx`
    - `packages/email-sdk/src/index.ts`
    - the specific adapter file in `packages/email-sdk/src/<adapter>.ts`
    - `packages/email-sdk/src/types.ts`, `core.ts`, and `errors.ts` when message shape, routing, retries, hooks, or error handling matter.
@@ -48,9 +48,9 @@ When local source and external docs disagree, prefer the code/types for the exac
 ## Defaults
 
 - Prefer `bun` and `bunx`.
-- Keep the core dependency-free.
+- Do not add runtime dependencies to the SDK. Its only one is Nodemailer, which the SMTP adapter and the CLI use.
 - Import adapters from separate entry points such as `@opencoredev/email-sdk/resend`, `@opencoredev/email-sdk/smtp`, and the adapter-specific entry point shown by the current package exports.
-- Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
+- Do not install Nodemailer yourself for SMTP. `@opencoredev/email-sdk` already depends on it and wraps it in the `smtp()` adapter, so use that adapter instead of calling Nodemailer directly.
 - SMTP auth on non-secure ports upgrades with STARTTLS by default. Only use `allowInsecureAuth` for trusted local test servers.
 - Adapters must either map a normalized `EmailMessage` field or reject it clearly. Never silently drop CC, BCC, reply-to, headers, tags, metadata, or attachments.
 - Keep adapter credentials in environment variables.
@@ -99,9 +99,9 @@ export const email = createEmailClient({
 
 Inside this repo, the main public docs for this pattern are:
 
-- `apps/fumadocs/content/docs/guides/production-send-pipeline.mdx`
-- `apps/fumadocs/content/docs/concepts/fallbacks-and-retries.mdx`
-- `apps/fumadocs/content/docs/adapters/field-support.mdx`
+- `apps/docs/content/docs/guides/production-send-pipeline.mdx`
+- `apps/docs/content/docs/concepts/fallbacks-and-retries.mdx`
+- `apps/docs/content/docs/adapters/field-support.mdx`
 
 ## Validation
 

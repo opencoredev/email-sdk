@@ -1,0 +1,263 @@
+---
+// Blog index. Posts are the `type: blog` pages in content/blog (the committed
+// posts plus any fetched from Notra at build time into content/blog/(notra)).
+// Blume renders each post, adds BlogPosting JSON-LD, and builds
+// /blog/rss.xml; this page lists them newest first.
+import { getCollection } from "astro:content";
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import { getBlumeCollection } from "blume/runtime";
+
+const { config } = data;
+
+const pageTitle = "Email SDK Blog";
+
+const pageDescription =
+  "Guides for developers sending email from TypeScript: provider APIs, pricing, local testing, and switching providers without rewriting your send code.";
+
+// getBlumeCollection drops drafts and hidden pages, so a post is listed only
+// when Blume also publishes it.
+const routeByEntry = new Map(
+  getBlumeCollection(data, { locale: config.i18n?.defaultLocale }).map((route) => [route.entryId, route.path]),
+);
+
+const estimateReadMinutes = (body: string | undefined): number => {
+  const words = (body ?? "").trim().split(/\s+/).filter(Boolean).length;
+
+  return Math.max(1, Math.round(words / 220));
+};
+
+const posts = (await getCollection("docs"))
+  .filter((entry) => entry.data.type === "blog")
+  .flatMap((entry) => {
+    const href = routeByEntry.get(entry.id);
+
+    if (href === undefined) return [];
+    const { date, description, search, title } = entry.data;
+
+    // A post without these would have no feed date and no summary.
+    if (date === undefined || description === undefined) {
+      throw new Error(`[blog] ${entry.id} needs a date and a description in its frontmatter.`);
+    }
+
+    const slug = href.replace(/^\/blog\//, "").replace(/\/$/, "");
+    const readMinutes = estimateReadMinutes(entry.body);
+    const tags = Array.isArray(search?.tags) ? search.tags.slice(0, 3) : [];
+
+    return [
+      {
+        date: new Date(date),
+        description,
+        href,
+        image: `/og/blog/${slug}.png`,
+        readMinutes,
+        tags,
+        title,
+      },
+    ];
+  })
+  .toSorted((a, b) => b.date.getTime() - a.date.getTime());
+
+const formatDate = (date: Date): string =>
+  date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  page={{ title: pageTitle, description: pageDescription, route: "/blog" }}
+>
+  <div class="blog-index">
+    <header class="intro">
+      <p class="eyebrow">Blog</p>
+      <h1>Email SDK Blog</h1>
+      <p class="lede">
+        Notes for developers sending email from TypeScript: provider APIs, pricing, local testing, and switching
+        providers without rewriting your send code. For the API itself, read the <a href="/docs">docs</a>.
+      </p>
+      <p class="feed"><a href="/blog/rss.xml">RSS feed</a></p>
+    </header>
+
+    <ol class="posts">
+      {
+        posts.map((post) => (
+          <li class="post">
+            <a class="post-thumb" href={post.href} tabindex="-1" aria-hidden="true">
+              <img alt="" height="116" loading="lazy" src={post.image} width="220" />
+            </a>
+            <div class="post-body">
+              <div class="post-meta">
+                <time datetime={post.date.toISOString().slice(0, 10)}>{formatDate(post.date)}</time>
+                <span aria-hidden="true">/</span>
+                <span>{post.readMinutes} min read</span>
+              </div>
+              <h2>
+                <a href={post.href}>{post.title}</a>
+              </h2>
+              <p class="post-description">{post.description}</p>
+              <div class="post-footer">
+                {post.tags.length > 0 && (
+                  <ul class="post-tags" aria-label="Topics">
+                    {post.tags.map((tag) => (
+                      <li>{tag}</li>
+                    ))}
+                  </ul>
+                )}
+                <a class="read-more" href={post.href}>
+                  Read post <span aria-hidden="true">→</span>
+                </a>
+              </div>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</PageLayout>
+
+<style>
+  .blog-index {
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: 4rem 1rem 6rem;
+    overflow-wrap: anywhere;
+  }
+  .eyebrow {
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  h1 {
+    margin: 0.75rem 0 1rem;
+    font-size: clamp(2.25rem, 5vw, 3rem);
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    max-width: 40rem;
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
+  .lede a,
+  .feed a {
+    color: var(--blume-foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--blume-accent);
+    text-underline-offset: 3px;
+  }
+  .feed {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+  }
+  .posts {
+    margin: 3rem 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--blume-border);
+  }
+  .post {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    padding: 1.75rem 0;
+    border-bottom: 1px solid var(--blume-border);
+    align-items: start;
+  }
+  @media (min-width: 768px) {
+    .post {
+      grid-template-columns: 220px 1fr;
+      gap: 1.75rem;
+    }
+  }
+  .post-thumb {
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--blume-border);
+    background: var(--email-panel, var(--blume-muted));
+    aspect-ratio: 1200 / 630;
+  }
+  .post-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .post-body {
+    min-width: 0;
+  }
+  .post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--blume-muted-foreground);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.8125rem;
+  }
+  h2 {
+    margin: 0.4rem 0 0.45rem;
+    font-size: 1.25rem;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  h2 a {
+    color: var(--blume-foreground);
+    text-decoration: none;
+  }
+  h2 a:hover {
+    color: var(--blume-accent);
+  }
+  .post-description {
+    margin: 0;
+    color: var(--blume-muted-foreground);
+    line-height: 1.65;
+  }
+  .post-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+  }
+  .post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .post-tags li {
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--blume-border);
+    color: var(--blume-muted-foreground);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
+  }
+  .read-more {
+    color: var(--blume-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: var(--blume-accent);
+    text-underline-offset: 3px;
+  }
+  .read-more:hover {
+    color: var(--blume-accent);
+  }
+</style>

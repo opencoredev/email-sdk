@@ -74,7 +74,7 @@ export class EmailAdapterNotFoundError extends EmailSdkError {
   readonly adapter: string;
 
   constructor(adapter: string) {
-    super(`Email adapter "${adapter}" is not registered.`, {
+    super(`Email adapter "${String(adapter)}" is not registered.`, {
       code: "adapter_not_found",
     });
     this.name = "EmailAdapterNotFoundError";

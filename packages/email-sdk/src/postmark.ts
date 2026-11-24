@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter, EmailTag } from "./types.js";
 import {
@@ -17,6 +18,7 @@ import {
   mapAttachments,
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -43,6 +45,9 @@ export function postmark(
     ...builtInAdapterDefinition("postmark", postmarkRules),
     raw: { baseUrl },
     async send(message, context) {
+      const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("postmark", safeMessage, postmarkRules);
+
       const response = await fetcher(`${baseUrl}/email`, {
         method: "POST",
         signal: context.signal,
@@ -52,7 +57,7 @@ export function postmark(
           "X-Postmark-Server-Token": options.serverToken,
           ...options.headers,
         },
-        body: JSON.stringify(await toPostmarkPayload(message, options.messageStream)),
+        body: JSON.stringify(await toPostmarkPayload(safeMessage, options.messageStream)),
       });
 
       if (!response.ok) {
@@ -69,7 +74,7 @@ export function postmark(
 
       // A 200 means Postmark accepted the whole message. Its "To" field is one comma-joined
       // string and omits Cc/Bcc, so list the submitted recipients instead.
-      const accepted = [message.to, message.cc, message.bcc].flatMap(list => arrayify(list).map(emailAddressOf));
+      const accepted = [safeMessage.to, safeMessage.cc, safeMessage.bcc].flatMap(list => arrayify(list).map(emailAddressOf));
 
       return {
         adapter: "postmark",

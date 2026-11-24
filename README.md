@@ -73,6 +73,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Resend pricing](https://email-sdk.dev/blog/resend-pricing)
 - [Amazon SES pricing](https://email-sdk.dev/blog/amazon-ses-pricing)
 - [Mailgun pricing](https://email-sdk.dev/blog/mailgun-pricing)
+- [MailerSend pricing](https://email-sdk.dev/blog/mailersend-pricing)
 - [Resend SMTP settings for Node.js](https://email-sdk.dev/blog/resend-smtp-nodejs)
 - [Mailgun API guide for Node.js and TypeScript](https://email-sdk.dev/blog/mailgun-api-nodejs-typescript)
 - [Brevo API guide for Node.js and TypeScript](https://email-sdk.dev/blog/brevo-api-nodejs-typescript)
@@ -87,7 +88,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 
 ## Telemetry
 
-Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run prints a notice with opt-out instructions.
+Email SDK collects anonymous usage analytics so we can see which adapters and CLI commands get used and how often sends succeed. The first run in a terminal prints a notice with opt-out instructions.
 
 What gets collected:
 

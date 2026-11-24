@@ -1,0 +1,405 @@
+import {
+  createEmailClient,
+  type EmailAdapter,
+  type EmailHeader,
+  type EmailMessage,
+} from "@opencoredev/email-sdk";
+import { brevo } from "@opencoredev/email-sdk/brevo";
+import { cloudflare } from "@opencoredev/email-sdk/cloudflare";
+import { graph } from "@opencoredev/email-sdk/graph";
+import { iterable } from "@opencoredev/email-sdk/iterable";
+import { helo } from "@opencoredev/email-sdk/helo";
+import { jetemail } from "@opencoredev/email-sdk/jetemail";
+import { lettermint } from "@opencoredev/email-sdk/lettermint";
+import { lettr } from "@opencoredev/email-sdk/lettr";
+import { loops } from "@opencoredev/email-sdk/loops";
+import { mailchimp } from "@opencoredev/email-sdk/mailchimp";
+import { mailersend } from "@opencoredev/email-sdk/mailersend";
+import { mailgun } from "@opencoredev/email-sdk/mailgun";
+import { mailpace } from "@opencoredev/email-sdk/mailpace";
+import { mailtrap } from "@opencoredev/email-sdk/mailtrap";
+import { plunk } from "@opencoredev/email-sdk/plunk";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+import {
+  observabilityPlugin,
+  type EmailObservabilityEvent,
+} from "@opencoredev/email-sdk/plugins/observability";
+import { postmark } from "@opencoredev/email-sdk/postmark";
+import { primitive } from "@opencoredev/email-sdk/primitive";
+import { resend } from "@opencoredev/email-sdk/resend";
+import { scaleway } from "@opencoredev/email-sdk/scaleway";
+import { sequenzy } from "@opencoredev/email-sdk/sequenzy";
+import { sendgrid } from "@opencoredev/email-sdk/sendgrid";
+import { sendheron } from "@opencoredev/email-sdk/sendheron";
+import { ses } from "@opencoredev/email-sdk/ses";
+import { smtp } from "@opencoredev/email-sdk/smtp";
+import { sparkpost } from "@opencoredev/email-sdk/sparkpost";
+import { unosend } from "@opencoredev/email-sdk/unosend";
+import { zeptomail } from "@opencoredev/email-sdk/zeptomail";
+import { z } from "zod";
+
+import { hydrateAttachment, type AttachmentFetchOptions } from "./attachments.js";
+import {
+  adapterFields,
+  CONVEX_EMAIL_ADAPTER_KINDS,
+  isDeclaredEnvVar,
+  type ConvexAdapterField,
+} from "../shared/adapters.js";
+import type {
+  ConvexEmailAdapterConfig,
+  ConvexEmailAdapterKind,
+  ConvexEmailMessage,
+  ConvexEmailMetadataValue,
+} from "../shared/types.js";
+
+export type BuildEmailClientOptions = {
+  adapters: ConvexEmailAdapterConfig[];
+  defaultAdapter?: string;
+  fallbackAdapters?: string[];
+  log?: (event: EmailObservabilityEvent) => void;
+  /**
+   * Runs before every provider request and must resolve for the request to go out. Hooks can't
+   * enforce that, because the SDK isolates hook errors, so each adapter's send is wrapped instead.
+   */
+  recordAttempt?: (event: { adapter: string; attempt: number }) => Promise<void>;
+  /** `false` turns off Email SDK telemetry for this client. */
+  telemetry?: boolean;
+  /** Where credentials are read from. Defaults to the deployment's `process.env`. */
+  env?: AdapterEnv;
+};
+
+/** Environment variables as the sender action sees them. */
+export type AdapterEnv = Readonly<Record<string, string | undefined>>;
+
+/** Copies symbol markers (such as the SDK's test-adapter marker) from one send function to another. */
+function keepSendMarkers<T extends EmailAdapter["send"]>(from: EmailAdapter["send"], to: T): T {
+  for (const key of Object.getOwnPropertySymbols(from)) {
+    const descriptor = Object.getOwnPropertyDescriptor(from, key);
+
+    if (descriptor) Object.defineProperty(to, key, descriptor);
+  }
+
+  return to;
+}
+
+export function gateDispatch(
+  adapter: EmailAdapter,
+  recordAttempt: (event: { adapter: string; attempt: number }) => Promise<void>,
+): EmailAdapter {
+  const gated: EmailAdapter = {
+    name: adapter.name,
+    capabilities: adapter.capabilities,
+    raw: adapter.raw,
+    send: keepSendMarkers(adapter.send, async (message, context) => {
+      await recordAttempt({ adapter: adapter.name, attempt: context.attempt });
+
+      return await adapter.send(message, context);
+    }),
+  };
+
+  if (adapter.validate) {
+    const validate = adapter.validate.bind(adapter);
+    gated.validate = (message, context) => validate(message, context);
+  }
+
+  if (adapter.sendPersonalized) {
+    const sendPersonalized = adapter.sendPersonalized.bind(adapter);
+    gated.sendPersonalized = async (input, context) => {
+      await recordAttempt({ adapter: adapter.name, attempt: context.attempt });
+
+      return await sendPersonalized(input, context);
+    };
+  }
+
+  return gated;
+}
+
+export function buildEmailClient(options: BuildEmailClientOptions) {
+  const { recordAttempt } = options;
+  const env = options.env ?? process.env;
+
+  const adapters = options.adapters.map((config) => {
+    const adapter = buildAdapter(config, env);
+
+    return recordAttempt ? gateDispatch(adapter, recordAttempt) : adapter;
+  });
+
+  const defaultAdapter = options.defaultAdapter ?? adapters[0]?.name;
+
+  return createEmailClient({
+    adapters,
+    defaultAdapter,
+    telemetry: options.telemetry,
+    fallback: options.fallbackAdapters
+      ? { adapters: options.fallbackAdapters, onUnknownDelivery: "stop" }
+      : undefined,
+    plugins: [
+      defaultsPlugin({
+        sendMetadata: {
+          service: "convex-email",
+        },
+      }),
+      observabilityPlugin({
+        log(event) {
+          options.log?.(event);
+        },
+      }),
+    ],
+  });
+}
+
+/** Any value an adapter config field can hold, inline or parsed from the environment. */
+type AdapterOptionValue = string | number | boolean | Readonly<Record<string, ConvexEmailMetadataValue>>;
+
+/** Email SDK adapter options keyed by registry field name. */
+type ResolvedAdapterOptions = Record<string, AdapterOptionValue>;
+
+type AdapterFactory = (
+  options: ResolvedAdapterOptions,
+  config: ConvexEmailAdapterConfig,
+) => EmailAdapter;
+
+/**
+ * Wraps an Email SDK adapter whose option keys match its registry field names one-to-one, which
+ * is every adapter that does not need option reshaping.
+ */
+function fromOptions<TOptions>(create: (options: TOptions) => EmailAdapter): AdapterFactory {
+  // SAFETY: resolveAdapterOptions only emits keys declared for this adapter in
+  // CONVEX_EMAIL_ADAPTERS, typed by each field's `type`, and throws when a `required` field is
+  // missing. The registry mirrors each Email SDK adapter's option names and value types, which
+  // adapters.test.ts exercises by constructing every adapter from resolved options.
+  return (options) => create(options as TOptions);
+}
+
+const smtpOptions = z.object({
+  host: z.string(),
+  port: z.number().optional(),
+  secure: z.boolean().optional(),
+  user: z.string().optional(),
+  pass: z.string().optional(),
+});
+
+/**
+ * The only place an adapter constructor is named. Field names, defaults, and the wire format all
+ * come from `CONVEX_EMAIL_ADAPTERS`; this map just says which factory receives them.
+ */
+const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
+  memory: (_options, config) => memoryAdapter(config.name ?? "memory"),
+  brevo: fromOptions(brevo),
+  cloudflare: fromOptions(cloudflare),
+  helo: fromOptions(helo),
+  iterable: fromOptions(iterable),
+  jetemail: fromOptions(jetemail),
+  lettermint: fromOptions(lettermint),
+  lettr: fromOptions(lettr),
+  loops: fromOptions(loops),
+  mailchimp: fromOptions(mailchimp),
+  mailersend: fromOptions(mailersend),
+  mailgun: fromOptions(mailgun),
+  mailpace: fromOptions(mailpace),
+  mailtrap: fromOptions(mailtrap),
+  plunk: fromOptions(plunk),
+  postmark: fromOptions(postmark),
+  primitive: fromOptions(primitive),
+  resend: fromOptions(resend),
+  scaleway: fromOptions(scaleway),
+  sendgrid: fromOptions(sendgrid),
+  sendheron: fromOptions(sendheron),
+  sequenzy: fromOptions(sequenzy),
+  ses: fromOptions(ses),
+  // SMTP is the one reshaped adapter: credentials resolve as flat fields but nest under `auth`.
+  smtp: (options, config) => {
+    const resolved = smtpOptions.parse(options);
+
+    return smtp({
+      name: config.name,
+      host: resolved.host,
+      port: resolved.port,
+      secure: resolved.secure,
+      auth:
+        resolved.user && resolved.pass ? { user: resolved.user, pass: resolved.pass } : undefined,
+    });
+  },
+  graph: fromOptions(graph),
+  sparkpost: fromOptions(sparkpost),
+  unosend: fromOptions(unosend),
+  zeptomail: fromOptions(zeptomail),
+};
+
+function buildAdapter(config: ConvexEmailAdapterConfig, env: AdapterEnv): EmailAdapter {
+  const factory = ADAPTER_FACTORIES[config.kind];
+
+  if (!factory) {
+    throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
+  }
+
+  return withName(factory(resolveAdapterOptions(config, env), config), config.name);
+}
+
+/**
+ * Turns stored adapter config into Email SDK options: inline values win, otherwise the field is
+ * read from the deployment environment under its configured or default variable name.
+ */
+export function resolveAdapterOptions(
+  config: ConvexEmailAdapterConfig,
+  env: AdapterEnv = process.env,
+) {
+  const fields = adapterFields(config.kind);
+
+  if (!fields) {
+    throw new Error(`Unknown Convex Email adapter kind "${config.kind}".`);
+  }
+
+  const values = new Map<string, AdapterConfigValue>(Object.entries(config));
+  const options = new Map<string, AdapterOptionValue>();
+
+  for (const [key, field] of Object.entries(fields)) {
+    const inline = field.inline ? values.get(key) : undefined;
+
+    if (inline !== undefined) {
+      options.set(key, inline);
+      continue;
+    }
+
+    const name = field.env ? envNameFor(config.kind, values, key, field.env) : undefined;
+    const fromEnv = name ? readEnvField(env, name, field) : undefined;
+
+    if (fromEnv !== undefined) {
+      options.set(key, fromEnv);
+      continue;
+    }
+
+    if (field.required) {
+      throw new Error(
+        name
+          ? `Missing Convex Email component environment variable ${name}.`
+          : `Convex Email adapter "${config.kind}" requires "${key}".`,
+      );
+    }
+  }
+
+  return Object.fromEntries(options);
+}
+
+/** Every value type a stored adapter config can carry, across all adapter kinds. */
+type AdapterConfigValue = AdapterOptionValue | undefined;
+
+const envOverride = z.string().min(1).optional().catch(undefined);
+
+function envNameFor(
+  kind: string,
+  values: ReadonlyMap<string, AdapterConfigValue>,
+  key: string,
+  fallback: string,
+) {
+  const override = envOverride.parse(values.get(`${key}Env`));
+
+  if (override === undefined) {
+    return fallback;
+  }
+
+  // Graph URL and identity fields must not turn unrelated secrets into request URLs.
+  if (kind === "graph" && override !== fallback) {
+    throw new Error(`Graph ${key}Env must use ${fallback}; set ${fallback} in the deployment environment.`);
+  }
+
+  // The sender action can read every deployment secret, so an override may only name a credential
+  // the adapter registry knows. This is defense in depth: adapter config must still come only from
+  // trusted server code, because a caller who also controls `baseUrl` can send any of these
+  // credentials to their own server. `exposeApi()` refuses caller-supplied adapters for that reason.
+  if (!isDeclaredEnvVar(override)) {
+    throw new Error(
+      `Convex Email adapter "${kind}" cannot read environment variable ${override}: ${key}Env ` +
+        `must name one of the credential variables Convex Email reads (default ${fallback}). ` +
+        `To use a different secret, set it as ${fallback} in the deployment environment.`,
+    );
+  }
+
+  for (const ownerKind of CONVEX_EMAIL_ADAPTER_KINDS) {
+    for (const [ownerKey, field] of Object.entries(adapterFields(ownerKind) ?? {})) {
+      if (field.env === override && field.restrictEnvToField &&
+        (kind !== ownerKind || key !== ownerKey)) {
+        throw new Error(`Convex environment variable ${override} is restricted to ${ownerKind}.${ownerKey}.`);
+      }
+    }
+  }
+
+  return override;
+}
+
+function readEnvField(env: AdapterEnv, name: string, field: ConvexAdapterField) {
+  const value = env[name];
+
+  if (!value) {
+    return undefined;
+  }
+
+  switch (field.type) {
+    case "number":
+      return parseNumberEnv(name, value);
+    case "boolean":
+      return value === "1" || value.toLowerCase() === "true";
+    case "record":
+      throw new Error(`Convex environment variable ${name} cannot supply a record value.`);
+    default:
+      return value;
+  }
+}
+
+export async function hydrateAttachments(
+  message: ConvexEmailMessage,
+  options: AttachmentFetchOptions = {},
+): Promise<EmailMessage> {
+  const attachments = message.attachments
+    ? await Promise.all(
+        message.attachments.map((attachment) => hydrateAttachment(attachment, options)),
+      )
+    : undefined;
+
+  const headers = normalizeHeaders(message.headers);
+  const { idempotencyKey: _, ...envelope } = message;
+  const hydrated = { ...envelope, headers, attachments };
+
+  if (message.html !== undefined) {
+    return { ...hydrated, html: message.html };
+  }
+
+  if (message.text !== undefined) {
+    return { ...hydrated, text: message.text };
+  }
+
+  throw new Error("Email message requires `html` or `text` content.");
+}
+
+function normalizeHeaders(
+  headers: ConvexEmailMessage["headers"],
+): readonly EmailHeader[] | undefined {
+  if (!headers) {
+    return undefined;
+  }
+
+  if (Array.isArray(headers)) {
+    return headers;
+  }
+
+  return Object.entries(headers).map(([name, value]) => ({ name, value }));
+}
+
+function withName<TAdapter extends EmailAdapter>(adapter: TAdapter, name: string | undefined) {
+  if (!name || name === adapter.name) {
+    return adapter;
+  }
+
+  return { ...adapter, name };
+}
+
+function parseNumberEnv(name: string, value: string) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Convex environment variable ${name} must be a number.`);
+  }
+
+  return parsed;
+}

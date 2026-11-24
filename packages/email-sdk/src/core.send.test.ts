@@ -175,6 +175,51 @@ describe("createEmailClient v1", () => {
     ).rejects.toThrow("must be an RFC 3339 timestamp");
   });
 
+  test("rejects empty attachment entries and non-object messages with EmailValidationError", async () => {
+    let sends = 0;
+
+    const client = createEmailClient({
+      adapters: [
+        {
+          ...adapter("primary"),
+          send: async () => {
+            sends += 1;
+
+            return { id: "primary_1" };
+          },
+        },
+      ],
+    });
+
+    for (const entry of [null, undefined, "report.pdf"]) {
+      // SAFETY: deliberately invalid runtime input from untyped JavaScript callers.
+      const sending = client.send({ ...message, attachments: [entry as never] });
+
+      await expect(sending).rejects.toBeInstanceOf(EmailValidationError);
+      await expect(sending).rejects.toThrow("Email message attachments[0] must be an object.");
+    }
+
+    // SAFETY: deliberately non-array attachments from an untyped JavaScript caller.
+    const notArray = client.send({ ...message, attachments: { filename: "a.txt" } as never });
+
+    await expect(notArray).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(notArray).rejects.toThrow("Email message attachments must be an array.");
+
+    // SAFETY: JSON records often carry attachments: null; it has always meant no attachments.
+    await expect(client.send({ ...message, attachments: null as never })).resolves.toMatchObject({
+      id: "primary_1",
+    });
+    expect(sends).toBe(1);
+    sends = 0;
+
+    // SAFETY: deliberately missing message from an untyped JavaScript caller.
+    const missing = client.validate(undefined as never);
+
+    await expect(missing).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(missing).rejects.toThrow("Email message must be an object.");
+    expect(sends).toBe(0);
+  });
+
   test("wraps middleware exceptions but isolates hook exceptions", async () => {
     const middlewareClient = createEmailClient({
       adapters: [adapter("primary")],
@@ -204,5 +249,36 @@ describe("createEmailClient v1", () => {
     });
 
     await expect(hookClient.send(message)).resolves.toMatchObject({ adapter: "primary" });
+  });
+});
+
+describe("send metadata cloning", () => {
+  test("a repeated Date or URL reference stays one object, so Map lookups still work", async () => {
+    const date = new Date("2026-11-23T00:00:00Z");
+    const link = new URL("https://example.com/receipt");
+    let seen: { date: Date; link: URL; labels: Map<Date | URL, string> } | undefined;
+
+    const client = createEmailClient({
+      adapters: [
+        adapter("primary", (_message, context) => {
+          // SAFETY: the test sends exactly this metadata shape below.
+          seen = context.metadata as typeof seen;
+
+          return { adapter: "primary", id: "p_1" };
+        }),
+      ],
+      telemetry: false,
+    });
+
+    const labels = new Map<Date | URL, string>([
+      [date, "receipt"],
+      [link, "link"],
+    ]);
+
+    await client.send(message, { metadata: { date, link, labels } });
+
+    expect(seen?.date).not.toBe(date);
+    expect(seen?.date && seen.labels.get(seen.date)).toBe("receipt");
+    expect(seen?.link && seen.labels.get(seen.link)).toBe("link");
   });
 });

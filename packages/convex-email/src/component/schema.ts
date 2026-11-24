@@ -88,4 +88,12 @@ export default defineSchema({
     cleanupAfterDays: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // The app's sender action, as a function handle. One row, refreshed by every enqueue, so
+  // retries and the sweep always schedule the action the app currently exports.
+  sender: defineTable({
+    key: v.string(),
+    handle: v.string(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });

@@ -47,7 +47,7 @@ console.log(result.adapter, result.id);
 - Type-inferred route names across `send`, `validate`, `adapter`, and `withAdapter`.
 - Capability validation for headers, attachments, tags, metadata, scheduling, and personalization.
 - Retries inside one adapter, then fallback only when your fallback policy allows it.
-- Sequential `sendMany` for independent sends and `sendPersonalized` for recipient variables.
+- `sendMany` for independent sends, sequential by default with opt-in bounded concurrency, and `sendPersonalized` for recipient variables.
 - Built-in SMTP transport with standards-compliant MIME, TLS, transfer encoding, and attachments.
 - Hooks and middleware for logs, metrics, traces, defaults, and capture stores.
 - Test adapters that never call a real provider.
@@ -169,7 +169,7 @@ Use fallback only when the backup adapter can represent the same message fields 
 
 ## Sending modes
 
-Use `send` for one message, `sendMany` for sequential independent messages, and `sendPersonalized` when one template is rendered with per-recipient variables.
+Use `send` for one message, `sendMany` for independent messages, and `sendPersonalized` when one template is rendered with per-recipient variables.
 
 ```ts
 await email.sendMany([
@@ -193,7 +193,7 @@ await email.sendPersonalized(
 );
 ```
 
-`sendMany` is ordered and settled. It returns one `{ ok, index, result | error }` item per input and does not run concurrently in v1.
+`sendMany` is ordered and settled. It returns one `{ ok, index, result | error }` item per input. Items send one at a time unless you pass `{ concurrency: n }`, which runs up to `n` at once; results stay in input order.
 
 ## Plugins
 
@@ -273,6 +273,8 @@ The optional `/react` subpath also exports email-safe shadcn-themed components s
 Import `@opencoredev/email-sdk/ai` only when your app also installs the optional `ai` peer. `createEmailTools` returns one approval-gated `sendEmail` tool whose schema lets the model set only `to`, `subject`, `text`, and `html`; your app binds the sender.
 
 ## Receiving email
+
+> `@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next release after 3.0.1, so `@opencoredev/email-sdk@3.0.1` from npm does not include it.
 
 `@opencoredev/email-sdk/inbound` verifies and parses inbound webhooks from 17 providers, including Resend, Mailgun, SendGrid, SES, Cloudflare Email Workers, Microsoft Graph, and Postmark, into one typed `InboundEmail`. It uses only web-standard APIs and adds no dependency.
 

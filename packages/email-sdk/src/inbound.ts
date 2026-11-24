@@ -155,7 +155,24 @@ export type InboundEndpointAuth =
 type Secret = string | readonly string[];
 
 /** Per-provider settings for `handleInbound`. Each signed provider requires its secret. */
-export type InboundHandlerConfig = InboundClockOptions & InboundFetchOptions & (
+/**
+ * Default `maxBodyBytes`: 50 MiB. SendGrid Inbound Parse accepts messages up to 30 MB, and
+ * providers that post attachments as base64 JSON or multipart add about a third on top.
+ */
+export const DEFAULT_INBOUND_MAX_BODY_BYTES = 50 * 1024 * 1024;
+
+export interface InboundBodyOptions {
+  /**
+   * Largest request body `handleInbound` reads, in bytes. A larger declared `Content-Length` is
+   * refused before reading, and a body that keeps streaming past the limit is cancelled, both
+   * with `InboundError` reason `payload_too_large`. The body is read before the signature can be
+   * checked, so this bounds the memory an unauthenticated request can claim. Defaults to
+   * `DEFAULT_INBOUND_MAX_BODY_BYTES` (50 MiB); `Infinity` disables the limit.
+   */
+  maxBodyBytes?: number;
+}
+
+export type InboundHandlerConfig = InboundClockOptions & InboundFetchOptions & InboundBodyOptions & (
   | { provider: "resend"; secret: Secret; api?: ResendInboundApiOptions }
   | { provider: "postmark"; auth: InboundEndpointAuth }
   | { provider: "mailgun"; secret: Secret }
@@ -235,12 +252,122 @@ export async function parseInbound(
   }
 }
 
+function bodyTooLarge(provider: InboundProvider, maxBodyBytes: number) {
+  return new InboundError(`Inbound request body is larger than maxBodyBytes (${maxBodyBytes} bytes).`, {
+    reason: "payload_too_large",
+    provider,
+  });
+}
+
+function validateMaxBodyBytes(maxBodyBytes: number): number {
+  if (
+    (!Number.isFinite(maxBodyBytes) && maxBodyBytes !== Number.POSITIVE_INFINITY) ||
+    maxBodyBytes <= 0
+  ) {
+    throw new RangeError("handleInbound maxBodyBytes must be a positive number of bytes or Infinity.");
+  }
+
+  return maxBodyBytes;
+}
+
+/** Reads at most `maxBodyBytes`, refusing an oversized Content-Length before reading anything. */
+async function readBoundedBody(request: Request, maxBodyBytes: number, provider: InboundProvider): Promise<Uint8Array<ArrayBuffer>> {
+  validateMaxBodyBytes(maxBodyBytes);
+
+  const declared = Number(request.headers.get("content-length") ?? Number.NaN);
+
+  if (Number.isFinite(declared) && declared > maxBodyBytes) throw bodyTooLarge(provider, maxBodyBytes);
+
+  if (request.bodyUsed) {
+    throw new InboundError("Inbound request body could not be read.", {
+      reason: "payload_invalid",
+      provider,
+    });
+  }
+
+  if (!request.body) return new Uint8Array(0);
+
+  // Content-Length can be absent (chunked) or wrong, so the stream is counted as it arrives.
+  let reader: ReadableStreamDefaultReader<Uint8Array>;
+
+  try {
+    reader = request.body.getReader();
+  } catch (error) {
+    throw new InboundError("Inbound request body could not be read.", {
+      reason: "payload_invalid",
+      provider,
+      cause: error instanceof Error ? error : undefined,
+    });
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    let chunk: Awaited<ReturnType<typeof reader.read>>;
+
+    try {
+      chunk = await reader.read();
+    } catch (error) {
+      throw new InboundError("Inbound request body could not be read.", {
+        reason: "payload_invalid",
+        provider,
+        cause: error instanceof Error ? error : undefined,
+      });
+    }
+
+    const { done, value } = chunk;
+
+    if (done) break;
+
+    if (!ArrayBuffer.isView(value)) {
+      void reader.cancel().catch(() => undefined);
+      throw new InboundError("Inbound request body could not be read.", {
+        reason: "payload_invalid",
+        provider,
+      });
+    }
+
+    const view: ArrayBufferView = value;
+
+    const bytes =
+      view instanceof Uint8Array
+        ? view
+        : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+
+    total += bytes.byteLength;
+
+    if (total > maxBodyBytes) {
+      // Do not await cancel(): on a cloned Request whose sibling branch is unread,
+      // awaiting tee-branch cancellation can hang until the other branch is read or cancelled.
+      void reader.cancel().catch(() => undefined);
+      throw bodyTooLarge(provider, maxBodyBytes);
+    }
+
+    chunks.push(bytes);
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return body;
+}
+
 /**
  * Verify and parse an inbound request in a web-standard route handler (Next.js, Hono,
  * Workers, Bun, Convex HTTP actions). Throws `InboundError` when verification fails; map
  * `signature_*` and `timestamp_expired` reasons to 401 and `payload_invalid` to 400.
  */
 export async function handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult> {
+  const maxBodyBytes = validateMaxBodyBytes(
+    config.maxBodyBytes === undefined ? DEFAULT_INBOUND_MAX_BODY_BYTES : config.maxBodyBytes,
+  );
+
   const fetchOptions = { fetch: config.fetch, signal: config.signal };
   const clock = { now: config.now, toleranceSeconds: config.toleranceSeconds };
 
@@ -261,7 +388,8 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
   // Copy headers before reading the body: Bun drops a FormData Content-Type from headers
   // first accessed after the body is consumed.
   const headers = new Headers(request.headers);
-  const payload: InboundRequestPayload = { body: new Uint8Array(await request.arrayBuffer()), headers, url: request.url };
+  const body = await readBoundedBody(request, maxBodyBytes, config.provider);
+  const payload: InboundRequestPayload = { body, headers, url: request.url };
 
   switch (config.provider) {
     case "resend": {

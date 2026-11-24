@@ -1,3 +1,4 @@
+import { EmailValidationError } from "./errors.js";
 import type {
   EmailAddress,
   EmailHeader,
@@ -6,6 +7,9 @@ import type {
   EmailTag,
   EmailSendOptions,
 } from "./types.js";
+import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "./internal/decode.js";
+import { copyBoundedArray } from "./internal/snapshot.js";
+import { headerList } from "./utils.js";
 
 export type EmailDefaultsPluginOptions = {
   id?: string;
@@ -19,69 +23,327 @@ export type EmailDefaultsPluginOptions = {
 };
 
 export function defaultsPlugin(options: EmailDefaultsPluginOptions): EmailPlugin {
+  let safeOptions: EmailDefaultsPluginOptions;
+
+  try {
+    if (!isNonArrayObject(options)) {
+      throw new EmailValidationError("defaultsPlugin options must be an object.");
+    }
+
+    const id = options.id;
+    const metadata = options.metadata;
+    const sendMetadata = options.sendMetadata;
+    const headers = options.headers;
+    const tags = options.tags;
+    const replyTo = options.replyTo;
+    const idempotencyKey = options.idempotencyKey;
+    const idempotencyKeyPrefix = options.idempotencyKeyPrefix;
+
+    if (metadata !== undefined && !isNonArrayObject(metadata)) {
+      throw new EmailValidationError("defaultsPlugin metadata must be an object.");
+    }
+
+    if (sendMetadata !== undefined && !isNonArrayObject(sendMetadata)) {
+      throw new EmailValidationError("defaultsPlugin sendMetadata must be an object.");
+    }
+
+    let safeHeaders: EmailHeader[] | undefined;
+
+    if (headers !== undefined) {
+      if (!Array.isArray(headers)) {
+        throw new EmailValidationError("defaultsPlugin headers must be an array.");
+      }
+
+      safeHeaders = copyBoundedArray(headers, "defaultsPlugin headers").map((header) => {
+        if (!isNonArrayObject(header)) {
+          throw new EmailValidationError(
+            "defaultsPlugin headers must contain objects with non-empty string name and string value.",
+          );
+        }
+
+        const name = header.name;
+        const value = header.value;
+
+        if (!isStringMember(name) || name.length === 0 || !isStringMember(value)) {
+          throw new EmailValidationError(
+            "defaultsPlugin headers must contain objects with non-empty string name and string value.",
+          );
+        }
+
+        return { name, value };
+      });
+    }
+
+    let safeTags: EmailTag[] | undefined;
+
+    if (tags !== undefined) {
+      if (!Array.isArray(tags)) {
+        throw new EmailValidationError("defaultsPlugin tags must be an array.");
+      }
+
+      safeTags = copyBoundedArray(tags, "defaultsPlugin tags").map((tag) => {
+        if (!isNonArrayObject(tag)) {
+          throw new EmailValidationError(
+            "defaultsPlugin tags must contain objects with string name and string value.",
+          );
+        }
+
+        const name = tag.name;
+        const value = tag.value;
+
+        if (!isStringMember(name) || !isStringMember(value)) {
+          throw new EmailValidationError(
+            "defaultsPlugin tags must contain objects with string name and string value.",
+          );
+        }
+
+        return { name, value };
+      });
+    }
+
+    safeOptions = {
+      id,
+      headers: safeHeaders,
+      tags: safeTags,
+      metadata: metadata === undefined ? undefined : cloneMetadataRecord(metadata, true),
+      sendMetadata: sendMetadata === undefined ? undefined : cloneMetadataRecord(sendMetadata),
+      replyTo: cloneReplyTo(replyTo),
+      idempotencyKey,
+      idempotencyKeyPrefix,
+    };
+  } catch (error) {
+    if (error instanceof EmailValidationError) throw error;
+    throw new EmailValidationError("defaultsPlugin options could not be read.", error);
+  }
+
   return {
-    id: options.id ?? "defaults",
+    id: safeOptions.id ?? "defaults",
     middleware: [
       {
         beforeSend(event) {
-          const message = withMessageDefaults(event.message, options);
-          const sendOptions = withSendOptionDefaults(event.options, message, options);
+          try {
+            if (!isNonArrayObject(event) || !isNonArrayObject(event.message)) {
+              throw new EmailValidationError("Email message must be an object.");
+            }
 
-          return {
-            message,
-            options: sendOptions,
-          };
+            const message = withMessageDefaults(event.message, safeOptions);
+            const sendOptions = withSendOptionDefaults(event.options, message, safeOptions);
+
+            return {
+              message,
+              options: sendOptions,
+            };
+          } catch (error) {
+            if (error instanceof EmailValidationError) throw error;
+            throw new EmailValidationError(
+              "Email message or send options could not be read.",
+              error,
+            );
+          }
         },
       },
     ],
   };
 }
 
+function cloneAddressEntry(entry: EmailAddress): EmailAddress {
+  if (isStringMember(entry) || !isNonArrayObject(entry)) return entry;
+
+  const email = entry.email;
+  const name = entry.name;
+
+  return name === undefined ? { email } : { email, name };
+}
+
+function cloneReplyTo(
+  replyTo: EmailDefaultsPluginOptions["replyTo"],
+): EmailDefaultsPluginOptions["replyTo"] {
+  if (replyTo === undefined || isStringMember(replyTo)) return replyTo;
+
+  if (Array.isArray(replyTo)) {
+    return copyBoundedArray(replyTo, "defaultsPlugin replyTo").map(cloneAddressEntry);
+  }
+
+  return cloneAddressEntry(replyTo);
+}
+
+const KNOWN_MESSAGE_KEYS: ReadonlySet<PropertyKey> = new Set([
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "subject",
+  "html",
+  "text",
+  "attachments",
+  "sendAt",
+  "replyTo",
+  "headers",
+  "tags",
+  "metadata",
+]);
+
 function withMessageDefaults(
   message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailMessage {
+  const extras: Partial<EmailMessage> = {};
+
+  for (const key of Reflect.ownKeys(message)) {
+    if (KNOWN_MESSAGE_KEYS.has(key)) continue;
+    const descriptor = Object.getOwnPropertyDescriptor(message, key);
+
+    if (!descriptor?.enumerable) continue;
+    Object.defineProperty(extras, key, {
+      value: descriptor.get ? descriptor.get.call(message) : descriptor.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  // SAFETY: Copying known EmailMessage fields once preserves prototype getters and avoids double-reading own getters.
   return {
-    ...message,
-    replyTo: message.replyTo ?? options.replyTo,
+    ...extras,
+    from: message.from,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    attachments: message.attachments,
+    sendAt: message.sendAt,
+    replyTo: message.replyTo ?? cloneReplyTo(options.replyTo),
     headers: mergeHeaders(options.headers, message.headers),
     tags: mergeTags(options.tags, message.tags),
     metadata: mergeMetadata(options.metadata, message.metadata),
-  };
+  } as EmailMessage;
 }
+
+const KNOWN_SEND_OPTION_KEYS: ReadonlySet<PropertyKey> = new Set([
+  "adapter",
+  "idempotency",
+  "signal",
+  "retry",
+  "fallback",
+  "metadata",
+  "idempotencyKey",
+]);
 
 function withSendOptionDefaults(
   sendOptions: EmailSendOptions | undefined,
   _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
 ): EmailSendOptions | undefined {
+  if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
+    throw new EmailValidationError("Email send options must be an object.");
+  }
+
+  const extras: Partial<EmailSendOptions> = {};
+
+  if (sendOptions) {
+    for (const key of Reflect.ownKeys(sendOptions)) {
+      if (KNOWN_SEND_OPTION_KEYS.has(key)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(sendOptions, key);
+
+      if (!descriptor?.enumerable) continue;
+      Object.defineProperty(extras, key, {
+        value: descriptor.get ? descriptor.get.call(sendOptions) : descriptor.value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+
+    const adapter = sendOptions.adapter;
+    const idempotency = sendOptions.idempotency;
+    const signal = sendOptions.signal;
+    const retry = sendOptions.retry;
+    const fallback = sendOptions.fallback;
+
+    if (adapter !== undefined) extras.adapter = adapter;
+
+    if (idempotency !== undefined) extras.idempotency = idempotency;
+
+    if (signal !== undefined) extras.signal = signal;
+
+    if (retry !== undefined) extras.retry = retry;
+
+    if (fallback !== undefined) extras.fallback = fallback;
+  }
+
   const metadata = mergeSendMetadata(options.sendMetadata, sendOptions?.metadata);
   const idempotencyKey = applyIdempotencyDefault(sendOptions?.idempotencyKey, options);
 
-  if (!sendOptions && !metadata && !idempotencyKey) {
+  if (!sendOptions && metadata === undefined && idempotencyKey === undefined) {
     return undefined;
   }
 
   return {
-    ...sendOptions,
+    ...extras,
     metadata,
     idempotencyKey,
   };
 }
 
+/**
+ * A default header applies only when the message does not set a header with the same name
+ * (compared case-insensitively, as header names are). Appending both would send two values,
+ * which adapters without repeated-header support reject, and on the others the message would
+ * not win. Repeated headers within the message itself are kept as given.
+ */
 function mergeHeaders(
   defaults: readonly EmailHeader[] | undefined,
-  value: readonly EmailHeader[] | undefined,
+  value: EmailMessage["headers"],
 ) {
-  if (!defaults) {
+  if (!defaults?.length) {
     return value;
   }
 
-  if (!value) {
-    return defaults;
+  if (value === undefined) {
+    return defaults.map((header) => ({ name: header.name, value: header.value }));
   }
 
-  return [...defaults, ...value];
+  let own: readonly EmailHeader[];
+
+  if (Array.isArray(value)) {
+    const items: EmailHeader[] = [];
+
+    for (const header of value) {
+      if (!isNonArrayObject(header)) {
+        return value;
+      }
+
+      const name = header.name;
+
+      if (!isStringMember(name) || name.length === 0) {
+        return value;
+      }
+
+      items.push({ name, value: header.value });
+    }
+
+    own = items;
+  } else if (isNonArrayObject(value)) {
+    // headerList also reads the legacy name-to-value object that JavaScript callers send.
+    own = headerList(value);
+  } else {
+    return value;
+  }
+
+  if (own.length === 0) {
+    return defaults.map((header) => ({ name: header.name, value: header.value }));
+  }
+
+  const overridden = new Set(own.map((header) => header.name.toLowerCase()));
+
+  return [
+    ...defaults
+      .filter((header) => !overridden.has(header.name.toLowerCase()))
+      .map((header) => ({ name: header.name, value: header.value })),
+    ...own,
+  ];
 }
 
 function mergeTags(
@@ -92,24 +354,53 @@ function mergeTags(
     return value;
   }
 
-  if (!value?.length) {
-    return defaults;
+  if (value === undefined) {
+    return defaults.map((tag) => ({ name: tag.name, value: tag.value }));
   }
 
-  return [...defaults, ...value];
+  if (!Array.isArray(value)) {
+    return value;
+  }
+
+  const own: EmailTag[] = [];
+
+  for (const tag of value) {
+    if (!isNonArrayObject(tag)) {
+      return value;
+    }
+
+    own.push({ name: tag.name, value: tag.value });
+  }
+
+  if (!own.length) {
+    return defaults.map((tag) => ({ name: tag.name, value: tag.value }));
+  }
+
+  return [...defaults.map((tag) => ({ name: tag.name, value: tag.value })), ...own];
 }
 
 function mergeMetadata(
   defaults: EmailMessage["metadata"] | undefined,
   value: EmailMessage["metadata"] | undefined,
 ) {
-  if (!defaults) {
+  if (defaults === undefined) {
     return value;
   }
 
+  if (!isNonArrayObject(defaults)) {
+    return value ?? defaults;
+  }
+
+  if (value !== undefined && !isNonArrayObject(value)) {
+    return value;
+  }
+
+  const clonedDefaults = cloneMetadataRecord(defaults, true);
+  const clonedValue = value === undefined ? undefined : cloneMetadataRecord(value, true);
+
   return {
-    ...defaults,
-    ...value,
+    ...clonedDefaults,
+    ...clonedValue,
   };
 }
 
@@ -117,13 +408,36 @@ function mergeSendMetadata(
   defaults: EmailSendOptions["metadata"] | undefined,
   value: EmailSendOptions["metadata"] | undefined,
 ) {
-  if (!defaults) {
+  if (defaults === undefined) {
+    return value;
+  }
+
+  if (!isNonArrayObject(defaults)) {
+    return value ?? defaults;
+  }
+
+  if (value !== undefined && !isNonArrayObject(value)) {
+    return value;
+  }
+
+  const clonedDefaults = cloneMetadataRecord(defaults);
+
+  if (value === undefined) {
+    return clonedDefaults;
+  }
+
+  const clonedValue = cloneMetadataRecord(value);
+
+  // cloneMetadataRecord copies plain records and keeps class instances by reference. Spreading an
+  // instance would drop its methods and private fields, so per-send class metadata replaces the
+  // defaults instead of merging with them.
+  if (clonedValue === value) {
     return value;
   }
 
   return {
-    ...defaults,
-    ...value,
+    ...clonedDefaults,
+    ...clonedValue,
   };
 }
 
@@ -133,7 +447,13 @@ function applyIdempotencyDefault(
 ) {
   const key = value ?? options.idempotencyKey;
 
-  if (!key || !options.idempotencyKeyPrefix || key.startsWith(options.idempotencyKeyPrefix)) {
+  if (
+    !isStringMember(key) ||
+    key.trim().length === 0 ||
+    !isStringMember(options.idempotencyKeyPrefix) ||
+    !options.idempotencyKeyPrefix ||
+    key.startsWith(options.idempotencyKeyPrefix)
+  ) {
     return key;
   }
 

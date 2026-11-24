@@ -1,5 +1,0 @@
-{
-  "title": "Built-in plugins",
-  "icon": "PackagePlus",
-  "pages": ["defaults", "routing", "timeout", "observability", "capture"]
-}

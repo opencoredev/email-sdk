@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { z } from "zod";
 import registry from "../adapter-verification.json";
 import evidence from "../adapter-verification-evidence.json";
-import { ADAPTER_SUPPORT_ENTRIES } from "../apps/fumadocs/src/lib/adapter-support";
-import { contractTestFilesFor, parseEvidence } from "../apps/fumadocs/src/lib/adapter-verification";
-import type { JsonValue } from "../apps/fumadocs/src/lib/json";
-import { providers } from "../apps/fumadocs/src/lib/providers";
+import { ADAPTER_SUPPORT_ENTRIES } from "../apps/docs/lib/adapter-support";
+import { contractTestFilesFor, parseEvidence } from "../apps/docs/lib/adapter-verification";
+import type { JsonValue } from "../apps/docs/lib/json";
+import { providers } from "../apps/docs/lib/providers";
 import { SUPPORTED_MESSAGE_FIELDS } from "../packages/email-sdk/src/utils";
 
 const sdkSrc = new URL("../packages/email-sdk/src/", import.meta.url).pathname;

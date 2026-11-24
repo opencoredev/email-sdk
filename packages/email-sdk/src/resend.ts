@@ -1,4 +1,5 @@
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -15,6 +16,7 @@ import {
   assertSupportedMessageFields,
   SUPPORTED_MESSAGE_FIELDS,
   mapAttachments,
+  validateBuiltInAdapter,
 } from "./utils.js";
 
 export type ResendAdapterOptions = {
@@ -46,11 +48,14 @@ export function resend(
         headers.set("Idempotency-Key", context.idempotencyKey);
       }
 
+      const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("resend", safeMessage);
+
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toResendPayload(message)),
+        body: JSON.stringify(await toResendPayload(safeMessage)),
       });
 
       if (!response.ok) {
@@ -88,7 +93,7 @@ async function toResendPayload(message: EmailMessage) {
     reply_to: formatAddresses(message.replyTo),
     headers: headersToObject(message.headers),
     attachments: await mapAttachments(message.attachments, toResendAttachment),
-    tags: message.tags,
+    tags: message.tags?.map((tag) => ({ name: tag.name, value: tag.value })),
     scheduled_at: sendAtIso(message),
   };
 }
