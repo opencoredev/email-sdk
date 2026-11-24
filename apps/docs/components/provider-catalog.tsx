@@ -1,15 +1,19 @@
 import verification from "../../../adapter-verification.json" with { type: "json" };
 
 import { ExternalLink, Heart } from "./icon";
-import { providers, type Provider } from "../lib/providers";
+import { listedProviders, providers, type Provider } from "../lib/providers";
 import { sponsors } from "../lib/sponsors";
 
 type LiveCheckProvider = keyof typeof verification.liveChecks;
 
 const sponsorNames = new Set(sponsors.map((sponsor) => sponsor.name));
 
-export function ProviderGrid() {
-  const visibleProviders = [...providers].sort(compareProviders);
+// Archived snapshots pass `release` (for example "v2.0.0"), which hides the
+// adapters that release did not ship.
+export function ProviderGrid({ release }: { release?: string }) {
+  const visibleProviders = listedProviders({ archived: release !== undefined }).toSorted(
+    compareProviders,
+  );
 
   return (
     <div className="not-prose border-y border-fd-border">

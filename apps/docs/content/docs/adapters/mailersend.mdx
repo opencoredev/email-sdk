@@ -121,6 +121,6 @@ Yes. Set sendAt on the message and the MailerSend adapter passes the scheduled t
 
 ### Does the MailerSend adapter support idempotent sends?
 
-No. MailerSend has no provider-side idempotency, so a retried send can be delivered twice. Deduplicate in your own queue before retrying.
+No. MailerSend has no provider-side idempotency, so a retried send can be delivered twice. A send with idempotencyKey on a route that includes MailerSend fails with EmailValidationError unless you pass idempotency: "best-effort". Deduplicate in your own queue before retrying.
 
 {/* adapter-faq:end */}

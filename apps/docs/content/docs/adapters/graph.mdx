@@ -215,6 +215,6 @@ No. Microsoft Graph has no provider-side scheduling, so a message with sendAt fa
 
 ### Does the Microsoft Graph adapter support idempotent sends?
 
-No. Microsoft Graph has no provider-side idempotency, so a retried send can be delivered twice. Deduplicate in your own queue before retrying.
+No. Microsoft Graph has no provider-side idempotency, so a retried send can be delivered twice. A send with idempotencyKey on a route that includes Microsoft Graph fails with EmailValidationError unless you pass idempotency: "best-effort". Deduplicate in your own queue before retrying.
 
 {/* adapter-faq:end */}

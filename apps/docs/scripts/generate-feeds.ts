@@ -64,7 +64,10 @@ function article(type: "TechArticle" | "BlogPosting", url: string, fields: Recor
   };
 }
 
-const posts = readBlogPosts();
+// A committed post dated in the future stays out of both feeds until that day.
+const today = new Date().toISOString().slice(0, 10);
+
+const posts = readBlogPosts().filter((post) => post.publishedAt <= today);
 
 const pageLines = [join(appDir, "content/docs"), join(appDir, "content/compare")].flatMap((dir) =>
   mdxFiles(dir).map((file) => {

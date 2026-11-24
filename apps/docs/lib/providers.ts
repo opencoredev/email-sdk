@@ -256,3 +256,13 @@ export const providers = [
 ] as const;
 
 export type Provider = (typeof providers)[number];
+
+/**
+ * The providers a docs page lists. Archived snapshots pass `archived: true`
+ * and drop the `currentOnly` adapters, which no released snapshot documents.
+ */
+export function listedProviders({ archived }: { archived: boolean }): readonly Provider[] {
+  if (!archived) return providers;
+
+  return providers.filter((provider) => !("currentOnly" in provider && provider.currentOnly));
+}

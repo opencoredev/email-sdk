@@ -52,18 +52,33 @@ function escapeCell(value: string) {
   return value.replace(/\|/g, "\\|").replace(/\n+/g, " ");
 }
 
+// Data-driven blocks render live registry data. Archived snapshots pass a
+// `release` prop, and on those pages the data describes the current SDK, not
+// the archived one, so the mirror links to the current page instead of
+// printing current rows under an old release URL.
+function currentData(docsPath: string, render: () => string): ComponentMarkdown {
+  return ({ props }) =>
+    attrsOf(props).has("release")
+      ? `\n\nThe live version of this content is at ${siteUrl}${docsPath}.\n\n`
+      : render();
+}
+
 export const markdownComponents = {
-  AdapterCapabilitySupport: () => renderCapabilitySupport(),
-  AdapterFieldSupport: () => renderFieldSupport(),
-  AdapterPricing: () => renderPricing(),
-  AdapterVerification: () => renderVerification(),
-  CommunityPluginRegistry: () => renderCommunityRegistry(),
+  AdapterCapabilitySupport: currentData("/docs/adapters/capability-groups", () =>
+    renderCapabilitySupport(),
+  ),
+  AdapterFieldSupport: currentData("/docs/adapters/field-support", () => renderFieldSupport()),
+  AdapterPricing: currentData("/docs/adapters/pricing", () => renderPricing()),
+  AdapterVerification: currentData("/docs/adapters/verification", () => renderVerification()),
+  CommunityPluginRegistry: currentData("/docs/plugins/community", () =>
+    renderCommunityRegistry(),
+  ),
   EmailExample: ({ props }) => renderEmailExample(attrsOf(props)),
-  EmailExampleGallery: () => renderEmailGallery(),
+  EmailExampleGallery: currentData("/docs/ui", () => renderEmailGallery()),
   PackageInstallTabs: ({ props }) => renderPackageInstall(attrsOf(props)),
   ProviderBadge: ({ props }) => renderProviderBadge(attrsOf(props)),
-  ProviderGrid: () => renderProviderGrid(),
-  SponsorSpotlight: () => renderSponsorSpotlight(),
+  ProviderGrid: currentData("/docs/adapters", () => renderProviderGrid()),
+  SponsorSpotlight: currentData("/docs/adapters", () => renderSponsorSpotlight()),
 } satisfies Record<string, ComponentMarkdown>;
 
 // region adapters
@@ -139,7 +154,7 @@ function renderFieldSupport() {
 
     const unsupportedCell =
       unsupported.length === 0
-        ? "All normalized fields"
+        ? "None"
         : unsupported.map((field) => FIELD_LABELS[field]).join(", ");
 
     const limitsCell = (entry.limits ?? []).join("; ");

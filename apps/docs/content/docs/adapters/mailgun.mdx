@@ -155,6 +155,6 @@ Yes. Set sendAt on the message and the Mailgun adapter passes the scheduled time
 
 ### Does the Mailgun adapter support idempotent sends?
 
-No. Mailgun has no provider-side idempotency, so a retried send can be delivered twice. Deduplicate in your own queue before retrying.
+No. Mailgun has no provider-side idempotency, so a retried send can be delivered twice. A send with idempotencyKey on a route that includes Mailgun fails with EmailValidationError unless you pass idempotency: "best-effort". Deduplicate in your own queue before retrying.
 
 {/* adapter-faq:end */}

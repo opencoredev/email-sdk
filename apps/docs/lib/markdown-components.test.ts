@@ -77,4 +77,23 @@ describe("markdown component serializers", () => {
   test("skips an unknown email example instead of inventing one", () => {
     expect(serialize("EmailExample", { id: "not-a-real-example" })).toBe("");
   });
+
+  test("reports no unsupported fields for an adapter that supports every field", () => {
+    const output = serialize("AdapterFieldSupport");
+
+    expect(output).toContain("| [Mailgun](/docs/adapters/mailgun) | None |");
+    expect(output).not.toContain("All normalized fields");
+  });
+
+  test("points archived-version mirrors at the current page for live registry data", () => {
+    const pricing = serialize("AdapterPricing", { release: "v2.0.0" });
+
+    expect(pricing).toContain("https://email-sdk.dev/docs/adapters/pricing");
+    expect(pricing).not.toContain("| Provider | Model |");
+
+    const grid = serialize("ProviderGrid", { release: "v2.0.0" });
+
+    expect(grid).toContain("https://email-sdk.dev/docs/adapters");
+    expect(grid).not.toContain("[Resend](/docs/adapters/resend)");
+  });
 });

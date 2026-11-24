@@ -109,6 +109,6 @@ No. ZeptoMail has no provider-side scheduling, so a message with sendAt fails va
 
 ### Does the ZeptoMail adapter support idempotent sends?
 
-No. ZeptoMail has no provider-side idempotency, so a retried send can be delivered twice. Deduplicate in your own queue before retrying.
+No. ZeptoMail has no provider-side idempotency, so a retried send can be delivered twice. A send with idempotencyKey on a route that includes ZeptoMail fails with EmailValidationError unless you pass idempotency: "best-effort". Deduplicate in your own queue before retrying.
 
 {/* adapter-faq:end */}

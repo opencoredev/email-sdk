@@ -11,8 +11,7 @@ A configured check is not a passing result. **Live check available** means a non
 
 The table covers all 24 current adapters: 23 provider APIs and SMTP. **No published run evidence** means this repository has no dated public result for that column. It does not mean a check failed or that the provider is unsupported. No passing dates, run links, or refresh dates are inferred from registry membership or from the existence of a test file.
 
-<AdapterVerification />
-
+<AdapterVerification  release="v2.0.0" />
 ## What each column means
 
 - **Contract tests:** the listed `packages/email-sdk/src/*.test.ts` files import that adapter and exercise request mapping, validation, and error projection without calling a provider account. The list is derived from the test files on disk at build time; `bun run verification:check` fails if it drifts. A test file existing does not prove a particular run passed or that every field was covered.

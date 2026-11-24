@@ -6,8 +6,9 @@
 // committed post wins on a slug collision. Run before `blume build`, or on
 // demand via `bun run posts:fetch`.
 //
-// Resilient by design: a missing key or a Notra outage leaves the committed
-// posts in place and never fails the build.
+// Resilient by design: a missing key or a Notra outage never fails the build.
+// Either one clears content/blog/(notra)/, so the build has the committed posts
+// only and never republishes posts left over from an earlier run.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -69,8 +70,12 @@ function committedSlugs(): Set<string> {
   );
 }
 
-function writePosts(posts: readonly MappedPost[]): number {
+function clearFetchedPosts(): void {
   rmSync(outputDir, { force: true, recursive: true });
+}
+
+function writePosts(posts: readonly MappedPost[]): number {
+  clearFetchedPosts();
   mkdirSync(outputDir, { recursive: true });
 
   const taken = committedSlugs();
@@ -95,6 +100,7 @@ async function main(): Promise<void> {
   const apiKey = process.env.NOTRA_API_KEY?.trim();
 
   if (!apiKey) {
+    clearFetchedPosts();
     console.warn("[notra] NOTRA_API_KEY is not set, so only the committed blog posts are built.");
 
     return;
@@ -116,6 +122,8 @@ async function main(): Promise<void> {
     console.log(`[notra] wrote ${written} published post(s) to content/blog/(notra)/`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    clearFetchedPosts();
     console.warn(`[notra] fetch failed (${message}); building with the committed posts only.`);
   }
 }

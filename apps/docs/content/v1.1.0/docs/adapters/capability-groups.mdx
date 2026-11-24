@@ -14,8 +14,7 @@ Field support answers whether an adapter can represent a message field. Capabili
 - Use provider-side scheduled delivery when `scheduling` is `true`; `sendAt` is translated to the provider, and the SDK never waits or queues.
 - Use one native personalized request when `personalized` is `native`; every other built-in adapter expands personalized delivery into deterministic sequential one-recipient sends.
 
-<AdapterCapabilitySupport />
-
+<AdapterCapabilitySupport  release="v1.1.0" />
 Every fallback candidate must preserve the message's fields and required delivery capabilities. No built-in adapter silently ignores an unsupported capability.
 
 ## Scheduling is not a queue

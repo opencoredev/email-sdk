@@ -67,29 +67,56 @@ async function resolveDns(name: string, type: "TXT" | "MX"): Promise<string[]> {
   throw new Error("DNS resolution is temporarily unavailable. Try again in a minute.");
 }
 
-async function probeDkimSelectors(domain: string, userSelector?: string) {
+type DkimProbe = {
+  /** Selectors that published a DKIM key. */
+  found: DkimSelectorResult[];
+  /** Selectors whose lookup failed on every resolver, so their state is unknown. */
+  unresolved: string[];
+};
+
+async function probeDkimSelectors(domain: string, userSelector?: string): Promise<DkimProbe> {
   const selectors = [
     ...new Set([...(userSelector ? [userSelector] : []), ...COMMON_DKIM_SELECTORS]),
   ];
 
   const results = await Promise.all(
-    selectors.map(async (selector): Promise<DkimSelectorResult> => {
+    selectors.map(async (selector) => {
       try {
         const records = await resolveDns(`${selector}._domainkey.${domain}`, "TXT");
         const dkim = records.find((record) => /v=DKIM1|k=rsa|p=[A-Za-z0-9+/]/.test(record));
 
-        return { selector, record: dkim ?? null };
+        return { kind: "resolved" as const, selector, record: dkim ?? null };
       } catch {
-        return { selector, record: null };
+        return { kind: "unresolved" as const, selector };
       }
     }),
   );
 
-  return results.filter((result) => result.record !== null);
+  const found: DkimSelectorResult[] = [];
+  const unresolved: string[] = [];
+
+  for (const result of results) {
+    if (result.kind === "unresolved") unresolved.push(result.selector);
+    else if (result.record !== null)
+      found.push({ selector: result.selector, record: result.record });
+  }
+
+  return { found, unresolved };
 }
 
-function dkimFindingsFor(selectors: readonly DkimSelectorResult[]): CheckFinding[] {
-  if (selectors.length === 0) {
+export function dkimFindingsFor({ found, unresolved }: DkimProbe): CheckFinding[] {
+  if (found.length === 0 && unresolved.length > 0) {
+    // A failed lookup is not an absent key: say the check is incomplete
+    // instead of telling the user to publish records they may already have.
+    return [
+      {
+        status: "warn",
+        message: `Couldn't look up DKIM for ${unresolved.length === 1 ? "selector" : "selectors"} ${unresolved.join(", ")}, so this check is incomplete. Try again in a minute.`,
+      },
+    ];
+  }
+
+  if (found.length === 0) {
     return [
       {
         status: "warn",
@@ -100,12 +127,12 @@ function dkimFindingsFor(selectors: readonly DkimSelectorResult[]): CheckFinding
     ];
   }
 
-  const plural = selectors.length === 1 ? "" : "s";
+  const plural = found.length === 1 ? "" : "s";
 
   return [
     {
       status: "pass",
-      message: `DKIM key${plural} found for selector${plural}: ${selectors.map((entry) => entry.selector).join(", ")}.`,
+      message: `DKIM key${plural} found for selector${plural}: ${found.map((entry) => entry.selector).join(", ")}.`,
     },
   ];
 }
@@ -119,7 +146,7 @@ export async function checkEmailDns(input: string, dkimSelector?: string): Promi
   const selector =
     dkimSelector && SELECTOR_RE.test(dkimSelector.trim()) ? dkimSelector.trim() : undefined;
 
-  const [rootTxt, dmarcTxt, mxRecords, dkimSelectors] = await Promise.all([
+  const [rootTxt, dmarcTxt, mxRecords, dkimProbe] = await Promise.all([
     resolveDns(domain, "TXT"),
     resolveDns(`_dmarc.${domain}`, "TXT"),
     resolveDns(domain, "MX"),
@@ -133,7 +160,7 @@ export async function checkEmailDns(input: string, dkimSelector?: string): Promi
     spf,
     dmarc: parseDmarc(dmarcTxt),
     mx: parseMx(mxRecords),
-    dkim: { selectors: dkimSelectors, findings: dkimFindingsFor(dkimSelectors) },
+    dkim: { selectors: dkimProbe.found, findings: dkimFindingsFor(dkimProbe) },
     providerHints: findProviderHints(spf.record),
     checkedAt: new Date().toISOString(),
   };
