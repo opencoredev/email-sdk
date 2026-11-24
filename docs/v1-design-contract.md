@@ -483,7 +483,7 @@ AI SDK 7 examples must use top-level `toolApproval`, because it is the current p
 | `packages/email-sdk` / `@opencoredev/email-sdk` | Public `1.0.0` | Core API, adapters, CLI, plugins, testing, `/ai`, `/compat`, deprecated `/agent-tools` | No runtime deps in root; optional `ai` peer only for `/ai` | Core SDK owner |
 | `packages/convex-email` / `@opencoredev/convex-email` | Public Convex Component package | Durable queue integration and compatibility with the v1 core API | Dev and peer dependency on core; no core dependency on Convex | Convex component owner |
 | `packages/config` / `@email-sdk/config` | Private | Shared TypeScript/workspace configuration | No product responsibility | Build owner |
-| `apps/fumadocs` | Private application | Human docs, version archives, redirects, search, raw Markdown, llms/schema/agent surfaces | Reads package metadata and source-derived manifests | Docs owner |
+| `apps/docs` | Private application | Human docs, version archives, redirects, search, raw Markdown, llms/schema/agent surfaces | Reads package metadata and source-derived manifests | Docs owner |
 | `Formula/email-sdk.rb` | Published through repository/Homebrew flow | Install the npm CLI with Node, matching its shebang and engine | Updated only after npm publish | Release owner |
 
 The core package tarball includes the TypeScript source files referenced by declaration maps, excluding tests and local-only files. Every exported subpath must resolve from an installed tarball under Node and Bun.
@@ -635,7 +635,7 @@ Examples form one progressive server-side application, carry filename labels whe
 - TypeScript examples compile; CLI examples run with telemetry disabled; secret/browser/deprecated-import scans pass.
 - Adapter, CLI, error, telemetry, package version, and capability documentation matches source-derived truth.
 - `/llms.txt`, `/docs/llms.txt`, `/llms-full.txt`, `/feeds/docs.jsonl`, `schemamap.xml`, search, agent discovery, and static agent docs include all current canonical routes.
-- `apps/fumadocs` passes `bun run types:check` and `bun run build`, followed by desktop/mobile browser checks for navigation, search, versions, Copy MD, raw Markdown, breadcrumbs, next links, and redirects.
+- `apps/docs` passes `bun run types:check` and `bun run build`, followed by desktop/mobile browser checks for navigation, search, versions, Copy MD, raw Markdown, breadcrumbs, next links, and redirects.
 
 ### 8.6 Final release gate
 
@@ -675,7 +675,7 @@ Ownership is path-exclusive unless the owners coordinate a handoff. Review owner
 | CLI and release blockers | `cli.ts`, shared validation adoption, Homebrew formula/runtime, pack/install scripts, idempotency precedence fixes | Public validation API may be landed in coordination with core | Release validator |
 | Chat/AI integration | New `/ai` source, export, peer/dev dependencies, AI tests and examples; deprecation treatment for `/agent-tools` | Stable v1 client/result/error types | Chat/AI validator |
 | Convex compatibility | `packages/convex-email/**` and peer range | Stable v1 root types and methods | Convex validator |
-| Docs and archive | `apps/fumadocs/**`, redirects, v0.6.5 snapshot, machine surfaces, migration guide | Frozen API names and package exports | Docs validator |
+| Docs and archive | `apps/docs/**`, redirects, v0.6.5 snapshot, machine surfaces, migration guide | Frozen API names and package exports | Docs validator |
 | Release orchestration | Changesets prerelease, final `release:ci`, npm/OIDC, post-publish Homebrew update | Every implementation and validation lane | Coordinator/release gate |
 
 Required sequence:

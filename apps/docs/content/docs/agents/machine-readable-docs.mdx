@@ -1,0 +1,44 @@
+---
+title: Machine-readable documentation
+description: Use raw Markdown, LLM indexes, the MCP server, JSONL entities, and the schema map for agent retrieval.
+---
+
+The docs site exposes the active navigation through formats that do not require scraping rendered HTML.
+
+| Endpoint               | Purpose                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `/llms.txt`            | Site-level LLM index, with archived versions listed last    |
+| `/llms-full.txt`       | Combined current documentation and comparison text          |
+| `/mcp`                 | MCP server: search the docs and read pages from an agent    |
+| `/api/docs/pages.json` | JSON index of every page                                    |
+| `/feeds/docs.jsonl`    | One schema.org JSON object per docs, compare, and blog page |
+| `/schemamap.xml`       | Machine-readable surface map                                |
+| `/docs/<path>.md`      | Raw Markdown for one current page                           |
+
+Every page answers `Accept: text/markdown` with its Markdown at the same URL, and every rendered page has Copy as Markdown and Open in chat actions. Archived versions have raw Markdown routes too, at `/v<release>/docs/<path>.md`.
+
+## Connect an MCP client
+
+```bash
+claude mcp add --transport http email-sdk https://email-sdk.dev/mcp
+```
+
+## Prefer canonical URLs
+
+Use current `/docs/...` URLs unless you need behavior from a pinned historical release. Archived pages carry `X-Robots-Tag: noindex, follow` (and HTML `noindex` meta tags) and point to the current docs for live usage.
+
+## Retrieve one page
+
+```bash
+curl https://email-sdk.dev/docs/reference/client.md
+```
+
+The response is the page's Markdown, with components such as adapter tables rendered as Markdown tables.
+
+## Retrieve the full corpus
+
+Use `/llms-full.txt` for a compact single request covering every docs and comparison page, or `/feeds/docs.jsonl` when your indexer wants discrete route records.
+
+<Card title="AI agent skill" href="/docs/getting-started/agent-skill">
+  Install instructions that make agents refresh these sources before coding.
+</Card>

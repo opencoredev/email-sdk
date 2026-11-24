@@ -1,0 +1,102 @@
+---
+title: Plugins
+description: Built-in plugins and extension points for Email SDK.
+sidebar:
+  icon: "plug"
+---
+
+Plugins are add-ons for an email client. They can register adapters, change a message before validation, record send activity, or expose a small typed helper on the client.
+
+Most apps should start with the built-in plugins. If a behavior should be reused across apps, move it into a plugin.
+
+## Built-in plugins
+
+| Plugin        | Import                                         | Use it when                                                                         |
+| ------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Defaults      | `@opencoredev/email-sdk/plugins/defaults`      | Every send needs shared headers, tags, metadata, reply-to, or idempotency defaults. |
+| Observability | `@opencoredev/email-sdk/plugins/observability` | You want logs, metrics, or traces without leaking recipients or email body content. |
+| Capture       | `@opencoredev/email-sdk/plugins/capture`       | Tests need to inspect attempted sends, retries, responses, and errors.              |
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { defaultsPlugin } from "@opencoredev/email-sdk/plugins/defaults";
+import { observabilityPlugin } from "@opencoredev/email-sdk/plugins/observability";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+  plugins: [
+    defaultsPlugin({
+      headers: { "X-App": "billing" },
+      sendMetadata: { service: "billing" },
+    }),
+    observabilityPlugin({
+      log(event) {
+        console.log(event.type, event.provider);
+      },
+    }),
+  ],
+});
+```
+
+## What plugins can do
+
+| Capability        | Example                                                           |
+| ----------------- | ----------------------------------------------------------------- |
+| Register adapters | A community provider package can add its own `EmailProvider`.     |
+| Change a message  | Defaults can add headers before provider validation.              |
+| Observe sends     | Observability can emit redacted success, retry, and error events. |
+| Capture tests     | Capture can expose `email.capture.events`.                        |
+| Add helpers       | A plugin can add a small typed property to the returned client.   |
+
+## What plugins cannot do
+
+Email SDK plugins do not add databases, migrations, HTTP endpoints, route middleware, rate limits, or server/client plugin pairs. Those are framework-level features. Email SDK plugins stay focused on sending email.
+
+## Common plugin shapes
+
+| Shape             | Where to start                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| Shared defaults   | Use the [defaults plugin](/v0.3.0/docs/plugins/built-in/defaults).                           |
+| Redacted logging  | Use the [observability plugin](/v0.3.0/docs/plugins/built-in/observability).                 |
+| Test capture      | Use the [capture plugin](/v0.3.0/docs/plugins/built-in/capture).                             |
+| Custom provider   | Follow [Create an adapter](/v0.3.0/docs/guides/authoring/create-adapter).                    |
+| Reusable behavior | Follow [Create your first plugin](/v0.3.0/docs/guides/authoring/create-first-plugin).        |
+| Community package | Follow [Publish a community plugin](/v0.3.0/docs/guides/authoring/publish-community-plugin). |
+
+## Order
+
+Plugin order is deterministic.
+
+1. Direct `adapters` register first.
+2. Plugins run in array order.
+3. Plugin adapters register in plugin order.
+4. Duplicate plugin IDs throw.
+5. Duplicate adapter names throw.
+6. `beforeSend` middleware runs before message validation.
+7. Plugin hooks run before user `hooks`.
+
+Use a custom `id` when mounting more than one instance of the same plugin type. If the plugin extends the client, also give each instance a distinct extension key, such as `capturePlugin({ id: "capture:audit", clientKey: "auditCapture" })`.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Defaults plugin" href="/v0.3.0/docs/plugins/built-in/defaults">
+    Apply shared message and send-option defaults.
+  </Card>
+  <Card title="Observability plugin" href="/v0.3.0/docs/plugins/built-in/observability">
+    Emit redacted log, metric, and trace events.
+  </Card>
+  <Card title="Capture plugin" href="/v0.3.0/docs/plugins/built-in/capture">
+    Record email behavior in tests.
+  </Card>
+  <Card title="Community plugins" href="/v0.3.0/docs/plugins/community">
+    Browse static community plugin listings and verification labels.
+  </Card>
+  <Card title="Writing plugins" href="/v0.3.0/docs/guides/authoring/create-first-plugin">
+    Build a reusable policy plugin step by step.
+  </Card>
+  <Card title="Create an adapter" href="/v0.3.0/docs/guides/authoring/create-adapter">
+    Write a custom provider adapter and wrap it as a plugin.
+  </Card>
+</CardGroup>

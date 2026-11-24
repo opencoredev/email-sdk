@@ -1,5 +1,0 @@
-{
-  "title": "Guides",
-  "icon": "BookOpen",
-  "pages": ["production-send-pipeline", "test-email-behavior", "authoring"]
-}

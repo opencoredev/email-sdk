@@ -1,0 +1,45 @@
+---
+title: Guides
+description: Task-based guides for extending Email SDK.
+sidebar:
+  icon: "book-open"
+---
+
+Use these guides when you are building something that should live outside one send call: a reusable plugin, a custom provider adapter, a community package, or test helpers around email behavior.
+
+## Build
+
+<CardGroup cols={2}>
+  <Card title="Create your first plugin" href="/v0.4.0/docs/guides/authoring/create-first-plugin">
+    Build a policy plugin that blocks sends missing required metadata.
+  </Card>
+  <Card title="Create an adapter" href="/v0.4.0/docs/guides/authoring/create-adapter">
+    Implement a provider adapter and expose it as a plugin.
+  </Card>
+  <Card
+    title="Publish a community adapter"
+    href="/v0.4.0/docs/guides/authoring/publish-community-adapter"
+  >
+    Shape package exports, docs, names, and tests for reuse.
+  </Card>
+</CardGroup>
+
+## Test
+
+<CardGroup cols={2}>
+  <Card title="Test email behavior" href="/v0.4.0/docs/guides/test-email-behavior">
+    Use memory providers and capture plugins to assert send behavior.
+  </Card>
+</CardGroup>
+
+## Where reference lives
+
+Guides are procedural. Use the reference pages when you need exact fields and contracts:
+
+| Need                       | Page                                                        |
+| -------------------------- | ----------------------------------------------------------- |
+| Client options             | [Client](/v0.4.0/docs/reference/client)                     |
+| Message shape              | [Message](/v0.4.0/docs/reference/message)                   |
+| Adapter contract           | [Adapter contract](/v0.4.0/docs/reference/adapter-contract) |
+| Plugin types and lifecycle | [Plugin API](/v0.4.0/docs/plugins/api)                      |
+| Provider field limits      | [Field support](/v0.4.0/docs/adapters/field-support)        |

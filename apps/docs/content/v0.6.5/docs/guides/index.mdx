@@ -1,0 +1,46 @@
+---
+title: Guides
+description: Step-by-step guides for running Email SDK in production and extending it with your own adapters and plugins.
+sidebar:
+  icon: "book-open"
+---
+
+Guides walk one task end to end: a goal, the steps, and a verification at the end. For exact types and options, use the [reference](/v0.6.5/docs/reference/client) pages instead.
+
+## Operate
+
+<CardGroup cols={2}>
+  <Card title="Production send pipeline" href="/v0.6.5/docs/guides/production-send-pipeline">
+    Build one production-ready client: retries, a compatible fallback, defaults, idempotency keys,
+    observability, tests, and CLI checks.
+  </Card>
+  <Card title="Test email behavior" href="/v0.6.5/docs/guides/test-email-behavior">
+    Assert sends, fallbacks, and retries in unit tests with the memory adapter and capture plugin.
+    No provider account needed.
+  </Card>
+</CardGroup>
+
+## Build and publish
+
+<CardGroup cols={2}>
+  <Card title="Create your first plugin" href="/v0.6.5/docs/guides/authoring/create-first-plugin">
+    Build an audit-log plugin with middleware and a typed client extension.
+  </Card>
+  <Card title="Create an adapter" href="/v0.6.5/docs/guides/authoring/create-adapter">
+    Implement the adapter contract for a provider the SDK doesn't ship: payload mapping, fail-fast
+    validation, retryable errors.
+  </Card>
+  <Card
+    title="Publish a community plugin"
+    href="/v0.6.5/docs/guides/authoring/publish-community-plugin"
+  >
+    Package a plugin for npm and list it in the community registry.
+  </Card>
+  <Card
+    title="Publish a community adapter"
+    href="/v0.6.5/docs/guides/authoring/publish-community-adapter"
+  >
+    Ship a third-party provider adapter as its own package: naming, field-support docs, and the
+    registry PR.
+  </Card>
+</CardGroup>

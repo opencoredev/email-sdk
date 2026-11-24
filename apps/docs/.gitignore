@@ -1,0 +1,11 @@
+node_modules
+.DS_Store
+.env*.local
+.blume/
+dist/
+.vercel/
+# Posts fetched from Notra at build time (scripts/fetch-notra-posts.ts).
+content/blog/(notra)/
+# Feeds written by scripts/generate-feeds.ts at build time.
+public/feed.json
+public/feeds/

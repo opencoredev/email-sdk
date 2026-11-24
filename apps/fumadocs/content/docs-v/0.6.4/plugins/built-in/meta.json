@@ -1,5 +1,0 @@
-{
-  "title": "Built-in",
-  "icon": "PackagePlus",
-  "pages": ["defaults", "observability", "capture"]
-}

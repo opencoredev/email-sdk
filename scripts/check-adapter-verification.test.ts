@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import registry from "../adapter-verification.json";
-import type { JsonValue } from "../apps/fumadocs/src/lib/json";
+import type { JsonValue } from "../apps/docs/lib/json";
 import { contractTestFilesOnDisk, validateAdapterVerification } from "./check-adapter-verification";
 
 const record = {

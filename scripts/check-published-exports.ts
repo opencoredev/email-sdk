@@ -79,8 +79,8 @@ export function checkPublishedExports(options: {
 }
 
 function docFiles(): DocFile[] {
-  // Current docs only; content/docs-v holds released snapshots.
-  const docsRoot = join(repoRoot, "apps/fumadocs/content/docs");
+  // Current docs only; content/v<release>/docs holds released snapshots.
+  const docsRoot = join(repoRoot, "apps/docs/content/docs");
 
   const docs = [...new Bun.Glob("**/*.{md,mdx}").scanSync(docsRoot)].map((file) =>
     join(docsRoot, file),

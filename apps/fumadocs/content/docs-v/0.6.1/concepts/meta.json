@@ -1,5 +1,0 @@
-{
-  "title": "Concepts",
-  "icon": "BookOpen",
-  "pages": ["adapter-model", "fallbacks-and-retries", "hooks"]
-}

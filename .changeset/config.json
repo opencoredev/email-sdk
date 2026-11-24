@@ -7,7 +7,7 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@email-sdk/config", "fumadocs"],
+  "ignore": ["@email-sdk/config", "@email-sdk/docs"],
   "privatePackages": {
     "version": false,
     "tag": false

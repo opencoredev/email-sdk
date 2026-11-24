@@ -1,0 +1,72 @@
+---
+title: Email SDK
+description: A small TypeScript email client with swappable adapters, plugins, and explicit provider limits.
+sidebar:
+  icon: "mail"
+---
+
+Email SDK is a small TypeScript package for transactional email. It gives your application one client and one message shape while keeping provider-specific behavior visible in the adapter docs.
+
+Use Resend for a simple API path, SMTP when you want a cheap or self-managed route, or another provider when its field support fits your app better. Add plugins for shared defaults, observability, capture, or community adapters. Your application code still calls `send`; the adapter decides how that message maps to the provider.
+
+```ts
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { resend } from "@opencoredev/email-sdk/resend";
+
+const email = createEmailClient({
+  adapters: [resend({ apiKey: process.env.RESEND_API_KEY! })],
+});
+
+await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+```
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Install package and CLI" href="/v0.3.0/docs/getting-started/install">
+    Use the scoped npm package and the email-sdk command.
+  </Card>
+  <Card title="Send your first email" href="/v0.3.0/docs/getting-started/quickstart">
+    Install the SDK, create a client, and send a message.
+  </Card>
+  <Card title="Understand adapters" href="/v0.3.0/docs/concepts/adapter-model">
+    Learn how adapters and routing names work.
+  </Card>
+  <Card title="Browse adapters" href="/v0.3.0/docs/adapters">
+    See all supported email services.
+  </Card>
+  <Card title="Use plugins" href="/v0.3.0/docs/plugins">
+    Add defaults, observability, capture, adapter plugins, and reusable send behavior.
+  </Card>
+  <Card title="Build an adapter" href="/v0.3.0/docs/guides/authoring/create-adapter">
+    Write your first custom provider adapter and package it for reuse.
+  </Card>
+  <Card title="Read the API reference" href="/v0.3.0/docs/reference/client">
+    Look up client options, messages, errors, and the CLI.
+  </Card>
+</CardGroup>
+
+## What is included
+
+- `createEmailClient` for one shared email client.
+- `email.send()` for one message.
+- `email.sendBatch()` for small batches where each result is reported separately.
+- Fifteen adapters, including Resend, SMTP, Postmark, SendGrid, Mailgun, and MailerSend.
+- Retry and fallback options that run in the order you configure.
+- Hooks for logs, metrics, tracing, and retry visibility.
+- Plugins for defaults, observability, capture, community adapters, and reusable send behavior.
+- A small CLI for setup checks, dry runs, and smoke-test sends.
+- A repo-local agent skill for future coding agents.
+
+## What stays small
+
+Email SDK does not try to be a template engine, campaign tool, queue, analytics platform, or full email operations suite. It is the layer many apps keep rebuilding: adapter setup, a consistent send call, typed errors, and a fallback path that is explicit enough to debug.
+
+## Provider behavior is not hidden
+
+Email providers do not all support the same fields. A fallback route is only safe when the backup adapter can represent the same class of message. Before choosing routes, read the <a href="/v0.3.0/docs/adapters/field-support">field support guide</a>; unsupported fields should fail fast instead of being silently dropped.

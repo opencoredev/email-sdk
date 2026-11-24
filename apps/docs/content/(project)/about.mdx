@@ -1,0 +1,25 @@
+---
+title: About Email SDK
+description: About Email SDK, an open-source TypeScript SDK for transactional email across 27 adapters, maintained by OpenCore.
+sidebar:
+  label: About
+  icon: info
+---
+
+Email SDK is an open-source TypeScript SDK for sending transactional email. It gives an application one typed client and one message shape, then routes each send to providers such as Resend, SMTP, Postmark, SendGrid, Mailgun, Unosend, AWS SES, and more.
+
+## What it is
+
+A single `send()` call with one normalized `EmailMessage` shape. Provider-specific behavior lives in adapters imported from their own entry points, so switching or adding a provider does not mean rewriting every place your app sends mail. The core ships with zero dependencies and includes its own SMTP transport.
+
+## Why it exists
+
+Most applications start on one email provider and later need a second one for deliverability, cost, or regional routing. Email SDK keeps provider differences behind a consistent API with explicit routing, automatic retries on transient failures, and fallback routes between adapters that support the same fields, so changing providers is a configuration change, not a refactor.
+
+## Who maintains it
+
+Email SDK is built and maintained by [OpenCore](https://opencore.dev) as an open-source project. The source, issues, and releases are public on [GitHub](https://github.com/opencoredev/email-sdk), and the package is published to [npm](https://www.npmjs.com/package/@opencoredev/email-sdk).
+
+## Where to go next
+
+Read the [documentation](/docs) to install the package and send your first email, browse the [adapters](/docs/adapters) for each provider, or get in touch through the [contact page](/contact).

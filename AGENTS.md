@@ -16,7 +16,7 @@ These instructions are local to this repository. Keep repo-specific release guid
 Read the matching skill before you test or report a change as done:
 
 - [`.agents/skills/test-email-sdk`](.agents/skills/test-email-sdk/SKILL.md): SDK, CLI, adapters, SMTP, and the Convex component. It defines the proof levels (unit, local wire, live auth, live send) and the credential-free SMTP check `bun scripts/check-smtp-local.ts`.
-- [`.agents/skills/test-email-sdk-docs`](.agents/skills/test-email-sdk-docs/SKILL.md): the `apps/fumadocs` docs site, including previews.
+- [`.agents/skills/test-email-sdk-docs`](.agents/skills/test-email-sdk-docs/SKILL.md): the `apps/docs` docs site, including previews.
 
 State the proof level each claim reached. A unit test with stubbed `fetch` doesn't prove delivery, and a missing credential is NOT CHECKED, not a pass. Several worktrees share this host's Docker and ports, so stop only the containers and processes you started.
 
@@ -171,42 +171,39 @@ Do not merge a `Version packages` PR for a major version unless the migration pa
 
 ## Docs Site
 
-The docs/marketing site lives in `apps/fumadocs` (Tanstack Start + Fumadocs) and
-deploys to Vercel.
+The docs/marketing site lives in `apps/docs`, built with Blume (Astro), and
+deploys to Vercel as server output. Blume needs Node 22.19 or later.
 
-- `cd apps/fumadocs && bun run dev` — local dev server on port 4000.
-- `bun run build` — fetches Notra blog posts, then runs the Vite build.
-- `bun run posts:fetch` — refresh the build-time Notra snapshot on demand.
-- `bun run types:check` — runs `fumadocs-mdx` then `tsc --noEmit`; run this and
-  `bun run build` to validate docs-site changes.
+- `cd apps/docs && bun run dev`: local dev server (port 4321).
+- `bun run build`: runs the prebuild checks and generators (email registry,
+  adapter FAQ, compare pages, Notra posts, feeds, OG cards), `blume build`,
+  then `scripts/patch-vercel-config.ts`, which adds the security headers and
+  the `/?mode=agent` rewrite to `.vercel/output/config.json`.
+- `bun run validate` (`blume validate --strict`) and `bun run audit`
+  (`blume audit`, after a build) check links, anchors, redirects, and metadata.
+- `bun run types:check`: `tsc` over `lib/`, `components/`, and `scripts/`.
 
-The blog is server-rendered on demand: `/blog`, `/blog/$slug`, and `/og/blog/*`
-are excluded from prerendering (`vite.config.ts` `prerender.filter`) and fetch
-published posts from Notra at request time via `src/lib/notra-runtime.ts`, so
-new posts appear without a rebuild. Everything else stays prerendered to static
-HTML, and the build-time snapshot still feeds sitemap/rss/feed.
+Content: `content/docs` (current docs), `content/blog` (posts),
+`content/compare` (generated from `lib/compare.ts` by
+`bun run compare:generate`; do not edit by hand), `content/tools`, and the
+project pages in `content/(project)`. Archived docs live in
+`content/v<release>/docs`, listed in `lib/versions.ts`; `blume.config.ts`
+registers them as Blume versions and redirects the old `/docs/v/<release>/...`
+URLs to `/v<release>/docs/...`. The adapter pages end in a generated FAQ
+section (`bun run adapter-faq:generate`).
 
-Set `NOTRA_API_KEY` for the blog fetch (local: `apps/fumadocs/.env.local`;
-production: the Vercel project env). Without the key the fetch is skipped.
+Set `NOTRA_API_KEY` for the blog fetch (local: `apps/docs/.env.local`;
+production: the Vercel project env). The build writes published Notra posts to
+`content/blog/(notra)/` (gitignored); without the key it builds the committed
+posts only. New Notra posts appear on the next build.
 
-2026-07-07: The app's `lucide-react` version must resolve to the same install
-fumadocs-ui uses. lucide-react is a peer dependency of fumadocs-core, so a
-version split makes bun materialize fumadocs-core once per peer set; two
-fumadocs-core instances mean two React contexts and every page crashes at
-hydration with "You need to wrap your application inside `FrameworkProvider`"
-while the build stays green (this took production down when a deps refresh
-bumped only the app's copy to 1.23.0). `bun run build` now runs
-`scripts/check-module-identity.ts` (pre-build, fails on any singleton split:
-fumadocs-core, react, react-dom, @tanstack/react-router, lucide-react) and
-`scripts/check-client-bundle.ts` (post-build backstop against the bundler
-duplicating the framework-context chunk). When bumping lucide-react or
-fumadocs packages, bump them together and let the identity check confirm a
-single resolution.
+`.github/workflows/blog-schedule.yml` rebuilds the site by hitting a Vercel
+deploy hook on the `notra-published` `repository_dispatch` event, a daily cron,
+or manual `workflow_dispatch`. It needs the `VERCEL_DEPLOY_HOOK_URL` secret;
+without it the job no-ops.
 
-`.github/workflows/blog-schedule.yml` refreshes the build-time snapshot
-(sitemap/rss/feed) by hitting a Vercel deploy hook on the `notra-published`
-`repository_dispatch` event, a daily cron, or manual `workflow_dispatch`. It
-needs the `VERCEL_DEPLOY_HOOK_URL` secret; without it the job no-ops.
+The Vercel project needs `VERCEL_DEEP_CLONE=true` so each page's "Last
+updated" date and sitemap `<lastmod>` come from git history.
 
 ## Homebrew Formula
 

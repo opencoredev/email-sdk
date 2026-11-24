@@ -3,15 +3,22 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  archivedDocsVersions,
+  archivedVersionContentPath,
   currentDocsMajorVersion,
-  docsVersions,
   getCurrentDocsPublishedVersion,
   latestPublishedVersion as packageJsonVersion,
-} from "../apps/fumadocs/src/lib/versions";
+} from "../apps/docs/lib/versions";
+
+// Checks the archived docs versions in apps/docs/lib/versions.ts against the
+// Blume site: each one needs a content/<id>/docs snapshot, which blume.config.ts
+// registers as an archived version and redirects to from its old
+// /docs/v/<release> URL. Every released package version except the latest
+// needs an archive.
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const fumadocsRoot = join(repoRoot, "apps/fumadocs");
+const docsRoot = join(repoRoot, "apps/docs");
 
 const errors: string[] = [];
 
@@ -19,17 +26,9 @@ function fail(message: string) {
   errors.push(message);
 }
 
-function readRepoFile(path: string) {
-  return readFileSync(join(repoRoot, path), "utf8");
-}
+const blumeConfig = readFileSync(join(docsRoot, "blume.config.ts"), "utf8");
 
-const sourceConfig = readRepoFile("apps/fumadocs/source.config.ts");
-
-const sourceLoader = readRepoFile("apps/fumadocs/src/lib/source.ts");
-
-const docsRoute = readRepoFile("apps/fumadocs/src/routes/docs/$.tsx");
-
-const changelog = readRepoFile("packages/email-sdk/CHANGELOG.md");
+const changelog = readFileSync(join(repoRoot, "packages/email-sdk/CHANGELOG.md"), "utf8");
 
 const latestPublishedVersion =
   process.env.EMAIL_SDK_VALIDATE_DOCS_PACKAGE_VERSION ?? packageJsonVersion;
@@ -43,113 +42,72 @@ if (!/^\d+\.\d+\.\d+$/.test(latestPublishedVersion)) {
   );
 }
 
-const latest = docsVersions.find((version) => version.current);
+const publishedMajor = Number(latestPublishedVersion.split(".", 1)[0]);
 
-if (!latest) {
-  fail("docsVersions must include a current version.");
-} else {
-  if (latest.version !== currentDocsVersion) {
+const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
+
+if (publishedMajor > currentDocsMajorVersion) {
+  fail(
+    `packages/email-sdk/package.json is ${latestPublishedVersion}, but current docs still track ${currentDocsVersion}.`,
+  );
+}
+
+if (
+  publishedMajor === currentDocsMajorVersion &&
+  currentDocsPublishedVersion !== latestPublishedVersion
+) {
+  fail(
+    `${latestPublishedVersion} should publish the ${currentDocsVersion} docs line, but the docs config does not expose it as the current published docs version.`,
+  );
+}
+
+if (publishedMajor < currentDocsMajorVersion && currentDocsPublishedVersion !== undefined) {
+  fail(
+    `${latestPublishedVersion} must not be treated as a published package for the unreleased ${currentDocsVersion} docs line.`,
+  );
+}
+
+// blume.config.ts builds `versions.archived` and the /docs/v/<release>
+// redirects from archivedDocsVersions; make sure it still does.
+for (const needle of [
+  "archivedDocsVersions.map",
+  "legacyArchivedVersionHref(version)",
+  "versions: {",
+]) {
+  if (!blumeConfig.includes(needle)) {
     fail(
-      `Current docs version must be ${currentDocsVersion}, got ${latest.version}. ` +
-        "Active docs track the v1 docs line while patch releases live in content/docs-v archives.",
-    );
-  }
-
-  const publishedMajor = Number(latestPublishedVersion.split(".", 1)[0]);
-  const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latestPublishedVersion);
-
-  if (publishedMajor > currentDocsMajorVersion) {
-    fail(
-      `packages/email-sdk/package.json is ${latestPublishedVersion}, but current docs still track ${currentDocsVersion}.`,
-    );
-  }
-
-  if (publishedMajor === currentDocsMajorVersion && currentDocsPublishedVersion !== latestPublishedVersion) {
-    fail(
-      `${latestPublishedVersion} should publish the ${currentDocsVersion} docs line, but the docs config does not expose it as the current published docs version.`,
-    );
-  }
-
-  if (publishedMajor < currentDocsMajorVersion && currentDocsPublishedVersion !== undefined) {
-    fail(
-      `${latestPublishedVersion} must not be treated as a published package for the unreleased ${currentDocsVersion} docs line.`,
+      `apps/docs/blume.config.ts no longer derives archived versions from lib/versions.ts (missing "${needle}").`,
     );
   }
 }
 
-const versionsBySlug = new Map<string, (typeof docsVersions)[number]>();
+const releases = new Set<string>();
 
-const collections = new Set<string>();
+for (const version of archivedDocsVersions) {
+  if (releases.has(version.release)) fail(`Duplicate archived docs release: ${version.release}`);
 
-for (const version of docsVersions) {
-  const slug = version.version.replace(/^v/, "");
+  releases.add(version.release);
 
-  if (versionsBySlug.has(slug)) {
-    fail(`Duplicate docs version slug: ${slug}`);
+  if (version.id !== `v${version.release}`) {
+    fail(`${version.release} archive id must be v${version.release}, got ${version.id}.`);
   }
 
-  versionsBySlug.set(slug, version);
-
-  if (collections.has(version.collection)) {
-    fail(`Duplicate docs version collection: ${version.collection}`);
-  }
-
-  collections.add(version.collection);
-
-  if (version.current) {
-    if (version.href !== "/docs") fail(`Current docs href must be /docs, got ${version.href}.`);
-
-    if (version.contentPath !== "content/docs") {
-      fail(`Current docs contentPath must be content/docs, got ${version.contentPath}.`);
-    }
-
-    continue;
-  }
-
-  const expectedHref = `/docs/v/${slug}`;
-  const expectedContentPath = `content/docs-v/${slug}`;
-  const contentDir = join(fumadocsRoot, version.contentPath);
-
-  if (version.href !== expectedHref) {
-    fail(`${version.version} href must be ${expectedHref}, got ${version.href}.`);
-  }
-
-  if (version.contentPath !== expectedContentPath) {
-    fail(`${version.version} contentPath must be ${expectedContentPath}, got ${version.contentPath}.`);
-  }
-
-  if (!existsSync(contentDir)) {
-    fail(`${version.version} content directory is missing: apps/fumadocs/${version.contentPath}`);
-  }
+  const contentDir = join(docsRoot, archivedVersionContentPath(version));
 
   if (!existsSync(join(contentDir, "index.mdx"))) {
-    fail(`${version.version} archive is missing index.mdx.`);
-  }
-
-  if (!sourceConfig.includes(`export const ${version.collection}`)) {
-    fail(`${version.version} is missing export const ${version.collection} in source.config.ts.`);
-  }
-
-  if (!sourceConfig.includes(`dir: "${version.contentPath}"`)) {
-    fail(`${version.version} source.config.ts entry must point at ${version.contentPath}.`);
-  }
-
-  if (!sourceLoader.includes(`${version.collection}: loader(`)) {
-    fail(`${version.version} is missing a ${version.collection} loader in src/lib/source.ts.`);
-  }
-
-  if (!docsRoute.includes(`browserCollections.${version.collection}`)) {
-    fail(`${version.version} is missing a browser loader in src/routes/docs/$.tsx.`);
+    fail(
+      `${version.id} archive is missing apps/docs/${archivedVersionContentPath(version)}/index.mdx.`,
+    );
   }
 }
 
-const archiveDir = join(fumadocsRoot, "content/docs-v");
+// Every content/v*/ folder must be a listed archive, or Blume would serve it as
+// ordinary pages.
+for (const dirent of readdirSync(join(docsRoot, "content"), { withFileTypes: true })) {
+  if (!dirent.isDirectory() || !/^v\d/.test(dirent.name)) continue;
 
-for (const dirent of readdirSync(archiveDir, { withFileTypes: true })) {
-  if (!dirent.isDirectory()) continue;
-
-  if (!versionsBySlug.has(dirent.name)) {
-    fail(`Archived docs folder ${dirent.name} is not listed in docsVersions.`);
+  if (!archivedDocsVersions.some((version) => version.id === dirent.name)) {
+    fail(`Archived docs folder content/${dirent.name} is not listed in apps/docs/lib/versions.ts.`);
   }
 }
 
@@ -164,8 +122,10 @@ const changelogVersions = Array.from(changelog.matchAll(/^##\s+(\d+\.\d+\.\d+)/g
 for (const version of changelogVersions) {
   if (version === latestPublishedVersion) continue;
 
-  if (!versionsBySlug.has(version)) {
-    fail(`CHANGELOG.md includes ${version}, but docsVersions has no v${version} archive.`);
+  if (!releases.has(version)) {
+    fail(
+      `CHANGELOG.md includes ${version}, but apps/docs/lib/versions.ts has no v${version} archive.`,
+    );
   }
 }
 
@@ -177,5 +137,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Docs version validation passed for ${docsVersions.map((version) => version.version).join(", ")}.`,
+  `Docs version validation passed for ${currentDocsVersion} and ${archivedDocsVersions.map((version) => version.id).join(", ")}.`,
 );

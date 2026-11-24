@@ -1,0 +1,24 @@
+---
+title: Email DNS checker
+description: "Check any domain's email DNS setup in seconds: SPF record validation, DKIM selector lookup, DMARC policy check, and MX records. Free, no signup, with fixes explained."
+seo:
+  title: "Free Email DNS Checker: SPF, DKIM & DMARC Lookup"
+sidebar:
+  icon: globe
+---
+
+Check a domain's SPF, DKIM, DMARC, and MX records in one pass. Free, no signup. Results explain what each record means and how to fix what's missing. Lookups run in your browser against Cloudflare's and Google's public DNS-over-HTTPS resolvers.
+
+<EmailDnsChecker />
+
+## What this tool checks
+
+Receiving mail servers decide whether to trust your email based on three DNS records. **SPF** (a TXT record starting with `v=spf1`) lists the servers allowed to send mail as your domain. **DKIM** (a TXT record under `<selector>._domainkey.yourdomain.com`) publishes a public key that lets receivers verify each message was signed by you and not altered in transit. **DMARC** (a TXT record at `_dmarc.yourdomain.com`) ties the two together: it tells receivers what to do with mail that fails SPF and DKIM, and where to send reports. MX records are checked too, since a domain that cannot receive replies or bounces loses signal with mailbox providers.
+
+## How to read the results
+
+A **pass** means the record exists and follows current best practice. A **warn** usually means mail still flows but you are leaving deliverability or security on the table: a DMARC policy of `p=none`, for example, monitors spoofing without stopping it. A **fail** is worth fixing before your next campaign: multiple SPF records or a record ending in `+all` can cause receivers to reject or junk otherwise legitimate mail. DKIM selectors are provider-specific, so if the probe finds nothing under the common selectors, check your provider's dashboard for the exact selector name and DNS records it issued during domain verification.
+
+## Setting up DNS for your provider
+
+Every transactional email provider (Resend, Postmark, SendGrid, AWS SES, Mailgun, Brevo, and the rest) walks you through publishing SPF and DKIM records when you verify a sending domain. The [Email SDK adapter guides](/docs/adapters) cover setup and verification for each provider, and the [authentication docs](/docs/getting-started/credentials) cover credentials. If you send through more than one provider (for example a [primary plus a fallback](/compare/resend-vs-postmark)), each provider needs its own DKIM records, and your SPF record must include all of them while staying under SPF's 10-DNS-lookup limit, which this tool checks.

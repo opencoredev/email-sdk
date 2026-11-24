@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   communityEntrySchema,
   type CommunityEntry,
-} from "../apps/fumadocs/src/lib/community-registry";
+} from "../apps/docs/lib/community-registry";
 
 const repositorySchema = z.union([
   z.string(),
@@ -45,7 +45,7 @@ const entryLabelSchema = z.object({ package: z.string() });
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-const registryPath = join(root, "apps/fumadocs/content/community/plugins.json");
+const registryPath = join(root, "apps/docs/content/community/plugins.json");
 
 const registryUrl = "https://registry.npmjs.org";
 
