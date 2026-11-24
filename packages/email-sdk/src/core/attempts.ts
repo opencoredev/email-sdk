@@ -6,9 +6,10 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
+import { cloneMetadataRecord, isFunction } from "../internal/decode.js";
+import { snapshotMessage } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
-  EmailAfterSendEvent,
   EmailHooks,
   EmailMessage,
   EmailRetryConfig,
@@ -18,7 +19,12 @@ import type {
 } from "../types.js";
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
 import { isAbort, sleep, throwIfAborted } from "./failures.js";
-import { hookEvent, invokeAfterSendMiddleware, invokeHooks } from "./lifecycle.js";
+import {
+  cloneAdapterError,
+  hookEvent,
+  invokeAfterSendMiddleware,
+  invokeHooks,
+} from "./lifecycle.js";
 import { recipientCount } from "./send-telemetry.js";
 
 export const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
@@ -85,33 +91,53 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
   // was never sent, so the final failure must not report not_sent.
   let earlierOutcomeUnknown = false;
 
+  if (!isFunction(input.adapter.send)) {
+    throw new EmailValidationError(`${input.adapter.name} adapter does not support send().`);
+  }
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(input.options?.signal);
-    const event = hookEvent(input.adapter.name, input.message, attempt, input.options?.metadata);
-    const beforeSend = invokeHooks(input.hooks, "beforeSend", event);
+
+    const freshEvent = () =>
+      hookEvent(
+        input.adapter.name,
+        snapshotMessage(input.message),
+        attempt,
+        input.options?.metadata ? cloneMetadataRecord(input.options.metadata) : undefined,
+      );
+
+    const beforeSend = invokeHooks(input.hooks, "beforeSend", freshEvent);
 
     if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
 
     try {
-      const adapterResult = await input.measureAttempt(
+      const attemptMessage = snapshotMessage(input.message);
+
+      const attemptMetadata = input.options?.metadata
+        ? cloneMetadataRecord(input.options.metadata)
+        : undefined;
+
+      result = await input.measureAttempt(
         input.adapter,
         input.path ?? "single",
         recipientCount(input.message),
-        () =>
-          input.adapter.send(input.message, {
-            adapter: input.adapter.name,
-            operation: "send",
-            attempt,
-            signal: input.options?.signal,
-            idempotencyKey: input.options?.idempotencyKey,
-            metadata: input.options?.metadata,
-          }),
+        async () =>
+          normalizeAdapterResult(
+            input.adapter.name,
+            await input.adapter.send(attemptMessage, {
+              adapter: input.adapter.name,
+              operation: "send",
+              attempt,
+              signal: input.options?.signal,
+              idempotencyKey: input.options?.idempotencyKey,
+              metadata: attemptMetadata,
+            }),
+          ),
       );
 
       throwIfAborted(input.options?.signal);
-      result = normalizeAdapterResult(input.adapter.name, adapterResult);
     } catch (error) {
       if (isAbort(error, input.options?.signal)) throw new EmailAbortError(error);
 
@@ -132,20 +158,38 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
       if (normalized.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, delayFor(attempt, normalized));
-      await invokeHooks(input.hooks, "onRetry", {
-        ...event,
-        error: normalized,
+      await invokeHooks(input.hooks, "onRetry", () => ({
+        ...freshEvent(),
+        error: cloneAdapterError(normalized),
         nextAttempt: attempt + 1,
         delayMs,
-      });
+      }));
       await sleep(delayMs, input.options?.signal);
       continue;
     }
 
-    if (input.middleware.length > 0 || input.hooks.length > 0) {
-      const afterEvent: EmailAfterSendEvent = { ...event, response: result };
-      await invokeAfterSendMiddleware(input.middleware, afterEvent);
-      await invokeHooks(input.hooks, "afterSend", afterEvent);
+    const snapshotResult = (): EmailSendResult => {
+      const copy: EmailSendResult = { ...result };
+
+      if (result.accepted) copy.accepted = [...result.accepted];
+
+      if (result.rejected) copy.rejected = [...result.rejected];
+
+      return copy;
+    };
+
+    if (input.middleware.length > 0) {
+      await invokeAfterSendMiddleware(input.middleware, () => ({
+        ...freshEvent(),
+        response: snapshotResult(),
+      }));
+    }
+
+    if (input.hooks.length > 0) {
+      await invokeHooks(input.hooks, "afterSend", () => ({
+        ...freshEvent(),
+        response: snapshotResult(),
+      }));
     }
 
     return result;

@@ -4,9 +4,7 @@ A private, standalone Node.js 20+/Bun project using public Email SDK imports, `p
 
 ## Safe local quickstart
 
-This example targets `@opencoredev/email-sdk@^1.3.0`, the forthcoming release introducing the public webhook exports it requires. Published 1.2.x is not sufficient. Until 1.3.0 is published, use the packed prerelease installation below instead of the registry install. Do not publish or change the SDK version just to run this example.
-
-After 1.3.0 is available, copy this directory anywhere and run:
+This example installs `@opencoredev/email-sdk@^3.0.1` from npm, which includes the `/webhooks` and `/testing` exports it uses. Copy this directory anywhere and run:
 
 ```sh
 cd packages/email-sdk/examples/durable-postgres
@@ -21,9 +19,9 @@ npm run status
 npm run reconcile
 ```
 
-The install is deliberately scoped to this private directory and does not replace the repository Bun lock. No lockfile is committed while the introducing release is unavailable; generate and retain one for your deployment after selecting the actual SDK artifact.
+The install is deliberately scoped to this private directory and does not replace the repository Bun lock. No lockfile is committed; generate and retain one for your deployment.
 
-### Before the introducing release: install a packed SDK
+### Test against your checkout: install a packed SDK
 
 From the repository root, use the current checkout's built SDK artifacts. If they are missing or stale, first coordinate with the maintainer to build the SDK; packing itself does not build it. Copy the example outside the workspace and install the tarball explicitly:
 
@@ -43,7 +41,7 @@ cp .env.example .env
 # Continue with setup/enqueue/worker/status above, using only the owned task database.
 ```
 
-The current development tarball still identifies itself as 1.2.0, but contains the new exports. This explicit, local test override intentionally does not satisfy the future `^1.3.0` manifest range; `--no-save --package-lock=false` preserves the honest manifest without fabricating a release lockfile. Do not run a subsequent plain install before testing, because it will resolve the future registry range again. This verifies a real packed dependency, not a workspace symlink. It neither publishes nor versions the SDK.
+Use this to try unreleased SDK changes from your checkout. `--no-save --package-lock=false` installs the packed tarball without rewriting the manifest range or creating a lockfile, so a later plain install resolves the registry release again. This verifies a real packed dependency, not a workspace symlink, and neither publishes nor versions the SDK.
 
 `bun run setup`, `bun run enqueue -- welcome:fixture-user:v1`, `bun run worker`, `bun run status`, `bun run reconcile`, and `bun run webhook` are equivalent. The scripts run portable TypeScript with `tsx`; no runtime code depends on Bun APIs. `worker` drains currently due work and exits; schedule repeated invocations or run it under your process supervisor. It does not busy-wait for future retry dates.
 

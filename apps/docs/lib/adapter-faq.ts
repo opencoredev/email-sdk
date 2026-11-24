@@ -33,7 +33,7 @@ export function buildAdapterFaq(entry: AdapterSupportEntry) {
   const idempotencyAnswer = {
     native: `Yes. The ${entry.label} adapter passes an idempotency key to the provider, so ${entry.label} deduplicates repeated sends on its side.`,
     message_id: `Partially. The ${entry.label} adapter derives a stable Message-ID from the idempotency key, but the receiving server decides whether to deduplicate.`,
-    none: `No. ${entry.label} has no provider-side idempotency, so a retried send can be delivered twice. Deduplicate in your own queue before retrying.`,
+    none: `No. ${entry.label} has no provider-side idempotency, so a retried send can be delivered twice. A send with idempotencyKey on a route that includes ${entry.label} fails with EmailValidationError unless you pass idempotency: "best-effort". Deduplicate in your own queue before retrying.`,
   }[entry.capabilities.idempotency];
 
   return [

@@ -3,7 +3,7 @@ title: "Mailgun Pricing in 2026: Plans, Overage and Real Costs"
 description: "Mailgun pricing, checked November 2026: Free, Basic, Foundation and Scale plans, overage per 1,000, the cheapest plan by volume, and Mailgun vs Resend and SES."
 type: blog
 date: 2026-11-15
-lastModified: 2026-11-17
+lastModified: 2026-11-22
 search:
   tags: ["Mailgun", "Pricing", "Transactional email"]
 ---
@@ -164,6 +164,6 @@ The code on this page was typechecked against `@opencoredev/email-sdk` 3.0.1, an
 - [Email API pricing compared](/blog/email-api-pricing): SES, Resend, SendGrid, Mailgun and Postmark at the same monthly volumes, and their free tiers.
 - [Mailgun API guide for Node.js and TypeScript](/blog/mailgun-api-nodejs-typescript): raw requests, US and EU regions, errors, rate limits and webhooks.
 - [Mailgun alternatives](/blog/mailgun-alternatives): retention and fields elsewhere, and a switch with Mailgun as the fallback.
-- [Amazon SES pricing](/blog/amazon-ses-pricing) and [Resend pricing](/blog/resend-pricing): the same breakdown for those providers.
+- [Amazon SES pricing](/blog/amazon-ses-pricing), [Resend pricing](/blog/resend-pricing) and [MailerSend pricing](/blog/mailersend-pricing): the same breakdown for those providers.
 - [Resend vs Mailgun](/compare/resend-vs-mailgun), [SendGrid vs Mailgun](/compare/sendgrid-vs-mailgun) and [Mailgun vs Amazon SES](/compare/mailgun-vs-ses): field support next to other providers.
 - [Mailgun adapter reference](/docs/adapters/mailgun): adapter options and field mapping.

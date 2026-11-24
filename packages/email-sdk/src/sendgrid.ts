@@ -1,4 +1,6 @@
+import { validatePersonalizedInput } from "./core/personalized.js";
 import { firstString, jsonProvider } from "./http.js";
+import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import {
   apiAddress,
   apiAddresses,
@@ -7,6 +9,7 @@ import {
   recipientVariableEntries,
   sendAtUnixSeconds,
   sendgridAttachments,
+  stringMetadata,
 } from "./payloads.js";
 import type { EmailMessage, EmailAdapter } from "./types.js";
 import { arrayify, assertMaxItems, emailAddressOf, hasRecipientVariables } from "./utils.js";
@@ -24,9 +27,9 @@ export function sendgrid(
     name: "sendgrid",
     baseUrl: options.baseUrl ?? "https://api.sendgrid.com",
     endpoint: "/v3/mail/send",
-    headers: {
+    headers: () => ({
       Authorization: `Bearer ${options.apiKey}`,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       return {
@@ -58,16 +61,22 @@ export function sendgrid(
   return {
     ...provider,
     async sendPersonalized(input, context) {
+      const safeInput = snapshotPersonalizedInputForSend(input);
+      validatePersonalizedInput(safeInput);
+
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
+        safeInput.recipients.map((recipient) => [
+          emailAddressOf(recipient.to),
+          recipient.variables,
+        ]),
       );
 
       const result = await provider.send(
-        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
-        // them. recipientVariables is the legacy extension read by sendgridPersonalizations.
+        // SAFETY: safeInput.message is a snapshotted EmailMessage without its recipient fields,
+        // and `to` restores them. recipientVariables is the legacy extension read by sendgridPersonalizations.
         {
-          ...input.message,
-          to: input.recipients.map((recipient) => recipient.to),
+          ...safeInput.message,
+          to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
         context,
@@ -75,7 +84,7 @@ export function sendgrid(
 
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
+        accepted: safeInput.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },
@@ -92,7 +101,7 @@ function sendgridPersonalizations(message: EmailMessage) {
     return recipientVariableEntries(message).map((entry) => ({
       to: [apiAddress(entry.to)],
       headers: commonHeadersObject(message),
-      custom_args: message.metadata,
+      custom_args: stringMetadata(message.metadata),
       substitutions: recipientSubstitutions(entry.variables),
     }));
   }
@@ -103,7 +112,7 @@ function sendgridPersonalizations(message: EmailMessage) {
       cc: optionalApiAddresses(message.cc),
       bcc: optionalApiAddresses(message.bcc),
       headers: commonHeadersObject(message),
-      custom_args: message.metadata,
+      custom_args: stringMetadata(message.metadata),
     },
   ];
 }

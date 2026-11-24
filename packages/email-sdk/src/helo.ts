@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { isJsonObject, jsonArray, jsonField, jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
@@ -68,7 +69,8 @@ export function helo(options: HeloAdapterOptions): EmailAdapter<"helo", { baseUr
     ...builtInAdapterDefinition("helo", heloRules),
     raw: { baseUrl },
     async send(message, context) {
-      validateBuiltInAdapter("helo", message, heloRules);
+      const safeMessage = snapshotMessageForSend(message);
+      validateBuiltInAdapter("helo", safeMessage, heloRules);
 
       // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
@@ -90,7 +92,7 @@ export function helo(options: HeloAdapterOptions): EmailAdapter<"helo", { baseUr
         method: "POST",
         signal: context.signal,
         headers,
-        body: JSON.stringify(await toHeloPayload(message)),
+        body: JSON.stringify(await toHeloPayload(safeMessage)),
       });
 
       if (!response.ok) {

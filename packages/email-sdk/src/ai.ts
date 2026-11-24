@@ -82,6 +82,9 @@ export function createEmailTools({
           {
             signal: abortSignal,
             idempotencyKey: `email-tool:${toolCallId}`,
+            // The SDK sets this key on every tool call, so adapters without provider
+            // deduplication still send instead of failing the strict idempotency check.
+            idempotency: "best-effort",
             metadata: { source: "email-sdk-ai", toolCallId },
           },
         );

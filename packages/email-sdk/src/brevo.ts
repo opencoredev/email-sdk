@@ -31,9 +31,9 @@ export function brevo(options: BrevoAdapterOptions): EmailAdapter<"brevo", { bas
     rules: brevoRules,
     baseUrl: options.baseUrl ?? "https://api.brevo.com",
     endpoint: "/v3/smtp/email",
-    headers: {
+    headers: () => ({
       "api-key": options.apiKey,
-    },
+    }),
     fetch: options.fetch,
     async buildPayload(message) {
       const attachments = await base64Attachments(message);

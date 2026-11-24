@@ -3,7 +3,7 @@ title: Telemetry and privacy
 description: Opt-out SDK and CLI analytics, redacted error reporting, storage, and privacy behavior.
 ---
 
-Core SDK and CLI telemetry are enabled by default. The first enabled run prints an opt-out notice to stderr and stores a random, stable installation identifier plus the notice marker. The identifier is not tied to a person's identity.
+Core SDK and CLI telemetry are enabled by default. The first enabled run whose stderr is a terminal prints an opt-out notice to stderr and stores a random, stable installation identifier plus the notice marker. When stderr is not a terminal, such as on a server, in CI, or under a test runner, nothing is printed and the marker is not set, so the notice appears on the first interactive run instead. Telemetry is still on in those runs unless you opt out. The identifier is not tied to a person's identity.
 
 ## Opt out
 

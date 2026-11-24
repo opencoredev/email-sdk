@@ -9,10 +9,13 @@ on:
 permissions:
   contents: read
 
+# Tenki runners only pick up jobs from this repository, so a pull request from a fork would queue
+# forever. Those runs fall back to GitHub-hosted ubuntu-latest; everything else stays on Tenki.
+
 jobs:
   verify:
     name: Verify (Bun)
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +35,7 @@ jobs:
 
   convex-deploy:
     name: Convex component deploys
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v6
@@ -52,7 +55,7 @@ jobs:
 
   ai-compatibility:
     name: ${{ matrix.name }}
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +81,7 @@ jobs:
 
   node:
     name: Node ${{ matrix.node }} public-package coverage
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +101,7 @@ jobs:
 
   commonjs:
     name: CommonJS on Node ${{ matrix.node }}
-    runs-on: tenki-standard-small-2c-4g
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-small-2c-4g' }}
     strategy:
       fail-fast: false
       matrix:

@@ -1,20 +1,20 @@
 ---
-title: "Resend Pricing: Free Tier, Pro, Scale and Overage"
-description: "Resend pricing, checked October 2026: the free tier's 3,000 emails and 100-a-day cap, Pro and Scale plans, overage rates, and the cheapest plan by volume."
+title: "Resend Pricing in 2026: Free Tier, Limits and Overage"
+description: "Resend pricing in 2026: the free tier's 3,000 emails a month (100 a day), Pro from $20, Scale from $90, overage, rate limits, and the cheapest plan by volume."
 type: blog
 date: 2026-10-30
-lastModified: 2026-11-17
+lastModified: 2026-11-23
 search:
   tags: ["Resend", "Pricing", "Transactional email"]
 ---
 
-Resend's free plan costs $0 and includes 3,000 transactional emails a month, capped at 100 a day. Paid sending plans start at $20 a month for 50,000 emails (Pro), and Scale starts at $90 a month for 100,000. Paid plans can keep sending past their quota at $0.46 to $0.90 per extra 1,000 emails, depending on the tier. Every number on this page comes from [resend.com/pricing](https://resend.com/pricing) and Resend's [usage limits docs](https://resend.com/docs/api-reference/rate-limit), checked October 2026. Prices change, so confirm them there before you buy.
+Resend's free plan costs $0 and includes 3,000 transactional emails a month, capped at 100 a day. Paid sending plans start at $20 a month for 50,000 emails (Pro), and Scale starts at $90 a month for 100,000. Paid plans can keep sending past their quota at $0.46 to $0.90 per extra 1,000 emails, depending on the tier. Every number on this page comes from [resend.com/pricing](https://resend.com/pricing) and Resend's [usage limits docs](https://resend.com/docs/api-reference/rate-limit), checked November 2026. Prices change, so confirm them there before you buy.
 
 This page covers what each plan includes, what counts against the quota, what happens when you run out, and how to keep tests and CI from spending it. Want code? The [Resend API guide for Node.js and TypeScript](/blog/resend-api-nodejs-typescript) shows the API calls.
 
 ## Transactional plans
 
-Resend bills transactional email (the `/emails` API) separately from marketing email (Broadcasts). This table lists the transactional tiers ([Resend pricing](https://resend.com/pricing), checked Oct 2026):
+Resend bills transactional email (the `/emails` API) separately from marketing email (Broadcasts). This table lists the transactional tiers ([Resend pricing](https://resend.com/pricing), checked Nov 2026):
 
 | Plan       | Price per month | Emails per month | Extra emails, per 1,000 | Daily limit | Domains     |
 | ---------- | --------------- | ---------------- | ----------------------- | ----------- | ----------- |
@@ -29,7 +29,7 @@ Resend bills transactional email (the `/emails` API) separately from marketing e
 | Scale      | $1,150          | 2,500,000        | $0.46                   | none        | 1,000       |
 | Enterprise | custom          | custom           | custom                  | none        | by contract |
 
-Free, Pro and Scale keep 30 days of email logs; Enterprise retention is set by contract. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Billing is monthly only: Resend has no annual plans and no annual discount. Registered nonprofits can apply for 50% off paid plans.
+Free, Pro and Scale keep 30 days of email logs; Enterprise retention is set by contract. Free gets 1 webhook endpoint, Pro 5 and Scale 10. Scale also adds a dedicated Slack channel, and it's the plan that can buy a dedicated IP and single sign-on. Self-serve plans are billed monthly only, with no annual plans and no annual discount; annual commitments at high volume go through Resend's sales team. Registered nonprofits can apply for 50% off paid plans.
 
 Every plan includes the REST API, the SMTP relay, the official SDKs, inbound email, scheduled sending, batch sending, open and link tracking, and DKIM, SPF and DMARC authentication. Open and click tracking also work on Free.
 
@@ -54,7 +54,7 @@ Resend's pricing page and usage-limits docs list what draws from the transaction
 
 ## What happens when you run out
 
-When you pass a limit, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Oct 2026):
+When you pass a sending quota, the send API answers with a `429` and one of two error types ([Usage limits](https://resend.com/docs/api-reference/rate-limit), checked Nov 2026):
 
 | Error                    | When                                         | What to do                                      |
 | ------------------------ | -------------------------------------------- | ----------------------------------------------- |
@@ -65,7 +65,7 @@ On a paid plan, pay-as-you-go lets you keep sending past the quota. Resend charg
 
 The API also sets two headers on every response, so you can watch usage before you hit the wall: `x-resend-monthly-quota` (used monthly quota) and, on Free only, `x-resend-daily-quota` (used daily quota).
 
-Upgrading doesn't change the API rate limit. It's 10 requests per second per team on every plan, shared by all of the team's API keys, and returns `429 rate_limit_exceeded` when you pass it. The batch endpoint sends up to 100 emails per request and counts as one request, which is the usual way to stay under it. Resend raises the limit for trusted senders on request.
+Upgrading doesn't change the API rate limit. The default is 10 requests per second per team on every plan, shared by all of the team's API keys, and returns `429 rate_limit_exceeded` when you pass it. The batch endpoint sends up to 100 emails per request and counts as one request, which is the usual way to stay under it. Resend raises the limit for trusted senders on request.
 
 ## Which plan is cheapest at your volume
 
@@ -81,11 +81,11 @@ Overage changes which plan wins, because Pro charges the same $0.90 per extra 1,
 | 500,000                       | Scale $350             | $350         |
 | 1,000,000                     | Scale $650             | $650         |
 
-Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: more than 10 domains, a dedicated IP, SSO, or more webhook endpoints. Pro and Scale can also add 100 domains for $20 a month.
+Pro with overage stays cheaper than the Scale tiers up to about 450,000 emails a month. Pick Scale earlier when you need what Pro lacks: a dedicated IP, SSO, more than 5 webhook endpoints, or more than 110 domains. Pro includes 10 domains, and its $20-a-month add-on raises that to 110. If domains are your only reason to upgrade, compare Pro plus the add-on with Scale at your monthly volume: near the crossover, the extra $20 can make Scale the cheaper plan.
 
 ## Marketing plans
 
-Broadcasts are priced by stored contacts, not by emails sent ([Resend pricing](https://resend.com/pricing), checked Oct 2026):
+Broadcasts are priced by stored contacts, not by emails sent ([Resend pricing](https://resend.com/pricing), checked Nov 2026):
 
 | Plan          | Price per month | Contacts |
 | ------------- | --------------- | -------- |

@@ -143,6 +143,7 @@ export const ADAPTER_SUPPORT_ENTRIES = [
       scheduling: false,
       personalized: "expanded",
     },
+    limits: ["Accepts at most 15 headers per message."],
   },
   {
     id: "mailgun",

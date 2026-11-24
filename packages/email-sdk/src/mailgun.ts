@@ -1,5 +1,9 @@
+import { validatePersonalizedInput } from "./core/personalized.js";
 import { EmailAdapterError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
+import { utf8ToBase64 } from "./internal/bytes.js";
 import { jsonString } from "./internal/decode.js";
+import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage } from "./types.js";
 import {
@@ -16,6 +20,7 @@ import {
   isRetryableStatus,
   readErrorBody,
   httpErrorMessage,
+  validateBuiltInAdapter,
 } from "./utils.js";
 
 export type MailgunAdapterOptions = {
@@ -30,7 +35,10 @@ export function mailgun(
 ): EmailAdapter<"mailgun", { baseUrl: string }> {
   const baseUrl = options.baseUrl ?? "https://api.mailgun.net";
 
-  const send: EmailAdapter<"mailgun">["send"] = async (message, context) => {
+  const send: EmailAdapter<"mailgun">["send"] = async (rawMessage, context) => {
+    const message = snapshotMessageForSend(rawMessage);
+    validateBuiltInAdapter("mailgun", message);
+
     const body = new FormData();
     body.set("from", formatAddress(message.from));
     body.set("subject", message.subject);
@@ -91,7 +99,7 @@ export function mailgun(
       method: "POST",
       signal: context.signal,
       headers: {
-        Authorization: `Basic ${Buffer.from(`api:${options.apiKey}`).toString("base64")}`,
+        Authorization: `Basic ${utf8ToBase64(`api:${options.apiKey}`)}`,
       },
       body,
     });
@@ -122,16 +130,22 @@ export function mailgun(
     raw: { baseUrl },
     send,
     async sendPersonalized(input, context) {
+      const safeInput = snapshotPersonalizedInputForSend(input);
+      validatePersonalizedInput(safeInput);
+
       const recipientVariables = Object.fromEntries(
-        input.recipients.map((recipient) => [emailAddressOf(recipient.to), recipient.variables]),
+        safeInput.recipients.map((recipient) => [
+          emailAddressOf(recipient.to),
+          recipient.variables,
+        ]),
       );
 
       const result = await send(
-        // SAFETY: input.message is an EmailMessage without its recipient fields, and `to` restores
-        // them. recipientVariables is the legacy extension read by the Mailgun form builder.
+        // SAFETY: safeInput.message is a snapshotted EmailMessage without its recipient fields,
+        // and `to` restores them. recipientVariables is the legacy extension read by the Mailgun form builder.
         {
-          ...input.message,
-          to: input.recipients.map((recipient) => recipient.to),
+          ...safeInput.message,
+          to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
         context,
@@ -139,7 +153,7 @@ export function mailgun(
 
       return {
         ...result,
-        accepted: input.recipients.map((recipient) => emailAddressOf(recipient.to)),
+        accepted: safeInput.recipients.map((recipient) => emailAddressOf(recipient.to)),
         rejected: [],
       };
     },

@@ -1,5 +1,6 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
-import { isJsonString, jsonField, jsonString, readJsonBody } from "./internal/decode.js";
+import { snapshotMessageForSend } from "./http.js";
+import { isJsonString, isNonArrayObject, jsonField, jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -15,6 +16,7 @@ import {
   isRetryableStatus,
   readErrorBody,
   arrayify,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -39,7 +41,18 @@ export function primitive(
     name: "primitive",
     ...builtInAdapterDefinition("primitive", primitiveRules),
     raw: { baseUrl },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
+
+      if (isNonArrayObject(message) && arrayify(message.to).length === 0) {
+        throw new EmailValidationError("primitive requires one recipient.", {
+          adapter: "primitive",
+          field: "to",
+        });
+      }
+
+      validateBuiltInAdapter("primitive", message, primitiveRules);
+
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,
         "Content-Type": "application/json",

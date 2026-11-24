@@ -31,7 +31,7 @@
     "live:run": "bun scripts/run-live-adapters.ts",
     "community:check": "bun scripts/validate-community-registry.ts",
     "docs:versions:check": "bun scripts/validate-docs-versions.ts",
-    "docs:check": "bun scripts/check-adapter-support-docs.ts && bun test scripts/check-cli-doc-consistency.test.ts && cd apps/docs && bun run types:check && bun run adapter-faq:check && bun run compare:check && bun run registry:check && bun run validate",
+    "docs:check": "bun scripts/check-adapter-support-docs.ts && bun scripts/check-published-exports.ts && bun test scripts/check-cli-doc-consistency.test.ts scripts/check-published-exports.test.ts && cd apps/docs && bun run types:check && bun run adapter-faq:check && bun run compare:check && bun run registry:check && bun run validate",
     "homebrew:update": "bun scripts/update-homebrew-formula.ts",
     "docs:audit": "cd apps/docs && bun run audit"
   },

@@ -3,7 +3,7 @@ title: "Brevo API Guide for Node.js and TypeScript"
 description: "Use the Brevo API from Node.js and TypeScript with fetch: the api-key header, templates, scheduling, batch sends, idempotency keys, rate limits, and webhooks."
 type: blog
 date: 2026-11-02
-lastModified: 2026-11-12
+lastModified: 2026-11-23
 search:
   tags: ["Brevo", "Node.js", "TypeScript"]
 ---
@@ -373,7 +373,7 @@ The adapter posts to `https://api.brevo.com/v3/smtp/email` ([`brevo.ts`](https:/
 
 `result.id` is the ID from the provider named in `result.adapter`: Brevo's `messageId` when Brevo sends, or Mailgun's message ID when the fallback does. Store both fields so you look up the message and match webhooks with the right provider.
 
-Two Brevo features have no Email SDK field. The adapter doesn't send `templateId`, so it renders your own `html` and `text`, and `metadata` reaches your content only as `params`. It also doesn't forward the SDK's `idempotencyKey` send option, because Brevo's key lives in the body rather than an HTTP header. If you want Brevo's duplicate guard, put a UUID `idempotencyKey` in `headers` yourself; when the fallback sends, Mailgun receives that entry as an ordinary custom header.
+Two Brevo features have no Email SDK field. The adapter doesn't send `templateId`, so it renders your own `html` and `text`, and `metadata` reaches your content only as `params`. It also doesn't forward the SDK's `idempotencyKey` send option, because Brevo's key lives in the body rather than an HTTP header, so passing `idempotencyKey` rejects with an `EmailValidationError` unless you opt into `idempotency: "best-effort"`. If you want Brevo's duplicate guard, put a UUID `idempotencyKey` in `headers` yourself; when the fallback sends, Mailgun receives that entry as an ordinary custom header.
 
 ### How the fallback behaves
 

@@ -15,8 +15,9 @@ export type EmailMetadataValue =
 export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue };
 
 /**
- * Augment this interface to give send-option metadata your own shape. The SDK forwards it
- * unchanged to hooks, plugins, and adapter contexts.
+ * Augment this interface to give send-option metadata your own shape. The SDK clones plain
+ * objects, null-prototype chains, arrays, and built-in value types per hook, middleware item,
+ * and adapter attempt while passing custom class instances by reference.
  *
  * ```ts
  * import "@opencoredev/email-sdk";
@@ -31,7 +32,9 @@ export type EmailMetadataRecord = { readonly [key: string]: EmailMetadataValue }
 export interface EmailMetadataRegister {}
 
 /** Send-option metadata: the registered shape, or `EmailMetadataRecord` when none is registered. */
-export type EmailSendMetadata = EmailMetadataRegister extends { metadata: infer Metadata extends object }
+export type EmailSendMetadata = EmailMetadataRegister extends {
+  metadata: infer Metadata extends object;
+}
   ? Metadata
   : EmailMetadataRecord;
 
@@ -174,7 +177,25 @@ export type EmailSendOptions<Name extends string = string> = {
   retry?: EmailRetryConfig;
   signal?: AbortSignal;
   idempotencyKey?: string;
+  /**
+   * What `idempotencyKey` requires of the route. `"strict"` (the default) rejects the send with
+   * an `EmailValidationError` before any request when an adapter on the route reports
+   * `capabilities.idempotency: "none"`, because that adapter cannot deduplicate a retried send.
+   * `"best-effort"` sends anyway and forwards the key to adapters that use it; choose it when the
+   * key is for your own bookkeeping or another layer (a queue, an outbox) already deduplicates.
+   */
+  idempotency?: "strict" | "best-effort";
   metadata?: EmailSendMetadata;
+};
+
+/** Options for `sendMany`: send options shared by every item, plus batch-only settings. */
+export type EmailSendManyOptions<Name extends string = string> = EmailSendOptions<Name> & {
+  /**
+   * How many items send at once. Defaults to `1`, which sends one after another in input order.
+   * Results always come back in input order, whatever the concurrency. Must be a positive
+   * integer; keep it within your provider's rate limit, since each item is its own request.
+   */
+  concurrency?: number;
 };
 
 export type EmailValidationWarning = {
@@ -310,7 +331,7 @@ export type EmailClient<
   ): Promise<EmailSendResult<RouteName<Routes>>>;
   sendMany(
     items: readonly EmailSendItem<RouteName<Routes>>[],
-    options?: EmailSendOptions<RouteName<Routes>>,
+    options?: EmailSendManyOptions<RouteName<Routes>>,
   ): Promise<readonly EmailSendSettledResult<RouteName<Routes>>[]>;
   sendPersonalized(
     input: EmailPersonalizedInput,
@@ -329,34 +350,3 @@ export type EmailClient<
     name: Name,
   ): Pick<EmailClient<Routes>, "validate" | "send" | "sendMany" | "sendPersonalized">;
 } & Extension;
-
-/** @deprecated Internal migration alias. Import v1 names from the package root. */
-export type EmailProvider<TRaw = unknown> = EmailAdapter<string, TRaw> & {
-  sendBulk?(
-    message: EmailMessage & {
-      recipientVariables?: RecipientVariables;
-      idempotencyKey?: string;
-    },
-    context: EmailAdapterContext,
-  ): MaybePromise<EmailSendResult>;
-};
-
-/** @deprecated Internal migration alias. */
-export type EmailProviderContext = EmailAdapterContext;
-
-/** @deprecated Internal migration alias. */
-export type EmailProviderResponse = EmailSendResult;
-
-/** @deprecated Internal migration alias. */
-export type SendOptions = EmailSendOptions & {
-  provider?: string;
-  fallbackAdapters?: readonly string[];
-  fallbackProviders?: readonly string[];
-  retries?: number;
-};
-
-/** @deprecated Internal migration alias. */
-export type SendBatchItem = EmailSendItem;
-
-/** @deprecated Internal migration alias. */
-export type SendBatchResult = EmailSendSettledResult;

@@ -80,7 +80,7 @@ export const email = createEmailClient({
 
 ## Send
 
-SES maps `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags` (as SES `EmailTags`, which flow to configuration-set event destinations).
+SES maps `cc`, `bcc`, `replyTo`, `headers`, `attachments`, and `tags` (as SES `EmailTags`, which flow to configuration-set event destinations). SES accepts at most 15 headers per message, so a message with more fails with `EmailValidationError` before the request.
 
 ```ts
 const result = await email.send({

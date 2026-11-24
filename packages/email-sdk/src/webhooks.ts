@@ -5,14 +5,18 @@ import {
   isJsonObject,
   isJsonString,
   isStringMember,
+  parseJson,
   parseJsonStrict,
 } from "./internal/decode.js";
+import { verifySendGridSignature } from "./internal/sendgrid-signature.js";
 
 export type { JsonObject, JsonValue } from "./internal/decode.js";
 
 export type WebhookHeaders = Headers | Readonly<Record<string, string | undefined>>;
 
-export type WebhookProvider = "resend" | "postmark" | "mailgun";
+export type WebhookProvider = "resend" | "postmark" | "mailgun" | "sendgrid" | "ses";
+
+const WEBHOOK_PROVIDERS: ReadonlySet<string> = new Set<WebhookProvider>(["resend", "postmark", "mailgun", "sendgrid", "ses"]);
 
 export type WebhookDeliveryStatus = "delivered" | "bounced" | "complained";
 
@@ -30,6 +34,17 @@ export interface ResendWebhookVerificationOptions extends WebhookVerificationOpt
 
 export interface MailgunWebhookVerificationOptions extends WebhookVerificationOptions {
   signatureField?: "signature" | "parent-signature";
+}
+
+export interface SendGridWebhookVerificationOptions {
+  /** The raw request body, exactly as received. */
+  body: string;
+  headers: WebhookHeaders;
+  /** The Event Webhook verification key (base64 SPKI or PEM). Pass several to rotate. */
+  publicKey: string | readonly string[];
+  toleranceSeconds?: number;
+  /** Current time in epoch milliseconds. */
+  now?: number;
 }
 
 export interface NormalizeWebhookOptions {
@@ -79,7 +94,7 @@ function header(headers: WebhookHeaders | undefined, name: string): string | und
 
 function timestampValid(
   value: JsonValue | undefined,
-  options: WebhookVerificationOptions,
+  options: Pick<WebhookVerificationOptions, "toleranceSeconds" | "now">,
 ): value is string | number {
   if (!isJsonString(value) && !isJsonNumber(value)) return false;
 
@@ -186,13 +201,174 @@ export async function verifyMailgunWebhook(options: MailgunWebhookVerificationOp
   }
 }
 
-/** Normalize authenticated provider JSON. This function does not verify authenticity. */
-export async function normalizeWebhookEvent(options: NormalizeWebhookOptions): Promise<NormalizedWebhookEvent> {
-  const { provider, body, headers } = options;
+/**
+ * Verify a SendGrid Event Webhook request: ECDSA P-256 / SHA-256 over
+ * `X-Twilio-Email-Event-Webhook-Timestamp` followed by the raw body, plus timestamp tolerance.
+ * Invalid input, a malformed key, or a non-JSON body returns false.
+ */
+export async function verifySendGridWebhook(options: SendGridWebhookVerificationOptions): Promise<boolean> {
+  try {
+    const signature = header(options.headers, "x-twilio-email-event-webhook-signature");
+    const timestamp = header(options.headers, "x-twilio-email-event-webhook-timestamp");
 
-  if (provider !== "resend" && provider !== "postmark" && provider !== "mailgun") {
+    if (!signature || !timestamp || !timestampValid(timestamp, options)) return false;
+    sendGridEvents(options.body);
+
+    const result = await verifySendGridSignature({
+      publicKeys: secrets(options.publicKey),
+      signature,
+      timestamp,
+      body: encoder.encode(options.body),
+    });
+
+    return result === "verified";
+  } catch {
+    return false;
+  }
+}
+
+async function bodyDigest(provider: WebhookProvider, content: string) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${provider}\0${content}`));
+
+  return `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function assertWebhookProvider(provider: WebhookProvider) {
+  if (!WEBHOOK_PROVIDERS.has(provider)) {
     throw new Error(`Unsupported webhook normalization provider: ${provider}`);
   }
+}
+
+/** SendGrid posts a JSON array of events; a single event object is accepted too. */
+function sendGridEvents(body: string): JsonObject[] {
+  if (!isStringMember(body)) throw new Error("Webhook body must be raw JSON text.");
+  const parsed = parseJsonStrict(body);
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  const events = list.filter(isJsonObject);
+
+  if (events.length === 0 || events.length !== list.length) {
+    throw new Error("SendGrid webhook body must be a JSON array of event objects.");
+  }
+
+  return events;
+}
+
+async function normalizeSendGridEvent(event: JsonObject): Promise<NormalizedWebhookEvent> {
+  const type = text(event.event)?.toLowerCase();
+  let status: WebhookDeliveryStatus | undefined;
+
+  if (type === "delivered") status = "delivered";
+
+  if (type === "spamreport") status = "complained";
+
+  // SendGrid's "bounce" event covers hard bounces (type "bounce") and temporary blocks
+  // (type "blocked"); only the hard bounce is final. "dropped" means SendGrid never sent it.
+  if (type === "bounce") {
+    const bounceType = text(event.type)?.toLowerCase();
+
+    if (bounceType === undefined || bounceType === "bounce") status = "bounced";
+  }
+
+  const normalized: NormalizedWebhookEvent = {
+    provider: "sendgrid",
+    deliveryId: text(event.sg_event_id) ?? (await bodyDigest("sendgrid", JSON.stringify(event))),
+    payload: event,
+  };
+
+  // sg_message_id is the send's X-Message-ID plus a ".filter..." suffix; the prefix matches the
+  // id the sendgrid adapter returns.
+  const providerMessageId = text(event.sg_message_id)?.split(".")[0];
+
+  if (providerMessageId) normalized.providerMessageId = providerMessageId;
+
+  if (type) normalized.type = type;
+
+  if (status) normalized.status = status;
+
+  return normalized;
+}
+
+/**
+ * SES delivers events through SNS (an envelope whose `Message` is the event JSON), EventBridge
+ * (`detail`), or as the bare event. Event publishing uses `eventType`; identity notifications
+ * use `notificationType`. The returned payload is the SES event, not the transport envelope.
+ */
+async function normalizeSesEvent(body: string): Promise<NormalizedWebhookEvent> {
+  const envelope = parseBody(body);
+  const snsType = text(envelope.Type);
+
+  if (snsType === "SubscriptionConfirmation" || snsType === "UnsubscribeConfirmation") {
+    throw new Error(`SNS ${snsType} is not an SES event. Confirm the subscription with its SubscribeURL first.`);
+  }
+
+  const snsMessage = snsType === "Notification" && isJsonString(envelope.Message) ? object(parseJson(envelope.Message)) : undefined;
+
+  if (snsType === "Notification" && !snsMessage) throw new Error("SNS notification Message must be SES event JSON.");
+
+  const detail = text(envelope["detail-type"]) ? object(envelope.detail) : undefined;
+  const event = snsMessage ?? detail ?? envelope;
+  const rawType = text(event.eventType) ?? text(event.notificationType);
+  const type = rawType?.toLowerCase();
+  let status: WebhookDeliveryStatus | undefined;
+
+  if (type === "delivery") status = "delivered";
+
+  if (type === "complaint") status = "complained";
+
+  // Transient and Undetermined bounces may still deliver later; only Permanent is final.
+  if (type === "bounce" && text(object(event.bounce)?.bounceType)?.toLowerCase() === "permanent") status = "bounced";
+
+  const transportId = snsMessage ? text(envelope.MessageId) : detail ? text(envelope.id) : undefined;
+
+  const normalized: NormalizedWebhookEvent = {
+    provider: "ses",
+    deliveryId: transportId ?? (await bodyDigest("ses", body)),
+    payload: event,
+  };
+
+  const providerMessageId = text(object(event.mail)?.messageId);
+
+  if (providerMessageId) normalized.providerMessageId = providerMessageId;
+
+  if (type) normalized.type = type;
+
+  if (status) normalized.status = status;
+
+  return normalized;
+}
+
+/**
+ * Normalize every event in an authenticated webhook body. SendGrid batches several events per
+ * request; the other providers send one. This function does not verify authenticity.
+ */
+export async function normalizeWebhookEvents(options: NormalizeWebhookOptions): Promise<NormalizedWebhookEvent[]> {
+  assertWebhookProvider(options.provider);
+
+  if (options.provider === "sendgrid") return Promise.all(sendGridEvents(options.body).map(normalizeSendGridEvent));
+
+  return [await normalizeWebhookEvent(options)];
+}
+
+/**
+ * Normalize authenticated provider JSON. This function does not verify authenticity. A SendGrid
+ * body must hold exactly one event; use `normalizeWebhookEvents` for SendGrid batches.
+ */
+export async function normalizeWebhookEvent(options: NormalizeWebhookOptions): Promise<NormalizedWebhookEvent> {
+  const { provider, body, headers } = options;
+  assertWebhookProvider(provider);
+
+  if (provider === "sendgrid") {
+    const events = sendGridEvents(body);
+    const [only] = events;
+
+    if (!only || events.length !== 1) {
+      throw new Error(`SendGrid posted ${events.length} events in one request; use normalizeWebhookEvents.`);
+    }
+
+    return normalizeSendGridEvent(only);
+  }
+
+  if (provider === "ses") return normalizeSesEvent(body);
 
   const payload = parseBody(body);
   const data = object(payload.data);
@@ -225,10 +401,7 @@ export async function normalizeWebhookEvent(options: NormalizeWebhookOptions): P
     ? text(payload.id) ?? header(headers, "svix-id")
     : text(payload.id) ?? text(payload.ID) ?? numericId ?? text(payload.eventId) ?? text(payload.webhookId) ?? text(payload.deliveryId) ?? text(eventData?.id);
 
-  if (!deliveryId) {
-    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${provider}\0${body}`));
-    deliveryId = `body:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`;
-  }
+  deliveryId ??= await bodyDigest(provider, body);
 
   const providerMessageId = provider === "resend"
     ? text(data?.email_id) ?? text(data?.id)

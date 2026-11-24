@@ -21,6 +21,7 @@ export const currentDocsPublishedVersion = getCurrentDocsPublishedVersion(latest
  * redirects those URLs here.
  */
 export const archivedDocsVersions = [
+  { id: "v3.0.1", release: "3.0.1", description: "Docs for the v3.0.1 release" },
   { id: "v3.0.0", release: "3.0.0", description: "Docs for the v3.0.0 release" },
   { id: "v2.0.0", release: "2.0.0", description: "Docs for the v2.0.0 release" },
   { id: "v1.2.0", release: "1.2.0", description: "Docs for the v1.2.0 release" },

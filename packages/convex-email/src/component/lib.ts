@@ -304,11 +304,7 @@ export const recordProviderAttempt = mutation({
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
-    if (
-      !email ||
-      email.status !== "processing" ||
-      email.processingLease !== args.processingLease
-    ) {
+    if (!email || email.status !== "processing" || email.processingLease !== args.processingLease) {
       return false;
     }
 
@@ -344,11 +340,7 @@ export const markSent = mutation({
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
-    if (
-      !email ||
-      email.status !== "processing" ||
-      email.processingLease !== args.processingLease
-    ) {
+    if (!email || email.status !== "processing" || email.processingLease !== args.processingLease) {
       return false;
     }
 
@@ -386,11 +378,7 @@ export const markFailedOrRetry = mutation({
   handler: async (ctx, args) => {
     const email = await ctx.db.get(args.emailId);
 
-    if (
-      !email ||
-      email.status !== "processing" ||
-      email.processingLease !== args.processingLease
-    ) {
+    if (!email || email.status !== "processing" || email.processingLease !== args.processingLease) {
       return false;
     }
 
@@ -439,7 +427,7 @@ export const processDueEmails = internalMutation({
       // The worker stopped mid-send, so the adapter this lease last reached may have sent it.
       await pinUnknownDelivery(ctx, email, email.dispatchedAdapter);
 
-      if (email.idempotencyKey) {
+      if (email.idempotencyKey?.trim()) {
         await markEmailFailedOrRetry(ctx, email, "Email processing exceeded recovery timeout.", {
           immediate: true,
         });
@@ -526,7 +514,7 @@ type EnqueueEmailOptions = {
 
 async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
   const { email: args, sender, ownerId } = options;
-  const idempotencyKey = args.idempotencyKey;
+  const idempotencyKey = args.idempotencyKey?.trim() ? args.idempotencyKey : undefined;
 
   if (idempotencyKey) {
     const existing = ownerId
@@ -674,7 +662,7 @@ function applyConfigToMessage(args: ConvexEmailSendArgs, config: ConvexEmailConf
     attachments: args.attachments,
     tags: args.tags,
     metadata: args.metadata,
-    idempotencyKey: args.idempotencyKey,
+    idempotencyKey: args.idempotencyKey?.trim() ? args.idempotencyKey : undefined,
   };
 
   if (!config.testMode) {

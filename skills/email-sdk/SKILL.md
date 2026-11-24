@@ -48,9 +48,9 @@ When local source and external docs disagree, prefer the code/types for the exac
 ## Defaults
 
 - Prefer `bun` and `bunx`.
-- Keep the core dependency-free.
+- Do not add runtime dependencies to the SDK. Its only one is Nodemailer, which the SMTP adapter and the CLI use.
 - Import adapters from separate entry points such as `@opencoredev/email-sdk/resend`, `@opencoredev/email-sdk/smtp`, and the adapter-specific entry point shown by the current package exports.
-- Do not add Nodemailer for SMTP; Email SDK includes its own SMTP transport.
+- Do not install Nodemailer yourself for SMTP. `@opencoredev/email-sdk` already depends on it and wraps it in the `smtp()` adapter, so use that adapter instead of calling Nodemailer directly.
 - SMTP auth on non-secure ports upgrades with STARTTLS by default. Only use `allowInsecureAuth` for trusted local test servers.
 - Adapters must either map a normalized `EmailMessage` field or reject it clearly. Never silently drop CC, BCC, reply-to, headers, tags, metadata, or attachments.
 - Keep adapter credentials in environment variables.

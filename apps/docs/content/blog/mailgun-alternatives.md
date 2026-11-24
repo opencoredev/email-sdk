@@ -1,14 +1,16 @@
 ---
-title: "Mailgun Alternatives for Developers, and How to Switch"
-description: "Compare Mailgun alternatives by price, log retention, and field support, then switch providers in TypeScript with Mailgun kept as the fallback."
+title: "Mailgun Alternatives in 2026: 5 APIs and How to Switch"
+description: "Mailgun alternatives in 2026: Resend, Postmark, SendGrid, Amazon SES and Lettermint by price, log retention and fields, plus a TypeScript switch with fallback."
 type: blog
 date: 2026-10-29
-lastModified: 2026-11-15
+lastModified: 2026-11-23
 search:
   tags: ["Mailgun", "Migration", "TypeScript"]
 ---
 
 Mailgun is a capable API, and it still supports every message field Email SDK models. Teams usually look elsewhere for narrower reasons: the free plan and Basic keep [one day of logs](https://www.mailgun.com/pricing/), the free plan caps you at 100 emails a day, or they want a different deliverability or support experience. The switch itself is the risky part, because a half-finished migration loses mail.
+
+The five Mailgun alternatives compared here are Resend, Postmark, SendGrid, Amazon SES and Lettermint. Resend has the largest free tier and native idempotency keys, Postmark keeps 45 days of history on its entry plan, SendGrid accepts every message field in the table below, SES costs the least at volume, and Lettermint keeps data in the EU.
 
 This post covers what to check in a replacement, a short sourced comparison, and a migration that keeps Mailgun as the fallback until the new provider has proven itself. It ends with complete code that passes its own tests.
 
@@ -40,7 +42,7 @@ Every price below comes from the provider's own pricing page, checked October 29
 
 **Postmark** is built for transactional mail and keeps 45 days of history on Basic. It has no tier between 100 and 10,000 emails a month, and it has no scheduled send.
 
-**SendGrid** matches Mailgun field for field, so it's the smallest code change. Its [free plan was retired in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan), and Essentials keeps 3 days of activity.
+**SendGrid** supports every field in the table, so it's the smallest code change. Two gaps the table doesn't show: Email SDK accepts repeated header names on Mailgun but rejects them on SendGrid, and SendGrid holds a scheduled send for up to 72 hours, against up to 3 days on most Mailgun plans (7 with extended storage). Its [free plan was retired in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan), and Essentials keeps 3 days of activity.
 
 **Amazon SES** is cheapest at volume, and you manage more yourself: bounce handling, reputation, and logging through configuration sets. AWS [moved new accounts to pricing plans](https://aws.amazon.com/blogs/messaging-and-targeting/introducing-amazon-simple-email-service-ses-pricing-plans/) on July 21, 2026, and the old 3,000-message SES free tier doesn't apply to them.
 

@@ -41,9 +41,9 @@ export function iterable(
     rules: iterableRules,
     baseUrl: options.baseUrl ?? "https://api.iterable.com",
     endpoint: "/api/email/target",
-    headers: {
+    headers: () => ({
       "Api-Key": options.apiKey,
-    },
+    }),
     buildPayload(message) {
       assertSupportedMessageFields("iterable", message, SUPPORTED_MESSAGE_FIELDS.iterable);
       const recipients = apiAddresses(message.to);

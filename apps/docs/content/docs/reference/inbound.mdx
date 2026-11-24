@@ -3,6 +3,10 @@ title: Inbound
 description: Types, functions, errors, and provider coverage for @opencoredev/email-sdk/inbound.
 ---
 
+:::warning[Not on npm yet]
+`@opencoredev/email-sdk/inbound` is not in a published release yet. It ships in the next release after 3.0.1, so `npm install @opencoredev/email-sdk@3.0.1` does not include it.
+:::
+
 Import everything on this page from `@opencoredev/email-sdk/inbound`. The module uses only `Request`, `Headers`, `Uint8Array`, `TextDecoder`, and Web Crypto, so it runs on Node 20+, Bun, Cloudflare Workers, and Convex. It adds no runtime dependency and is not part of the root entrypoint. For a walkthrough, see [Receive email](/docs/guides/receive-email).
 
 ## InboundEmail
@@ -35,7 +39,9 @@ Verdicts are `"pass" | "fail" | "softfail" | "neutral" | "none" | "temperror" | 
 handleInbound(request: Request, config: InboundHandlerConfig): Promise<InboundHandlerResult>
 ```
 
-Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request, SNS subscription confirmations, MailerSend's `webhook.test` route check, and Mandrill's HEAD probe and empty test POST. The provider test secrets (MailerSend's published key, Mandrill's `test-webhook`) only ever produce a handshake for a body that carries no message; they never authenticate an email. A Graph handshake fails with `secret_missing` when `clientState` is empty, so a subscription is only confirmed once its notifications can be checked. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, and `signal`.
+Verifies the request, parses it, and returns `{ type: "emails", emails }` or `{ type: "handshake", response }`. Return a handshake response unchanged: it answers Graph's `validationToken` request, SNS subscription confirmations, MailerSend's `webhook.test` route check, and Mandrill's HEAD probe and empty test POST. The provider test secrets (MailerSend's published key, Mandrill's `test-webhook`) only ever produce a handshake for a body that carries no message; they never authenticate an email. A Graph handshake fails with `secret_missing` when `clientState` is empty, so a subscription is only confirmed once its notifications can be checked. Every config also accepts `toleranceSeconds` (default `300`), `now`, `fetch`, `signal`, and `maxBodyBytes`.
+
+The body is read before its signature can be checked, so `maxBodyBytes` (default `DEFAULT_INBOUND_MAX_BODY_BYTES`, 50 MiB) bounds what an unauthenticated request can make the handler buffer. Passing a value that is not a positive number or `Infinity` throws `RangeError` before any handshake or body read. A larger `Content-Length` is refused before reading, and a chunked or mislabeled body is cancelled as soon as it passes the limit. Both fail with `payload_too_large`. Raise it if your provider posts larger messages; `Infinity` turns the limit off.
 
 | `provider`                                   | Required config                          | Optional                                                                                                         |
 | -------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -125,6 +131,7 @@ All comparisons run in constant time. A valid signature does not stop a replay i
 | `timestamp_expired`   | Timestamp outside `toleranceSeconds`                                                                 | 401                                                                          |
 | `secret_missing`      | No secret or key configured, or the key is malformed                                                 | 500 (fix the config)                                                         |
 | `payload_invalid`     | Body is not the provider's documented format                                                         | 400                                                                          |
+| `payload_too_large`   | Body is larger than `maxBodyBytes`                                                                   | 413                                                                          |
 | `unsupported`         | For example an SNS message that is not an email notification                                         | 200, then ignore                                                             |
 | `decryption_required` | SES stored the message with receipt-rule encryption, which only the S3 encryption client can decrypt | 500, so SNS retries; decrypt it yourself and call `sesEmailFromNotification` |
 | `fetch_failed`        | A provider API or download failed; see `status`                                                      | 502, or retry                                                                |

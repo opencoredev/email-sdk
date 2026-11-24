@@ -1,4 +1,5 @@
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { snapshotMessageForSend } from "./http.js";
 import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
 import {
@@ -16,6 +17,7 @@ import {
   readErrorBody,
   arrayify,
   emailAddressOf,
+  validateBuiltInAdapter,
   type MessageRules,
 } from "./utils.js";
 
@@ -50,7 +52,10 @@ export function jetemail(
     name: "jetemail",
     ...builtInAdapterDefinition("jetemail", jetemailRules),
     raw: { baseUrl },
-    async send(message, context) {
+    async send(rawMessage, context) {
+      const message = snapshotMessageForSend(rawMessage);
+      validateBuiltInAdapter("jetemail", message, jetemailRules);
+
       // Read per send so a rotated apiKey or edited headers apply to the next request.
       const headers = new Headers({
         Authorization: `Bearer ${options.apiKey}`,

@@ -1,8 +1,8 @@
 import { parseJson } from "../internal/decode.js";
+import { verifySendGridSignature } from "../internal/sendgrid-signature.js";
 import { decodeCharset, parseAddress, parseAddressList, parseMimeHeaders, parseMultipartFormData } from "./mime.js";
 import { emailFromMime, headerFields, mergeSecurity } from "./normalize.js";
 import {
-  decodeBase64Strict,
   inlineAttachment,
   jsonList,
   jsonNumber,
@@ -13,7 +13,6 @@ import {
   rejected,
   timestampFresh,
   toBytes,
-  utf8Bytes,
   verdict,
   verified,
 } from "./shared.js";
@@ -32,30 +31,6 @@ const provider = "sendgrid";
 export interface SendGridInboundVerificationOptions extends InboundClockOptions {
   /** The base64 ECDSA public key from the Inbound Parse security policy (`signature.public_key`). */
   publicKey: string | readonly string[];
-}
-
-/** Convert a DER ECDSA signature to the raw `r || s` form WebCrypto verifies. */
-function derToRaw(der: Uint8Array, size: number): Uint8Array<ArrayBuffer> | undefined {
-  if (der[0] !== 0x30) return undefined;
-
-  let offset = der[1]! & 0x80 ? 2 + (der[1]! & 0x7f) : 2;
-  const raw = new Uint8Array(size * 2);
-
-  for (let index = 0; index < 2; index += 1) {
-    if (der[offset] !== 0x02) return undefined;
-
-    const length = der[offset + 1]!;
-    let value = der.subarray(offset + 2, offset + 2 + length);
-
-    while (value.length > size && value[0] === 0) value = value.subarray(1);
-
-    if (value.length > size) return undefined;
-
-    raw.set(value, index * size + size - value.length);
-    offset += 2 + length;
-  }
-
-  return raw;
 }
 
 /**
@@ -77,45 +52,9 @@ export async function verifySendGridInbound(
 
   if (!timestampFresh(timestamp, options)) return rejected("timestamp_expired");
 
-  let raw: Uint8Array<ArrayBuffer> | undefined;
+  const result = await verifySendGridSignature({ publicKeys: keys, signature, timestamp, body: toBytes(payload.body) });
 
-  try {
-    raw = derToRaw(decodeBase64Strict(signature), 32);
-  } catch {
-    return rejected("signature_invalid");
-  }
-
-  if (!raw) return rejected("signature_invalid");
-
-  const body = toBytes(payload.body);
-  const signed = new Uint8Array(timestamp.length + body.length);
-  signed.set(utf8Bytes(timestamp));
-  signed.set(body, timestamp.length);
-
-  // A malformed key is skipped, so one bad entry in a rotation list cannot block the valid one.
-  let usable = 0;
-
-  for (const key of keys) {
-    let cryptoKey: CryptoKey;
-
-    try {
-      cryptoKey = await crypto.subtle.importKey(
-        "spki",
-        decodeBase64Strict(key.replace(/-----[^-]+-----|\s/g, "")),
-        { name: "ECDSA", namedCurve: "P-256" },
-        false,
-        ["verify"],
-      );
-    } catch {
-      continue;
-    }
-
-    usable += 1;
-
-    if (await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, cryptoKey, raw, signed)) return verified;
-  }
-
-  return rejected(usable ? "signature_invalid" : "secret_missing");
+  return result === "verified" ? verified : rejected(result);
 }
 
 function sendGridSecurity(fields: ReadonlyMap<string, string>): InboundSecurity {

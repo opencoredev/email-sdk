@@ -5,6 +5,8 @@ import {
   EmailValidationError,
   isRetryableEmailError,
 } from "../errors.js";
+import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "../internal/decode.js";
+import { snapshotMessage, snapshotPersonalizedInputForSend } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailHooks,
@@ -16,7 +18,7 @@ import type {
   EmailSendOptions,
   EmailSendResult,
 } from "../types.js";
-import { emailAddressOf, normalizeAdapterResult } from "../utils.js";
+import { emailAddressOf, isValidAddress, normalizePersonalizedAdapterResult } from "../utils.js";
 import {
   attemptAdapter,
   defaultDelay,
@@ -31,11 +33,13 @@ import {
   throwIfAborted,
 } from "./failures.js";
 import {
+  cloneAdapterError,
   hookEvent,
   invokeAfterSendMiddleware,
+  invokeErrorMiddleware,
   invokeHooks,
-  invokeSendFailureLifecycle,
 } from "./lifecycle.js";
+import { cloneNestedSendOptions } from "./routing.js";
 
 export async function attemptNativePersonalized(
   adapter: EmailAdapter,
@@ -47,60 +51,108 @@ export async function attemptNativePersonalized(
   middleware: EmailSendMiddleware[],
   measureAttempt: MeasureAttempt,
 ): Promise<PersonalizedAttempt> {
-  const maxAttempts = sendOptions?.retry?.maxAttempts ?? clientRetry?.maxAttempts ?? 1;
   const retry = sendOptions?.retry ?? clientRetry;
+  const maxAttempts = retry?.maxAttempts ?? 1;
   // See attemptAdapter: after an attempt with an unknown outcome, nothing later proves not_sent.
   let earlierOutcomeUnknown = false;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  // Every pass returns, throws, or retries while attempt < maxAttempts (validated >= 1), so the
+  // loop needs no exit condition and no unreachable fallback result after it.
+  for (let attempt = 1; ; attempt += 1) {
     throwIfAborted(sendOptions?.signal);
-    const event = hookEvent(adapter.name, hookMessage, attempt, sendOptions?.metadata);
-    await invokeHooks(hooks, "beforeSend", event);
+
+    const freshEvent = () =>
+      hookEvent(
+        adapter.name,
+        snapshotMessage(hookMessage),
+        attempt,
+        sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
+      );
+
+    await invokeHooks(hooks, "beforeSend", freshEvent);
 
     try {
-      const result = await measureAttempt(
+      const attemptInput = snapshotPersonalizedInputForSend(input);
+
+      const attemptMetadata = sendOptions?.metadata
+        ? cloneMetadataRecord(sendOptions.metadata)
+        : undefined;
+
+      const personalized = await measureAttempt(
         adapter,
         "personalized_native",
         input.recipients.length,
-        () =>
-          adapter.sendPersonalized!(input, {
-            adapter: adapter.name,
-            operation: "personalized",
-            attempt,
-            signal: sendOptions?.signal,
-            idempotencyKey: sendOptions?.idempotencyKey,
-            metadata: sendOptions?.metadata,
-          }),
+        async () =>
+          personalizedResult(
+            adapter.name,
+            await adapter.sendPersonalized!(attemptInput, {
+              adapter: adapter.name,
+              operation: "personalized",
+              attempt,
+              signal: sendOptions?.signal,
+              idempotencyKey: sendOptions?.idempotencyKey,
+              metadata: attemptMetadata,
+            }),
+          ),
       );
 
       throwIfAborted(sendOptions?.signal);
-      const normalized = normalizeAdapterResult(adapter.name, result);
-
-      const personalized = {
-        ...normalized,
-        accepted: result.accepted,
-        rejected: result.rejected,
-      };
 
       if (personalized.accepted.length > 0) {
-        await invokeAfterSendMiddleware(middleware, { ...event, response: personalized });
-        await invokeHooks(hooks, "afterSend", { ...event, response: personalized });
+        if (middleware.length > 0) {
+          await invokeAfterSendMiddleware(middleware, () => ({
+            ...freshEvent(),
+            response: {
+              ...personalized,
+              accepted: [...personalized.accepted],
+              rejected: [...personalized.rejected],
+            },
+          }));
+        }
+
+        if (hooks.length > 0) {
+          await invokeHooks(hooks, "afterSend", () => ({
+            ...freshEvent(),
+            response: {
+              ...personalized,
+              accepted: [...personalized.accepted],
+              rejected: [...personalized.rejected],
+            },
+          }));
+        }
 
         return { ...personalized, failures: [] };
       }
 
+      const rejectedSet = new Set(personalized.rejected.map((addr) => addr.toLowerCase()));
+
+      const unreported = input.recipients.some(
+        (recipient) => !rejectedSet.has(emailAddressOf(recipient.to).toLowerCase()),
+      );
+
       const failure = new EmailAdapterError(
-        `${adapter.name} rejected every personalized recipient.`,
+        unreported
+          ? `${adapter.name} left one or more personalized recipients unreported.`
+          : `${adapter.name} rejected every personalized recipient.`,
         {
           adapter: adapter.name,
-          delivery: earlierOutcomeUnknown ? "unknown" : "not_sent",
+          delivery: earlierOutcomeUnknown || unreported ? "unknown" : "not_sent",
         },
       );
 
-      await invokeSendFailureLifecycle(middleware, hooks, {
-        ...event,
-        error: failure,
-      });
+      if (middleware.length > 0) {
+        await invokeErrorMiddleware(middleware, () => ({
+          ...freshEvent(),
+          error: cloneAdapterError(failure),
+        }));
+      }
+
+      if (hooks.length > 0) {
+        await invokeHooks(hooks, "onError", () => ({
+          ...freshEvent(),
+          error: cloneAdapterError(failure),
+        }));
+      }
 
       return {
         ...personalized,
@@ -118,10 +170,20 @@ export async function attemptNativePersonalized(
 
       if (!canRetry) {
         const finalFailure = earlierOutcomeUnknown ? withUnknownDelivery(failure) : failure;
-        await invokeSendFailureLifecycle(middleware, hooks, {
-          ...event,
-          error: finalFailure,
-        });
+
+        if (middleware.length > 0) {
+          await invokeErrorMiddleware(middleware, () => ({
+            ...freshEvent(),
+            error: cloneAdapterError(finalFailure),
+          }));
+        }
+
+        if (hooks.length > 0) {
+          await invokeHooks(hooks, "onError", () => ({
+            ...freshEvent(),
+            error: cloneAdapterError(finalFailure),
+          }));
+        }
 
         return { adapter: adapter.name, accepted: [], rejected: [], failures: [finalFailure] };
       }
@@ -129,17 +191,30 @@ export async function attemptNativePersonalized(
       if (failure.delivery === "unknown") earlierOutcomeUnknown = true;
 
       const delayMs = Math.max(0, (retry?.delay ?? defaultDelay)(attempt, failure));
-      await invokeHooks(hooks, "onRetry", {
-        ...event,
-        error: failure,
+      await invokeHooks(hooks, "onRetry", () => ({
+        ...freshEvent(),
+        error: cloneAdapterError(failure),
         nextAttempt: attempt + 1,
         delayMs,
-      });
+      }));
       await sleep(delayMs, sendOptions?.signal);
     }
   }
+}
 
-  return { adapter: adapter.name, accepted: [], rejected: [], failures: [] };
+/**
+ * Checks a native personalized result before core reads it. The type requires `accepted` and
+ * `rejected`, but a plain JavaScript or custom adapter can omit them. A missing `rejected` list
+ * means nothing was reported rejected. A missing `accepted` list is an adapter defect: the call
+ * resolved, so the provider may have sent, and the failure reports `unknown` delivery instead of
+ * letting a `TypeError` escape or treating every recipient as rejected (which would allow a
+ * duplicate-sending fallback).
+ */
+function personalizedResult(
+  adapterName: string,
+  result: EmailPersonalizedResult,
+): EmailPersonalizedResult {
+  return normalizePersonalizedAdapterResult(adapterName, result);
 }
 
 export type ExpandedRecipient = {
@@ -172,11 +247,13 @@ export async function attemptExpandedPersonalized(
       const result = await attemptAdapter({
         adapter,
         message,
-        options: {
-          ...sendOptions,
-          fallback: undefined,
-          idempotencyKey: recipientIdempotencyKey(sendOptions?.idempotencyKey, address),
-        },
+        options: sendOptions
+          ? cloneNestedSendOptions({
+              ...sendOptions,
+              fallback: undefined,
+              idempotencyKey: recipientIdempotencyKey(sendOptions.idempotencyKey, address),
+            })
+          : undefined,
         retry: sendOptions?.retry ?? clientRetry,
         hooks,
         middleware,
@@ -198,13 +275,27 @@ export async function attemptExpandedPersonalized(
       rejected.push(address);
       const failure = normalizeAdapterFailure(adapter.name, error);
       failures.push(failure);
-      await invokeSendFailureLifecycle(middleware, hooks, {
-        adapter: adapter.name,
-        message,
-        attempt: failureAttempt(error),
-        metadata: sendOptions?.metadata,
-        error: failure,
-      });
+      const attemptNum = failureAttempt(error);
+
+      if (middleware.length > 0) {
+        await invokeErrorMiddleware(middleware, () => ({
+          adapter: adapter.name,
+          message: snapshotMessage(message),
+          attempt: attemptNum,
+          metadata: sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
+          error: cloneAdapterError(failure),
+        }));
+      }
+
+      if (hooks.length > 0) {
+        await invokeHooks(hooks, "onError", () => ({
+          adapter: adapter.name,
+          message: snapshotMessage(message),
+          attempt: attemptNum,
+          metadata: sendOptions?.metadata ? cloneMetadataRecord(sendOptions.metadata) : undefined,
+          error: cloneAdapterError(failure),
+        }));
+      }
     }
   }
 
@@ -219,13 +310,45 @@ export async function attemptExpandedPersonalized(
 }
 
 export function validatePersonalizedInput(input: EmailPersonalizedInput) {
-  if (input.recipients.length === 0) {
+  if (!isNonArrayObject(input)) {
+    throw new EmailValidationError("sendPersonalized input must be an object.");
+  }
+
+  if (!isNonArrayObject(input.message)) {
+    throw new EmailValidationError("sendPersonalized message must be an object.");
+  }
+
+  if (!isStringMember(input.message.subject) || input.message.subject.length === 0) {
+    throw new EmailValidationError("sendPersonalized message requires a string subject.");
+  }
+
+  if (input.message.html !== undefined && !isStringMember(input.message.html)) {
+    throw new EmailValidationError("sendPersonalized message html content must be a string.");
+  }
+
+  if (input.message.text !== undefined && !isStringMember(input.message.text)) {
+    throw new EmailValidationError("sendPersonalized message text content must be a string.");
+  }
+
+  if (!Array.isArray(input.recipients) || input.recipients.length === 0) {
     throw new EmailValidationError("sendPersonalized requires at least one recipient.");
   }
 
   const recipients = new Set<string>();
 
   for (const recipient of input.recipients) {
+    if (!isNonArrayObject(recipient)) {
+      throw new EmailValidationError("Each personalized recipient must be an object.");
+    }
+
+    if (recipient.variables !== undefined && !isNonArrayObject(recipient.variables)) {
+      throw new EmailValidationError("Personalized recipient variables must be an object.");
+    }
+
+    if (!isValidAddress(recipient.to)) {
+      throw new EmailValidationError("Personalized recipients require a valid email address.");
+    }
+
     const address = emailAddressOf(recipient.to).toLowerCase();
 
     if (!address)
@@ -237,11 +360,21 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 
     recipients.add(address);
 
-    for (const key of Object.keys(recipient.variables)) {
-      if (!/^[\w-]+$/.test(key)) {
-        throw new EmailValidationError(
-          `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
-        );
+    if (recipient.variables) {
+      for (const key of Object.keys(recipient.variables)) {
+        if (!/^[\w-]+$/.test(key)) {
+          throw new EmailValidationError(
+            `Personalized variable keys may only contain letters, numbers, underscores, and hyphens: "${key}".`,
+          );
+        }
+
+        try {
+          String(recipient.variables[key]);
+        } catch {
+          throw new EmailValidationError(
+            `Personalized variable "${key}" cannot be converted to a string.`,
+          );
+        }
       }
     }
   }
@@ -250,21 +383,22 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
 export function personalizedMiddlewareMessage(input: EmailPersonalizedInput): EmailMessage {
   const to = input.recipients[0]?.to ?? "";
 
-  // SAFETY: input.message is an EmailMessage without recipients. Omit flattens the html-or-text
-  // union, but the template still carries html or text, so adding `to` restores an EmailMessage.
-  // The empty `to` only reaches middleware; validatePersonalizedInput rejects empty recipients.
-  return { ...input.message, to } as EmailMessage;
+  // SAFETY: input.message is an EmailMessage template without recipients; adding `to` restores EmailMessage.
+  return {
+    ...input.message,
+    to,
+  } as EmailMessage;
 }
 
 export function withPersonalizedMessage(
   input: EmailPersonalizedInput,
   message: EmailMessage,
 ): EmailPersonalizedInput {
-  const { to: _to, cc: _cc, bcc: _bcc, ...template } = message;
+  const { to: _to, cc: _cc, bcc: _bcc, ...rest } = message;
 
   return {
-    // SAFETY: Removing to, cc, and bcc from an EmailMessage leaves exactly the template shape.
-    message: template as EmailPersonalizedInput["message"],
+    // SAFETY: Omitting to, cc, and bcc from a snapshotted EmailMessage restores the template shape.
+    message: rest as EmailPersonalizedInput["message"],
     recipients: input.recipients,
   };
 }
@@ -274,10 +408,14 @@ export function expandPersonalizedMessage(
   to: EmailPersonalizedInput["recipients"][number]["to"],
   variables: EmailPersonalizedInput["recipients"][number]["variables"],
 ): EmailMessage {
+  const vars = isNonArrayObject(variables) ? variables : undefined;
+
   const render = (value: string | undefined) =>
-    value?.replace(/%recipient\.([\w-]+)%/g, (_match, key: string) =>
-      Object.hasOwn(variables, key) ? String(variables[key]) : `%recipient.${key}%`,
-    );
+    isStringMember(value)
+      ? value.replace(/%recipient\.([\w-]+)%/g, (_match, key: string) =>
+          vars && Object.hasOwn(vars, key) ? String(vars[key]) : `%recipient.${key}%`,
+        )
+      : undefined;
 
   // SAFETY: The template has html or text, and each is rendered only when present, so the
   // result keeps the html-or-text shape of an EmailMessage.
@@ -285,8 +423,14 @@ export function expandPersonalizedMessage(
     ...input.message,
     to,
     subject: render(input.message.subject) ?? input.message.subject,
-    html: render(input.message.html),
-    text: render(input.message.text),
+    html:
+      input.message.html === undefined
+        ? undefined
+        : (render(input.message.html) ?? input.message.html),
+    text:
+      input.message.text === undefined
+        ? undefined
+        : (render(input.message.text) ?? input.message.text),
   } as EmailMessage;
 }
 

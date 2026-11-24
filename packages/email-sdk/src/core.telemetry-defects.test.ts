@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { createEmailClient } from "./core.js";
-import { EmailAdapterError, EmailMiddlewareError } from "./errors.js";
+import { EmailAdapterError, EmailMiddlewareError, EmailValidationError } from "./errors.js";
 import { resetTelemetry, setSharedTelemetry } from "./telemetry.js";
 import type { EmailAdapter } from "./types.js";
 import { BUILT_IN_ADAPTER_CAPABILITIES, isBuiltInAdapter } from "./utils.js";
@@ -341,5 +341,35 @@ describe("isBuiltInAdapter", () => {
     Reflect.deleteProperty(legacy, "capabilities");
 
     expect(isBuiltInAdapter(legacy)).toBe(false);
+  });
+});
+
+describe("invalid input with telemetry enabled", () => {
+  test("a missing message or empty attachment entry is a validation error, not a defect", async () => {
+    const { events, exceptions } = captured();
+    const client = createEmailClient({ adapters: [adapter("custom")] });
+
+    // SAFETY: deliberately missing message from an untyped JavaScript caller.
+    const missing = client.send(undefined as never);
+
+    await expect(missing).rejects.toBeInstanceOf(EmailValidationError);
+    await expect(missing).rejects.toThrow("Email message must be an object.");
+
+    // SAFETY: deliberately empty attachment entry from an untyped JavaScript caller.
+    const sparse = client.send({ ...message, attachments: [undefined as never] });
+
+    await expect(sparse).rejects.toBeInstanceOf(EmailValidationError);
+
+    // SAFETY: deliberately missing batch message from an untyped JavaScript caller.
+    const settled = await client.sendMany([{ message: undefined as never }, { message }]);
+
+    expect(settled[0]).toMatchObject({ ok: false, error: { code: "validation_error" } });
+    expect(settled[1]).toMatchObject({ ok: true });
+    expect(exceptions).toHaveLength(0);
+    expect(events.find((item) => item.event === "email batch sent")?.properties).toMatchObject({
+      message_count: 2,
+      failed: 1,
+      recipients: 1,
+    });
   });
 });

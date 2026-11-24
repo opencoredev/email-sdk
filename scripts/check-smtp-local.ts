@@ -64,11 +64,15 @@ function expectEqual(name: string, actual: Observed, expected: Observed): void {
 function docker(args: readonly string[]): string {
   const result = spawnSync("docker", args, { encoding: "utf8" });
 
-  if (result.status !== 0) {
-    throw new Error(`docker ${args[0]} failed: ${result.stderr.trim()}`);
+  if (result.error) {
+    throw new Error(`docker ${args[0]} failed: ${result.error.message}`);
   }
 
-  return result.stdout.trim();
+  if (result.status !== 0) {
+    throw new Error(`docker ${args[0]} failed: ${(result.stderr ?? "").trim()}`);
+  }
+
+  return (result.stdout ?? "").trim();
 }
 
 function hostPort(containerPort: number): number {
