@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  dateCustomPages,
   markdownContentTypeRoute,
   type ParsedRoute,
   patchVercelRoutes,
@@ -125,5 +126,39 @@ describe("trimArchivedLlms", () => {
     const trimmed = trimArchivedLlms(llms, ["v3.0.0", "v2.0.0"]);
 
     expect(trimArchivedLlms(trimmed, ["v3.0.0", "v2.0.0"])).toBe(trimmed);
+  });
+});
+
+describe("dateCustomPages", () => {
+  const sitemap = [
+    "<urlset>",
+    "  <url><loc>https://email-sdk.dev/</loc></url>",
+    "  <url><loc>https://email-sdk.dev/about</loc><lastmod>2026-09-26</lastmod></url>",
+    "  <url><loc>https://email-sdk.dev/blog</loc></url>",
+    "  <url><loc>https://email-sdk.dev/blog/a</loc><lastmod>2026-11-17</lastmod></url>",
+    "  <url><loc>https://email-sdk.dev/blog/b</loc><lastmod>2026-11-23</lastmod></url>",
+    "  <url><loc>https://email-sdk.dev/stats</loc></url>",
+    "</urlset>",
+  ].join("\n");
+
+  test("dates the homepage and the blog index, and nothing else", () => {
+    const dated = dateCustomPages(sitemap, "2026-11-22", "2026-11-01");
+
+    expect(dated).toContain("<loc>https://email-sdk.dev/</loc><lastmod>2026-11-22</lastmod>");
+    expect(dated).toContain("<loc>https://email-sdk.dev/blog</loc><lastmod>2026-11-23</lastmod>");
+    expect(dated).toContain("<url><loc>https://email-sdk.dev/stats</loc></url>");
+    expect(dated).toContain("<loc>https://email-sdk.dev/about</loc><lastmod>2026-09-26</lastmod>");
+  });
+
+  test("dates the blog index by its own change when that is newer than every post", () => {
+    expect(dateCustomPages(sitemap, undefined, "2026-11-25")).toContain(
+      "<loc>https://email-sdk.dev/blog</loc><lastmod>2026-11-25</lastmod>",
+    );
+  });
+
+  test("leaves the homepage undated without a date", () => {
+    expect(dateCustomPages(sitemap, undefined, undefined)).toContain(
+      "<url><loc>https://email-sdk.dev/</loc></url>",
+    );
   });
 });

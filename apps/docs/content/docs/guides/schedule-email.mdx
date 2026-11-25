@@ -1,6 +1,7 @@
 ---
 title: Schedule an email
 description: "Schedule email from TypeScript and Node.js with sendAt: which providers support scheduled sending and attachments, and how far ahead each accepts."
+lastModified: 2026-11-09
 ---
 
 To schedule an email with Email SDK, put `sendAt` on the message and send it through an adapter whose provider supports scheduled sending: Resend, SendGrid, Mailgun, MailerSend, Brevo, Mailchimp Transactional, SparkPost, Lettr or SendHeron. The provider holds the email until that time. Every other adapter, including Postmark, Amazon SES and SMTP, rejects a message with `sendAt` before any request is made.

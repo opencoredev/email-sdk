@@ -1,6 +1,7 @@
 ---
 title: Timeout plugin
 description: Bound one logical send, including retries and fallback, while preserving caller cancellation.
+lastModified: 2026-07-22
 ---
 
 `timeoutPlugin` adds an `AbortSignal.timeout` to every send. When a caller already supplies a signal, the plugin combines both and aborts on whichever happens first.

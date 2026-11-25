@@ -236,3 +236,31 @@ export function trimArchivedLlms(llms: string, versionIds: readonly string[]): s
     ].join("\n") + trailing
   );
 }
+
+/**
+ * Date the sitemap entries Blume leaves undated. It dates content pages from
+ * their front matter, but not custom pages like the homepage and the /blog
+ * index: the homepage takes the date passed in, the blog index the newer of its
+ * own date and its newest post's. A loc that already has a <lastmod> keeps it.
+ */
+export function dateCustomPages(
+  sitemap: string,
+  homeLastmod: string | undefined,
+  blogIndexLastmod: string | undefined,
+): string {
+  const postDates = [...sitemap.matchAll(/<loc>[^<]+\/blog\/[^<]+<\/loc><lastmod>([^<]+)<\/lastmod>/g)]
+    .map((match) => match[1] ?? "")
+    .concat(blogIndexLastmod ?? [])
+    .toSorted();
+
+  const lastmods = new Map([
+    [`${siteUrl}/`, homeLastmod],
+    [`${siteUrl}/blog`, postDates.at(-1)],
+  ]);
+
+  return sitemap.replaceAll(/<url><loc>([^<]+)<\/loc><\/url>/g, (url, loc: string) => {
+    const lastmod = lastmods.get(loc);
+
+    return lastmod ? `<url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>` : url;
+  });
+}

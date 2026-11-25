@@ -1,6 +1,7 @@
 ---
 title: Test email sending without sending real email
 description: "Test email sending in Node.js and TypeScript without sending real email: capture messages in memory, prove retries and fallback, or route SMTP to Mailpit."
+lastModified: 2026-11-08
 ---
 
 To test email sending in a Node.js or TypeScript app without sending real email, swap the provider adapter for `memoryAdapter()` from `@opencoredev/email-sdk/testing`. It never calls a provider and keeps every message your code sends, so a test can check the recipients, subject, and body. Use `failingAdapter()` to test retries and fallback, and point the [SMTP adapter](/docs/adapters/smtp) at a local catcher such as Mailpit when you need to see the rendered MIME message.

@@ -19,6 +19,8 @@ const appDir = join(import.meta.dirname, "..");
 const pageFrontmatterSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
+  // YAML reads a bare 2026-11-23 as a Date.
+  lastModified: z.coerce.date().optional(),
 });
 
 function mdxFiles(dir: string): string[] {
@@ -71,11 +73,16 @@ const posts = readBlogPosts().filter((post) => post.publishedAt <= today);
 
 const pageLines = [join(appDir, "content/docs"), join(appDir, "content/compare")].flatMap((dir) =>
   mdxFiles(dir).map((file) => {
-    const { title, description } = frontmatterOf(file);
+    const { title, description, lastModified } = frontmatterOf(file);
     const url = `${siteUrl}${routeFor(file)}`;
 
     return JSON.stringify(
-      article("TechArticle", url, { headline: title, name: title, description: description ?? "" }),
+      article("TechArticle", url, {
+        headline: title,
+        name: title,
+        description: description ?? "",
+        ...(lastModified && { dateModified: lastModified.toISOString().slice(0, 10) }),
+      }),
     );
   }),
 );

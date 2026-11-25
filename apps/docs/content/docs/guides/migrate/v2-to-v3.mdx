@@ -1,6 +1,7 @@
 ---
 title: Upgrade from Email SDK 2.x to v3
 description: Update send-option metadata, webhook payload reads, and SMTP TLS options for the stricter v3 types.
+lastModified: 2026-10-12
 ---
 
 v3 tightens the TypeScript types at the SDK's input boundaries. Most apps upgrade without code changes. The ones that need edits pass send-option `metadata` that isn't plain data, and TypeScript reports each spot as a compile error, so the type checker gives you the full list.
