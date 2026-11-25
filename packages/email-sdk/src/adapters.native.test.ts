@@ -1054,6 +1054,16 @@ describe("native entries are snapshotted as plain data", () => {
     expect(capture.calls).toHaveLength(0);
   });
 
+  test("an array proxy reporting a non-integer length is rejected before it is walked", () => {
+    const forged: EmailNativeValue[] = new Proxy([], {
+      get: (_target, key) => (key === "length" ? Number.POSITIVE_INFINITY : undefined),
+    });
+
+    expect(() => snapshotNativeObject({ forged })).toThrow(
+      "Native options contain an array with an invalid length.",
+    );
+  });
+
   test("every adapter entry in a send's native map draws on one budget", async () => {
     const capture = jsonCapture({ id: "re_1" });
 

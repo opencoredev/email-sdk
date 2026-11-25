@@ -474,6 +474,11 @@ function snapshotNativeValue(
   if (!isNativeList(value)) return snapshotNativeRecord(value, depth, budget);
 
   const length = value.length;
+
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw new EmailValidationError("Native options contain an array with an invalid length.");
+  }
+
   chargeNativeSlots(budget, length);
   enterNative(value, budget);
   const copy: EmailNativeValue[] = [];
@@ -530,7 +535,7 @@ export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOpt
   assertPlainNative(native);
   const budget = nativeBudget();
   const keys = Object.keys(native);
-  chargeNativeSlots(budget, keys.length * 2);
+  chargeNativeSlots(budget, 1 + keys.length * 2);
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
   for (const key of keys) {
