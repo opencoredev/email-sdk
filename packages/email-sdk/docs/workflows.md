@@ -443,6 +443,12 @@ failure inside it is, so a 503 retries and a 400 fails. Errors are recognized by
 entry with its own copy of the error classes. Retries are timers, not in-process sleeps, so a crash during backoff
 loses nothing. The email client's own `retry` option still applies inside each attempt.
 
+A send whose failure says it may already have gone out (an adapter failure whose `delivery` is not
+`not_sent`) records that adapter on its retrying journal entry, and every later attempt goes to
+that adapter alone with an empty fallback list. Otherwise a retry would restart the route from its
+first adapter, which never saw the idempotency key. Ambiguity across two adapters, or from a
+failure that doesn't name its adapter, fails the run.
+
 ### Versioning in-flight runs
 
 A run records its definition's `version` (default `1`). `start` creates a run of exactly the

@@ -467,8 +467,10 @@ async function workflowsCommand(args: string[], flags: CliFlags) {
 
   if (!modulePath) fail("Pass the module that exports the workflow: email-sdk workflows inspect <module>.");
 
-  for (const name of ["export", "subject", "format", "max-paths", "max-depth"]) {
+  for (const name of ["export", "subject", "format", "max-paths", "max-depth", "input", "events", "steps"]) {
     if (flags[name] === true) fail(`--${name} needs a value.`);
+
+    if (Array.isArray(flags[name])) fail(`--${name} can be given only once.`);
   }
 
   const format = stringFlag(flags, "format") ?? "json";

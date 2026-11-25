@@ -1521,10 +1521,11 @@ describe("workflows: review regressions", () => {
     expect((await engine.start(once, ada, { id: "run-2" })).status).toBe("failed");
   });
 
-  test("a fallback adapter that may have delivered fails the run instead of retrying the route", async () => {
+  test("a send a fallback adapter may have delivered retries through that adapter alone", async () => {
     const primarySends: EmailMessage[] = [];
     const backupKeys: (string | undefined)[] = [];
     let primaryDown = true;
+    let backupLost = true;
 
     const primary = {
       ...memoryAdapter("primary"),
@@ -1544,7 +1545,11 @@ describe("workflows: review regressions", () => {
       send: (_message: EmailMessage, options?: EmailSendOptions) => {
         backupKeys.push(options?.idempotencyKey);
 
-        throw new EmailAdapterError("response lost", { adapter: "backup", retryable: true, delivery: "unknown" });
+        if (backupLost) {
+          throw new EmailAdapterError("response lost", { adapter: "backup", retryable: true, delivery: "unknown" });
+        }
+
+        return { adapter: "backup", id: "backup_1" };
       },
     };
 
@@ -1563,14 +1568,66 @@ describe("workflows: review regressions", () => {
     });
 
     const { engine, scheduler } = setup([once], { email });
-    const run = await engine.start(once, ada, { id: "run-1" });
+    const key = await workflowIdempotencyKey("run-1", "welcome");
 
-    expect(run.status).toBe("failed");
-    expect(backupKeys).toEqual([await workflowIdempotencyKey("run-1", "welcome")]);
+    expect((await engine.start(once, ada, { id: "run-1" })).wait).toMatchObject({ kind: "retry", step: "welcome" });
+    expect((await engine.get("run-1"))?.journal.welcome).toMatchObject({ status: "retrying", adapter: "backup" });
 
     primaryDown = false;
+    backupLost = false;
     await scheduler.advance("1h", engine);
+
+    expect((await engine.get("run-1"))?.status).toBe("completed");
     expect(primarySends).toHaveLength(0);
+    expect(backupKeys).toEqual([key, key]);
+  });
+
+  test("a send the primary may have delivered never falls back on a later attempt", async () => {
+    const primaryErrors = [
+      new EmailAdapterError("500 after accept", { adapter: "primary", status: 500, retryable: true, delivery: "unknown" }),
+      new EmailAdapterError("401", { adapter: "primary", status: 401, retryable: false, delivery: "not_sent" }),
+    ];
+
+    const backupSends: EmailMessage[] = [];
+
+    const primary = {
+      ...memoryAdapter("primary"),
+      send: () => {
+        throw primaryErrors.shift() ?? new Error("unexpected primary call");
+      },
+    };
+
+    const backup = {
+      ...memoryAdapter("backup"),
+      send: (message: EmailMessage) => {
+        backupSends.push(message);
+
+        return { adapter: "backup", id: "backup_1" };
+      },
+    };
+
+    const email = createEmailClient({
+      adapters: [primary, backup],
+      fallback: { adapters: ["backup"] },
+      telemetry: false,
+      retry: { maxAttempts: 1 },
+    });
+
+    const once = defineWorkflow({
+      name: "once",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"));
+      },
+    });
+
+    const { engine, scheduler } = setup([once], { email });
+
+    expect((await engine.start(once, ada, { id: "run-1" })).wait).toMatchObject({ kind: "retry", step: "welcome" });
+    await scheduler.advance("1h", engine);
+
+    expect((await engine.get("run-1"))?.status).toBe("failed");
+    expect(primaryErrors).toHaveLength(0);
+    expect(backupSends).toHaveLength(0);
   });
 
   test("an Email SDK error from another bundle is classified by its shape", async () => {
@@ -1588,7 +1645,7 @@ describe("workflows: review regressions", () => {
     class ForeignRouteError extends Error {
       readonly code = "route_error";
       readonly retryable = false;
-      readonly failures = [{ code: "adapter_error", retryable: true }];
+      readonly failures = [{ code: "adapter_error", retryable: true, adapter: "primary", delivery: "not_sent" }];
     }
 
     const once = defineWorkflow({

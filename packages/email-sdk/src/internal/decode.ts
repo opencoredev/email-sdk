@@ -258,6 +258,7 @@ export async function readJson(response: Response): Promise<JsonValue | undefine
 }
 
 type ThrownFields = {
+  adapter?: unknown;
   code?: unknown;
   delivery?: unknown;
   failures?: unknown;
@@ -286,7 +287,7 @@ export async function readJsonBody(response: Response): Promise<JsonValue> {
 }
 
 /** Read a string property, such as `code`, from a thrown value. */
-export function causeString(cause: unknown, key: "code" | "delivery" | "message" | "name"): string | undefined {
+export function causeString(cause: unknown, key: "adapter" | "code" | "delivery" | "message" | "name"): string | undefined {
   if (!isObjectLike(cause)) {
     return undefined;
   }

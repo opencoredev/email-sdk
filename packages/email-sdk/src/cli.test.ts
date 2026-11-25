@@ -1139,6 +1139,7 @@ describe("workflows inspect", () => {
       [["workflows", "inspect", fixture, "--format"], "--format needs a value"],
       [["workflows", "inspect", fixture, "--export"], "--export needs a value"],
       [["workflows", "inspect", fixture, "--max-depth"], "--max-depth needs a value"],
+      [["workflows", "inspect", fixture, "--subject", "ada@example.com", "--subject"], "--subject can be given only once"],
     ];
 
     for (const [args, message] of cases) {
