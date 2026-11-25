@@ -245,10 +245,9 @@ const factories = {
     smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
       port: Number(stringFlag(flags, "port") ?? process.env.SMTP_PORT ?? 587),
-      secure: truthyFlag(flags, "secure") || process.env.SMTP_SECURE === "true",
-      requireTLS: truthyFlag(flags, "require-tls") || process.env.SMTP_REQUIRE_TLS === "true",
-      allowInsecureAuth:
-        truthyFlag(flags, "allow-insecure-auth") || process.env.SMTP_ALLOW_INSECURE_AUTH === "true",
+      secure: smtpBoolean(flags, "secure", "SMTP_SECURE"),
+      requireTLS: smtpBoolean(flags, "require-tls", "SMTP_REQUIRE_TLS") ? true : undefined,
+      allowInsecureAuth: smtpBoolean(flags, "allow-insecure-auth", "SMTP_ALLOW_INSECURE_AUTH"),
       auth:
         stringFlag(flags, "user") || process.env.SMTP_USER
           ? {
@@ -714,6 +713,8 @@ async function readPackageInfo(): Promise<PackageInfo> {
   }
 }
 
+const strictBooleanFlags = new Set(["secure", "require-tls", "allow-insecure-auth"]);
+
 function parseFlags(args: string[]) {
   const flags: CliFlags = {};
 
@@ -737,7 +738,12 @@ function parseFlags(args: string[]) {
 
     const next = args[index + 1];
 
-    if (!next || next.startsWith("--")) {
+    const valueless =
+      next === undefined ||
+      next.startsWith("--") ||
+      (next === "" && !strictBooleanFlags.has(key));
+
+    if (valueless) {
       setFlag(flags, key, true);
       continue;
     }
@@ -836,6 +842,20 @@ function booleanFlag(flags: CliFlags, name: string) {
   }
 
   return value === true || value === "true" || value === "1";
+}
+
+function smtpBoolean(flags: CliFlags, flag: string, env: string) {
+  const value = flags[flag];
+
+  if (value === undefined) {
+    return process.env[env] === undefined ? undefined : process.env[env] === "true";
+  }
+
+  if (value === true || value === "true" || value === "1") return true;
+
+  if (value === "false" || value === "0") return false;
+
+  fail(`--${flag} must be true or false.`);
 }
 
 function booleanEnv(name: string) {
@@ -1081,7 +1101,7 @@ SMTP options:
   --port <port>                Overrides SMTP_PORT.
   --secure                     Use TLS from the start.
   --require-tls                Require STARTTLS.
-  --allow-insecure-auth        Allow SMTP AUTH without TLS.
+  --allow-insecure-auth        Allow SMTP AUTH without TLS. Overrides SMTP_ALLOW_INSECURE_AUTH.
   --user <user>                Overrides SMTP_USER.
   --pass <pass>                Overrides SMTP_PASS.
 `);

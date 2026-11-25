@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -1074,6 +1075,241 @@ describe("send routing flags", () => {
   });
 });
 
+describe("smtp send credentials", () => {
+  const smtpArgs = [
+    "send",
+    "--adapter",
+    "smtp",
+    "--host",
+    "127.0.0.1",
+    "--user",
+    "smtp-user",
+    "--pass",
+    "smtp-secret",
+    "--from",
+    "hello@example.com",
+    "--to",
+    "user@example.com",
+    "--subject",
+    "Hello",
+    "--text",
+    "It works",
+  ];
+
+  const clearedSmtpEnv = {
+    SMTP_HOST: undefined,
+    SMTP_PORT: undefined,
+    SMTP_SECURE: undefined,
+    SMTP_REQUIRE_TLS: undefined,
+    SMTP_ALLOW_INSECURE_AUTH: undefined,
+    SMTP_USER: undefined,
+    SMTP_PASS: undefined,
+  };
+
+  /** A plaintext SMTP server that offers AUTH, refuses STARTTLS, and records every command. */
+  async function plaintextAuthServer() {
+    const commands: string[] = [];
+    const sockets = new Set<net.Socket>();
+    const closed: Promise<void>[] = [];
+
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      closed.push(new Promise((resolve) => socket.once("close", () => resolve())));
+      socket.setEncoding("utf8");
+      socket.write("220 test.local\r\n");
+      let buffered = "";
+      let inData = false;
+
+      socket.on("data", (chunk: string) => {
+        buffered += chunk;
+        const lines = buffered.split("\r\n");
+        buffered = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (inData) {
+            if (line === ".") {
+              inData = false;
+              socket.write("250 queued as TEST1\r\n");
+            }
+
+            continue;
+          }
+
+          const command = line.toUpperCase();
+          commands.push(command.split(" ")[0] ?? command);
+
+          if (command.startsWith("EHLO")) {
+            socket.write("250-test.local\r\n250 AUTH PLAIN LOGIN\r\n");
+          } else if (command === "STARTTLS") {
+            socket.write("502 5.5.1 STARTTLS not supported\r\n");
+          } else if (command.startsWith("AUTH")) {
+            socket.write("235 authenticated\r\n");
+          } else if (command === "DATA") {
+            inData = true;
+            socket.write("354 go ahead\r\n");
+          } else if (command === "QUIT") {
+            socket.write("221 bye\r\n");
+            socket.end();
+          } else {
+            socket.write("250 ok\r\n");
+          }
+        }
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    // SAFETY: a server listening on a TCP host and port reports an AddressInfo, never a pipe path.
+    const { port } = server.address() as net.AddressInfo;
+
+    return {
+      commands,
+      port: String(port),
+      /** Waits for the CLI's connections to close so every command it sent is recorded. */
+      drain: () => Promise.all(closed),
+      stop: async () => {
+        for (const socket of sockets) socket.destroy();
+
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      },
+    };
+  }
+
+  async function sendAgainst(extraArgs: string[], env: Record<string, string | undefined> = {}) {
+    const server = await plaintextAuthServer();
+
+    try {
+      const result = await runCli([...smtpArgs, "--port", server.port, ...extraArgs], {
+        ...clearedSmtpEnv,
+        ...env,
+      });
+
+      await server.drain();
+
+      return { ...result, commands: server.commands };
+    } finally {
+      await server.stop();
+    }
+  }
+
+  test("refuses to authenticate over plaintext when the server offers no STARTTLS", async () => {
+    const { stdout, stderr, exitCode, commands } = await sendAgainst([]);
+
+    expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
+    expect(commands).not.toContain("AUTH");
+    expect(stdout + stderr).not.toContain("smtp-secret");
+  });
+
+  test("--allow-insecure-auth still authenticates over plaintext when asked to", async () => {
+    const { stderr, exitCode, commands } = await sendAgainst(["--allow-insecure-auth"]);
+
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
+
+  test("--allow-insecure-auth=1 still opts in, as before", async () => {
+    const { exitCode, commands } = await sendAgainst(["--allow-insecure-auth=1"]);
+
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
+
+  test("--allow-insecure-auth=false overrides SMTP_ALLOW_INSECURE_AUTH=true", async () => {
+    const { exitCode, commands } = await sendAgainst(["--allow-insecure-auth=false"], {
+      SMTP_ALLOW_INSECURE_AUTH: "true",
+    });
+
+    expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
+    expect(commands).not.toContain("AUTH");
+  });
+
+  test("SMTP_ALLOW_INSECURE_AUTH=true alone authenticates over plaintext", async () => {
+    const { exitCode, commands } = await sendAgainst([], { SMTP_ALLOW_INSECURE_AUTH: "true" });
+
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
+
+  test("SMTP_ALLOW_INSECURE_AUTH=1 still requires TLS", async () => {
+    const { exitCode, commands } = await sendAgainst([], { SMTP_ALLOW_INSECURE_AUTH: "1" });
+
+    expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
+    expect(commands).not.toContain("AUTH");
+  });
+
+  test("rejects an empty --allow-insecure-auth value before connecting", async () => {
+    const { stderr, exitCode, commands } = await sendAgainst(["--allow-insecure-auth", ""]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("must be true or false");
+    expect(commands).toEqual([]);
+  });
+
+  test.each([
+    ["--require-tls=yes", { SMTP_REQUIRE_TLS: "true" }],
+    ["--secure=maybe", { SMTP_SECURE: "true" }],
+  ])("rejects malformed %s instead of dropping the env TLS setting", async (flag, env) => {
+    const { stderr, exitCode, commands } = await sendAgainst([flag], env);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("must be true or false");
+    expect(commands).toEqual([]);
+  });
+});
+
+describe("empty flag values", () => {
+  test.each([
+    ["--dry-run", 0, ""],
+    ["--fallback", 1, "--fallback needs comma-separated adapter names."],
+  ] as const)(
+    "%s with an empty value never sends",
+    async (flag, expectedExit, expectedStderr) => {
+      let calls = 0;
+
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch() {
+          calls++;
+
+          return Response.json({ id: "sent" });
+        },
+      });
+
+      try {
+        const result = await runCli([
+          "send",
+          "--adapter",
+          "unosend",
+          "--api-key",
+          "fixture-key",
+          "--base-url",
+          server.url.origin,
+          "--from",
+          "hello@example.com",
+          "--to",
+          "user@example.com",
+          "--subject",
+          "Hello",
+          "--text",
+          "It works",
+          flag,
+          "",
+        ]);
+
+        expect(result.exitCode).toBe(expectedExit);
+        expect(result.stderr.trim()).toBe(expectedStderr);
+        expect(calls).toBe(0);
+      } finally {
+        server.stop(true);
+      }
+    },
+  );
+});
+
 describe("workflows inspect", () => {
   const fixture = "test-support/onboarding-workflow.ts";
 
@@ -1189,11 +1425,12 @@ async function runCli(args: string[], env: Record<string, string | undefined> = 
   const packageRoot = new URL("..", import.meta.url).pathname;
 
   const proc = Bun.spawn({
-    cmd: ["bun", "src/cli.ts", ...args],
+    cmd: ["bun", "--no-env-file", "src/cli.ts", ...args],
     cwd: packageRoot,
     // NODE_ENV=test already disables telemetry; the explicit opt-out keeps these
     // tests network-free even if env propagation changes.
     env: { ...process.env, ...env, EMAIL_SDK_TELEMETRY: "0" },
+    timeout: 30_000,
     stderr: "pipe",
     stdout: "pipe",
   });
