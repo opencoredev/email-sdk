@@ -17,7 +17,7 @@ jobs:
     name: Verify (Bun)
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The docs build dates each page from its last commit (Blume
           # lastModified: "git"), which a shallow clone can't answer.
@@ -37,7 +37,7 @@ jobs:
     name: Convex component deploys
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'tenki-standard-medium-4c-8g' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -67,7 +67,7 @@ jobs:
             node: 22
             case: chat-ai7
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
@@ -87,7 +87,7 @@ jobs:
       matrix:
         node: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
@@ -107,7 +107,7 @@ jobs:
       matrix:
         node: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
@@ -124,7 +124,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: tenki-standard-medium-4c-8g
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
