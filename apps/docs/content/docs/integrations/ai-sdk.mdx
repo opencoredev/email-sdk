@@ -3,6 +3,7 @@ title: Send email safely from an AI SDK agent
 description: "Let an AI agent send email safely from a TypeScript app: one narrow sendEmail tool for the Vercel AI SDK, with user approval, a fixed sender, and no secrets in results."
 sidebar:
   icon: "bot"
+lastModified: 2026-11-05
 ---
 
 To let an AI agent send email safely, give the model one narrow tool instead of your email client. With `createEmailTools()` from `@opencoredev/email-sdk/ai`, the model can only propose recipients, a subject, and a body. Your code fixes the sender and every delivery option, nothing is sent until a person approves the exact message, and the model gets back a status, never a provider response or API key.

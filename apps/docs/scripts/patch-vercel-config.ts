@@ -5,7 +5,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { z } from "zod";
+
+import { customPageDatesPath } from "../lib/lastmod";
 import {
+  dateCustomPages,
   patchVercelRoutes,
   trimArchivedLlms,
   vercelConfigSchema,
@@ -23,6 +27,8 @@ const curatedIndexMdPath = join(docsDir, "lib/index.md");
 const builtIndexMdPath = join(staticDir, "index.md");
 
 const builtLlmsTxtPath = join(staticDir, "llms.txt");
+
+const builtSitemapPath = join(staticDir, "sitemap.xml");
 
 if (!existsSync(configPath)) {
   console.error(`[vercel] ${configPath} is missing. Run \`blume build\` first.`);
@@ -55,6 +61,19 @@ if (existsSync(builtLlmsTxtPath)) {
   );
 
   if (trimmed !== llms) writeFileSync(builtLlmsTxtPath, trimmed);
+}
+
+// Date the homepage and /blog index, which Blume's sitemap leaves undated.
+if (existsSync(builtSitemapPath)) {
+  const sitemap = readFileSync(builtSitemapPath, "utf8");
+
+  const { home, blogIndex } = z
+    .object({ home: z.string().optional(), blogIndex: z.string().optional() })
+    .parse(JSON.parse(readFileSync(customPageDatesPath, "utf8")));
+
+  const dated = dateCustomPages(sitemap, home, blogIndex);
+
+  if (dated !== sitemap) writeFileSync(builtSitemapPath, dated);
 }
 
 let patch: ReturnType<typeof patchVercelRoutes>;

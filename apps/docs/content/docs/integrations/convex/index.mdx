@@ -1,6 +1,7 @@
 ---
 title: Send email from Convex with retries
 description: "Send email from a Convex app with automatic retries: queue from a mutation, back off exponentially, deduplicate with idempotency keys, and track status reactively."
+lastModified: 2026-11-21
 ---
 
 To send email from a Convex app with retries, install `@opencoredev/convex-email`, mount it in `convex/convex.config.ts`, export its sender action from a `"use node"` file, and call `email.send(ctx, message)` from a mutation with an `idempotencyKey`. The component stores the message in the same transaction, runs your sender action after the mutation commits to send it through an Email SDK adapter such as Resend, and retries retryable failures with exponential backoff: 3 attempts by default, starting at 1 second and capped at 60 seconds between attempts.
