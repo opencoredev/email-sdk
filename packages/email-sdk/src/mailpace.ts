@@ -1,6 +1,6 @@
 import { firstString, jsonProvider } from "./http.js";
 import { formatAddress, formatAddresses, optionalStringAddresses } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativePassthrough } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type MailPaceAdapterOptions = {
@@ -11,7 +11,7 @@ export type MailPaceAdapterOptions = {
 
 export function mailpace(
   options: MailPaceAdapterOptions,
-): EmailAdapter<"mailpace", { baseUrl: string }> {
+): EmailAdapter<"mailpace", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "mailpace",
     baseUrl: options.baseUrl ?? "https://app.mailpace.com/api/v1",

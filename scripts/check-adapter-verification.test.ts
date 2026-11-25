@@ -53,6 +53,7 @@ test("contract test membership in the docs table matches packages/email-sdk/src 
   expect(onDisk.get("resend")).toEqual([
     "adapters.field-support.test.ts",
     "adapters.http-delivery.test.ts",
+    "adapters.native.test.ts",
     "adapters.resend-postmark-sendgrid.test.ts",
     "adapters.scheduling.test.ts",
     "core.fallback-delivery.test.ts",
@@ -65,6 +66,7 @@ test("contract test membership in the docs table matches packages/email-sdk/src 
     "adapters.field-support.test.ts",
     "adapters.http-delivery.test.ts",
     "adapters.json-providers.test.ts",
+    "adapters.native.test.ts",
     "adapters.scheduling.test.ts",
   ]);
   expect(onDisk.get("nonexistent")).toEqual([]);

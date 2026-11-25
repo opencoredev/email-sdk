@@ -5,6 +5,7 @@ import type {
   EmailMessage,
   EmailPlugin,
   EmailTag,
+  EmailNativeSendOptions,
   EmailSendOptions,
 } from "./types.js";
 import { cloneMetadataRecord, isNonArrayObject, isStringMember } from "./internal/decode.js";
@@ -232,15 +233,15 @@ const KNOWN_SEND_OPTION_KEYS: ReadonlySet<PropertyKey> = new Set([
 ]);
 
 function withSendOptionDefaults(
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   _message: EmailMessage,
   options: EmailDefaultsPluginOptions,
-): EmailSendOptions | undefined {
+): EmailNativeSendOptions | undefined {
   if (sendOptions !== undefined && !isNonArrayObject(sendOptions)) {
     throw new EmailValidationError("Email send options must be an object.");
   }
 
-  const extras: Partial<EmailSendOptions> = {};
+  const extras: Partial<EmailNativeSendOptions> = {};
 
   if (sendOptions) {
     for (const key of Reflect.ownKeys(sendOptions)) {

@@ -2,7 +2,7 @@ import { EmailAdapterError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { jsonString } from "./internal/decode.js";
 import { base64Attachments, emailParts, sendAtUtcDateTime } from "./payloads.js";
-import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailAdapter, OneOrMany, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -17,7 +17,7 @@ export type MailchimpAdapterOptions = {
 
 export function mailchimp(
   options: MailchimpAdapterOptions,
-): EmailAdapter<"mailchimp", { baseUrl: string }> {
+): EmailAdapter<"mailchimp", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "mailchimp",
     baseUrl: options.baseUrl ?? "https://mandrillapp.com/api/1.0",

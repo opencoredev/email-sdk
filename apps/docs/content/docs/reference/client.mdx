@@ -1,7 +1,7 @@
 ---
 title: Client reference
 description: Exact construction options, methods, routing helpers, validation results, and send results for the v1 client.
-lastModified: 2026-11-23
+lastModified: 2026-11-25
 ---
 
 ## `createEmailClient(options)`
@@ -55,7 +55,14 @@ Built-in validation currently returns an empty warnings array on success.
 ## `send(message, options?)`
 
 ```ts title="types.ts"
-type EmailSendOptions<Name extends string> = {
+type EmailSendOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = [Native] extends [never]
+  ? EmailSendOptionsBase<Name>
+  : EmailSendOptionsBase<Name> & { native?: Native }; // experimental, keyed by adapter name
+
+type EmailSendOptionsBase<Name extends string> = {
   adapter?: Name;
   fallback?: {
     adapters: readonly Name[];
@@ -72,6 +79,8 @@ type EmailSendOptions<Name extends string> = {
   metadata?: EmailSendMetadata;
 };
 ```
+
+`native` carries provider-specific options; each adapter receives only its own entry. The client's `send()` fills `Native` with `EmailNativeOptions<typeof adapters>`, so `native` is typed from its adapters. A bare `EmailSendOptions<Name>` annotation leaves `Native` as `never` and has no `native` field, so code written before it existed still compiles. To accept native options in your own helper, type the parameter as `Parameters<typeof email.send>[1]`. See [Use provider-native features](/docs/guides/provider-native-options).
 
 `idempotency` controls what `idempotencyKey` requires. With `"strict"`, the default, a route that includes an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` before any request, so a key is never dropped silently. `"best-effort"` sends anyway and forwards the key to adapters that use it.
 
@@ -105,17 +114,22 @@ type EmailSendResult<Name extends string = string, Raw = unknown> = {
 ## `sendMany(items, options?)`
 
 ```ts title="types.ts"
-type EmailSendItem<Name extends string> = {
+type EmailSendItem<Name extends string = string, Native extends EmailNativeOptionsMap = never> = {
   message: EmailMessage;
-  options?: EmailSendOptions<Name>;
+  options?: EmailSendOptions<Name, Native>;
 };
+
+type EmailSendManyOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = EmailSendOptions<Name, Native> & { concurrency?: number };
 
 type EmailSendSettledResult<Name extends string> =
   | { ok: true; index: number; result: EmailSendResult<Name> }
   | { ok: false; index: number; error: EmailSdkError };
 ```
 
-Items run one at a time in input order unless the method options set `concurrency` (a positive integer, default `1`), which caps how many items send at once. Results are always in input order. `concurrency` applies to the batch only and is not passed to each send. Item options override method options. When method options set a non-blank `idempotencyKey`, each item without its own `idempotencyKey` derives `<key>:<index>` so providers do not deduplicate distinct items against each other; a blank or non-string shared `idempotencyKey` is rejected per item unless that item supplies its own valid key. `retry` and `fallback` merge one level deep, so an item that sets only `retry.delay` keeps the method's `retry.maxAttempts`; an item's `fallback.adapters` still replaces the method's list. The method returns one settled result per item once input validation passes; non-array `items`, non-object options, or invalid `concurrency` reject the call with `EmailValidationError`.
+Items run one at a time in input order unless the method options set `concurrency` (a positive integer, default `1`), which caps how many items send at once. Results are always in input order. `concurrency` applies to the batch only and is not passed to each send. Item options override method options. When method options set a non-blank `idempotencyKey`, each item without its own `idempotencyKey` derives `<key>:<index>` so providers do not deduplicate distinct items against each other; a blank or non-string shared `idempotencyKey` is rejected per item unless that item supplies its own valid key. `retry` and `fallback` merge one level deep, so an item that sets only `retry.delay` keeps the method's `retry.maxAttempts`; an item's `fallback.adapters` still replaces the method's list. An item's `native` entry for an adapter replaces the method's entry for that adapter and keeps the others. The method returns one settled result per item once input validation passes; non-array `items`, non-object options, or invalid `concurrency` reject the call with `EmailValidationError`.
 
 ## `sendPersonalized(input, options?)`
 

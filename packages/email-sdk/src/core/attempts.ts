@@ -7,14 +7,15 @@ import {
   isRetryableEmailError,
 } from "../errors.js";
 import { cloneMetadataRecord, isFunction } from "../internal/decode.js";
-import { snapshotMessage } from "../internal/snapshot.js";
+import { snapshotMessage, snapshotNativeObject } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailHooks,
   EmailMessage,
+  EmailNativeObject,
   EmailRetryConfig,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   EmailSendResult,
 } from "../types.js";
 import { normalizeAdapterResult, toProviderError } from "../utils.js";
@@ -29,19 +30,27 @@ import { recipientCount } from "./send-telemetry.js";
 
 export const defaultDelay = (attempt: number) => Math.min(100 * 2 ** (attempt - 1), 2_000);
 
+/**
+ * Validates provider-reported counts against the recipients the SDK sent. `recipients` is
+ * `undefined` when native fields replaced the message's recipients: the SDK then doesn't know how
+ * many addresses the provider got, so the provider's counts only need to be well formed.
+ */
 export function acceptanceCounts(
   accepted: number | undefined,
   rejected: number | undefined,
-  recipients: number,
+  recipients: number | undefined,
   requireComplete: boolean,
 ) {
+  const limit = recipients ?? Number.MAX_SAFE_INTEGER;
+
   const valid = (count: number | undefined) =>
-    count === undefined || (Number.isSafeInteger(count) && count >= 0 && count <= recipients);
+    count === undefined || (Number.isSafeInteger(count) && count >= 0 && count <= limit);
 
   if (
     !valid(accepted) ||
     !valid(rejected) ||
-    (accepted !== undefined &&
+    (recipients !== undefined &&
+      accepted !== undefined &&
       rejected !== undefined &&
       (accepted + rejected > recipients || (requireComplete && accepted + rejected !== recipients)))
   ) {
@@ -57,18 +66,60 @@ export function acceptanceCounts(
 
 export type AttemptPath = "single" | "personalized_native" | "personalized_expanded";
 
-/** Runs one adapter call, timing it for telemetry when telemetry is on. */
+/**
+ * Runs one adapter call, timing it for telemetry when telemetry is on. `native` is the entry the
+ * adapter received; see `nativeAttemptFacts` for how it changes what the attempt reports.
+ */
 export type MeasureAttempt = <T extends EmailSendResult>(
   adapter: EmailAdapter,
   path: AttemptPath,
   recipients: number,
   invoke: () => T | PromiseLike<T>,
+  native?: EmailNativeObject,
 ) => T | PromiseLike<T>;
+
+// The raw passthroughs can replace any top-level request field, recipients included. Typed
+// native options can't.
+export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
+
+/**
+ * What an attempt's native entry means for telemetry. `recipientsReplaced`: a raw passthrough may
+ * send to recipients other than the message's. `validationOnly`: SendGrid's `sandboxMode` and
+ * Mailgun's `testMode` make the provider validate the request without delivering it.
+ */
+export function nativeAttemptFacts(adapter: string, native: EmailNativeObject | undefined) {
+  const rawOverride =
+    native !== undefined && RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
+
+  return {
+    recipientsReplaced: rawOverride,
+    // A raw override can switch the mode back off, so only the typed flag alone counts.
+    validationOnly:
+      !rawOverride &&
+      ((adapter === "sendgrid" && native?.sandboxMode === true) ||
+        (adapter === "mailgun" && native?.testMode === true)),
+  };
+}
+
+/**
+ * This adapter's own entry from the send's `native` map, snapshotted so an adapter or a retry
+ * can't change what the caller, a later attempt, or another adapter sees.
+ */
+export function nativeEntryFor(
+  native: EmailNativeSendOptions["native"],
+  adapter: string,
+): EmailNativeObject | undefined {
+  if (!native || !Object.hasOwn(native, adapter)) return undefined;
+
+  const entry = native[adapter];
+
+  return entry === undefined ? undefined : snapshotNativeObject(entry);
+}
 
 export type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
-  options?: EmailSendOptions;
+  options?: EmailNativeSendOptions;
   retry?: EmailRetryConfig;
   hooks: readonly EmailHooks[];
   middleware: readonly EmailSendMiddleware[];
@@ -111,6 +162,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
+    const native = nativeEntryFor(input.options?.native, input.adapter.name);
 
     try {
       const attemptMessage = snapshotMessage(input.message);
@@ -133,8 +185,10 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
               signal: input.options?.signal,
               idempotencyKey: input.options?.idempotencyKey,
               metadata: attemptMetadata,
+              native,
             }),
           ),
+        native,
       );
 
       throwIfAborted(input.options?.signal);

@@ -10,21 +10,21 @@ import {
   isNonArrayObject,
   isStringMember,
 } from "../internal/decode.js";
-import { copyBoundedArray } from "../internal/snapshot.js";
+import { copyBoundedArray, snapshotNativeMap } from "../internal/snapshot.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
   EmailFallbackConfig,
   EmailMessage,
   EmailRetryConfig,
-  EmailSendOptions,
+  EmailNativeSendOptions,
 } from "../types.js";
 
 export function validateCapabilities(
   adapter: EmailAdapter,
   message: EmailMessage,
   operation: "send" | "personalized",
-  sendOptions?: Pick<EmailSendOptions, "idempotencyKey" | "idempotency">,
+  sendOptions?: Pick<EmailNativeSendOptions, "idempotencyKey" | "idempotency">,
 ) {
   try {
     if (!isNonArrayObject(adapter.capabilities)) {
@@ -103,7 +103,7 @@ export type EmailRoute = {
 export function resolveRoute(
   defaultAdapter: string,
   clientFallback: EmailFallbackConfig | undefined,
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
 ): EmailRoute {
   const primary = sendOptions?.adapter ?? defaultAdapter;
   const fallback = sendOptions?.fallback ?? clientFallback;
@@ -259,10 +259,10 @@ export function validateFallback(
  * Copies send options, keeping an own key whose value is `undefined`: spreading the copy over
  * batch or middleware options must still clear that setting, as spreading the raw object did.
  */
-export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOptions {
-  const copy: EmailSendOptions = {};
+export function cloneNestedSendOptions(options: EmailNativeSendOptions): EmailNativeSendOptions {
+  const copy: EmailNativeSendOptions = {};
 
-  const present = (key: keyof EmailSendOptions, value: EmailSendOptions[keyof EmailSendOptions]) =>
+  const present = (key: keyof EmailNativeSendOptions, value: EmailNativeSendOptions[keyof EmailNativeSendOptions]) =>
     value !== undefined || Object.hasOwn(options, key);
 
   const adapter = options.adapter;
@@ -299,6 +299,10 @@ export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOpti
     copy.metadata = isNonArrayObject(metadata) ? cloneMetadataRecord(metadata) : metadata;
   }
 
+  const native = options.native;
+
+  if (present("native", native)) copy.native = native && isNonArrayObject(native) ? snapshotNativeMap(native) : native;
+
   return copy;
 }
 
@@ -308,9 +312,9 @@ export function cloneNestedSendOptions(options: EmailSendOptions): EmailSendOpti
  * from the item still replaces the batch list as a whole.
  */
 export function mergeSendOptions(
-  base: EmailSendOptions | undefined,
-  override: EmailSendOptions | undefined,
-): EmailSendOptions | undefined {
+  base: EmailNativeSendOptions | undefined,
+  override: EmailNativeSendOptions | undefined,
+): EmailNativeSendOptions | undefined {
   if (!base) return override ? cloneNestedSendOptions(override) : undefined;
 
   if (!override) return cloneNestedSendOptions(base);
@@ -318,7 +322,7 @@ export function mergeSendOptions(
   base = cloneNestedSendOptions(base);
   override = cloneNestedSendOptions(override);
 
-  const merged: EmailSendOptions = { ...base, ...override };
+  const merged: EmailNativeSendOptions = { ...base, ...override };
 
   if (override.idempotencyKey === undefined && base.idempotencyKey !== undefined) {
     merged.idempotencyKey = base.idempotencyKey;
@@ -363,6 +367,16 @@ export function mergeSendOptions(
 
   if (merged.metadata && isNonArrayObject(merged.metadata)) {
     merged.metadata = cloneMetadataRecord(merged.metadata);
+  }
+
+  // Per-item native options replace the batch's entry for the same adapter and keep the rest.
+  if (
+    base.native &&
+    override.native &&
+    isNonArrayObject(base.native) &&
+    isNonArrayObject(override.native)
+  ) {
+    merged.native = { ...base.native, ...override.native };
   }
 
   return merged;

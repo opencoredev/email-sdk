@@ -8,7 +8,7 @@ import {
   optionalSingleApiAddress,
   sendAtUnixSeconds,
 } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -29,7 +29,7 @@ const mailersendRules: MessageRules = (message) => {
 
 export function mailersend(
   options: MailerSendAdapterOptions,
-): EmailAdapter<"mailersend", { baseUrl: string }> {
+): EmailAdapter<"mailersend", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "mailersend",
     rules: mailersendRules,

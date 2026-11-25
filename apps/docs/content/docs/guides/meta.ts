@@ -6,6 +6,7 @@ export default defineMeta({
   pages: [
     "schedule-email",
     "receive-email",
+    "provider-native-options",
     "email-workflows",
     "view-email-workflows",
     "production-send-pipeline",
