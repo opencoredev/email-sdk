@@ -64,6 +64,10 @@
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
+    "./workflows": {
+      "types": "./dist/client/workflows.d.ts",
+      "import": "./dist/client/workflows.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"

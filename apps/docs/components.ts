@@ -9,10 +9,12 @@ import EmailExampleGallery from "./components/mdx/EmailExampleGallery.astro";
 import ProviderBadge from "./components/mdx/ProviderBadge.astro";
 import ProviderGrid from "./components/mdx/ProviderGrid.astro";
 import SponsorSpotlight from "./components/mdx/SponsorSpotlight.astro";
+import WorkflowViewer from "./components/mdx/WorkflowViewer.astro";
 
 // Data-driven docs components. The static ones render to HTML at build time;
 // AdapterPricing, PackageInstallTabs, and EmailExample are islands in
 // islands/ because they filter, switch tabs, or toggle themes in the browser.
+// WorkflowViewer builds its data at render time and hydrates a React child.
 // Layout wraps Blume's page shell to emit the site's own JSON-LD.
 export default defineComponents({
   layout: { Layout },
@@ -25,5 +27,6 @@ export default defineComponents({
     ProviderBadge,
     ProviderGrid,
     SponsorSpotlight,
+    WorkflowViewer,
   },
 });

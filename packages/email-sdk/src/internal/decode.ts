@@ -258,10 +258,14 @@ export async function readJson(response: Response): Promise<JsonValue | undefine
 }
 
 type ThrownFields = {
+  adapter?: unknown;
   code?: unknown;
+  delivery?: unknown;
+  failures?: unknown;
   message?: unknown;
   name?: unknown;
   responseCode?: unknown;
+  retryable?: unknown;
   status?: unknown;
 };
 
@@ -283,7 +287,7 @@ export async function readJsonBody(response: Response): Promise<JsonValue> {
 }
 
 /** Read a string property, such as `code`, from a thrown value. */
-export function causeString(cause: unknown, key: "code" | "message" | "name"): string | undefined {
+export function causeString(cause: unknown, key: "adapter" | "code" | "delivery" | "message" | "name"): string | undefined {
   if (!isObjectLike(cause)) {
     return undefined;
   }
@@ -662,4 +666,28 @@ export function cloneMetadataRecord<T>(metadata: T, flattenTopLevelClass = false
   }
 
   return clone(metadata, 0);
+}
+
+/** Read a boolean property, such as `retryable`, from a thrown value. */
+export function causeBoolean(cause: unknown, key: "retryable"): boolean | undefined {
+  if (!isObjectLike(cause)) {
+    return undefined;
+  }
+
+  const fields: ThrownFields = cause;
+  const field = fields[key];
+
+  return isBoolean(field) ? field : undefined;
+}
+
+/** Read an array property, such as a route error's `failures`, from a thrown value. */
+export function causeArray(cause: unknown, key: "failures"): readonly unknown[] {
+  if (!isObjectLike(cause)) {
+    return [];
+  }
+
+  const fields: ThrownFields = cause;
+  const field = fields[key];
+
+  return Array.isArray(field) ? field : [];
 }
