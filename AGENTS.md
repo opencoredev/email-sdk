@@ -210,7 +210,9 @@ prebuild step) writes each docs, project, and tools page's `lastModified`
 front matter: the newest commit that changed the page or a data file its
 components render (the map lives in `lib/lastmod.ts`), skipping the Blume
 migration commit and reading older history from the Fumadocs paths. Commit its
-output with your content change. Compare pages take their dates from
+output with your content change. It also writes `lib/custom-page-dates.json`
+for the homepage and the /blog index, which have no front matter; the
+post-build sitemap patch reads it. Compare pages take their dates from
 `lib/compare.ts` and blog posts from their own front matter. The Vercel project
 needs `VERCEL_DEEP_CLONE=true` so the prebuild step sees full history; in a
 shallow clone it keeps the committed dates.

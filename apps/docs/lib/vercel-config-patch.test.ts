@@ -142,7 +142,7 @@ describe("dateCustomPages", () => {
   ].join("\n");
 
   test("dates the homepage and the blog index, and nothing else", () => {
-    const dated = dateCustomPages(sitemap, "2026-11-22");
+    const dated = dateCustomPages(sitemap, "2026-11-22", "2026-11-01");
 
     expect(dated).toContain("<loc>https://email-sdk.dev/</loc><lastmod>2026-11-22</lastmod>");
     expect(dated).toContain("<loc>https://email-sdk.dev/blog</loc><lastmod>2026-11-23</lastmod>");
@@ -150,7 +150,15 @@ describe("dateCustomPages", () => {
     expect(dated).toContain("<loc>https://email-sdk.dev/about</loc><lastmod>2026-09-26</lastmod>");
   });
 
+  test("dates the blog index by its own change when that is newer than every post", () => {
+    expect(dateCustomPages(sitemap, undefined, "2026-11-25")).toContain(
+      "<loc>https://email-sdk.dev/blog</loc><lastmod>2026-11-25</lastmod>",
+    );
+  });
+
   test("leaves the homepage undated without a date", () => {
-    expect(dateCustomPages(sitemap, undefined)).toContain("<url><loc>https://email-sdk.dev/</loc></url>");
+    expect(dateCustomPages(sitemap, undefined, undefined)).toContain(
+      "<url><loc>https://email-sdk.dev/</loc></url>",
+    );
   });
 });

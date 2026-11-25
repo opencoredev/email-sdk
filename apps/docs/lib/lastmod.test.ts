@@ -1,29 +1,27 @@
 import { describe, expect, test } from "bun:test";
 
-import { changesContent, fumadocsPath, pageDataFiles } from "./lastmod";
+import { fumadocsPath, pageDataFiles, withoutLastmod } from "./lastmod";
 
-describe("changesContent", () => {
-  test("ignores a patch that only moves the lastModified line", () => {
-    const patch = [
-      "diff --git a/page.mdx b/page.mdx",
-      "--- a/page.mdx",
-      "+++ b/page.mdx",
-      "@@ -4 +4 @@ title: Page",
-      "-lastModified: 2026-09-01",
-      "+lastModified: 2026-11-01",
-    ].join("\n");
+describe("withoutLastmod", () => {
+  test("drops only the front matter lastModified line", () => {
+    const before = "---\ntitle: Page\nlastModified: 2026-09-01\n---\n\nBody.\n";
+    const after = "---\ntitle: Page\nlastModified: 2026-11-01\n---\n\nBody.\n";
 
-    expect(changesContent(patch)).toBe(false);
+    expect(withoutLastmod(before)).toBe(withoutLastmod(after));
+    expect(withoutLastmod(before)).toBe("---\ntitle: Page\n---\n\nBody.\n");
   });
 
-  test("counts any other added or removed line", () => {
-    const patch = ["--- a/page.mdx", "+++ b/page.mdx", "@@ -9 +9 @@", "-Old text.", "+New text."].join("\n");
+  test("keeps any other change visible", () => {
+    const before = "---\ntitle: Page\nlastModified: 2026-09-01\n---\n\nOld text.\n";
+    const after = "---\ntitle: Page\nlastModified: 2026-09-01\n---\n\nNew text.\n";
 
-    expect(changesContent(patch)).toBe(true);
+    expect(withoutLastmod(before)).not.toBe(withoutLastmod(after));
   });
 
-  test("counts a removed line that starts like a file header", () => {
-    expect(changesContent(["@@ -3 +2,0 @@", "---"].join("\n"))).toBe(true);
+  test("leaves a lastModified line in the body alone", () => {
+    const text = "---\ntitle: Page\n---\n\nlastModified: 2026-09-01\n";
+
+    expect(withoutLastmod(text)).toBe(text);
   });
 });
 
@@ -34,6 +32,9 @@ describe("fumadocsPath", () => {
     );
     expect(fumadocsPath("apps/docs/lib/adapter-support.ts")).toBe(
       "apps/fumadocs/src/lib/adapter-support.ts",
+    );
+    expect(fumadocsPath("apps/docs/content/community/plugins.json")).toBe(
+      "apps/fumadocs/content/community/plugins.json",
     );
   });
 
@@ -50,7 +51,24 @@ describe("pageDataFiles", () => {
     expect(pageDataFiles(source)).toEqual(["apps/docs/lib/adapter-support.ts"]);
   });
 
+  test("follows each component to every data file it renders", () => {
+    expect(pageDataFiles('<ProviderGrid />')).toEqual([
+      "apps/docs/lib/providers.ts",
+      "apps/docs/lib/sponsors.ts",
+      "adapter-verification.json",
+    ]);
+    expect(pageDataFiles("<AdapterVerification />")).toContain("apps/docs/lib/adapter-support.ts");
+    expect(pageDataFiles('<EmailExample template="welcome" />')).toEqual([
+      "apps/docs/lib/email-example-data.ts",
+    ]);
+  });
+
+  test("matches whole component names only", () => {
+    expect(pageDataFiles("<EmailExampleGallery />")).toEqual(["apps/docs/lib/email-example-data.ts"]);
+    expect(pageDataFiles("<ProviderBadgeList />")).toEqual([]);
+  });
+
   test("returns nothing for a page without data components", () => {
-    expect(pageDataFiles("## Plain page\n\n<ProviderBadge provider=\"resend\" />")).toEqual([]);
+    expect(pageDataFiles("## Plain page\n\n<Card title=\"Resend\" />")).toEqual([]);
   });
 });

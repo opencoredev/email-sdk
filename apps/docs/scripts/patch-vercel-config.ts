@@ -5,7 +5,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { fileLastmod, homePageSources, isShallowClone } from "../lib/lastmod";
+import { z } from "zod";
+
+import { customPageDatesPath } from "../lib/lastmod";
 import {
   dateCustomPages,
   patchVercelRoutes,
@@ -64,16 +66,12 @@ if (existsSync(builtLlmsTxtPath)) {
 // Date the homepage and /blog index, which Blume's sitemap leaves undated.
 if (existsSync(builtSitemapPath)) {
   const sitemap = readFileSync(builtSitemapPath, "utf8");
-  const today = new Date().toISOString().slice(0, 10);
 
-  const homeLastmod = isShallowClone()
-    ? undefined
-    : homePageSources
-        .flatMap((file) => fileLastmod(file, today) ?? [])
-        .toSorted()
-        .at(-1);
+  const { home, blogIndex } = z
+    .object({ home: z.string().optional(), blogIndex: z.string().optional() })
+    .parse(JSON.parse(readFileSync(customPageDatesPath, "utf8")));
 
-  const dated = dateCustomPages(sitemap, homeLastmod);
+  const dated = dateCustomPages(sitemap, home, blogIndex);
 
   if (dated !== sitemap) writeFileSync(builtSitemapPath, dated);
 }
