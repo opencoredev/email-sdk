@@ -1089,6 +1089,21 @@ describe("native entries are snapshotted as plain data", () => {
     expect(snapshotNativeObject({ list }).list).toEqual(["own", "inherited"]);
   });
 
+  test("an index setter on Array.prototype doesn't intercept the copy", () => {
+    Object.defineProperty(Array.prototype, "0", {
+      set() {
+        throw new Error("setter ran");
+      },
+      configurable: true,
+    });
+
+    try {
+      expect(snapshotNativeObject({ list: ["a"] }).list).toEqual(["a"]);
+    } finally {
+      Reflect.deleteProperty(Array.prototype, "0");
+    }
+  });
+
   test("a value shared by sibling fields is still copied to each", async () => {
     const capture = jsonCapture({ id: "re_1" });
     const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });

@@ -471,7 +471,8 @@ function snapshotNativeValue(
 
   for (let index = 0; index < length; index += 1) {
     if (index in value) {
-      copy[index] = snapshotNativeValue(value[index], depth + 1, budget);
+      const item = snapshotNativeValue(value[index], depth + 1, budget);
+      Object.defineProperty(copy, index, { value: item, enumerable: true, writable: true, configurable: true });
     } else {
       chargeNative(budget, 0);
     }
