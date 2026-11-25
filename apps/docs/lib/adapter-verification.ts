@@ -148,6 +148,7 @@ export const CONTRACT_TEST_FILES = {
   ],
   sendheron: ["adapters.http-delivery.test.ts", "adapters.sendheron.test.ts"],
   helo: ["adapters.helo.test.ts", "adapters.http-delivery.test.ts"],
+  nightmail: ["adapters.http-delivery.test.ts", "adapters.nightmail.test.ts"],
   sequenzy: [
     "adapters.credential-rotation.test.ts",
     "adapters.field-support.test.ts",

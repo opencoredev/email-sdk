@@ -54,6 +54,7 @@ The body is read before its signature can be checked, so `maxBodyBytes` (default
 | `"mailchimp"`                                | `secret`                                 | `url` (defaults to `request.url`)                                                                                |
 | `"sparkpost"`, `"lettr"`                     | `secret` (webhook token)                 |                                                                                                                  |
 | `"mailersend"`, `"lettermint"`, `"jetemail"` | `secret`                                 |                                                                                                                  |
+| `"nightmail"`                                | `secret` (`whsec_` signing secret)            |                                                                                                                  |
 | `"primitive"`                                | `secret`                                 | `downloadOrigins` for self-hosted download URLs                                                                  |
 | `"mailpace"`                                 | `publicKey`                              |                                                                                                                  |
 | `"brevo"`                                    | `auth`                                   | `apiKey`, `baseUrl`                                                                                              |
@@ -81,6 +82,7 @@ The body is read before its signature can be checked, so `maxBodyBytes` (default
 | Lettermint              | `verifyLettermintInbound`              | `parseLettermintInbound`                     |
 | Primitive               | `verifyPrimitiveInbound`               | `parsePrimitiveInbound`                      |
 | JetEmail                | `verifyJetEmailInbound`                | `parseJetEmailInbound`                       |
+| Nightmail               | `verifyNightmailInbound`               | `parseNightmailInbound`                      |
 | Mailtrap                | `verifyMailtrapInbound`                |                                              |
 
 `isMailerSendRouteTest(payload)` and `isMandrillWebhookTest(payload, { url })` detect the providers' setup checks when you verify by hand; answer those with a 200 and do not parse them. `verifySnsMessage` takes the result of `parseSnsMessage(body)`. `parseGraphNotifications` checks `clientState` on every notification, and `graphValidationResponse(url)` answers the subscription handshake. `parseMandrillInbound`, `parseSparkPostInbound`, `parseLettrInbound`, and `parseBrevoInbound` return arrays, because one post can carry several messages.
@@ -96,6 +98,7 @@ Some providers keep the message, or parts of it, behind their API:
 - `fetchGraphInboundEmail(resource, { getAccessToken })` fetches a Graph message as MIME.
 - `fetchMailtrapInboundEmail(inboxId, messageId, { apiToken })` fetches a Mailtrap message.
 - Brevo and Lettermint attachments download through `read()`. Brevo needs `apiKey`.
+- `parseNightmailInbound` parses the MIME a `format: "inbound"` webhook inlines (up to 2 MiB). A larger message falls back to Nightmail's parsed fields, and its attachments carry Nightmail's `downloadUrl` in `url`, which needs an admin API key, so their `read()` throws.
 - `parsePrimitiveInbound` downloads the raw message when the webhook does not include it, only from `https://*.primitive.dev`. A self-hosted Primitive lists its origins in `downloadOrigins`.
 
 `parseInbound(provider, payload, options?)` dispatches to the right parser and always returns an array. It covers every provider above except Cloudflare, Graph, and Mailtrap, which have no webhook payload to parse.
@@ -115,6 +118,7 @@ Some providers keep the message, or parts of it, behind their API:
 | MailPace                | Ed25519 over the body in `X-MailPace-Signature`                                                                                                                                                                                           |
 | Lettermint              | `t=…,v1=…` HMAC-SHA256 over `t.body`, `X-Lettermint-Delivery` equal to `t`, plus tolerance                                                                                                                                                |
 | Primitive               | `t=…,v1=…` HMAC-SHA256 over `t.body`, plus tolerance                                                                                                                                                                                      |
+| Nightmail               | Standard Webhooks HMAC-SHA256 over `webhook-id.webhook-timestamp.body` with the `whsec_` secret, plus timestamp tolerance                                                                                                                     |
 | JetEmail                | Hex HMAC-SHA256 over `X-Webhook-ID.X-Webhook-Timestamp.body`, plus tolerance                                                                                                                                                              |
 | Mailtrap                | Hex HMAC-SHA256 of the body in `mailtrap-signature`                                                                                                                                                                                       |
 

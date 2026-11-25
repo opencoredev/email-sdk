@@ -273,6 +273,12 @@ const pricingByProvider = {
     note: "One plan: a $5 monthly platform fee plus $0.00035 per email, with no included volume, tiers, or commitments. There is no free plan; new accounts get 1,000 free test sends to their own verified domains.",
     prices: [usd(5.35), usd(22.5), usd(40), usd(92.5), usd(180), usd(355)],
   },
+  nightmail: {
+    model: "Usage, prepaid credit",
+    sources: [{ label: "Nightmail pricing", href: "https://nightmail.dev/pricing" }],
+    note: "$0.20 per 1,000 emails sent or received, after 5,000 sent and 20,000 received free every month. Usage is paid from prepaid credit; top-ups start at $20.",
+    prices: [usd(0), usd(9), usd(19), usd(49), usd(99), usd(199)],
+  },
 } satisfies Record<Provider["key"], PricingDetails>;
 
 export const adapterPricing: readonly AdapterPricingRow[] = providers.map((provider) => ({

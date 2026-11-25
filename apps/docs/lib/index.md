@@ -1,8 +1,8 @@
 # Email SDK
 
-> An open-source TypeScript SDK for transactional email. 27 adapters. One typed SDK.
+> An open-source TypeScript SDK for transactional email. 28 adapters. One typed SDK.
 
-Email SDK is an open-source TypeScript SDK (npm: `@opencoredev/email-sdk`) for sending transactional email through 26 provider APIs plus SMTP (Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more) behind one typed `send()` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
+Email SDK is an open-source TypeScript SDK (npm: `@opencoredev/email-sdk`) for sending transactional email through 27 provider APIs plus SMTP (Resend, SMTP, Postmark, SendGrid, Mailgun, Cloudflare Email Sending, Unosend, AWS SES, and more) behind one typed `send()` call with retries and compatible fallbacks. It is a library you install into a TypeScript/JavaScript app, **not** a hosted API or a service you sign up for. There are no credentials to obtain from us; you bring the provider keys your app already has.
 
 ## Install
 

@@ -121,6 +121,7 @@ mailersend
 mailgun
 mailpace
 mailtrap
+nightmail
 plunk
 postmark
 primitive
@@ -164,6 +165,7 @@ MAILGUN_API_KEY
 MAILGUN_DOMAIN
 MAILPACE_API_KEY
 MAILTRAP_API_KEY
+NIGHTMAIL_API_KEY
 PLUNK_API_KEY
 POSTMARK_SERVER_TOKEN
 PRIMITIVE_API_KEY

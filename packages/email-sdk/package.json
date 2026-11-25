@@ -1,7 +1,7 @@
 {
   "name": "@opencoredev/email-sdk",
   "version": "3.1.0",
-  "description": "Email SDK for TypeScript: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 21 more providers plus SMTP, with validation, retries and fallback.",
+  "description": "Email SDK for TypeScript: one client for Resend, SendGrid, Postmark, AWS SES, Mailgun and 22 more providers plus SMTP, with validation, retries and fallback.",
   "keywords": [
     "bun",
     "email",
@@ -13,6 +13,7 @@
     "iterable",
     "mailgun",
     "microsoft-graph",
+    "nightmail",
     "nodemailer-alternative",
     "postmark",
     "resend",
@@ -173,6 +174,12 @@
       "import": "./dist/primitive.js",
       "require": "./dist/primitive.cjs",
       "default": "./dist/primitive.js"
+    },
+    "./nightmail": {
+      "types": "./dist/nightmail.d.ts",
+      "import": "./dist/nightmail.js",
+      "require": "./dist/nightmail.cjs",
+      "default": "./dist/nightmail.js"
     },
     "./plunk": {
       "types": "./dist/plunk.d.ts",

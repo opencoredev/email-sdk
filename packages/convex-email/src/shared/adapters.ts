@@ -105,6 +105,10 @@ export const CONVEX_EMAIL_ADAPTERS = {
     apiKey: { type: "string", env: "MAILTRAP_API_KEY", required: true },
     baseUrl: BASE_URL,
   },
+  nightmail: {
+    apiKey: { type: "string", env: "NIGHTMAIL_API_KEY", required: true },
+    baseUrl: BASE_URL,
+  },
   plunk: {
     apiKey: { type: "string", env: "PLUNK_API_KEY", required: true },
     baseUrl: BASE_URL,

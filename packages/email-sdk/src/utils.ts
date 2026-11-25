@@ -892,6 +892,14 @@ export const SUPPORTED_MESSAGE_FIELDS = {
     tags: true,
     metadata: true,
   },
+  nightmail: {
+    cc: true,
+    bcc: true,
+    replyTo: true,
+    headers: true,
+    attachments: true,
+    sendAt: true,
+  },
 } satisfies Record<string, MessageFieldSupport>;
 
 const NATIVE_IDEMPOTENCY = new Set([
@@ -901,6 +909,7 @@ const NATIVE_IDEMPOTENCY = new Set([
   "primitive",
   "sendheron",
   "helo",
+  "nightmail",
 ]);
 
 const REPEATED_HEADERS = new Set(["mailgun", "postmark", "scaleway", "ses", "smtp", "graph"]);
@@ -947,6 +956,7 @@ type RuledAdapterName =
   | "loops"
   | "mailersend"
   | "mailtrap"
+  | "nightmail"
   | "plunk"
   | "postmark"
   | "primitive"

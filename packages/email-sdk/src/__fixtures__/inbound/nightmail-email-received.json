@@ -1,0 +1,108 @@
+{
+  "event": "email.received",
+  "timestamp": "2026-11-24T12:00:05.000Z",
+  "endpoint": {
+    "id": "mwh_01JTEST",
+    "name": "Support hook",
+    "type": "webhook"
+  },
+  "email": {
+    "id": "msg_01JNIGHTMAIL",
+    "messageId": "<thread-1@example.net>",
+    "from": {
+      "text": "Ada Lovelace <ada@example.net>",
+      "addresses": [
+        {
+          "name": "Ada Lovelace",
+          "address": "ada@example.net"
+        }
+      ]
+    },
+    "to": {
+      "text": "support@reply.acme.test",
+      "addresses": [
+        {
+          "name": null,
+          "address": "support@reply.acme.test"
+        }
+      ]
+    },
+    "recipient": "support@reply.acme.test",
+    "envelopeRecipients": [
+      "support@reply.acme.test",
+      "audit@reply.acme.test"
+    ],
+    "subject": "Invoice question",
+    "receivedAt": "2026-11-24T12:00:00.000Z",
+    "threadId": "thr_01JTHREAD",
+    "spam": {
+      "isJunk": false,
+      "reason": null
+    },
+    "parsedData": {
+      "messageId": "<thread-1@example.net>",
+      "date": "Tue, 24 Nov 2026 12:00:00 +0000",
+      "subject": "Invoice question",
+      "from": {
+        "text": "Ada Lovelace <ada@example.net>",
+        "addresses": [
+          {
+            "name": "Ada Lovelace",
+            "address": "ada@example.net"
+          }
+        ]
+      },
+      "to": {
+        "text": "support@reply.acme.test",
+        "addresses": [
+          {
+            "name": null,
+            "address": "support@reply.acme.test"
+          }
+        ]
+      },
+      "cc": {
+        "text": "Grace <grace@example.net>",
+        "addresses": [
+          {
+            "name": "Grace",
+            "address": "grace@example.net"
+          }
+        ]
+      },
+      "bcc": null,
+      "replyTo": null,
+      "inReplyTo": "<order-41@acme.test>",
+      "references": [
+        "<order-40@acme.test>",
+        "<order-41@acme.test>"
+      ],
+      "textBody": "Where is invoice 41?",
+      "htmlBody": "<p>Where is invoice 41?</p>",
+      "raw": "From: Ada Lovelace <ada@example.net>\r\nTo: support@reply.acme.test\r\nCc: Grace <grace@example.net>\r\nSubject: Invoice question\r\nMessage-ID: <thread-1@example.net>\r\nIn-Reply-To: <order-41@acme.test>\r\nReferences: <order-40@acme.test> <order-41@acme.test>\r\nDate: Tue, 24 Nov 2026 12:00:00 +0000\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n--b1\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nWhere is invoice 41?\r\n--b1\r\nContent-Type: text/plain; name=\"invoice.txt\"\r\nContent-Disposition: attachment; filename=\"invoice.txt\"\r\nContent-Transfer-Encoding: base64\r\n\r\nSW52b2ljZSA0MQ==\r\n--b1--\r\n",
+      "attachments": [
+        {
+          "filename": "invoice.txt",
+          "contentType": "text/plain",
+          "size": 10,
+          "contentId": null,
+          "contentDisposition": "attachment",
+          "downloadUrl": "https://nightmail.dev/v1/inbound/messages/msg_01JNIGHTMAIL/parts/att_1"
+        }
+      ],
+      "headers": {
+        "message-id": "<thread-1@example.net>",
+        "subject": "Invoice question",
+        "x-priority": "3"
+      }
+    },
+    "cleanedContent": {
+      "html": "<p>Where is invoice 41?</p>",
+      "text": "Where is invoice 41?",
+      "hasHtml": true,
+      "hasText": true,
+      "attachments": [],
+      "headers": {}
+    }
+  }
+}

@@ -522,11 +522,37 @@ export const ADAPTER_SUPPORT_ENTRIES = [
       "Idempotency keys longer than 36 characters are hashed to a UUID-shaped SHA-256 digest.",
     ],
   },
+  {
+    id: "nightmail",
+    label: "Nightmail",
+    setupHref: "/docs/adapters/nightmail",
+    fields: {
+      cc: true,
+      bcc: true,
+      replyTo: true,
+      headers: true,
+      attachments: true,
+      sendAt: true,
+    },
+    capabilities: {
+      repeatedHeaders: false,
+      idempotency: "native",
+      scheduling: true,
+      personalized: "expanded",
+    },
+    limits: [
+      "Accepts at most 50 to, 49 cc, and 49 bcc recipients, and 10 replyTo addresses.",
+      "Recipient and replyTo addresses must be plain email addresses; the sender display name is sent as fromName.",
+      "Accepts at most 15 custom headers and 100 attachments.",
+      "Attachments are uploaded to POST /v1/attachments before the send, one request each.",
+      "Idempotency keys that are not 1 to 200 printable ASCII characters are hashed to a SHA-256 digest.",
+    ],
+  },
 ] as const satisfies readonly AdapterSupportEntry[];
 
 export type AdapterSupportId = (typeof ADAPTER_SUPPORT_ENTRIES)[number]["id"];
 
-export const ADAPTER_SUPPORT_TOTAL_LABEL = "26 provider APIs plus SMTP, 27 adapters total";
+export const ADAPTER_SUPPORT_TOTAL_LABEL = "27 provider APIs plus SMTP, 28 adapters total";
 
 export function getUnsupportedFields(entry: AdapterSupportEntry): AdapterSupportField[] {
   return ADAPTER_SUPPORT_FIELDS.filter((field) => entry.fields[field] !== true);

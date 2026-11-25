@@ -13,6 +13,7 @@ export type InboundProvider =
   | "mailgun"
   | "mailpace"
   | "mailtrap"
+  | "nightmail"
   | "postmark"
   | "primitive"
   | "resend"

@@ -283,6 +283,11 @@ describe("doctor safe probes", () => {
       "https://api.primitive.dev/v1/account",
       { success: true, data: { id: "private-account-id" } },
     ],
+    [
+      "nightmail",
+      "https://nightmail.dev/v1/me",
+      { id: "private-account-id", workspaceId: "ws_1", permissions: ["send"], domains: [] },
+    ],
     ["lettermint", "https://api.lettermint.co/v1/ping", 200],
     [
       "lettr",
@@ -452,7 +457,7 @@ describe("doctor safe probes", () => {
     expect(JSON.stringify(result)).not.toContain("private-account-id");
   });
 
-  test.each(["resend", "sequenzy", "primitive", "lettermint", "lettr"])(
+  test.each(["resend", "sequenzy", "primitive", "nightmail", "lettermint", "lettr"])(
     "%s rejects malformed success",
     async (adapter) => {
       for (const body of [null, {}, [], { success: true }, "200"]) {
