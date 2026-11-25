@@ -340,6 +340,68 @@ async function checkCliSend(smtpPort: number, apiBase: string): Promise<void> {
   expectEqual("cli: text body", message.Text.trim(), "Sent by the built CLI.");
 }
 
+// Mailpit offers AUTH without STARTTLS here, so the CLI must refuse to send
+// credentials unless --allow-insecure-auth opts in.
+async function checkCliAuth(smtpPort: number, apiBase: string): Promise<void> {
+  const send = (subject: string, extraArgs: readonly string[]) =>
+    spawnSync(
+      process.execPath,
+      [
+        "--no-env-file",
+        CLI_PATH,
+        "send",
+        "--adapter",
+        "smtp",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(smtpPort),
+        "--user",
+        "check-user",
+        "--pass",
+        "check-pass",
+        "--from",
+        "cli@example.test",
+        "--to",
+        "to@example.test",
+        "--subject",
+        subject,
+        "--text",
+        "Sent by the built CLI with credentials.",
+        ...extraArgs,
+      ],
+      { encoding: "utf8", env: cliEnv() },
+    );
+
+  const refusedSubject = "Email SDK CLI SMTP auth without TLS";
+  const refused = send(refusedSubject, []);
+
+  expectEqual("cli auth: refuses plaintext AUTH by default", refused.status, 1);
+
+  const summary = await getJson(`${apiBase}/api/v1/messages`, summarySchema);
+
+  expectEqual(
+    "cli auth: nothing delivered without TLS",
+    summary.messages.some((message) => message.Subject === refusedSubject),
+    false,
+  );
+
+  const allowedSubject = "Email SDK CLI SMTP auth opt-out";
+  const allowed = send(allowedSubject, ["--allow-insecure-auth"]);
+
+  expectEqual("cli auth: --allow-insecure-auth exit status", allowed.status, 0);
+
+  if (allowed.status !== 0) {
+    checks.push({ name: "cli auth: stderr", ok: false, detail: allowed.stderr.trim() });
+
+    return;
+  }
+
+  const { message } = await findMessage(apiBase, allowedSubject);
+
+  expectEqual("cli auth: opt-out delivers", message.From.Address, "cli@example.test");
+}
+
 function newestSourceMtime(dir: string): number {
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
@@ -380,6 +442,8 @@ async function main(): Promise<void> {
     "-p",
     "127.0.0.1::8025",
     MAILPIT_IMAGE,
+    "--smtp-auth-accept-any",
+    "--smtp-auth-allow-insecure",
   ]);
 
   // finally blocks don't run when the process is killed, so remove the
@@ -404,6 +468,7 @@ async function main(): Promise<void> {
     await checkSdkSend(smtpPort, apiBase);
     await checkCommentedAddresses(smtpPort, apiBase);
     await checkCliSend(smtpPort, apiBase);
+    await checkCliAuth(smtpPort, apiBase);
   } finally {
     if (process.env.KEEP_MAILPIT === "1") {
       console.error(`Kept ${containerName}: Mailpit UI ${apiBase}, SMTP 127.0.0.1:${smtpPort}`);
