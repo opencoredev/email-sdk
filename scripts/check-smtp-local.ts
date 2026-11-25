@@ -21,6 +21,8 @@ const REQUEST_TIMEOUT_MS = 5_000;
 
 const containerName = `email-sdk-smtp-check-${process.pid}`;
 
+const authContainerName = `${containerName}-auth`;
+
 const address = z.object({ Name: z.string(), Address: z.string() });
 
 const summarySchema = z.object({
@@ -75,8 +77,8 @@ function docker(args: readonly string[]): string {
   return (result.stdout ?? "").trim();
 }
 
-function hostPort(containerPort: number): number {
-  const mapping = docker(["port", containerName, `${containerPort}/tcp`]).split("\n")[0] ?? "";
+function hostPort(name: string, containerPort: number): number {
+  const mapping = docker(["port", name, `${containerPort}/tcp`]).split("\n")[0] ?? "";
 
   const port = Number(mapping.slice(mapping.lastIndexOf(":") + 1));
 
@@ -340,10 +342,32 @@ async function checkCliSend(smtpPort: number, apiBase: string): Promise<void> {
   expectEqual("cli: text body", message.Text.trim(), "Sent by the built CLI.");
 }
 
-// Mailpit offers AUTH without STARTTLS here, so the CLI must refuse to send
-// credentials unless --allow-insecure-auth opts in.
-async function checkCliAuth(smtpPort: number, apiBase: string): Promise<void> {
-  const send = (subject: string, extraArgs: readonly string[]) =>
+// A second Mailpit requires AUTH (check-user/check-pass) and offers no
+// STARTTLS, so the CLI must refuse to send credentials unless
+// --allow-insecure-auth opts in, and the opt-in must really authenticate.
+async function checkCliAuth(): Promise<void> {
+  docker([
+    "run",
+    "-d",
+    "--rm",
+    "--name",
+    authContainerName,
+    "-e",
+    "MP_SMTP_AUTH=check-user:check-pass",
+    "-p",
+    "127.0.0.1::1025",
+    "-p",
+    "127.0.0.1::8025",
+    MAILPIT_IMAGE,
+    "--smtp-auth-allow-insecure",
+  ]);
+
+  const smtpPort = hostPort(authContainerName, 1025);
+  const apiBase = `http://127.0.0.1:${hostPort(authContainerName, 8025)}`;
+
+  await waitForReady(apiBase);
+
+  const send = (subject: string, pass: string, extraArgs: readonly string[]) =>
     spawnSync(
       process.execPath,
       [
@@ -359,7 +383,7 @@ async function checkCliAuth(smtpPort: number, apiBase: string): Promise<void> {
         "--user",
         "check-user",
         "--pass",
-        "check-pass",
+        pass,
         "--from",
         "cli@example.test",
         "--to",
@@ -368,38 +392,36 @@ async function checkCliAuth(smtpPort: number, apiBase: string): Promise<void> {
         subject,
         "--text",
         "Sent by the built CLI with credentials.",
+        "--json",
         ...extraArgs,
       ],
       { encoding: "utf8", env: cliEnv() },
     );
 
   const refusedSubject = "Email SDK CLI SMTP auth without TLS";
-  const refused = send(refusedSubject, []);
+  const refused = send(refusedSubject, "check-pass", []);
 
   expectEqual("cli auth: refuses plaintext AUTH by default", refused.status, 1);
+  expectEqual("cli auth: refusal is the STARTTLS upgrade", refused.stdout.includes("STARTTLS"), true);
+
+  const wrongPassword = send("Email SDK CLI SMTP auth wrong password", "wrong-pass", [
+    "--allow-insecure-auth",
+  ]);
+
+  expectEqual("cli auth: opt-out really authenticates", wrongPassword.stdout.includes("535"), true);
+
+  const allowedSubject = "Email SDK CLI SMTP auth opt-out";
+  const allowed = send(allowedSubject, "check-pass", ["--allow-insecure-auth"]);
+
+  expectEqual("cli auth: --allow-insecure-auth exit status", allowed.status, 0);
 
   const summary = await getJson(`${apiBase}/api/v1/messages`, summarySchema);
 
   expectEqual(
-    "cli auth: nothing delivered without TLS",
-    summary.messages.some((message) => message.Subject === refusedSubject),
-    false,
+    "cli auth: only the authenticated opt-out send is stored",
+    summary.messages.map((message) => message.Subject),
+    [allowedSubject],
   );
-
-  const allowedSubject = "Email SDK CLI SMTP auth opt-out";
-  const allowed = send(allowedSubject, ["--allow-insecure-auth"]);
-
-  expectEqual("cli auth: --allow-insecure-auth exit status", allowed.status, 0);
-
-  if (allowed.status !== 0) {
-    checks.push({ name: "cli auth: stderr", ok: false, detail: allowed.stderr.trim() });
-
-    return;
-  }
-
-  const { message } = await findMessage(apiBase, allowedSubject);
-
-  expectEqual("cli auth: opt-out delivers", message.From.Address, "cli@example.test");
 }
 
 function newestSourceMtime(dir: string): number {
@@ -425,7 +447,7 @@ function removeContainer(): void {
 
   containerRemoved = true;
 
-  spawnSync("docker", ["rm", "-f", containerName], { stdio: "ignore" });
+  spawnSync("docker", ["rm", "-f", containerName, authContainerName], { stdio: "ignore" });
 }
 
 async function main(): Promise<void> {
@@ -442,8 +464,6 @@ async function main(): Promise<void> {
     "-p",
     "127.0.0.1::8025",
     MAILPIT_IMAGE,
-    "--smtp-auth-accept-any",
-    "--smtp-auth-allow-insecure",
   ]);
 
   // finally blocks don't run when the process is killed, so remove the
@@ -462,13 +482,13 @@ async function main(): Promise<void> {
   let apiBase = "";
 
   try {
-    smtpPort = hostPort(1025);
-    apiBase = `http://127.0.0.1:${hostPort(8025)}`;
+    smtpPort = hostPort(containerName, 1025);
+    apiBase = `http://127.0.0.1:${hostPort(containerName, 8025)}`;
     await waitForReady(apiBase);
     await checkSdkSend(smtpPort, apiBase);
     await checkCommentedAddresses(smtpPort, apiBase);
     await checkCliSend(smtpPort, apiBase);
-    await checkCliAuth(smtpPort, apiBase);
+    await checkCliAuth();
   } finally {
     if (process.env.KEEP_MAILPIT === "1") {
       console.error(`Kept ${containerName}: Mailpit UI ${apiBase}, SMTP 127.0.0.1:${smtpPort}`);
