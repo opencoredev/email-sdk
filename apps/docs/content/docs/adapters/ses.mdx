@@ -3,7 +3,7 @@ title: AWS SES
 description: Send through the SES v2 SendEmail API with built-in SigV4 signing and no AWS SDK dependency.
 sidebar:
   icon: "https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64"
-lastModified: 2026-11-23
+lastModified: 2026-11-25
 ---
 
 ## Capabilities
@@ -112,8 +112,6 @@ AWS_ACCESS_KEY_ID="..." AWS_SECRET_ACCESS_KEY="..." AWS_REGION="us-east-1" \
 ```bash
 npx --package @opencoredev/email-sdk email-sdk send \
   --adapter ses \
-  --access-key-id "$AWS_ACCESS_KEY_ID" \
-  --secret-access-key "$AWS_SECRET_ACCESS_KEY" \
   --region us-east-1 \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
@@ -122,7 +120,7 @@ npx --package @opencoredev/email-sdk email-sdk send \
   --dry-run
 ```
 
-`--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send. It is the only way to prove the identity is verified and the account is out of the SES sandbox.
+The CLI reads `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` from the environment, so keep credentials there rather than in command-line flags. `--session-token` and `--configuration-set` flags are also available. Drop `--dry-run` for one real send. It is the only way to prove the identity is verified and the account is out of the SES sandbox.
 
 Moving from Resend to SES? [Resend alternatives](/blog/resend-alternatives) walks through the cutover with Resend kept as the fallback.
 
