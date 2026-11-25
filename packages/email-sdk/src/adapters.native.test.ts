@@ -10,7 +10,13 @@ import { postmark, type PostmarkNativeOptions } from "./postmark.js";
 import { resend, type ResendNativeOptions } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
 import { ses } from "./ses.js";
-import type { EmailAdapter, EmailAdapterContext, EmailMessage, EmailNativeValue } from "./types.js";
+import type {
+  EmailAdapter,
+  EmailAdapterContext,
+  EmailMessage,
+  EmailNativeObject,
+  EmailNativeValue,
+} from "./types.js";
 import {
   context,
   formCapture,
@@ -871,6 +877,25 @@ describe("native entries are snapshotted as plain data", () => {
     const client = createEmailClient({ adapters: [sendgrid({ apiKey: "sg", fetch: capture.fetch })] });
 
     await expect(client.send(simple, { native: { sendgrid: new SendGridEntry() } })).rejects.toBeInstanceOf(
+      EmailValidationError,
+    );
+
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a class-instance native map is rejected before any request", async () => {
+    class TestEnvironment {
+      [adapter: string]: EmailNativeObject | undefined;
+
+      get sendgrid() {
+        return { sandboxMode: true };
+      }
+    }
+
+    const capture = jsonCapture({});
+    const client = createEmailClient({ adapters: [sendgrid({ apiKey: "sg", fetch: capture.fetch })] });
+
+    await expect(client.send(simple, { native: new TestEnvironment() })).rejects.toBeInstanceOf(
       EmailValidationError,
     );
 

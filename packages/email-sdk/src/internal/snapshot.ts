@@ -397,6 +397,15 @@ function defineNativeField<V>(record: Record<string, V>, key: string, value: V) 
   Object.defineProperty(record, key, { value, enumerable: true, writable: true, configurable: true });
 }
 
+// A class instance can hold settings in prototype getters that a field copy would silently drop.
+function assertPlainNative(record: EmailNativeObject | EmailNativeOptionsMap) {
+  const prototype = Object.getPrototypeOf(record);
+
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new EmailValidationError("Native options must be plain objects and arrays.");
+  }
+}
+
 function isNativeList(value: EmailNativeValue): value is readonly EmailNativeValue[] {
   return Array.isArray(value);
 }
@@ -414,13 +423,7 @@ function snapshotNativeValue(value: EmailNativeValue, depth: number): EmailNativ
 }
 
 function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNativeObject {
-  const prototype = Object.getPrototypeOf(record);
-
-  // A class instance can hold settings in getters that a field copy would silently drop.
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new EmailValidationError("Native options must be plain objects and arrays.");
-  }
-
+  assertPlainNative(record);
   const copy: Record<string, EmailNativeValue> = {};
 
   for (const key of Object.keys(record)) {
@@ -441,6 +444,7 @@ export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObjec
 
 /** Copies a send's `native` map with `snapshotNativeObject` for each own entry. */
 export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
+  assertPlainNative(native);
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
   for (const key of Object.keys(native)) {
