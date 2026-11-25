@@ -182,12 +182,12 @@ function submittedRecipients(message: EmailMessage) {
   return [message.to, message.cc, message.bcc].flatMap((list) => arrayify(list).map(emailAddressOf));
 }
 
-// A native body that replaces To, Cc, or Bcc sends to recipients the SDK never parsed, so it
-// can't say which addresses Postmark accepted.
+// Any native body can replace the recipients (under any key casing Postmark accepts), so the
+// SDK can't say which addresses Postmark accepted once one is present.
 function replacesRecipients(native: PostmarkNativeOptions | undefined) {
   const body = native?.body;
 
-  return body !== undefined && isNonArrayObject(body) && ("To" in body || "Cc" in body || "Bcc" in body);
+  return body !== undefined && isNonArrayObject(body);
 }
 
 async function toPostmarkAttachment(attachment: EmailAttachment) {

@@ -401,7 +401,8 @@ function defineNativeField<V>(record: Record<string, V>, key: string, value: V) 
 function assertPlainNative(record: EmailNativeObject | EmailNativeOptionsMap) {
   const prototype = Object.getPrototypeOf(record);
 
-  if (prototype !== Object.prototype && prototype !== null) {
+  // Object.prototype from any realm has a null prototype, so vm-created plain objects pass.
+  if (prototype !== null && Object.getPrototypeOf(prototype) !== null) {
     throw new EmailValidationError("Native options must be plain objects and arrays.");
   }
 }

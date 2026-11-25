@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { runInNewContext } from "node:vm";
 import { brevo } from "./brevo.js";
 import { createEmailClient } from "./core.js";
 import { loops } from "./loops.js";
@@ -115,10 +116,12 @@ describe("provider-native options reach each adapter", () => {
     const adapter = postmark({ serverToken: "t", fetch: capture.fetch });
 
     const overridden = await adapter.send(simple, withNative({ body: { To: "other@example.com" } }));
-    const plain = await adapter.send(simple, withNative({ body: { Metadata: { a: "1" } } }));
+    const lowercase = await adapter.send(simple, withNative({ body: { to: "other@example.com" } }));
+    const plain = await adapter.send(simple, withNative({ trackOpens: true }));
 
     expect(capture.calls[0]?.json.To).toBe("other@example.com");
     expect(overridden.accepted).toBeUndefined();
+    expect(lowercase.accepted).toBeUndefined();
     expect(plain.accepted).toEqual(["ada@example.com"]);
   });
 
@@ -881,6 +884,16 @@ describe("native entries are snapshotted as plain data", () => {
     );
 
     expect(capture.calls).toHaveLength(0);
+  });
+
+  test("plain objects from another JavaScript realm are accepted", async () => {
+    const capture = jsonCapture({ MessageID: "pm_1" });
+    const client = createEmailClient({ adapters: [postmark({ serverToken: "t", fetch: capture.fetch })] });
+    const model: EmailNativeObject = runInNewContext('({ name: "Ada", items: [{ sku: "a" }] })');
+
+    await client.send(simple, { native: { postmark: { template: { alias: "welcome", model } } } });
+
+    expect(capture.calls[0]?.json.TemplateModel).toEqual({ name: "Ada", items: [{ sku: "a" }] });
   });
 
   test("a class-instance native map is rejected before any request", async () => {
