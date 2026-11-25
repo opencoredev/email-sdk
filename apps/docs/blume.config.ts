@@ -5,6 +5,7 @@ import { vercel } from "blume/deploy";
 import { markdownComponents } from "./lib/markdown-components";
 import { latestDocsRedirects, permanentRedirects } from "./lib/redirects";
 import { appDescription, llmsOverview } from "./lib/shared";
+import { siteOrganization } from "./lib/structured-data";
 import {
   archivedDocsVersions,
   currentDocsLabel,
@@ -169,12 +170,7 @@ export default defineConfig({
     // public/robots.txt carries the hand-written crawler policy.
     robots: false,
     og: { enabled: true },
-    organization: {
-      name: "OpenCore",
-      url: "https://github.com/opencoredev",
-      logo: "/logo.png",
-      sameAs: ["https://github.com/opencoredev", "https://www.npmjs.com/org/opencoredev"],
-    },
+    organization: siteOrganization,
     software: {
       name: "Email SDK",
       license: "https://github.com/opencoredev/email-sdk/blob/main/LICENSE",

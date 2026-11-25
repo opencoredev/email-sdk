@@ -1,12 +1,15 @@
 ---
 // Blog index. Posts are the `type: blog` pages in content/blog (the committed
 // posts plus any fetched from Notra at build time into content/blog/(notra)).
-// Blume renders each post, adds BlogPosting JSON-LD, and builds
-// /blog/rss.xml; this page lists them newest first.
+// Blume renders each post (components/layout/Layout.astro adds its BlogPosting
+// JSON-LD) and builds /blog/rss.xml; this page lists them newest first, with
+// Blog JSON-LD in place of PageLayout's default graph.
 import { getCollection } from "astro:content";
 import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 import { getBlumeCollection } from "blume/runtime";
+
+import { buildBlogIndexStructuredData, serializeJsonLd } from "../../lib/structured-data";
 
 const { config } = data;
 
@@ -58,6 +61,8 @@ const posts = (await getCollection("docs"))
   })
   .toSorted((a, b) => b.date.getTime() - a.date.getTime());
 
+const structuredData = serializeJsonLd(buildBlogIndexStructuredData(posts, pageDescription));
+
 const formatDate = (date: Date): string =>
   date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 ---
@@ -76,7 +81,9 @@ const formatDate = (date: Date): string =>
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
   page={{ title: pageTitle, description: pageDescription, route: "/blog" }}
+  structuredDataEnabled={false}
 >
+  <script type="application/ld+json" is:inline set:html={structuredData} />
   <div class="blog-index">
     <header class="intro">
       <p class="eyebrow">Blog</p>

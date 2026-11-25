@@ -1,6 +1,7 @@
 ---
 title: Migrate from Nodemailer
 description: "A typed Nodemailer alternative for TypeScript: keep SMTP through Email SDK's smtp() adapter, then switch to Resend, SendGrid, or SES APIs without rewriting sends."
+lastModified: 2026-11-05
 ---
 
 If you want a Nodemailer alternative with TypeScript types and provider APIs, you don't have to give up Nodemailer. Email SDK (`@opencoredev/email-sdk`) sends SMTP through Nodemailer and adds typed adapters for 27 provider HTTP APIs, including Resend, SendGrid, Postmark, Mailgun, and Amazon SES. Your code calls one `email.send()` with a typed message, so moving from SMTP to a provider API, or adding a backup provider, changes the client config and not every send.

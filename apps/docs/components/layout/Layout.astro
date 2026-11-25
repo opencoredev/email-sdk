@@ -1,0 +1,32 @@
+---
+// Blume's page shell with this site's JSON-LD (lib/structured-data.ts) in
+// place of Blume's own graph, which has no FAQPage, drops breadcrumbs for pages
+// in a sidebar group without an index page, and types every page an article.
+import type { ComponentProps } from "astro/types";
+import RootLayout from "blume/components/layout/RootLayout.astro";
+import data from "blume:data";
+
+import { buildPageStructuredData, serializeJsonLd } from "../../lib/structured-data";
+
+type Props = ComponentProps<typeof RootLayout>;
+
+const props = Astro.props;
+
+const structuredData = props.noindex
+  ? null
+  : buildPageStructuredData({
+      route: props.page.route,
+      title: props.page.title,
+      description: props.page.description,
+      modified: props.lastModified,
+      published: props.published,
+      pageType: props.pageType,
+      image: props.ogImage,
+      routeTitles: new Map(data.routes.map((route) => [route.path, route.title])),
+    });
+---
+
+<RootLayout {...props} structuredDataEnabled={false}>
+  <slot />
+  {structuredData && <script type="application/ld+json" is:inline set:html={serializeJsonLd(structuredData)} />}
+</RootLayout>

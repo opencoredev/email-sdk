@@ -3,6 +3,7 @@ title: Retries and provider fallback
 description: "Retry one email provider, then fall back to another, such as Resend to Postmark, without an accidental duplicate: what triggers fallback and how to opt in."
 sidebar:
   label: Retries & fallback
+lastModified: 2026-11-23
 ---
 
 To add email fallback between two providers in Node.js, register both adapters on one Email SDK client, name the primary in `defaultAdapter`, and list the backup in `fallback.adapters`. Retries always stay on the current provider; fallback starts only after that provider's last attempt fails. By default fallback continues only when the SDK can prove the first provider did not accept the message: a definite rejection such as a 401 or 422 moves on to the backup, while a timeout or a 5xx stops, because it could mean the email was already sent.
