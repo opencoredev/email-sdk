@@ -3,7 +3,11 @@ import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
 import { jsonString } from "./internal/decode.js";
-import { snapshotNativeObject, snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
+import {
+  assertNativeWithinLimits,
+  snapshotNativeObject,
+  snapshotPersonalizedInputForSend,
+} from "./internal/snapshot.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage, EmailNativeObject } from "./types.js";
 import {
@@ -87,8 +91,9 @@ export function mailgun(
   ) => {
     const message = snapshotMessageForSend(rawMessage);
     validateBuiltInAdapter("mailgun", message);
-    const rawNative = context.native;
-    const native = rawNative && snapshotNativeObject(rawNative);
+    const native = context.native;
+
+    if (native) assertNativeWithinLimits(native);
 
     const body = new FormData();
     body.set("from", formatAddress(message.from));

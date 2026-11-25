@@ -1,6 +1,6 @@
 import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
-import { snapshotNativeObject } from "./internal/snapshot.js";
+import { assertNativeWithinLimits } from "./internal/snapshot.js";
 import { isNonArrayObject, jsonString, responseJson } from "./internal/decode.js";
 import type {
   EmailAttachment,
@@ -86,8 +86,9 @@ export function postmark(
       const safeMessage = snapshotMessageForSend(message);
       validateBuiltInAdapter("postmark", safeMessage, postmarkRules);
 
-      const rawNative = context.native;
-      const native = rawNative && snapshotNativeObject(rawNative);
+      const native = context.native;
+
+      if (native) assertNativeWithinLimits(native);
       const payload = await toPostmarkPayload(safeMessage, options.messageStream);
       const endpoint = native?.template ? "/email/withTemplate" : "/email";
 

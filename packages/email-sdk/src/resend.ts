@@ -1,6 +1,6 @@
 import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
-import { snapshotNativeObject } from "./internal/snapshot.js";
+import { assertNativeWithinLimits } from "./internal/snapshot.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
 import type {
@@ -79,8 +79,9 @@ export function resend(
 
       const safeMessage = snapshotMessageForSend(message);
       validateBuiltInAdapter("resend", safeMessage);
-      const rawNative = context.native;
-      const native = rawNative && snapshotNativeObject(rawNative);
+      const native = context.native;
+
+      if (native) assertNativeWithinLimits(native);
       const payload = await toResendPayload(safeMessage);
 
       const response = await fetcher(`${baseUrl}/emails`, {

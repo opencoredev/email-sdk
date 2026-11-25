@@ -1079,6 +1079,16 @@ describe("native entries are snapshotted as plain data", () => {
     );
   });
 
+  test("direct Postmark send still reads a non-enumerable template field", async () => {
+    const capture = jsonCapture({ MessageID: "pm_1" });
+    const entry: PostmarkNativeOptions = {};
+    Object.defineProperty(entry, "template", { value: { alias: "welcome" }, enumerable: false });
+
+    await postmark({ serverToken: "t", fetch: capture.fetch }).send(simple, { ...context, native: entry });
+
+    expect(capture.calls[0]?.url).toEndWith("/email/withTemplate");
+  });
+
   test("every adapter entry in a send's native map draws on one budget", async () => {
     const capture = jsonCapture({ id: "re_1" });
 

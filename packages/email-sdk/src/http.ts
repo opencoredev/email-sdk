@@ -1,7 +1,7 @@
 import { EmailProviderError } from "./errors.js";
 import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
-import { snapshotMessageForSend, snapshotNativeObject } from "./internal/snapshot.js";
+import { assertNativeWithinLimits, snapshotMessageForSend } from "./internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailMessage,
@@ -72,8 +72,9 @@ export function jsonProvider<
 
       validateBuiltInMessage(options.name, safeMessage, rules);
       const fetcher = options.fetch ?? fetch;
-      const rawNative = context.native;
-      const native = rawNative && snapshotNativeObject(rawNative);
+      const native = context.native;
+
+      if (native) assertNativeWithinLimits(native);
       const payload = await options.buildPayload(safeMessage, native);
       const headers = { "Content-Type": "application/json", ...options.headers() };
 
