@@ -27,9 +27,9 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
+export UNOSEND_API_KEY="..."
 npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter unosend \
-  --api-key "$UNOSEND_API_KEY" \
   --from "hello@example.com" \
   --to "user@example.com" \
   --subject "Hello" \

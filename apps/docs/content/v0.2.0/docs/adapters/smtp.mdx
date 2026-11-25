@@ -64,11 +64,11 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
+export SMTP_PASS="..."
 email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --user hello@example.com \
-  --pass "$SMTP_PASS" \
   --from "Acme <hello@example.com>" \
   --to user@example.com \
   --subject "SMTP test" \

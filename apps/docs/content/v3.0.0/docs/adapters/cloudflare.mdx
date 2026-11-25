@@ -121,13 +121,13 @@ Cloudflare REST API does not return a message id; instead `result.accepted` list
 ## Verify from the CLI
 
 ```bash
-CLOUDFLARE_API_TOKEN="..." CLOUDFLARE_ACCOUNT_ID="..." npx --package @opencoredev/email-sdk email-sdk doctor --adapter cloudflare
+export CLOUDFLARE_API_TOKEN="..." CLOUDFLARE_ACCOUNT_ID="..."
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter cloudflare
 ```
 
 ```bash
 npx --package @opencoredev/email-sdk email-sdk send \
   --adapter cloudflare \
-  --api-token "$CLOUDFLARE_API_TOKEN" \
   --account-id "$CLOUDFLARE_ACCOUNT_ID" \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

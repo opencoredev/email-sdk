@@ -33,9 +33,9 @@ const email = createEmailClient({
 ## CLI
 
 ```bash
+export CLOUDFLARE_API_TOKEN="..."
 npx --yes --package @opencoredev/email-sdk email-sdk send \
   --adapter cloudflare \
-  --api-token "$CLOUDFLARE_API_TOKEN" \
   --account-id "$CLOUDFLARE_ACCOUNT_ID" \
   --from "hello@example.com" \
   --to "user@example.com" \

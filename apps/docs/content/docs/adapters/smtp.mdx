@@ -163,13 +163,13 @@ SMTP_HOST=smtp.purelymail.com npx --package @opencoredev/email-sdk email-sdk doc
 ```
 
 ```bash
+export SMTP_PASS="..."
 npx --package @opencoredev/email-sdk email-sdk send \
   --adapter smtp \
   --host smtp.purelymail.com \
   --port 587 \
   --require-tls \
   --user hello@acme.com \
-  --pass "$SMTP_PASS" \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \
   --subject "SMTP smoke test" \
