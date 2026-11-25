@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { createEmailClient } from "./core.js";
 import { nightmail } from "./nightmail.js";
+import { memoryAdapter } from "./testing.js";
 import type { JsonValue } from "./internal/decode.js";
 import { parseJsonStrict } from "./internal/decode.js";
 import type { EmailMessage } from "./types.js";
@@ -249,6 +251,62 @@ describe("Nightmail adapter", () => {
     );
 
     expect(error).toMatchObject({ status, retryable: false, delivery: "unknown" });
+  });
+
+  test("a retried send replays the same uploads and an identical body", async () => {
+    const calls: Call[] = [];
+    const uploads = new Map<string, string>();
+    let sends = 0;
+
+    const fetch = stubFetch(async (input, init) => {
+      const url = String(input);
+      const headers = new Headers(init?.headers);
+      calls.push({ url, headers, json: parseJsonStrict(String(init?.body)) });
+
+      if (url.endsWith("/v1/attachments")) {
+        const key = headers.get("idempotency-key") ?? "";
+        const id = uploads.get(key) ?? `att_${uploads.size + 1}`;
+        uploads.set(key, id);
+
+        return Response.json({ id }, { status: 201 });
+      }
+
+      sends += 1;
+
+      return sends === 1 ? apiError(503, "UNAVAILABLE", true) : Response.json(queued, { status: 202 });
+    });
+
+    const client = createEmailClient({ adapters: [nightmail({ apiKey: "nm_key", fetch })], retry: { maxAttempts: 2, delay: () => 0 } });
+
+    await client.send(
+      { ...base, attachments: [{ filename: "a.txt", content: "a" }, { filename: "b.txt", content: "b" }] },
+      { idempotencyKey: "order-1" },
+    );
+
+    const sendCalls = calls.filter((call) => call.url.endsWith("/v1/emails/send"));
+
+    expect(sendCalls).toHaveLength(2);
+    expect(sendCalls[1]?.json).toEqual(sendCalls[0]?.json);
+    expect(sendCalls[0]?.json).toMatchObject({ attachments: ["att_1", "att_2"] });
+    expect(uploads.size).toBe(2);
+  });
+
+  test("an abort during an upload stays an abort and never reaches a fallback adapter", async () => {
+    const fetch = stubFetch(async () => {
+      throw new DOMException("upload canceled", "AbortError");
+    });
+
+    const backup = memoryAdapter("backup");
+
+    const client = createEmailClient({
+      adapters: [nightmail({ apiKey: "nm_key", fetch }), backup],
+      fallback: { adapters: ["backup"] },
+    });
+
+    await expect(
+      client.send({ ...base, attachments: [{ filename: "a.txt", content: "a" }] }),
+    ).rejects.toThrow();
+    expect(backup.raw.sent).toHaveLength(0);
   });
 
   test("a transport failure during an upload is not_sent, so fallback can try another adapter", async () => {

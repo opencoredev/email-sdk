@@ -20,10 +20,7 @@ function signed(payload: string, time = String(now / 1000)) {
 }
 
 function withoutRaw() {
-  const root = JSON.parse(body);
-  root.email.parsedData.raw = null;
-
-  return JSON.stringify(root);
+  return body.replace(/"raw": "(?:[^"\\]|\\.)*"/, '"raw": null');
 }
 
 describe("Nightmail inbound", () => {
@@ -91,10 +88,9 @@ describe("Nightmail inbound", () => {
   });
 
   test("reports junk mail through security.spam", () => {
-    const root = JSON.parse(body);
-    root.email.spam = { isJunk: true, reason: "ses_spam" };
+    const junk = body.replace('"isJunk": false', '"isJunk": true');
 
-    expect(parseNightmailInbound({ body: JSON.stringify(root) }).security.spam).toBe("fail");
+    expect(parseNightmailInbound({ body: junk }).security.spam).toBe("fail");
   });
 
   test("rejects the thin nightmail-format event and malformed payloads", () => {

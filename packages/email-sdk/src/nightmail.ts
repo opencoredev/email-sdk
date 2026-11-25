@@ -1,4 +1,4 @@
-import { EmailAdapterError, EmailValidationError } from "./errors.js";
+import { EmailAbortError, EmailAdapterError, EmailValidationError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { isJsonBoolean, jsonField, jsonString, readJson } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
@@ -103,6 +103,11 @@ export function nightmail(
 
       const attachments = await uploadAttachments(message.attachments ?? [], key, request).catch(
         (cause: unknown) => {
+          // Cancellation is the caller's to see, so an abort is never relabelled as a refusal.
+          if (cause instanceof EmailAbortError || (cause instanceof Error && cause.name === "AbortError")) {
+            throw cause;
+          }
+
           const error = toProviderError("nightmail", cause);
 
           // The email was never submitted, so a failed upload or attachment read cannot have sent it.
