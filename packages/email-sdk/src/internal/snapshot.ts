@@ -530,14 +530,6 @@ export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObjec
   return snapshotNativeRecord(entry, 0, budget);
 }
 
-/**
- * Applies the snapshot's plain-data, depth, cycle and size checks to an entry an adapter received
- * directly, without replacing it, so the adapter keeps reading the caller's object as before.
- */
-export function assertNativeWithinLimits(entry: EmailNativeObject): void {
-  snapshotNativeObject(entry);
-}
-
 /** Copies a send's `native` map like `snapshotNativeObject`, with one budget for every entry. */
 export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
   assertPlainNative(native);
