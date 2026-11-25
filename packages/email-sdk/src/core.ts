@@ -504,8 +504,13 @@ export function createEmailClient<
       const submittedMessages =
         path === "personalized_native" ? submittedRecipients : Number(submittedRecipients > 0);
 
+      // A passthrough that replaced the recipients can send to more addresses than the message had.
+      const attemptedRecipients = recipientsReplaced
+        ? Math.max(recipients, accepted + rejected)
+        : recipients;
+
       const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
-      const unknownRecipients = notSent ? 0 : Math.max(0, recipients - accepted - rejected);
+      const unknownRecipients = notSent ? 0 : Math.max(0, attemptedRecipients - accepted - rejected);
       void telemetry.capture("email adapter attempted", {
         failure_kind: resolved ? undefined : classifyAttemptFailure(adapter.name, failure),
         http_status: resolved ? undefined : attemptStatus(adapter.name, failure),
@@ -522,8 +527,8 @@ export function createEmailClient<
         not_sent_attempt_count: Number(notSent),
         uncertain_attempt_count: Number(!resolved && !notSent),
         attempted_message_count: path === "personalized_native" ? recipients : 1,
-        attempted_recipient_count: recipients,
-        not_sent_recipient_count: notSent ? recipients : 0,
+        attempted_recipient_count: attemptedRecipients,
+        not_sent_recipient_count: notSent ? attemptedRecipients : 0,
         accepted_message_count: acceptedMessages,
         accepted_recipient_count: accepted,
         rejected_recipient_count: rejected,

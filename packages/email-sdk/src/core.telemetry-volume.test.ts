@@ -366,6 +366,7 @@ describe("createEmailClient v1", () => {
           adapter_resolved_count: 1,
           acceptance_basis: "explicit",
           accepted_message_count: 1,
+          attempted_recipient_count: accepted + rejected,
           accepted_recipient_count: accepted,
           rejected_recipient_count: rejected,
           unknown_recipient_count: 0,
