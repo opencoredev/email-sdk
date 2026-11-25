@@ -505,8 +505,9 @@ so a durable sender can do this; an `EmailClient` ignores it.
 
 `@opencoredev/convex-email/workflows` imports only types from `@opencoredev/email-sdk/workflows`.
 Its non-retryable error is a local class that the engine recognizes by name, as it recognizes errors
-from another bundle. So the component keeps its `^3.0.1` peer range: apps that never use workflows
-stay on email-sdk 3.0.x without a peer warning, and apps that do need 3.1 for `createWorkflowEngine`.
+from another bundle. So the component's peer range does not move for workflows: apps that never use them keep
+whatever email-sdk version that range accepts, and apps that do need the release that adds
+`createWorkflowEngine`.
 A test fails if anything reachable from that entry loads the SDK's workflows entry at runtime.
 
 The engine runs in a Convex action (the user's `run` function is app code the component cannot

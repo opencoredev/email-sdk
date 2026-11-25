@@ -1,14 +1,14 @@
 /**
  * Experimental: a Convex-backed store, scheduler, and email sender for
- * `@opencoredev/email-sdk/workflows`. Building an engine needs `createWorkflowEngine` from
- * @opencoredev/email-sdk 3.1 or later.
+ * `@opencoredev/email-sdk/workflows`. Building an engine needs `createWorkflowEngine` from the
+ * @opencoredev/email-sdk release that adds that entry.
  *
  * Run the workflow engine inside a Convex action. Runs live in the component's `workflowRuns`
  * table, waits use `ctx.scheduler.runAt`, and each `ctx.send` enqueues through the component's
  * durable queue with the step's idempotency key, so a step is queued at most once.
  */
 // Only types come from `@opencoredev/email-sdk/workflows`, so the package's runtime code loads with
-// email-sdk 3.0.x as well; only apps that build an engine need 3.1. A test enforces this.
+// email-sdk versions that lack the entry; only apps that build an engine need it. A test enforces this.
 import type { EmailAddress, EmailAttachment, EmailMessage, EmailSendOptions, OneOrMany } from "@opencoredev/email-sdk";
 import type {
   WorkflowEmailSender,

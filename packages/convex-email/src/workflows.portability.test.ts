@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 // `@opencoredev/convex-email/workflows` runs inside Convex queries, mutations, and default-runtime
 // actions, which have no Node built-ins. The email-sdk workflows entry it imports has its own guard.
 // It also imports only types from `@opencoredev/email-sdk/workflows`, so the package keeps working
-// with email-sdk 3.0.x, whose peer range it still accepts.
+// with every email-sdk version its peer range accepts, including ones without the workflows entry.
 
 const specifier = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s+)["']([^"']+)["']/gm;
 

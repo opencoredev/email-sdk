@@ -365,10 +365,9 @@ await email.setConfig(ctx, {
 
 ## Workflows (Experimental)
 
-`@opencoredev/convex-email/workflows` runs [Email SDK workflows](https://email-sdk.dev/docs/integrations/convex/workflows) on Convex. Using it needs `@opencoredev/email-sdk` 3.1 or later, which provides `createWorkflowEngine`; the component's peer range still accepts 3.0.1, so apps that skip workflows can stay on 3.0.x. Runs are stored in the component's `workflowRuns` table, waits use `ctx.scheduler.runAt`, and every `ctx.send` goes through this component's queue with the step's idempotency key, so retries, fallback, and webhook status apply to drip emails too. Each workflow send is recorded in the `workflowSends` table, so a replayed step never queues its email twice, even after `cleanupAfterDays` deleted it. Records are kept while the run is active and for `workflowSendRetentionDays` (default 30) after it finishes.
+`@opencoredev/convex-email/workflows` runs [Email SDK workflows](https://email-sdk.dev/docs/integrations/convex/workflows) on Convex. It is not in a published release yet, and it needs the `@opencoredev/email-sdk` release that adds `@opencoredev/email-sdk/workflows`. The entry imports only types from the SDK, so the component's peer range is unchanged for apps that skip workflows. Runs are stored in the component's `workflowRuns` table, waits use `ctx.scheduler.runAt`, and every `ctx.send` goes through this component's queue with the step's idempotency key, so retries, fallback, and webhook status apply to drip emails too. Each workflow send is recorded in the `workflowSends` table, so a replayed step never queues its email twice, even after `cleanupAfterDays` deleted it. Records are kept while the run is active and for `workflowSendRetentionDays` (default 30) after it finishes.
 
 ```ts title="convex/onboarding.ts"
-import { ConvexEmail } from "@opencoredev/convex-email";
 import {
   convexWorkflowEmail,
   convexWorkflowScheduler,
@@ -378,9 +377,9 @@ import { createWorkflowEngine } from "@opencoredev/email-sdk/workflows";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction, type ActionCtx } from "./_generated/server";
+// `email` is the ConvexEmail client from setup above, with its sender action.
+import { email } from "./email";
 import { onboarding } from "./workflows/onboarding";
-
-const email = new ConvexEmail(components.convexEmail);
 
 function engine(ctx: ActionCtx) {
   return createWorkflowEngine({
