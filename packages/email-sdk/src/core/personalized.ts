@@ -23,6 +23,7 @@ import { emailAddressOf, isValidAddress, normalizePersonalizedAdapterResult } fr
 import {
   attemptAdapter,
   defaultDelay,
+  nativeEntryFor,
   RECIPIENT_REPLACING_NATIVE_KEYS,
   withUnknownDelivery,
   type MeasureAttempt,
@@ -94,7 +95,7 @@ export async function attemptNativePersonalized(
               signal: sendOptions?.signal,
               idempotencyKey: sendOptions?.idempotencyKey,
               metadata: attemptMetadata,
-              native: sendOptions?.native?.[adapter.name],
+              native: nativeEntryFor(sendOptions?.native, adapter.name),
             }),
           ),
       );
@@ -392,7 +393,7 @@ export function assertNativeKeepsRecipients(
   if (!native) return;
 
   for (const name of names) {
-    const entry = native[name];
+    const entry = Object.hasOwn(native, name) ? native[name] : undefined;
 
     for (const key of RECIPIENT_REPLACING_NATIVE_KEYS) {
       if (entry?.[key] !== undefined) {

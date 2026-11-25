@@ -4,9 +4,9 @@ import { createEmailClient } from "./core.js";
 import { loops } from "./loops.js";
 import { mailersend } from "./mailersend.js";
 import { mailgun } from "./mailgun.js";
-import { EmailValidationError } from "./errors.js";
+import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { defaultsPlugin } from "./plugins-defaults.js";
-import { postmark } from "./postmark.js";
+import { postmark, type PostmarkNativeOptions } from "./postmark.js";
 import { resend } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
 import { ses } from "./ses.js";
@@ -176,6 +176,38 @@ describe("provider-native options reach each adapter", () => {
       { to: [{ email: "a@example.com" }], dynamic_template_data: { plan: "pro", name: "Ada" } },
       { to: [{ email: "b@example.com" }], dynamic_template_data: { plan: "pro", name: "Linus" } },
     ]);
+  });
+
+  test("beforeSend middleware that mutates a native entry leaves the caller's options unchanged", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+
+    const client = createEmailClient({
+      adapters: [resend({ apiKey: "re", fetch: capture.fetch })],
+      plugins: [
+        {
+          id: "mutate-native",
+          middleware: [
+            {
+              beforeSend(event) {
+                const entry = event.options?.native?.resend;
+
+                if (entry?.template) Object.assign(entry.template, { id: "mutated" });
+
+                return {};
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const options = { native: { resend: { template: { id: "welcome" } } } };
+
+    await client.send(simple, options);
+    await client.send(simple, options);
+
+    expect(capture.calls.map((call) => call.json.template?.id)).toEqual(["mutated", "mutated"]);
+    expect(options.native.resend.template.id).toBe("welcome");
   });
 
   test("SendGrid and Mailgun reject recipient-replacing passthroughs when sendPersonalized is called directly", async () => {
@@ -754,5 +786,73 @@ describe("native request headers", () => {
     expect(received[0]?.contentType).toStartWith("multipart/form-data; boundary=");
     expect(received[0]?.trace).toBe("1");
     expect(received[0]?.fields).toMatchObject({ from: "Acme <hello@example.com>", subject: "Welcome", text: "Hello" });
+  });
+});
+
+describe("native entries stay isolated per adapter and attempt", () => {
+  const capabilities = {
+    repeatedHeaders: true,
+    idempotency: "none",
+    scheduling: false,
+    personalized: "expanded",
+  } as const;
+
+  test("each retry receives a fresh copy of the adapter's entry", async () => {
+    const seen: Array<string | undefined> = [];
+
+    const flaky: EmailAdapter<"flaky", unknown, unknown, { tag?: string }> = {
+      name: "flaky",
+      capabilities,
+      send(_message, attemptContext) {
+        seen.push(attemptContext.native?.tag);
+
+        if (attemptContext.native) Object.assign(attemptContext.native, { tag: "changed" });
+
+        if (attemptContext.attempt === 1) {
+          throw new EmailAdapterError("try again", { adapter: "flaky", retryable: true });
+        }
+
+        return { adapter: "flaky" };
+      },
+    };
+
+    const client = createEmailClient({ adapters: [flaky] });
+    const options = { native: { flaky: { tag: "original" } }, retry: { maxAttempts: 2, delay: () => 0 } };
+
+    await client.send(simple, options);
+
+    expect(seen).toEqual(["original", "original"]);
+    expect(options.native.flaky.tag).toBe("original");
+  });
+
+  test("an adapter named like an Object.prototype key gets no inherited entry", async () => {
+    const received: Array<{ tag?: string } | undefined> = [];
+
+    const proto: EmailAdapter<"constructor", unknown, unknown, { tag?: string }> = {
+      name: "constructor",
+      capabilities,
+      send(_message, attemptContext) {
+        received.push(attemptContext.native);
+
+        return { adapter: "constructor" };
+      },
+    };
+
+    const client = createEmailClient({
+      adapters: [proto, resend({ apiKey: "re", fetch: jsonCapture({ id: "re_1" }).fetch })],
+    });
+
+    await client.send(simple, { native: { resend: { topicId: "t" } } });
+
+    expect(received).toEqual([undefined]);
+  });
+
+  test("Postmark reports accepted recipients when a JavaScript caller passes body: null", async () => {
+    const capture = jsonCapture({ MessageID: "pm_1" });
+    const nullBody: PostmarkNativeOptions = JSON.parse('{"body":null}');
+    const result = await postmark({ serverToken: "t", fetch: capture.fetch }).send(simple, withNative(nullBody));
+
+    expect(result.accepted).toEqual(["ada@example.com"]);
+    expect(capture.calls[0]?.json.To).toBe("ada@example.com");
   });
 });

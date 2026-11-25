@@ -54,7 +54,14 @@ Built-in validation currently returns an empty warnings array on success.
 ## `send(message, options?)`
 
 ```ts title="types.ts"
-type EmailSendOptions<Name extends string = string, Native extends EmailNativeOptionsMap = never> = {
+type EmailSendOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = [Native] extends [never]
+  ? EmailSendOptionsBase<Name>
+  : EmailSendOptionsBase<Name> & { native?: Native }; // experimental, keyed by adapter name
+
+type EmailSendOptionsBase<Name extends string> = {
   adapter?: Name;
   fallback?: {
     adapters: readonly Name[];
@@ -69,7 +76,6 @@ type EmailSendOptions<Name extends string = string, Native extends EmailNativeOp
   idempotencyKey?: string;
   idempotency?: "strict" | "best-effort";
   metadata?: EmailSendMetadata;
-  native?: Native; // experimental, keyed by adapter name; omitted when Native is never
 };
 ```
 
@@ -107,17 +113,22 @@ type EmailSendResult<Name extends string = string, Raw = unknown> = {
 ## `sendMany(items, options?)`
 
 ```ts title="types.ts"
-type EmailSendItem<Name extends string> = {
+type EmailSendItem<Name extends string = string, Native extends EmailNativeOptionsMap = never> = {
   message: EmailMessage;
-  options?: EmailSendOptions<Name>;
+  options?: EmailSendOptions<Name, Native>;
 };
+
+type EmailSendManyOptions<
+  Name extends string = string,
+  Native extends EmailNativeOptionsMap = never,
+> = EmailSendOptions<Name, Native> & { concurrency?: number };
 
 type EmailSendSettledResult<Name extends string> =
   | { ok: true; index: number; result: EmailSendResult<Name> }
   | { ok: false; index: number; error: EmailSdkError };
 ```
 
-Items run one at a time in input order unless the method options set `concurrency` (a positive integer, default `1`), which caps how many items send at once. Results are always in input order. `concurrency` applies to the batch only and is not passed to each send. Item options override method options. When method options set a non-blank `idempotencyKey`, each item without its own `idempotencyKey` derives `<key>:<index>` so providers do not deduplicate distinct items against each other; a blank or non-string shared `idempotencyKey` is rejected per item unless that item supplies its own valid key. `retry` and `fallback` merge one level deep, so an item that sets only `retry.delay` keeps the method's `retry.maxAttempts`; an item's `fallback.adapters` still replaces the method's list. The method returns one settled result per item once input validation passes; non-array `items`, non-object options, or invalid `concurrency` reject the call with `EmailValidationError`.
+Items run one at a time in input order unless the method options set `concurrency` (a positive integer, default `1`), which caps how many items send at once. Results are always in input order. `concurrency` applies to the batch only and is not passed to each send. Item options override method options. When method options set a non-blank `idempotencyKey`, each item without its own `idempotencyKey` derives `<key>:<index>` so providers do not deduplicate distinct items against each other; a blank or non-string shared `idempotencyKey` is rejected per item unless that item supplies its own valid key. `retry` and `fallback` merge one level deep, so an item that sets only `retry.delay` keeps the method's `retry.maxAttempts`; an item's `fallback.adapters` still replaces the method's list. An item's `native` entry for an adapter replaces the method's entry for that adapter and keeps the others. The method returns one settled result per item once input validation passes; non-array `items`, non-object options, or invalid `concurrency` reject the call with `EmailValidationError`.
 
 ## `sendPersonalized(input, options?)`
 

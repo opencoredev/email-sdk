@@ -1,6 +1,6 @@
 import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
-import { jsonString, responseJson } from "./internal/decode.js";
+import { isNonArrayObject, jsonString, responseJson } from "./internal/decode.js";
 import type {
   EmailAttachment,
   EmailMessage,
@@ -187,7 +187,7 @@ function submittedRecipients(message: EmailMessage) {
 function replacesRecipients(native: PostmarkNativeOptions | undefined) {
   const body = native?.body;
 
-  return body !== undefined && ("To" in body || "Cc" in body || "Bcc" in body);
+  return body !== undefined && isNonArrayObject(body) && ("To" in body || "Cc" in body || "Bcc" in body);
 }
 
 async function toPostmarkAttachment(attachment: EmailAttachment) {

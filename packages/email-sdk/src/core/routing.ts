@@ -301,7 +301,7 @@ export function cloneNestedSendOptions(options: EmailNativeSendOptions): EmailNa
 
   const native = options.native;
 
-  if (present("native", native)) copy.native = isNonArrayObject(native) ? { ...native } : native;
+  if (present("native", native)) copy.native = isNonArrayObject(native) ? cloneMetadataRecord(native) : native;
 
   return copy;
 }

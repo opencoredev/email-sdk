@@ -90,6 +90,21 @@ function replacesRecipients(native: EmailNativeObject | undefined) {
   return RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
 }
 
+/**
+ * This adapter's own entry from the send's `native` map, deep-copied so an adapter or a retry
+ * can't change what the caller, a later attempt, or another adapter sees.
+ */
+export function nativeEntryFor(
+  native: EmailNativeSendOptions["native"],
+  adapter: string,
+): EmailNativeObject | undefined {
+  if (!native || !Object.hasOwn(native, adapter)) return undefined;
+
+  const entry = native[adapter];
+
+  return entry === undefined ? undefined : cloneMetadataRecord(entry);
+}
+
 export type AttemptInput = {
   adapter: EmailAdapter;
   message: EmailMessage;
@@ -136,7 +151,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
     if (beforeSend) await beforeSend;
 
     let result: EmailSendResult;
-    const native = input.options?.native?.[input.adapter.name];
+    const native = nativeEntryFor(input.options?.native, input.adapter.name);
 
     try {
       const attemptMessage = snapshotMessage(input.message);
