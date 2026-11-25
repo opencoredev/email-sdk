@@ -1,6 +1,6 @@
 ---
-title: "Resend SMTP Settings and Nodemailer Setup for Node.js"
-description: "Resend SMTP settings: smtp.resend.com, ports 465, 587, 2465 and 2587, API key login, Nodemailer code in TypeScript, idempotency headers and common errors."
+title: "Resend SMTP Settings: Host, Ports and Nodemailer"
+description: "Resend SMTP settings: host smtp.resend.com, user resend, API key as password, ports 465 or 587 (2465 or 2587 if blocked), with Nodemailer code and error fixes."
 type: blog
 date: 2026-10-31
 lastModified: 2026-10-31
@@ -10,7 +10,7 @@ search:
 
 Resend's SMTP server is `smtp.resend.com`. The username is always `resend` and the password is a Resend API key. Use port 465 for TLS from the first byte, or port 587 to connect in plain text and upgrade with STARTTLS. If your host blocks those ports, Resend also listens on 2465 and 2587.
 
-This guide covers those settings, a working Nodemailer setup in TypeScript, the Resend-specific headers that work over SMTP, the errors you're likely to hit, and when to use the HTTP API instead. Settings come from [Resend's SMTP docs](https://resend.com/docs/send-with-smtp), checked October 2026. The code samples typecheck against Nodemailer 10.3 and `@opencoredev/email-sdk` 3.0.1, and the Email SDK behavior described below was checked with `bun test` against a local SMTP server and a stubbed `fetch`. No real email was sent.
+This guide covers those settings, a working Nodemailer setup in TypeScript, the Resend-specific headers that work over SMTP, the errors you're likely to hit, and when to use the HTTP API instead. Settings come from [Resend's SMTP docs](https://resend.com/docs/send-with-smtp), checked November 2026. The code samples typecheck against Nodemailer 10.3 and `@opencoredev/email-sdk` 3.0.1, and the Email SDK behavior described below was checked with `bun test` against a local SMTP server and a stubbed `fetch`. No real email was sent.
 
 ## Resend SMTP settings
 
