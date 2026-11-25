@@ -1253,6 +1253,51 @@ describe("smtp send credentials", () => {
   });
 });
 
+describe("empty flag values", () => {
+  test.each([["--dry-run", ""], ["--fallback", ""]])(
+    "%s with an empty value never sends",
+    async (flag, value) => {
+      let calls = 0;
+
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch() {
+          calls++;
+
+          return Response.json({ id: "sent" });
+        },
+      });
+
+      try {
+        await runCli([
+          "send",
+          "--adapter",
+          "unosend",
+          "--api-key",
+          "fixture-key",
+          "--base-url",
+          server.url.origin,
+          "--from",
+          "hello@example.com",
+          "--to",
+          "user@example.com",
+          "--subject",
+          "Hello",
+          "--text",
+          "It works",
+          flag,
+          value,
+        ]);
+
+        expect(calls).toBe(0);
+      } finally {
+        server.stop(true);
+      }
+    },
+  );
+});
+
 describe("workflows inspect", () => {
   const fixture = "test-support/onboarding-workflow.ts";
 

@@ -713,6 +713,8 @@ async function readPackageInfo(): Promise<PackageInfo> {
   }
 }
 
+const strictBooleanFlags = new Set(["secure", "require-tls", "allow-insecure-auth"]);
+
 function parseFlags(args: string[]) {
   const flags: CliFlags = {};
 
@@ -736,7 +738,12 @@ function parseFlags(args: string[]) {
 
     const next = args[index + 1];
 
-    if (next === undefined || next.startsWith("--")) {
+    const valueless =
+      next === undefined ||
+      next.startsWith("--") ||
+      (next === "" && !strictBooleanFlags.has(key));
+
+    if (valueless) {
       setFlag(flags, key, true);
       continue;
     }
@@ -1094,7 +1101,7 @@ SMTP options:
   --port <port>                Overrides SMTP_PORT.
   --secure                     Use TLS from the start.
   --require-tls                Require STARTTLS.
-  --allow-insecure-auth        Allow SMTP AUTH without TLS.
+  --allow-insecure-auth        Allow SMTP AUTH without TLS. Overrides SMTP_ALLOW_INSECURE_AUTH.
   --user <user>                Overrides SMTP_USER.
   --pass <pass>                Overrides SMTP_PASS.
 `);
