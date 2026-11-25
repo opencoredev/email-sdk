@@ -1080,6 +1080,15 @@ describe("native entries are snapshotted as plain data", () => {
     expect(Array.isArray(copy.list) && copy.list[1]).toBe("b");
   });
 
+  test("an inherited array element is copied as before", () => {
+    const base: EmailNativeValue[] = [];
+    base[1] = "inherited";
+    const list: EmailNativeValue[] = Object.setPrototypeOf(["own"], base);
+    list.length = 2;
+
+    expect(snapshotNativeObject({ list }).list).toEqual(["own", "inherited"]);
+  });
+
   test("a value shared by sibling fields is still copied to each", async () => {
     const capture = jsonCapture({ id: "re_1" });
     const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });

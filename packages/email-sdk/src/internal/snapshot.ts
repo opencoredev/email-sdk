@@ -470,7 +470,7 @@ function snapshotNativeValue(
   copy.length = length;
 
   for (let index = 0; index < length; index += 1) {
-    if (Object.hasOwn(value, index)) {
+    if (index in value) {
       copy[index] = snapshotNativeValue(value[index], depth + 1, budget);
     } else {
       chargeNative(budget, 0);
