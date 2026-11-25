@@ -246,7 +246,10 @@ const factories = {
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
       port: Number(stringFlag(flags, "port") ?? process.env.SMTP_PORT ?? 587),
       secure: truthyFlag(flags, "secure") || process.env.SMTP_SECURE === "true",
-      requireTLS: truthyFlag(flags, "require-tls") || process.env.SMTP_REQUIRE_TLS === "true",
+      requireTLS:
+        truthyFlag(flags, "require-tls") || process.env.SMTP_REQUIRE_TLS === "true"
+          ? true
+          : undefined,
       allowInsecureAuth:
         truthyFlag(flags, "allow-insecure-auth") || process.env.SMTP_ALLOW_INSECURE_AUTH === "true",
       auth:

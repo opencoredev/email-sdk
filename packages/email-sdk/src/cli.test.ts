@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -1071,6 +1072,119 @@ describe("send routing flags", () => {
       ok: false,
       error: { code: "validation_error" },
     });
+  });
+});
+
+describe("smtp send credentials", () => {
+  const smtpArgs = [
+    "send",
+    "--adapter",
+    "smtp",
+    "--host",
+    "127.0.0.1",
+    "--user",
+    "smtp-user",
+    "--pass",
+    "smtp-secret",
+    "--from",
+    "hello@example.com",
+    "--to",
+    "user@example.com",
+    "--subject",
+    "Hello",
+    "--text",
+    "It works",
+  ];
+
+  const clearedSmtpEnv = {
+    SMTP_HOST: undefined,
+    SMTP_PORT: undefined,
+    SMTP_SECURE: undefined,
+    SMTP_REQUIRE_TLS: undefined,
+    SMTP_ALLOW_INSECURE_AUTH: undefined,
+    SMTP_USER: undefined,
+    SMTP_PASS: undefined,
+  };
+
+  /** A plaintext SMTP server that offers AUTH but no STARTTLS, recording every AUTH command. */
+  async function plaintextAuthServer() {
+    const authCommands: string[] = [];
+
+    const server = net.createServer((socket) => {
+      socket.setEncoding("utf8");
+      socket.write("220 test.local\r\n");
+      let inData = false;
+
+      socket.on("data", (chunk: string) => {
+        for (const line of chunk.split("\r\n").filter(Boolean)) {
+          if (inData) {
+            if (line === ".") {
+              inData = false;
+              socket.write("250 queued as TEST1\r\n");
+            }
+
+            continue;
+          }
+
+          const command = line.toUpperCase();
+
+          if (command.startsWith("EHLO")) {
+            socket.write("250-test.local\r\n250 AUTH PLAIN LOGIN\r\n");
+          } else if (command.startsWith("AUTH")) {
+            authCommands.push(line);
+            socket.write("235 authenticated\r\n");
+          } else if (command === "DATA") {
+            inData = true;
+            socket.write("354 go ahead\r\n");
+          } else if (command === "QUIT") {
+            socket.write("221 bye\r\n");
+            socket.end();
+          } else {
+            socket.write("250 ok\r\n");
+          }
+        }
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    // SAFETY: a server listening on a TCP host and port reports an AddressInfo, never a pipe path.
+    const { port } = server.address() as net.AddressInfo;
+
+    return { authCommands, port: String(port), stop: () => server.close() };
+  }
+
+  test("refuses to authenticate over plaintext when the server offers no STARTTLS", async () => {
+    const server = await plaintextAuthServer();
+
+    try {
+      const { stdout, stderr, exitCode } = await runCli(
+        [...smtpArgs, "--port", server.port],
+        clearedSmtpEnv,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(server.authCommands).toEqual([]);
+      expect(stdout + stderr).not.toContain("smtp-secret");
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("--allow-insecure-auth still authenticates over plaintext when asked to", async () => {
+    const server = await plaintextAuthServer();
+
+    try {
+      const { stderr, exitCode } = await runCli(
+        [...smtpArgs, "--port", server.port, "--allow-insecure-auth"],
+        clearedSmtpEnv,
+      );
+
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(server.authCommands).toHaveLength(1);
+    } finally {
+      server.stop();
+    }
   });
 });
 
