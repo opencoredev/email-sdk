@@ -1106,17 +1106,26 @@ describe("smtp send credentials", () => {
     SMTP_PASS: undefined,
   };
 
-  /** A plaintext SMTP server that offers AUTH but no STARTTLS, recording every AUTH command. */
+  /** A plaintext SMTP server that offers AUTH, refuses STARTTLS, and records every command. */
   async function plaintextAuthServer() {
-    const authCommands: string[] = [];
+    const commands: string[] = [];
+    const sockets = new Set<net.Socket>();
+    const closed: Promise<void>[] = [];
 
     const server = net.createServer((socket) => {
+      sockets.add(socket);
+      closed.push(new Promise((resolve) => socket.once("close", () => resolve())));
       socket.setEncoding("utf8");
       socket.write("220 test.local\r\n");
+      let buffered = "";
       let inData = false;
 
       socket.on("data", (chunk: string) => {
-        for (const line of chunk.split("\r\n").filter(Boolean)) {
+        buffered += chunk;
+        const lines = buffered.split("\r\n");
+        buffered = lines.pop() ?? "";
+
+        for (const line of lines) {
           if (inData) {
             if (line === ".") {
               inData = false;
@@ -1127,11 +1136,13 @@ describe("smtp send credentials", () => {
           }
 
           const command = line.toUpperCase();
+          commands.push(command.split(" ")[0] ?? command);
 
           if (command.startsWith("EHLO")) {
             socket.write("250-test.local\r\n250 AUTH PLAIN LOGIN\r\n");
+          } else if (command === "STARTTLS") {
+            socket.write("502 5.5.1 STARTTLS not supported\r\n");
           } else if (command.startsWith("AUTH")) {
-            authCommands.push(line);
             socket.write("235 authenticated\r\n");
           } else if (command === "DATA") {
             inData = true;
@@ -1150,41 +1161,60 @@ describe("smtp send credentials", () => {
     // SAFETY: a server listening on a TCP host and port reports an AddressInfo, never a pipe path.
     const { port } = server.address() as net.AddressInfo;
 
-    return { authCommands, port: String(port), stop: () => server.close() };
+    return {
+      commands,
+      port: String(port),
+      /** Waits for the CLI's connections to close so every command it sent is recorded. */
+      drain: () => Promise.all(closed),
+      stop: async () => {
+        for (const socket of sockets) socket.destroy();
+
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      },
+    };
+  }
+
+  async function sendAgainst(extraArgs: string[], env: Record<string, string | undefined> = {}) {
+    const server = await plaintextAuthServer();
+
+    try {
+      const result = await runCli([...smtpArgs, "--port", server.port, ...extraArgs], {
+        ...clearedSmtpEnv,
+        ...env,
+      });
+
+      await server.drain();
+
+      return { ...result, commands: server.commands };
+    } finally {
+      await server.stop();
+    }
   }
 
   test("refuses to authenticate over plaintext when the server offers no STARTTLS", async () => {
-    const server = await plaintextAuthServer();
+    const { stdout, stderr, exitCode, commands } = await sendAgainst([]);
 
-    try {
-      const { stdout, stderr, exitCode } = await runCli(
-        [...smtpArgs, "--port", server.port],
-        clearedSmtpEnv,
-      );
-
-      expect(exitCode).toBe(1);
-      expect(server.authCommands).toEqual([]);
-      expect(stdout + stderr).not.toContain("smtp-secret");
-    } finally {
-      server.stop();
-    }
+    expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
+    expect(commands).not.toContain("AUTH");
+    expect(stdout + stderr).not.toContain("smtp-secret");
   });
 
   test("--allow-insecure-auth still authenticates over plaintext when asked to", async () => {
-    const server = await plaintextAuthServer();
+    const { stderr, exitCode, commands } = await sendAgainst(["--allow-insecure-auth"]);
 
-    try {
-      const { stderr, exitCode } = await runCli(
-        [...smtpArgs, "--port", server.port, "--allow-insecure-auth"],
-        clearedSmtpEnv,
-      );
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
 
-      expect(stderr).toBe("");
-      expect(exitCode).toBe(0);
-      expect(server.authCommands).toHaveLength(1);
-    } finally {
-      server.stop();
-    }
+  test("--allow-insecure-auth=false overrides SMTP_ALLOW_INSECURE_AUTH=true", async () => {
+    const { exitCode, commands } = await sendAgainst(["--allow-insecure-auth=false"], {
+      SMTP_ALLOW_INSECURE_AUTH: "true",
+    });
+
+    expect(exitCode).toBe(1);
+    expect(commands).not.toContain("AUTH");
   });
 });
 
@@ -1303,11 +1333,12 @@ async function runCli(args: string[], env: Record<string, string | undefined> = 
   const packageRoot = new URL("..", import.meta.url).pathname;
 
   const proc = Bun.spawn({
-    cmd: ["bun", "src/cli.ts", ...args],
+    cmd: ["bun", "--no-env-file", "src/cli.ts", ...args],
     cwd: packageRoot,
     // NODE_ENV=test already disables telemetry; the explicit opt-out keeps these
     // tests network-free even if env propagation changes.
     env: { ...process.env, ...env, EMAIL_SDK_TELEMETRY: "0" },
+    timeout: 30_000,
     stderr: "pipe",
     stdout: "pipe",
   });
