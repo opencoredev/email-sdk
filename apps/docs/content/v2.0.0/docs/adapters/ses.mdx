@@ -104,15 +104,14 @@ adapter](/v2.0.0/docs/adapters/field-support).
 ## Verify from the CLI
 
 ```bash
-AWS_ACCESS_KEY_ID="..." AWS_SECRET_ACCESS_KEY="..." AWS_REGION="us-east-1" \
-  npx --package @opencoredev/email-sdk email-sdk doctor --adapter ses
+export AWS_ACCESS_KEY_ID="..." AWS_SECRET_ACCESS_KEY="..." AWS_REGION="us-east-1"
+# Temporary credentials also need: export AWS_SESSION_TOKEN="..."
+npx --package @opencoredev/email-sdk email-sdk doctor --adapter ses
 ```
 
 ```bash
 npx --package @opencoredev/email-sdk email-sdk send \
   --adapter ses \
-  --access-key-id "$AWS_ACCESS_KEY_ID" \
-  --secret-access-key "$AWS_SECRET_ACCESS_KEY" \
   --region us-east-1 \
   --from "Acme <hello@acme.com>" \
   --to user@example.com \

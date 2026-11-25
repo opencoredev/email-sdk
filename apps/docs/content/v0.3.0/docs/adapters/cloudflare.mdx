@@ -32,16 +32,7 @@ const email = createEmailClient({
 
 ## CLI
 
-```bash
-bunx --yes @opencoredev/email-sdk send \
-  --adapter cloudflare \
-  --api-token "$CLOUDFLARE_API_TOKEN" \
-  --account-id "$CLOUDFLARE_ACCOUNT_ID" \
-  --from "hello@example.com" \
-  --to "user@example.com" \
-  --subject "Hello" \
-  --text "It works"
-```
+The published 0.3.0 package does not include the Cloudflare adapter. Upgrade to 0.4.0 or later and follow the [v0.4.0 Cloudflare instructions](/v0.4.0/docs/adapters/cloudflare#cli).
 
 Cloudflare Email Sending requires a Cloudflare DNS domain onboarded to Email Service. New accounts may be limited to verified recipient addresses, and Email Sending is available on Workers Paid plans.
 
