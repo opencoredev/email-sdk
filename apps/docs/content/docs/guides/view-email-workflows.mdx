@@ -5,7 +5,7 @@ mode: wide
 ---
 
 :::warning[Experimental]
-The inspector ships with `@opencoredev/email-sdk/workflows`, which is new in 3.2. Its output format may change in a minor release.
+The inspector ships with `@opencoredev/email-sdk/workflows`, which is not in a published release yet. Its output format may change in a minor release.
 :::
 
 A workflow is plain TypeScript, so its shape lives in the code: which emails go out, how long it sleeps, where it waits for an event, and what happens when the event never comes. `inspectWorkflow` turns that code into a graph without sending anything, and `describeRun` turns a stored run into a timeline. The viewer below draws both for the onboarding drip from [Email workflows](/docs/guides/email-workflows).
