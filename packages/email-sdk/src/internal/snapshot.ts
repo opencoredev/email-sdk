@@ -392,6 +392,35 @@ export function snapshotPersonalizedInputForSend(
 
 const MAX_NATIVE_DEPTH = 64;
 
+const MAX_NATIVE_NODES = 1_000_000;
+
+const MAX_NATIVE_TEXT_LENGTH = 32 * 1024 * 1024;
+
+/**
+ * Work left for one native snapshot. Shared references are copied once per path, so a small
+ * object graph can expand into far more values than it holds; this caps the expanded result.
+ */
+type NativeContainer = EmailNativeObject | readonly EmailNativeValue[];
+
+interface NativeBudget {
+  nodes: number;
+  textLength: number;
+  readonly ancestors: Set<NativeContainer>;
+}
+
+function nativeBudget(): NativeBudget {
+  return { nodes: 0, textLength: 0, ancestors: new Set() };
+}
+
+function chargeNative(budget: NativeBudget, textLength: number) {
+  budget.nodes += 1;
+  budget.textLength += textLength;
+
+  if (budget.nodes > MAX_NATIVE_NODES || budget.textLength > MAX_NATIVE_TEXT_LENGTH) {
+    throw new EmailValidationError("Native options are too large.");
+  }
+}
+
 // Defined, not assigned, so a key such as "__proto__" stays data instead of setting the prototype.
 function defineNativeField<V>(record: Record<string, V>, key: string, value: V) {
   Object.defineProperty(record, key, { value, enumerable: true, writable: true, configurable: true });
@@ -411,25 +440,51 @@ function isNativeList(value: EmailNativeValue): value is readonly EmailNativeVal
   return Array.isArray(value);
 }
 
-function snapshotNativeValue(value: EmailNativeValue, depth: number): EmailNativeValue {
+function snapshotNativeValue(
+  value: EmailNativeValue,
+  depth: number,
+  budget: NativeBudget,
+): EmailNativeValue {
+  chargeNative(budget, isStringMember(value) ? value.length : 0);
+
   if (!isObjectLike(value)) return value;
 
   if (depth > MAX_NATIVE_DEPTH) {
     throw new EmailValidationError("Native options exceed the maximum nesting depth.");
   }
 
-  if (isNativeList(value)) return value.map((item) => snapshotNativeValue(item, depth + 1));
+  if (!isNativeList(value)) return snapshotNativeRecord(value, depth, budget);
 
-  return snapshotNativeRecord(value, depth);
+  enterNative(value, budget);
+  const copy = value.map((item) => snapshotNativeValue(item, depth + 1, budget));
+  budget.ancestors.delete(value);
+
+  return copy;
 }
 
-function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNativeObject {
+function enterNative(value: NativeContainer, budget: NativeBudget) {
+  if (budget.ancestors.has(value)) {
+    throw new EmailValidationError("Native options must not contain cycles.");
+  }
+
+  budget.ancestors.add(value);
+}
+
+function snapshotNativeRecord(
+  record: EmailNativeObject,
+  depth: number,
+  budget: NativeBudget,
+): EmailNativeObject {
   assertPlainNative(record);
+  enterNative(record, budget);
   const copy: Record<string, EmailNativeValue> = {};
 
   for (const key of Object.keys(record)) {
-    defineNativeField(copy, key, snapshotNativeValue(record[key], depth + 1));
+    chargeNative(budget, key.length);
+    defineNativeField(copy, key, snapshotNativeValue(record[key], depth + 1, budget));
   }
+
+  budget.ancestors.delete(record);
 
   return copy;
 }
@@ -439,18 +494,22 @@ function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNa
  * once, so nothing the caller, a hook, or an adapter holds can change the copy that was checked
  * and sent. Class instances are rejected with an `EmailValidationError`.
  */
-export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObject {
-  return snapshotNativeRecord(entry, 0);
+export function snapshotNativeObject(
+  entry: EmailNativeObject,
+  budget: NativeBudget = nativeBudget(),
+): EmailNativeObject {
+  return snapshotNativeRecord(entry, 0, budget);
 }
 
 /** Copies a send's `native` map with `snapshotNativeObject` for each own entry. */
 export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
   assertPlainNative(native);
+  const budget = nativeBudget();
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
   for (const key of Object.keys(native)) {
     const entry = native[key];
-    defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeObject(entry) : entry);
+    defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeObject(entry, budget) : entry);
   }
 
   return copy;

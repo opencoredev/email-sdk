@@ -981,4 +981,50 @@ describe("native entries are snapshotted as plain data", () => {
 
     expect(Object.hasOwn(capture.calls[0]?.json, "__proto__")).toBe(true);
   });
+  test("shared references that expand past the node budget are rejected before any request", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    let fanout: EmailNativeValue = "x";
+
+    for (let level = 0; level < 20; level += 1) fanout = [fanout, fanout];
+
+    await expect(
+      client.send(simple, { native: { resend: { body: { fanout } } } }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a shared long string that expands past the text budget is rejected", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const chunk = "x".repeat(1024 * 1024);
+
+    await expect(
+      client.send(simple, { native: { resend: { body: { chunks: Array.from({ length: 40 }, () => chunk) } } } }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a cyclic native entry is rejected as a cycle", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const loop: Record<string, EmailNativeValue> = {};
+    loop.self = loop;
+
+    await expect(client.send(simple, { native: { resend: { body: { loop } } } })).rejects.toThrow(
+      "Native options must not contain cycles.",
+    );
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a value shared by sibling fields is still copied to each", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const shared = { plan: "pro" };
+
+    await client.send(simple, { native: { resend: { body: { a: shared, b: shared } } } });
+
+    expect(capture.calls[0]?.json.a).toEqual({ plan: "pro" });
+    expect(capture.calls[0]?.json.b).toEqual({ plan: "pro" });
+  });
 });
