@@ -76,7 +76,7 @@ const runSchema = z.object({
         kind: z.enum(["send", "step"]),
         attempts: z.number(),
         lastError: z.string(),
-        adapter: z.string().optional(),
+        primaryOnly: z.boolean().optional(),
         sequence: z.number().optional(),
       }),
     ]),

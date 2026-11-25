@@ -58,8 +58,8 @@ export type WorkflowStepRecord =
       kind: "send" | "step";
       attempts: number;
       lastError: string;
-      /** For a send that may already have gone out through this adapter: later attempts use only it. */
-      adapter?: string;
+      /** For a send the route's first adapter may already have delivered: later attempts skip fallback. */
+      primaryOnly?: boolean;
       sequence?: number;
     };
 

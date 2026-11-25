@@ -443,11 +443,13 @@ failure inside it is, so a 503 retries and a 400 fails. Errors are recognized by
 entry with its own copy of the error classes. Retries are timers, not in-process sleeps, so a crash during backoff
 loses nothing. The email client's own `retry` option still applies inside each attempt.
 
-A send whose failure says it may already have gone out (an adapter failure whose `delivery` is not
-`not_sent`) records that adapter on its retrying journal entry, and every later attempt goes to
-that adapter alone with an empty fallback list. Otherwise a retry would restart the route from its
-first adapter, which never saw the idempotency key. Ambiguity across two adapters, or from a
-failure that doesn't name its adapter, fails the run.
+A retry restarts the route at its first adapter. So a send failure that may still have delivered
+(an adapter failure whose `delivery` is not `not_sent`) is classified by position. If only the
+first adapter may have sent, the retrying journal entry gets `primaryOnly: true` and later attempts
+pass `fallback: { adapters: [] }`, so the same key reaches the same provider. If a fallback adapter
+or a personalized recipient may have sent, the run fails, since the first adapter never saw the key.
+A crash between a fallback's acceptance and the journal save can still replay from the first
+adapter, and `beforeSend` middleware that rewrites routing on a retry bypasses the rule.
 
 ### Versioning in-flight runs
 

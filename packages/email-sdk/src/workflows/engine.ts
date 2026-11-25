@@ -84,15 +84,10 @@ type ExecutionOutcome =
 
 type RunTransform = (run: WorkflowRun) => WorkflowRun;
 
-function retryingRecord(
-  kind: "send" | "step",
-  attempts: number,
-  lastError: string,
-  adapter: string | undefined,
-): WorkflowStepRecord {
+function retryingRecord(kind: "send" | "step", attempts: number, lastError: string, primaryOnly: boolean): WorkflowStepRecord {
   const record: WorkflowStepRecord = { status: "retrying", kind, attempts, lastError };
 
-  if (adapter !== undefined) record.adapter = adapter;
+  if (primaryOnly) record.primaryOnly = true;
 
   return record;
 }
@@ -117,16 +112,25 @@ function sdkRetryable(cause: unknown): boolean | undefined {
 }
 
 /**
- * The adapters a failed send may still have delivered through: each adapter failure that is not
- * `not_sent`. An entry is undefined when the failure doesn't name its adapter.
+ * Where a failed send may still have gone out. `first`: only the route's first adapter may have
+ * delivered, so a retry with fallback turned off reaches the provider that saw the idempotency key.
+ * `later`: a fallback adapter, or one recipient of a personalized send, may have delivered; a retry
+ * starts the route over at its first adapter, which never saw the key, so it can't be retried.
  */
-function ambiguousAdapters(cause: unknown): (string | undefined)[] {
+function deliveryRisk(cause: unknown): "none" | "first" | "later" {
   const code = causeString(cause, "code");
-  const failures = code === "route_error" ? causeArray(cause, "failures") : code === "adapter_error" ? [cause] : [];
 
-  return failures
-    .filter((failure) => causeString(failure, "delivery") !== "not_sent")
-    .map((failure) => causeString(failure, "adapter"));
+  if (code === "adapter_error") return causeString(cause, "delivery") === "not_sent" ? "none" : "first";
+
+  if (code !== "route_error" && code !== "all_recipients_failed") return "none";
+
+  const mayHaveSent = causeArray(cause, "failures").map((failure) => causeString(failure, "delivery") !== "not_sent");
+
+  if (code === "all_recipients_failed") return mayHaveSent.includes(true) ? "later" : "none";
+
+  if (mayHaveSent.slice(1).includes(true)) return "later";
+
+  return mayHaveSent[0] === true ? "first" : "none";
 }
 
 function isPermanentFailure(cause: unknown): boolean {
@@ -662,13 +666,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       name: string,
       kind: "send" | "step",
       retry: WorkflowRetryPolicy | undefined,
-      effect: (pinnedAdapter: string | undefined) => Promise<WorkflowJsonValue | void>,
+      effect: (primaryOnly: boolean) => Promise<WorkflowJsonValue | void>,
     ): Promise<WorkflowJsonValue | undefined> {
       if (!(await renew()) || !live()) return suspend();
 
       const previous = current.journal[name];
       const attempt = (previous?.status === "retrying" ? previous.attempts : 0) + 1;
-      const previousPin = previous?.status === "retrying" ? previous.adapter : undefined;
+      const wasPrimaryOnly = previous?.status === "retrying" && previous.primaryOnly === true;
       const policy = resolveRetry(options.retry, definition.retry, retry);
       const startedAt = now();
 
@@ -696,16 +700,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       let result: WorkflowJsonValue | void;
 
       try {
-        result = await withHeartbeat(() => effect(previousPin));
+        result = await withHeartbeat(() => effect(wasPrimaryOnly));
       } catch (cause) {
         const error = toError(cause);
-        // A send that may have gone out through one adapter retries through that adapter alone, so
-        // its idempotency key reaches the provider that saw it. Ambiguity across adapters, or from
-        // an unnamed one, can't be pinned, so that send fails instead of risking a second copy.
-        const ambiguous = kind === "send" ? ambiguousAdapters(cause) : [];
-        const pin = previousPin ?? ambiguous[0];
-        const unpinnable = ambiguous.some((adapter) => adapter === undefined || adapter !== pin);
-        const willRetry = !unpinnable && !isPermanentFailure(cause) && attempt < policy.maxAttempts;
+        const risk = kind === "send" ? deliveryRisk(cause) : "none";
+        const primaryOnly = wasPrimaryOnly || risk === "first";
+        const willRetry = risk !== "later" && !isPermanentFailure(cause) && attempt < policy.maxAttempts;
 
         // A run this execution is failing or already failed, as when `run` rejected beside this
         // step, stays failed.
@@ -725,7 +725,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           ...run,
           status: "waiting",
           wait: { kind: "retry", step: name, until },
-          journal: journalWith(run.journal, name, retryingRecord(kind, attempt, error.message, pin)),
+          journal: journalWith(run.journal, name, retryingRecord(kind, attempt, error.message, primaryOnly)),
         }));
 
         if (saved) await scheduleWake(current);
@@ -802,9 +802,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
           const idempotencyKey = await whileLive(workflowIdempotencyKey(loaded.id, name));
 
-          const sent = await sideEffect(name, "send", undefined, async (pinnedAdapter) => {
-            const routed =
-              pinnedAdapter === undefined ? sendOptions : { ...sendOptions, adapter: pinnedAdapter, fallback: { adapters: [] } };
+          const sent = await sideEffect(name, "send", undefined, async (primaryOnly) => {
+            const routed = primaryOnly ? { ...sendOptions, fallback: { adapters: [] } } : sendOptions;
 
             const response = await email.send(message, { ...routed, idempotencyKey }, { runId: loaded.id, step: name });
             const sendRecord: WorkflowSendRecord = { adapter: response.adapter };

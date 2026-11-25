@@ -1521,7 +1521,7 @@ describe("workflows: review regressions", () => {
     expect((await engine.start(once, ada, { id: "run-2" })).status).toBe("failed");
   });
 
-  test("a send a fallback adapter may have delivered retries through that adapter alone", async () => {
+  test("a send a fallback adapter may have delivered fails instead of retrying from the primary", async () => {
     const primarySends: EmailMessage[] = [];
     const backupKeys: (string | undefined)[] = [];
     let primaryDown = true;
@@ -1553,12 +1553,13 @@ describe("workflows: review regressions", () => {
       },
     };
 
+    // withAdapter overrides the adapter option, so pinning by name could not hold; failing must.
     const email = createEmailClient({
       adapters: [primary, backup],
       fallback: { adapters: ["backup"] },
       telemetry: false,
       retry: { maxAttempts: 1 },
-    });
+    }).withAdapter("primary");
 
     const once = defineWorkflow({
       name: "once",
@@ -1568,18 +1569,16 @@ describe("workflows: review regressions", () => {
     });
 
     const { engine, scheduler } = setup([once], { email });
-    const key = await workflowIdempotencyKey("run-1", "welcome");
 
-    expect((await engine.start(once, ada, { id: "run-1" })).wait).toMatchObject({ kind: "retry", step: "welcome" });
-    expect((await engine.get("run-1"))?.journal.welcome).toMatchObject({ status: "retrying", adapter: "backup" });
+    expect((await engine.start(once, ada, { id: "run-1" })).status).toBe("failed");
+    expect(backupKeys).toEqual([await workflowIdempotencyKey("run-1", "welcome")]);
 
     primaryDown = false;
     backupLost = false;
     await scheduler.advance("1h", engine);
 
-    expect((await engine.get("run-1"))?.status).toBe("completed");
     expect(primarySends).toHaveLength(0);
-    expect(backupKeys).toEqual([key, key]);
+    expect(backupKeys).toHaveLength(1);
   });
 
   test("a send the primary may have delivered never falls back on a later attempt", async () => {
@@ -1623,6 +1622,7 @@ describe("workflows: review regressions", () => {
     const { engine, scheduler } = setup([once], { email });
 
     expect((await engine.start(once, ada, { id: "run-1" })).wait).toMatchObject({ kind: "retry", step: "welcome" });
+    expect((await engine.get("run-1"))?.journal.welcome).toMatchObject({ status: "retrying", primaryOnly: true });
     await scheduler.advance("1h", engine);
 
     expect((await engine.get("run-1"))?.status).toBe("failed");
