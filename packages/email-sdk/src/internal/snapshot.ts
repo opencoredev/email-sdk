@@ -412,19 +412,20 @@ function nativeBudget(): NativeBudget {
   return { nodes: 0, textLength: 0, ancestors: new Set() };
 }
 
-function chargeNative(budget: NativeBudget, textLength: number) {
-  reserveNative(budget, 1);
-  budget.nodes += 1;
-  budget.textLength += textLength;
-
-  if (budget.textLength > MAX_NATIVE_TEXT_LENGTH) {
+// Charged before a container's slots are walked or allocated, so a huge or sparse array or key
+// set fails before any copy.
+function chargeNativeSlots(budget: NativeBudget, count: number) {
+  if (budget.nodes + count > MAX_NATIVE_NODES) {
     throw new EmailValidationError("Native options are too large.");
   }
+
+  budget.nodes += count;
 }
 
-// Checked before walking a container, so a huge or sparse array or key set fails before any copy.
-function reserveNative(budget: NativeBudget, count: number) {
-  if (budget.nodes + count > MAX_NATIVE_NODES) {
+function chargeNativeText(budget: NativeBudget, length: number) {
+  budget.textLength += length;
+
+  if (budget.textLength > MAX_NATIVE_TEXT_LENGTH) {
     throw new EmailValidationError("Native options are too large.");
   }
 }
@@ -448,12 +449,21 @@ function isNativeList(value: EmailNativeValue): value is readonly EmailNativeVal
   return Array.isArray(value);
 }
 
+function enterNative(value: NativeContainer, budget: NativeBudget) {
+  if (budget.ancestors.has(value)) {
+    throw new EmailValidationError("Native options must not contain cycles.");
+  }
+
+  budget.ancestors.add(value);
+}
+
+// The caller has already charged this value's slot.
 function snapshotNativeValue(
   value: EmailNativeValue,
   depth: number,
   budget: NativeBudget,
 ): EmailNativeValue {
-  chargeNative(budget, isStringMember(value) ? value.length : 0);
+  if (isStringMember(value)) chargeNativeText(budget, value.length);
 
   if (!isObjectLike(value)) return value;
 
@@ -464,7 +474,7 @@ function snapshotNativeValue(
   if (!isNativeList(value)) return snapshotNativeRecord(value, depth, budget);
 
   const length = value.length;
-  reserveNative(budget, length);
+  chargeNativeSlots(budget, length);
   enterNative(value, budget);
   const copy: EmailNativeValue[] = [];
   copy.length = length;
@@ -473,8 +483,6 @@ function snapshotNativeValue(
     if (index in value) {
       const item = snapshotNativeValue(value[index], depth + 1, budget);
       Object.defineProperty(copy, index, { value: item, enumerable: true, writable: true, configurable: true });
-    } else {
-      chargeNative(budget, 0);
     }
   }
 
@@ -483,14 +491,7 @@ function snapshotNativeValue(
   return copy;
 }
 
-function enterNative(value: NativeContainer, budget: NativeBudget) {
-  if (budget.ancestors.has(value)) {
-    throw new EmailValidationError("Native options must not contain cycles.");
-  }
-
-  budget.ancestors.add(value);
-}
-
+// Charges one slot per key and one per value before reading any value.
 function snapshotNativeRecord(
   record: EmailNativeObject,
   depth: number,
@@ -499,11 +500,11 @@ function snapshotNativeRecord(
   assertPlainNative(record);
   enterNative(record, budget);
   const keys = Object.keys(record);
-  reserveNative(budget, keys.length * 2);
+  chargeNativeSlots(budget, keys.length * 2);
   const copy: Record<string, EmailNativeValue> = {};
 
   for (const key of keys) {
-    chargeNative(budget, key.length);
+    chargeNativeText(budget, key.length);
     defineNativeField(copy, key, snapshotNativeValue(record[key], depth + 1, budget));
   }
 
@@ -517,33 +518,25 @@ function snapshotNativeRecord(
  * once, so nothing the caller, a hook, or an adapter holds can change the copy that was checked
  * and sent. Class instances are rejected with an `EmailValidationError`.
  */
-export function snapshotNativeObject(
-  entry: EmailNativeObject,
-  budget: NativeBudget = nativeBudget(),
-): EmailNativeObject {
-  chargeNative(budget, 0);
+export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObject {
+  const budget = nativeBudget();
+  chargeNativeSlots(budget, 1);
 
   return snapshotNativeRecord(entry, 0, budget);
 }
 
-/** Copies a send's `native` map with `snapshotNativeObject` for each own entry. */
+/** Copies a send's `native` map like `snapshotNativeObject`, with one budget for every entry. */
 export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
   assertPlainNative(native);
   const budget = nativeBudget();
   const keys = Object.keys(native);
-  reserveNative(budget, keys.length * 2);
+  chargeNativeSlots(budget, keys.length * 2);
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
   for (const key of keys) {
-    chargeNative(budget, key.length);
+    chargeNativeText(budget, key.length);
     const entry = native[key];
-
-    if (isObjectLike(entry)) {
-      defineNativeField(copy, key, snapshotNativeObject(entry, budget));
-    } else {
-      chargeNative(budget, 0);
-      defineNativeField(copy, key, entry);
-    }
+    defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeRecord(entry, 0, budget) : entry);
   }
 
   return copy;

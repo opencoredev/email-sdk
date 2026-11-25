@@ -1030,6 +1030,30 @@ describe("native entries are snapshotted as plain data", () => {
     expect(capture.calls).toHaveLength(0);
   });
 
+  test("nested sparse arrays are charged in full before either is walked", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    let innerReads = 0;
+    const inner: EmailNativeValue[] = [];
+    inner.length = 600_000;
+    Object.defineProperty(inner, 0, {
+      enumerable: true,
+      get() {
+        innerReads += 1;
+
+        return "x";
+      },
+    });
+    const outer: EmailNativeValue[] = [inner];
+    outer.length = 600_000;
+
+    await expect(client.send(simple, { native: { resend: { body: { outer } } } })).rejects.toThrow(
+      "Native options are too large.",
+    );
+    expect(innerReads).toBe(0);
+    expect(capture.calls).toHaveLength(0);
+  });
+
   test("every adapter entry in a send's native map draws on one budget", async () => {
     const capture = jsonCapture({ id: "re_1" });
 
