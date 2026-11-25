@@ -205,9 +205,10 @@ deploy hook on the `notra-published` `repository_dispatch` event, a daily cron,
 or manual `workflow_dispatch`. It needs the `VERCEL_DEPLOY_HOOK_URL` secret;
 without it the job no-ops.
 
-Page dates come from git history. `bun run lastmod:generate` (also the first
-prebuild step) writes each docs, project, and tools page's `lastModified`
-front matter: the newest commit that changed the page or a data file its
+Page dates come from git history. `bun run lastmod:generate` regenerates the
+adapter FAQs, then writes each docs, project, and tools page's `lastModified`
+front matter (the date step is also the first prebuild step, where a stale FAQ
+still fails `adapter-faq:check`): the newest commit that changed the page or a data file its
 components render (the map lives in `lib/lastmod.ts`), skipping the Blume
 migration commit and reading older history from the Fumadocs paths. Commit its
 output with your content change. It also writes `lib/custom-page-dates.json`

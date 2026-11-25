@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "blume dev",
-    "prebuild": "bun run lastmod:generate && bun run registry:check && bun run adapter-faq:check && bun run compare:check && bun scripts/fetch-notra-posts.ts && bun scripts/generate-feeds.ts && bun run og:generate",
+    "prebuild": "bun scripts/generate-lastmod.ts && bun run registry:check && bun run adapter-faq:check && bun run compare:check && bun scripts/fetch-notra-posts.ts && bun scripts/generate-feeds.ts && bun run og:generate",
     "build": "blume build && bun scripts/patch-vercel-config.ts",
     "preview": "bun scripts/preview-static.ts",
     "validate": "blume validate --strict",
@@ -18,7 +18,7 @@
     "registry:check": "bun scripts/generate-email-registry.ts --check",
     "adapter-faq:generate": "bun scripts/generate-adapter-faq.ts",
     "adapter-faq:check": "bun scripts/generate-adapter-faq.ts --check",
-    "lastmod:generate": "bun scripts/generate-lastmod.ts",
+    "lastmod:generate": "bun run adapter-faq:generate && bun scripts/generate-lastmod.ts",
     "test": "bun test",
     "compare:generate": "bun scripts/generate-compare-pages.ts",
     "compare:check": "bun scripts/generate-compare-pages.ts --check",

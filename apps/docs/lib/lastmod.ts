@@ -132,9 +132,11 @@ export function pageDataFiles(source: string): string[] {
 
 /**
  * A file's text without its front matter `lastModified:` line, so a commit
- * that only refreshes the date doesn't date the page.
+ * that only refreshes the date doesn't date the page. Line endings are
+ * normalized, so a CRLF checkout of an unchanged file matches its blob.
  */
-export function withoutLastmod(text: string): string {
+export function withoutLastmod(checkout: string): string {
+  const text = checkout.replaceAll("\r\n", "\n");
   const end = text.startsWith("---\n") ? text.indexOf("\n---\n", 3) : -1;
 
   if (end === -1) return text;

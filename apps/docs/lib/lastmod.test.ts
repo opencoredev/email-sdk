@@ -18,6 +18,12 @@ describe("withoutLastmod", () => {
     expect(withoutLastmod(before)).not.toBe(withoutLastmod(after));
   });
 
+  test("treats a CRLF checkout like its LF blob", () => {
+    const blob = "---\ntitle: Page\nlastModified: 2026-09-01\n---\n\nBody.\n";
+
+    expect(withoutLastmod(blob.replaceAll("\n", "\r\n"))).toBe(withoutLastmod(blob));
+  });
+
   test("leaves a lastModified line in the body alone", () => {
     const text = "---\ntitle: Page\n---\n\nlastModified: 2026-09-01\n";
 
