@@ -174,6 +174,7 @@ seo:
 sidebar:
   label: Overview
   icon: git-compare-arrows
+lastModified: ${comparePairs.map(comparePairLastmod).toSorted().at(-1)}
 ---
 
 ${header}

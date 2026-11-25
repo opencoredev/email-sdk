@@ -205,8 +205,20 @@ deploy hook on the `notra-published` `repository_dispatch` event, a daily cron,
 or manual `workflow_dispatch`. It needs the `VERCEL_DEPLOY_HOOK_URL` secret;
 without it the job no-ops.
 
-The Vercel project needs `VERCEL_DEEP_CLONE=true` so each page's "Last
-updated" date and sitemap `<lastmod>` come from git history.
+Page dates come from git history. `bun run lastmod:generate` (also the first
+prebuild step) writes each docs, project, and tools page's `lastModified`
+front matter: the newest commit that changed the page or a data file its
+components render (the map lives in `lib/lastmod.ts`), skipping the Blume
+migration commit and reading older history from the Fumadocs paths. Commit its
+output with your content change. Compare pages take their dates from
+`lib/compare.ts` and blog posts from their own front matter. The Vercel project
+needs `VERCEL_DEEP_CLONE=true` so the prebuild step sees full history; in a
+shallow clone it keeps the committed dates.
+
+`components/layout/Layout.astro` replaces Blume's JSON-LD with the site's own
+graph from `lib/structured-data.ts`: FAQPage on adapter and compare pages,
+BreadcrumbList everywhere below the homepage, WebApplication for tools, and
+CollectionPage and Blog for the /compare and /blog indexes.
 
 ## Homebrew Formula
 
