@@ -467,9 +467,14 @@ function snapshotNativeValue(
   reserveNative(budget, length);
   enterNative(value, budget);
   const copy: EmailNativeValue[] = [];
+  copy.length = length;
 
   for (let index = 0; index < length; index += 1) {
-    copy.push(snapshotNativeValue(value[index], depth + 1, budget));
+    if (Object.hasOwn(value, index)) {
+      copy[index] = snapshotNativeValue(value[index], depth + 1, budget);
+    } else {
+      chargeNative(budget, 0);
+    }
   }
 
   budget.ancestors.delete(value);
@@ -493,7 +498,7 @@ function snapshotNativeRecord(
   assertPlainNative(record);
   enterNative(record, budget);
   const keys = Object.keys(record);
-  reserveNative(budget, keys.length);
+  reserveNative(budget, keys.length * 2);
   const copy: Record<string, EmailNativeValue> = {};
 
   for (const key of keys) {
@@ -525,13 +530,19 @@ export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOpt
   assertPlainNative(native);
   const budget = nativeBudget();
   const keys = Object.keys(native);
-  reserveNative(budget, keys.length);
+  reserveNative(budget, keys.length * 2);
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
   for (const key of keys) {
     chargeNative(budget, key.length);
     const entry = native[key];
-    defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeObject(entry, budget) : entry);
+
+    if (isObjectLike(entry)) {
+      defineNativeField(copy, key, snapshotNativeObject(entry, budget));
+    } else {
+      chargeNative(budget, 0);
+      defineNativeField(copy, key, entry);
+    }
   }
 
   return copy;

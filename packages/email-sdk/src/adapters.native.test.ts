@@ -26,6 +26,7 @@ import {
   messageWithoutProviderSpecificFields,
 } from "../test-support/adapter-fixtures.js";
 import { stubFetch } from "../test-support/fetch.js";
+import { snapshotNativeObject } from "./internal/snapshot.js";
 
 const simple: EmailMessage = {
   from: "Acme <hello@example.com>",
@@ -1066,6 +1067,17 @@ describe("native entries are snapshotted as plain data", () => {
       ),
     ).rejects.toThrow("Native options must not contain cycles.");
     expect(capture.calls).toHaveLength(0);
+  });
+
+  test("array holes stay holes in the snapshot", () => {
+    const list: EmailNativeValue[] = [];
+    list[1] = "b";
+
+    const copy = snapshotNativeObject({ list });
+
+    expect(Array.isArray(copy.list) && copy.list.length).toBe(2);
+    expect(Object.hasOwn(copy.list ?? {}, 0)).toBe(false);
+    expect(Array.isArray(copy.list) && copy.list[1]).toBe("b");
   });
 
   test("a value shared by sibling fields is still copied to each", async () => {
