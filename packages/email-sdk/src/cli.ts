@@ -736,7 +736,7 @@ function parseFlags(args: string[]) {
 
     const next = args[index + 1];
 
-    if (!next || next.startsWith("--")) {
+    if (next === undefined || next.startsWith("--")) {
       setFlag(flags, key, true);
       continue;
     }

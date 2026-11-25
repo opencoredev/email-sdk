@@ -1233,6 +1233,14 @@ describe("smtp send credentials", () => {
     expect(commands).not.toContain("AUTH");
   });
 
+  test("rejects an empty --allow-insecure-auth value before connecting", async () => {
+    const { stderr, exitCode, commands } = await sendAgainst(["--allow-insecure-auth", ""]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("must be true or false");
+    expect(commands).toEqual([]);
+  });
+
   test.each([
     ["--require-tls=yes", { SMTP_REQUIRE_TLS: "true" }],
     ["--secure=maybe", { SMTP_SECURE: "true" }],
