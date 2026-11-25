@@ -1,4 +1,4 @@
-import { validatePersonalizedInput } from "./core/personalized.js";
+import { assertNativeKeepsRecipients, validatePersonalizedInput } from "./core/personalized.js";
 import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
@@ -188,6 +188,7 @@ export function mailgun(
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
       validatePersonalizedInput(safeInput);
+      assertNativeKeepsRecipients(["mailgun"], { mailgun: context.native });
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [

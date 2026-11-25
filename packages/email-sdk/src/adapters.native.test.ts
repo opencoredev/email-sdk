@@ -178,6 +178,34 @@ describe("provider-native options reach each adapter", () => {
     ]);
   });
 
+  test("SendGrid and Mailgun reject recipient-replacing passthroughs when sendPersonalized is called directly", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+
+    const input = {
+      message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+      recipients: [{ to: "a@example.com", variables: { name: "Ada" } }],
+    };
+
+    const adapters = [
+      () =>
+        sendgrid({ apiKey: "sg", fetch: capture.fetch }).sendPersonalized?.(
+          input,
+          withNative({ body: { personalizations: [{ to: [{ email: "other@example.com" }] }] } }),
+        ),
+      () =>
+        mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: capture.fetch }).sendPersonalized?.(
+          input,
+          withNative({ fields: { to: "other@example.com" } }),
+        ),
+    ];
+
+    for (const send of adapters) {
+      await expect(send()).rejects.toBeInstanceOf(EmailValidationError);
+    }
+
+    expect(capture.calls).toHaveLength(0);
+  });
+
   test("SES replaces simple content with a stored template and keeps headers and attachments", async () => {
     const capture = jsonCapture({ MessageId: "ses_1" });
 

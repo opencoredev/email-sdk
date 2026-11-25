@@ -1,4 +1,4 @@
-import { validatePersonalizedInput } from "./core/personalized.js";
+import { assertNativeKeepsRecipients, validatePersonalizedInput } from "./core/personalized.js";
 import { firstString, jsonProvider } from "./http.js";
 import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import {
@@ -94,6 +94,7 @@ export function sendgrid(
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
       validatePersonalizedInput(safeInput);
+      assertNativeKeepsRecipients(["sendgrid"], { sendgrid: context.native });
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [
