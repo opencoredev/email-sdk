@@ -123,7 +123,8 @@ removed from the child environment. CI sets `LIVE_ADAPTERS_EXCLUDE=graph` so
 `live:plan` never selects Graph there: CI has no Microsoft Graph credentials.
 Run `bun run live:graph` locally to check that adapter. The CI live job runs
 only on manual `workflow_dispatch`, because CI has no provider credentials; run
-live gates locally with `bun run live:run` or `bun run live:<adapter>`.
+live gates locally with `bun run live:run -- <adapter list>` or
+`bun run live:<adapter>`.
 
 ## Telemetry
 
