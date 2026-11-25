@@ -28,6 +28,9 @@ export default defineSchema({
     // The adapter the current processing lease last sent a request to; cleared on each new lease.
     dispatchedAdapter: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
+    // Set on a workflow step's email. Its idempotency key is the workflow's own: `workflowSends`
+    // dedupes it, and a caller's lookup by the same key never matches it.
+    workflowRunId: v.optional(v.string()),
     sendMetadata: v.optional(vEmailMetadata),
     attemptCount: v.number(),
     processingLease: v.optional(v.number()),
@@ -44,7 +47,7 @@ export default defineSchema({
   })
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"])
     .index("by_status_and_updatedAt", ["status", "updatedAt"])
-    .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_idempotencyKey_and_workflowRunId", ["idempotencyKey", "workflowRunId"])
     .index("by_ownerId_and_idempotencyKey", ["ownerId", "idempotencyKey"])
     .index("by_createdAt", ["createdAt"])
     .index("by_terminalAt", ["terminalAt"])
@@ -78,6 +81,37 @@ export default defineSchema({
     .index("by_emailId", ["emailId"])
     .index("by_receivedAt", ["receivedAt"]),
 
+  // Experimental workflow runs (@opencoredev/convex-email/workflows). `state` is the engine's JSON
+  // run document; the other columns are copies of its fields that the indexes need.
+  workflowRuns: defineTable({
+    runId: v.string(),
+    workflow: v.string(),
+    status: v.string(),
+    subject: v.optional(v.string()),
+    active: v.boolean(),
+    dueAt: v.optional(v.number()),
+    revision: v.number(),
+    state: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_runId", ["runId"])
+    .index("by_subject_and_active", ["subject", "active"])
+    .index("by_active_and_dueAt", ["active", "dueAt"]),
+
+  // One row per workflow send, keyed by the step's idempotency key. A replayed step finds its email
+  // here even after email cleanup deleted the email row. `releasedAt` is set once the run finishes;
+  // the row is deleted `workflowSendRetentionDays` later.
+  workflowSends: defineTable({
+    idempotencyKey: v.string(),
+    runId: v.string(),
+    emailId: v.id("emails"),
+    createdAt: v.number(),
+    releasedAt: v.optional(v.number()),
+  })
+    .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_runId", ["runId"])
+    .index("by_releasedAt", ["releasedAt"]),
+
   config: defineTable({
     key: v.string(),
     testMode: v.optional(v.boolean()),
@@ -86,6 +120,7 @@ export default defineSchema({
     maxAttempts: v.optional(v.number()),
     retryBaseMs: v.optional(v.number()),
     cleanupAfterDays: v.optional(v.number()),
+    workflowSendRetentionDays: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
 
