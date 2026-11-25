@@ -26,6 +26,7 @@ import {
   messageWithoutProviderSpecificFields,
 } from "../test-support/adapter-fixtures.js";
 import { stubFetch } from "../test-support/fetch.js";
+import { snapshotNativeObject } from "./internal/snapshot.js";
 
 const simple: EmailMessage = {
   from: "Acme <hello@example.com>",
@@ -980,5 +981,171 @@ describe("native entries are snapshotted as plain data", () => {
     await client.send(simple, { native: { resend: entry } });
 
     expect(Object.hasOwn(capture.calls[0]?.json, "__proto__")).toBe(true);
+  });
+  test("shared references that expand past the node budget are rejected before any request", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    let fanout: EmailNativeValue = "x";
+
+    for (let level = 0; level < 20; level += 1) fanout = [fanout, fanout];
+
+    await expect(
+      client.send(simple, { native: { resend: { body: { fanout } } } }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a shared long string that expands past the text budget is rejected", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const chunk = "x".repeat(1024 * 1024);
+
+    await expect(
+      client.send(simple, { native: { resend: { body: { chunks: Array.from({ length: 40 }, () => chunk) } } } }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a cyclic native entry is rejected as a cycle", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const loop: Record<string, EmailNativeValue> = {};
+    loop.self = loop;
+
+    await expect(client.send(simple, { native: { resend: { body: { loop } } } })).rejects.toThrow(
+      "Native options must not contain cycles.",
+    );
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("a sparse array longer than the node budget is rejected before it is walked", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const sparse: EmailNativeValue[] = [];
+    sparse.length = 2_000_000;
+
+    await expect(client.send(simple, { native: { resend: { body: { sparse } } } })).rejects.toThrow(
+      "Native options are too large.",
+    );
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("nested sparse arrays are charged in full before either is walked", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    let innerReads = 0;
+    const inner: EmailNativeValue[] = [];
+    inner.length = 600_000;
+    Object.defineProperty(inner, 0, {
+      enumerable: true,
+      get() {
+        innerReads += 1;
+
+        return "x";
+      },
+    });
+    const outer: EmailNativeValue[] = [inner];
+    outer.length = 600_000;
+
+    await expect(client.send(simple, { native: { resend: { body: { outer } } } })).rejects.toThrow(
+      "Native options are too large.",
+    );
+    expect(innerReads).toBe(0);
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("an array proxy reporting a non-integer length is rejected before it is walked", () => {
+    const forged: EmailNativeValue[] = new Proxy([], {
+      get: (_target, key) => (key === "length" ? Number.POSITIVE_INFINITY : undefined),
+    });
+
+    expect(() => snapshotNativeObject({ forged })).toThrow(
+      "Native options contain an array with an invalid length.",
+    );
+  });
+
+  test("every adapter entry in a send's native map draws on one budget", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+
+    const client = createEmailClient({
+      adapters: [
+        resend({ apiKey: "re", fetch: capture.fetch }),
+        postmark({ serverToken: "t", fetch: capture.fetch }),
+      ],
+    });
+
+    let fanout: EmailNativeValue = "x";
+
+    for (let level = 0; level < 18; level += 1) fanout = [fanout, fanout];
+
+    await expect(
+      client.send(simple, {
+        native: { resend: { body: { fanout } }, postmark: { body: { fanout } } },
+      }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("direct SendGrid sendPersonalized rejects a cyclic native entry", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+    const loop: Record<string, EmailNativeValue> = {};
+    loop.self = loop;
+
+    await expect(
+      sendgrid({ apiKey: "sg", fetch: capture.fetch }).sendPersonalized?.(
+        {
+          message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+          recipients: [{ to: "a@example.com", variables: { name: "Ada" } }],
+        },
+        { ...context, native: { body: { loop } } },
+      ),
+    ).rejects.toThrow("Native options must not contain cycles.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("array holes stay holes in the snapshot", () => {
+    const list: EmailNativeValue[] = [];
+    list[1] = "b";
+
+    const copy = snapshotNativeObject({ list });
+
+    expect(Array.isArray(copy.list) && copy.list.length).toBe(2);
+    expect(Object.hasOwn(copy.list ?? {}, 0)).toBe(false);
+    expect(Array.isArray(copy.list) && copy.list[1]).toBe("b");
+  });
+
+  test("an inherited array element is copied as before", () => {
+    const base: EmailNativeValue[] = [];
+    base[1] = "inherited";
+    const list: EmailNativeValue[] = Object.setPrototypeOf(["own"], base);
+    list.length = 2;
+
+    expect(snapshotNativeObject({ list }).list).toEqual(["own", "inherited"]);
+  });
+
+  test("an index setter on Array.prototype doesn't intercept the copy", () => {
+    Object.defineProperty(Array.prototype, "0", {
+      set() {
+        throw new Error("setter ran");
+      },
+      configurable: true,
+    });
+
+    try {
+      expect(snapshotNativeObject({ list: ["a"] }).list).toEqual(["a"]);
+    } finally {
+      Reflect.deleteProperty(Array.prototype, "0");
+    }
+  });
+
+  test("a value shared by sibling fields is still copied to each", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const shared = { plan: "pro" };
+
+    await client.send(simple, { native: { resend: { body: { a: shared, b: shared } } } });
+
+    expect(capture.calls[0]?.json.a).toEqual({ plan: "pro" });
+    expect(capture.calls[0]?.json.b).toEqual({ plan: "pro" });
   });
 });
