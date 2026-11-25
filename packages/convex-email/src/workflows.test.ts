@@ -26,7 +26,7 @@ import schema from "./component/schema.js";
 import type { ConvexWorkflowSendArgs } from "./shared/types.js";
 import { emailSender } from "./node/index.js";
 import { registerConvexEmail } from "./testing.js";
-import { modules, SENDER } from "../test-support/sender.js";
+import { modules, RENAMED_SENDER, SENDER } from "../test-support/sender.js";
 
 function component() {
   const reference = componentsGeneric().convexEmail;
@@ -1002,6 +1002,18 @@ describe("convex workflow send records", () => {
     await t.mutation(api.workflows.enqueueSend, workflowSend);
 
     await expect(t.mutation(api.workflows.enqueueSend, { ...workflowSend, runId: "run-2" })).rejects.toThrow("run-1");
+  });
+
+  test("a replayed send registers a renamed sender action without queueing a second email", async () => {
+    const t = convexTest(schema, modules);
+
+    const emailId = await t.mutation(api.workflows.enqueueSend, workflowSend);
+
+    expect(await t.mutation(api.workflows.enqueueSend, { ...workflowSend, sender: RENAMED_SENDER })).toBe(emailId);
+    expect(await countRows(t, "emails")).toBe(1);
+    expect(await t.run(async (ctx) => (await ctx.db.query("sender").collect()).map((doc) => doc.handle))).toEqual([
+      RENAMED_SENDER,
+    ]);
   });
 });
 

@@ -467,6 +467,10 @@ async function workflowsCommand(args: string[], flags: CliFlags) {
 
   if (!modulePath) fail("Pass the module that exports the workflow: email-sdk workflows inspect <module>.");
 
+  for (const name of ["export", "subject", "format", "max-paths", "max-depth"]) {
+    if (flags[name] === true) fail(`--${name} needs a value.`);
+  }
+
   const format = stringFlag(flags, "format") ?? "json";
 
   if (!isWorkflowInspectFormat(format)) {

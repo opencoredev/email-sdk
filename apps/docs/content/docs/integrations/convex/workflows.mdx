@@ -54,7 +54,7 @@ export const resume = internalAction({
 });
 
 export const sendEvent = internalAction({
-  args: { name: v.string(), subject: v.string() },
+  args: { name: v.string(), subject: v.string(), payload: v.optional(v.object({ plan: v.string() })) },
   handler: async (ctx, args) => {
     await engine(ctx).sendEvent(args);
   },
@@ -68,7 +68,7 @@ export const resumeDue = internalAction({
 });
 ```
 
-Start a run from a mutation with `ctx.scheduler.runAfter(0, internal.onboarding.start, { ... })`, and send `activated` or `unsubscribed` events the same way.
+Start a run from a mutation with `ctx.scheduler.runAfter(0, internal.onboarding.start, { ... })`, and send `activated` or `unsubscribed` events the same way, for example `{ name: "activated", subject: user.email, payload: { plan: "pro" } }`.
 
 ## Recover crashed runs
 

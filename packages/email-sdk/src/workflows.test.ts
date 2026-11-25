@@ -1521,6 +1521,58 @@ describe("workflows: review regressions", () => {
     expect((await engine.start(once, ada, { id: "run-2" })).status).toBe("failed");
   });
 
+  test("a fallback adapter that may have delivered fails the run instead of retrying the route", async () => {
+    const primarySends: EmailMessage[] = [];
+    const backupKeys: (string | undefined)[] = [];
+    let primaryDown = true;
+
+    const primary = {
+      ...memoryAdapter("primary"),
+      send: (message: EmailMessage) => {
+        if (primaryDown) {
+          throw new EmailAdapterError("503", { adapter: "primary", status: 503, retryable: true, delivery: "not_sent" });
+        }
+
+        primarySends.push(message);
+
+        return { adapter: "primary", id: `msg_${primarySends.length}` };
+      },
+    };
+
+    const backup = {
+      ...memoryAdapter("backup"),
+      send: (_message: EmailMessage, options?: EmailSendOptions) => {
+        backupKeys.push(options?.idempotencyKey);
+
+        throw new EmailAdapterError("response lost", { adapter: "backup", retryable: true, delivery: "unknown" });
+      },
+    };
+
+    const email = createEmailClient({
+      adapters: [primary, backup],
+      fallback: { adapters: ["backup"] },
+      telemetry: false,
+      retry: { maxAttempts: 1 },
+    });
+
+    const once = defineWorkflow({
+      name: "once",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"));
+      },
+    });
+
+    const { engine, scheduler } = setup([once], { email });
+    const run = await engine.start(once, ada, { id: "run-1" });
+
+    expect(run.status).toBe("failed");
+    expect(backupKeys).toEqual([await workflowIdempotencyKey("run-1", "welcome")]);
+
+    primaryDown = false;
+    await scheduler.advance("1h", engine);
+    expect(primarySends).toHaveLength(0);
+  });
+
   test("an Email SDK error from another bundle is classified by its shape", async () => {
     // A CommonJS consumer gets the root entry's errors from a different copy of the class.
     class ForeignAdapterError extends Error {

@@ -181,7 +181,7 @@ The key is `wf_` followed by the SHA-256 hex digest of the JSON-encoded `[runId,
 
 - Adapters with native idempotency (Resend and the others marked in [delivery capabilities](/docs/adapters/capability-groups)) drop the duplicate. Postmark is not one of them.
 - SMTP sets a stable `Message-ID`, which receiving systems can use to dedupe.
-- Adapters with no idempotency support may deliver that one email twice.
+- Adapters with no idempotency support reject a keyed send by default (`idempotency: "strict"`), so the run fails before anything is sent. To send through one anyway, pass `{ idempotency: "best-effort" }` as the `ctx.send` options and accept that a crash in that gap may deliver that one email twice. On Convex the component's queue already dedupes by the key, so its sender always uses best-effort.
 
 ## Storage and timers
 

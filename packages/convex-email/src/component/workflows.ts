@@ -156,6 +156,9 @@ export const enqueueSend = mutation({
         });
       }
 
+      // A replay after the app renamed its sender action must still point the queue at the new one.
+      await registerSender(ctx, args.sender);
+
       return recorded.emailId;
     }
 

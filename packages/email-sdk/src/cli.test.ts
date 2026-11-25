@@ -1136,6 +1136,9 @@ describe("workflows inspect", () => {
       [["workflows", "inspect", fixture, "--input", "{}"], "Invalid input for workflow onboarding"],
       [["workflows", "inspect", "missing-module.ts"], "Could not import missing-module.ts"],
       [["workflows", "inspect", fixture, "--max-paths", "0"], "--max-paths must be a positive integer"],
+      [["workflows", "inspect", fixture, "--format"], "--format needs a value"],
+      [["workflows", "inspect", fixture, "--export"], "--export needs a value"],
+      [["workflows", "inspect", fixture, "--max-depth"], "--max-depth needs a value"],
     ];
 
     for (const [args, message] of cases) {

@@ -91,6 +91,10 @@ function toError(cause: unknown): Error {
 /**
  * Whether an Email SDK error allows a retry, or undefined for other errors. A route or
  * all-recipients error wraps the adapter failures, and is retryable when any of them is.
+ *
+ * A retry starts the route again from its first adapter. When a fallback adapter may already have
+ * delivered (its failure is not `not_sent`), that adapter's own idempotency can't stop the first
+ * adapter from sending again, so the route error is permanent.
  */
 function sdkRetryable(cause: unknown): boolean | undefined {
   const code = causeString(cause, "code");
@@ -100,7 +104,13 @@ function sdkRetryable(cause: unknown): boolean | undefined {
 
   if (code !== "route_error" && code !== "all_recipients_failed") return retryable;
 
-  return retryable || causeArray(cause, "failures").some((failure) => causeBoolean(failure, "retryable") === true);
+  const failures = causeArray(cause, "failures");
+
+  if (code === "route_error" && failures.slice(1).some((failure) => causeString(failure, "delivery") !== "not_sent")) {
+    return false;
+  }
+
+  return retryable || failures.some((failure) => causeBoolean(failure, "retryable") === true);
 }
 
 function isPermanentFailure(cause: unknown): boolean {
