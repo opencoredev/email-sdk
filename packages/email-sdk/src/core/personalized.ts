@@ -11,17 +11,19 @@ import type {
   EmailAdapter,
   EmailHooks,
   EmailMessage,
+  EmailNativeOptionsMap,
   EmailPersonalizedInput,
   EmailPersonalizedResult,
   EmailRetryConfig,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   EmailSendResult,
 } from "../types.js";
 import { emailAddressOf, isValidAddress, normalizePersonalizedAdapterResult } from "../utils.js";
 import {
   attemptAdapter,
   defaultDelay,
+  RECIPIENT_REPLACING_NATIVE_KEYS,
   withUnknownDelivery,
   type MeasureAttempt,
 } from "./attempts.js";
@@ -45,7 +47,7 @@ export async function attemptNativePersonalized(
   adapter: EmailAdapter,
   input: EmailPersonalizedInput,
   hookMessage: EmailMessage,
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
@@ -92,6 +94,7 @@ export async function attemptNativePersonalized(
               signal: sendOptions?.signal,
               idempotencyKey: sendOptions?.idempotencyKey,
               metadata: attemptMetadata,
+              native: sendOptions?.native?.[adapter.name],
             }),
           ),
       );
@@ -229,7 +232,7 @@ export type PersonalizedAttempt = EmailPersonalizedResult & {
 export async function attemptExpandedPersonalized(
   adapter: EmailAdapter,
   expanded: readonly ExpandedRecipient[],
-  sendOptions: EmailSendOptions | undefined,
+  sendOptions: EmailNativeSendOptions | undefined,
   clientRetry: EmailRetryConfig | undefined,
   hooks: EmailHooks[],
   middleware: EmailSendMiddleware[],
@@ -375,6 +378,27 @@ export function validatePersonalizedInput(input: EmailPersonalizedInput) {
             `Personalized variable "${key}" cannot be converted to a string.`,
           );
         }
+      }
+    }
+  }
+}
+
+// The personalized result must name exactly who was sent to, so the raw passthroughs that can
+// replace the recipients are refused outright.
+export function assertNativeKeepsRecipients(
+  names: readonly string[],
+  native: EmailNativeOptionsMap | undefined,
+) {
+  if (!native) return;
+
+  for (const name of names) {
+    const entry = native[name];
+
+    for (const key of RECIPIENT_REPLACING_NATIVE_KEYS) {
+      if (entry?.[key] !== undefined) {
+        throw new EmailValidationError(
+          `sendPersonalized can't use native.${name}.${key}, because it can replace the recipients the result reports. Use send() for this message, or the adapter's typed native options.`,
+        );
       }
     }
   }

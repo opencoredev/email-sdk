@@ -54,7 +54,7 @@ Built-in validation currently returns an empty warnings array on success.
 ## `send(message, options?)`
 
 ```ts title="types.ts"
-type EmailSendOptions<Name extends string> = {
+type EmailSendOptions<Name extends string = string, Native extends EmailNativeOptionsMap = never> = {
   adapter?: Name;
   fallback?: {
     adapters: readonly Name[];
@@ -69,8 +69,11 @@ type EmailSendOptions<Name extends string> = {
   idempotencyKey?: string;
   idempotency?: "strict" | "best-effort";
   metadata?: EmailSendMetadata;
+  native?: Native; // experimental, keyed by adapter name; omitted when Native is never
 };
 ```
+
+`native` carries provider-specific options; each adapter receives only its own entry. The client's `send()` fills `Native` with `EmailNativeOptions<typeof adapters>`, so `native` is typed from its adapters. A bare `EmailSendOptions<Name>` annotation leaves `Native` as `never` and has no `native` field, so code written before it existed still compiles. To accept native options in your own helper, type the parameter as `Parameters<typeof email.send>[1]`. See [Use provider-native features](/docs/guides/provider-native-options).
 
 `idempotency` controls what `idempotencyKey` requires. With `"strict"`, the default, a route that includes an adapter whose `capabilities.idempotency` is `"none"` fails with `EmailValidationError` before any request, so a key is never dropped silently. `"best-effort"` sends anyway and forwards the key to adapters that use it.
 

@@ -20,6 +20,7 @@ import {
   resolvePluginAdapters,
 } from "./core/lifecycle.js";
 import {
+  assertNativeKeepsRecipients,
   attemptExpandedPersonalized,
   attemptNativePersonalized,
   expandPersonalizedMessage,
@@ -78,9 +79,10 @@ import type {
   EmailPlugin,
   EmailPluginClientExtensions,
   EmailSendItem,
-  EmailSendManyOptions,
+  EmailNativeSendManyOptions,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeOptionsMap,
+  EmailNativeSendOptions,
   EmailSendResult,
   EmailRetryConfig,
   EmailSendSettledResult,
@@ -158,6 +160,8 @@ function snapshotHooks(raw: EmailHooks, label: string): EmailHooks {
 
   return copy;
 }
+
+type NativeSendItem = EmailSendItem<string, EmailNativeOptionsMap>;
 
 export function createEmailClient<
   const TAdapters extends readonly EmailAdapter[],
@@ -415,10 +419,10 @@ export function createEmailClient<
   const telemetrySource = getTelemetrySource();
   const hooks = [...pluginHooks, ...(clientHooks ? [clientHooks] : [])];
 
-  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke) => {
+  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke, recipientsReplaced) => {
     if (!telemetry?.enabled) return invoke();
 
-    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke);
+    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke, recipientsReplaced);
   };
 
   const measureAttemptTelemetry = async <T extends EmailSendResult>(
@@ -427,6 +431,7 @@ export function createEmailClient<
     path: AttemptPath,
     recipients: number,
     invoke: () => T | PromiseLike<T>,
+    recipientsReplaced = false,
   ): Promise<T> => {
     const startedAt = Date.now();
     const adapterName = normalizeAdapterName(adapter.name);
@@ -478,13 +483,15 @@ export function createEmailClient<
       const counts = acceptanceCounts(
         resultAccepted ?? adapterError?.acceptedCount,
         resultRejected ?? adapterError?.rejectedCount,
-        recipients,
+        recipientsReplaced ? undefined : recipients,
         adapterError !== undefined,
       );
 
       const { accepted, rejected } = counts;
       const acceptedMessages = path === "personalized_native" ? accepted : Number(accepted > 0);
-      const inferred = resolved && resultAccepted === undefined && resultRejected === undefined;
+
+      const inferred =
+        resolved && !recipientsReplaced && resultAccepted === undefined && resultRejected === undefined;
 
       const acceptanceBasis = counts.explicit
         ? "explicit"
@@ -591,7 +598,7 @@ export function createEmailClient<
     message: EmailMessage,
     route: EmailRoute,
     operation: "send" | "personalized",
-    sendOptions: EmailSendOptions | undefined,
+    sendOptions: EmailNativeSendOptions | undefined,
     from = 0,
   ): Promise<void> | undefined => {
     if (from === 0) assertMessage(message);
@@ -644,7 +651,7 @@ export function createEmailClient<
     }
   };
 
-  const snapshotSendOptions = (raw: EmailSendOptions | undefined): EmailSendOptions | undefined => {
+  const snapshotSendOptions = (raw: EmailNativeSendOptions | undefined): EmailNativeSendOptions | undefined => {
     if (raw === undefined) return undefined;
 
     return readBoundary(() => {
@@ -656,7 +663,7 @@ export function createEmailClient<
     }, "Email send options");
   };
 
-  const resolveCheckedRoute = (sendOptions: EmailSendOptions | undefined) => {
+  const resolveCheckedRoute = (sendOptions: EmailNativeSendOptions | undefined) => {
     validateRetry(sendOptions?.retry);
     const route = resolveRoute(defaultAdapter, clientFallback, sendOptions);
     validateFallback(adapters, route.fallback);
@@ -666,7 +673,7 @@ export function createEmailClient<
 
   const validate = async (
     message: EmailMessage,
-    sendOptions?: EmailSendOptions,
+    sendOptions?: EmailNativeSendOptions,
   ): Promise<EmailValidationResult> => {
     const safeOptions = snapshotSendOptions(sendOptions);
     const route = readBoundary(() => resolveCheckedRoute(safeOptions), "Email send options");
@@ -685,7 +692,7 @@ export function createEmailClient<
 
   const send = async (
     message: EmailMessage,
-    sendOptions?: EmailSendOptions,
+    sendOptions?: EmailNativeSendOptions,
   ): Promise<EmailSendResult> => {
     const startedAt = Date.now();
 
@@ -870,8 +877,8 @@ export function createEmailClient<
   };
 
   const sendMany = async (
-    items: readonly EmailSendItem[],
-    manyOptions?: EmailSendManyOptions,
+    items: readonly NativeSendItem[],
+    manyOptions?: EmailNativeSendManyOptions,
   ): Promise<readonly EmailSendSettledResult[]> => {
     readBoundary(() => {
       if (!Array.isArray(items)) {
@@ -881,7 +888,7 @@ export function createEmailClient<
 
     const startedAt = Date.now();
     let concurrency = 1;
-    let sendOptions: EmailSendOptions | undefined;
+    let sendOptions: EmailNativeSendOptions | undefined;
 
     if (manyOptions !== undefined) {
       try {
@@ -917,7 +924,7 @@ export function createEmailClient<
     let firstErrorCode: string | undefined;
     let totalRecipients = 0;
 
-    const itemSendOptions = (index: number, itemOptions: EmailSendOptions | undefined) => {
+    const itemSendOptions = (index: number, itemOptions: EmailNativeSendOptions | undefined) => {
       const safeItem = itemOptions ? cloneNestedSendOptions(itemOptions) : undefined;
       const merged = mergeSendOptions(sendOptions, safeItem);
 
@@ -936,8 +943,8 @@ export function createEmailClient<
       return merged;
     };
 
-    const settle = async (index: number, message: EmailMessage, item: EmailSendItem) => {
-      let itemOptions: EmailSendOptions | undefined;
+    const settle = async (index: number, message: EmailMessage, item: NativeSendItem) => {
+      let itemOptions: EmailNativeSendOptions | undefined;
 
       try {
         itemOptions = readBoundary(() => {
@@ -1145,7 +1152,7 @@ export function createEmailClient<
 
   const sendPersonalized = async (
     input: EmailPersonalizedInput,
-    sendOptions?: EmailSendOptions,
+    sendOptions?: EmailNativeSendOptions,
   ): Promise<EmailPersonalizedResult> => {
     const startedAt = Date.now();
 
@@ -1227,6 +1234,7 @@ export function createEmailClient<
       );
 
       attemptedAdapter = route.primary;
+      assertNativeKeepsRecipients(route.names, safePreparedOptions?.native);
 
       const expanded = readBoundary(
         () =>
@@ -1343,7 +1351,7 @@ export function createEmailClient<
     // A live read-only view: the type says ReadonlyMap, and a cast can no longer change routing.
     adapters: new ReadonlyMapView(adapters),
     defaultAdapter,
-    validate(message: EmailMessage, sendOptions?: EmailSendOptions) {
+    validate(message: EmailMessage, sendOptions?: EmailNativeSendOptions) {
       return validate(message, sendOptions);
     },
     send,
@@ -1358,7 +1366,7 @@ export function createEmailClient<
     withAdapter(name: string) {
       requireAdapter(adapters, name);
 
-      const routeOptions = (value: EmailSendOptions | undefined): EmailSendOptions => {
+      const routeOptions = (value: EmailNativeSendOptions | undefined): EmailNativeSendOptions => {
         if (value === undefined) return { adapter: name };
 
         return readBoundary(() => {
@@ -1370,7 +1378,7 @@ export function createEmailClient<
         }, "Email send options");
       };
 
-      const routeManyOptions = (value: EmailSendManyOptions | undefined): EmailSendManyOptions => {
+      const routeManyOptions = (value: EmailNativeSendManyOptions | undefined): EmailNativeSendManyOptions => {
         if (value === undefined) return { adapter: name };
 
         return readBoundary(() => {
@@ -1388,16 +1396,16 @@ export function createEmailClient<
       };
 
       return {
-        async validate(message: EmailMessage, sendOptions?: EmailSendOptions) {
+        async validate(message: EmailMessage, sendOptions?: EmailNativeSendOptions) {
           return validate(message, routeOptions(sendOptions));
         },
-        async send(message: EmailMessage, sendOptions?: EmailSendOptions) {
+        async send(message: EmailMessage, sendOptions?: EmailNativeSendOptions) {
           return send(message, routeOptions(sendOptions));
         },
-        async sendMany(items: readonly EmailSendItem[], sendOptions?: EmailSendManyOptions) {
+        async sendMany(items: readonly NativeSendItem[], sendOptions?: EmailNativeSendManyOptions) {
           return sendMany(items, routeManyOptions(sendOptions));
         },
-        async sendPersonalized(input: EmailPersonalizedInput, sendOptions?: EmailSendOptions) {
+        async sendPersonalized(input: EmailPersonalizedInput, sendOptions?: EmailNativeSendOptions) {
           return sendPersonalized(input, routeOptions(sendOptions));
         },
       };

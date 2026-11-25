@@ -7,7 +7,7 @@ import {
   optionalStringAddresses,
   sendAtIsoUtcSeconds,
 } from "./payloads.js";
-import type { EmailAdapter } from "./types.js";
+import type { EmailAdapter, EmailNativePassthrough } from "./types.js";
 import {
   SUPPORTED_MESSAGE_FIELDS,
   assertSupportedMessageFields,
@@ -23,7 +23,7 @@ export type SparkPostAdapterOptions = {
 
 export function sparkpost(
   options: SparkPostAdapterOptions,
-): EmailAdapter<"sparkpost", { baseUrl: string }> {
+): EmailAdapter<"sparkpost", { baseUrl: string }, unknown, EmailNativePassthrough> {
   return jsonProvider({
     name: "sparkpost",
     baseUrl: options.baseUrl ?? "https://api.sparkpost.com/api/v1",

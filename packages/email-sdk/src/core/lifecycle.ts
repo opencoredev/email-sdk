@@ -12,7 +12,7 @@ import type {
   EmailPlugin,
   EmailPluginContext,
   EmailSendMiddleware,
-  EmailSendOptions,
+  EmailNativeSendOptions,
   MaybePromise,
 } from "../types.js";
 import { isFunction, isNonArrayObject } from "../internal/decode.js";
@@ -99,7 +99,7 @@ export function applyClientExtension<TClient extends object, TExtension extends 
 export function applyBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
-  onOptions?: (options: EmailSendOptions | undefined) => void,
+  onOptions?: (options: EmailNativeSendOptions | undefined) => void,
 ): MaybePromise<EmailBeforeSendEvent> {
   if (middleware.length === 0) return event;
 
@@ -109,7 +109,7 @@ export function applyBeforeSendMiddleware(
 async function runBeforeSendMiddleware(
   middleware: readonly EmailSendMiddleware[],
   event: EmailBeforeSendEvent,
-  onOptions?: (options: EmailSendOptions | undefined) => void,
+  onOptions?: (options: EmailNativeSendOptions | undefined) => void,
 ): Promise<EmailBeforeSendEvent> {
   let message = event.message;
   let options = event.options;
@@ -140,7 +140,7 @@ async function runBeforeSendMiddleware(
 
         // A fresh object per middleware, never the caller's options. The clone keeps own keys set
         // to undefined, so middleware can still clear a setting.
-        const merged: EmailSendOptions = { ...options, ...cloneNestedSendOptions(nextOptions) };
+        const merged: EmailNativeSendOptions = { ...options, ...cloneNestedSendOptions(nextOptions) };
 
         options = merged;
       }

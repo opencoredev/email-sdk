@@ -2,7 +2,12 @@ import { EmailProviderError } from "./errors.js";
 import { jsonString, readJsonBody } from "./internal/decode.js";
 import type { JsonValue } from "./internal/decode.js";
 import { snapshotMessageForSend } from "./internal/snapshot.js";
-import type { EmailAdapter, EmailMessage } from "./types.js";
+import type {
+  EmailAdapter,
+  EmailMessage,
+  EmailNativeObject,
+  EmailNativePassthrough,
+} from "./types.js";
 import {
   BUILT_IN_ADAPTER_CAPABILITIES,
   httpErrorDelivery,
@@ -11,6 +16,7 @@ import {
   normalizeAdapterResult,
   readErrorBody,
   validateBuiltInMessage,
+  withNativeRequestHeaders,
   type AdapterRulesOption,
   type BuiltInAdapterName,
   type LegacyEmailSendResult,
@@ -21,7 +27,8 @@ export { snapshotMessageForSend };
 
 export type JsonProviderOptions<
   Name extends BuiltInAdapterName,
-  TPayload,
+  TPayload extends object,
+  Native extends EmailNativePassthrough = EmailNativePassthrough,
 > = AdapterRulesOption<Name> & {
   name: Name;
   baseUrl: string;
@@ -33,7 +40,8 @@ export type JsonProviderOptions<
    */
   headers: () => Record<string, string>;
   fetch?: typeof fetch;
-  buildPayload: (message: EmailMessage) => TPayload | Promise<TPayload>;
+  /** `native` is this adapter's entry from the send's `native` option, when one was given. */
+  buildPayload: (message: EmailMessage, native: Native | undefined) => TPayload | Promise<TPayload>;
   /** Receives the parsed JSON response body, or `{}` when the body is empty or malformed. */
   parseResponse?: (
     body: JsonValue,
@@ -42,9 +50,13 @@ export type JsonProviderOptions<
   ) => LegacyEmailSendResult;
 };
 
-export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
-  options: JsonProviderOptions<Name, TPayload>,
-): EmailAdapter<Name, { baseUrl: string }> {
+export function jsonProvider<
+  const Name extends BuiltInAdapterName,
+  TPayload extends object,
+  Native extends EmailNativePassthrough & EmailNativeObject = EmailNativePassthrough,
+>(
+  options: JsonProviderOptions<Name, TPayload, Native>,
+): EmailAdapter<Name, { baseUrl: string }, unknown, Native> {
   const rules: MessageRules | undefined = options.rules;
   const url = `${options.baseUrl}${options.endpoint}`;
 
@@ -60,16 +72,17 @@ export function jsonProvider<const Name extends BuiltInAdapterName, TPayload>(
 
       validateBuiltInMessage(options.name, safeMessage, rules);
       const fetcher = options.fetch ?? fetch;
-      const payload = await options.buildPayload(safeMessage);
+      const native = context.native;
+      const payload = await options.buildPayload(safeMessage, native);
+      const headers = { "Content-Type": "application/json", ...options.headers() };
 
       const response = await fetcher(url, {
         method: "POST",
         signal: context.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers(),
-        },
-        body: JSON.stringify(payload),
+        headers: native?.headers
+          ? withNativeRequestHeaders(options.name, headers, native.headers)
+          : headers,
+        body: JSON.stringify(native?.body ? { ...payload, ...native.body } : payload),
       });
 
       if (!response.ok) {

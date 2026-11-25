@@ -4,21 +4,29 @@ description: Exact v1 adapter capabilities, validation context, send context, pe
 ---
 
 ```ts title="types.ts"
-type EmailAdapter<Name extends string = string, RawClient = unknown, RawResult = unknown> = {
+type EmailAdapter<
+  Name extends string = string,
+  RawClient = unknown,
+  RawResult = unknown,
+  Native extends EmailNativeObject = EmailNativeObject,
+> = {
   readonly name: Name;
   readonly capabilities: EmailAdapterCapabilities;
   readonly raw?: RawClient;
+  readonly "~native"?: Native; // type-only, never set at runtime
   validate?(message: EmailMessage, context: EmailAdapterValidationContext): MaybePromise<void>;
   send(
     message: EmailMessage,
-    context: EmailAdapterContext,
+    context: EmailAdapterContext<Native>,
   ): MaybePromise<EmailSendResult<Name, RawResult>>;
   sendPersonalized?(
     input: EmailPersonalizedInput,
-    context: EmailAdapterContext,
+    context: EmailAdapterContext<Native>,
   ): MaybePromise<EmailPersonalizedResult<Name>>;
 };
 ```
+
+`Native` is experimental. It declares the options this adapter accepts through the `native` send option. See [Use provider-native features](/docs/guides/provider-native-options).
 
 ## Capabilities
 
@@ -47,12 +55,14 @@ type EmailAdapterValidationContext = {
 ## Send context
 
 ```ts title="types.ts"
-type EmailAdapterContext = EmailAdapterValidationContext & {
-  attempt: number;
-  signal?: AbortSignal;
-  idempotencyKey?: string;
-  metadata?: EmailSendMetadata;
-};
+type EmailAdapterContext<Native extends EmailNativeObject = EmailNativeObject> =
+  EmailAdapterValidationContext & {
+    attempt: number;
+    signal?: AbortSignal;
+    idempotencyKey?: string;
+    metadata?: EmailSendMetadata;
+    native?: Native; // experimental: this adapter's entry from the send's `native` option
+  };
 ```
 
 Forward `signal` to network work. Honor idempotency only when the provider or transport supports the declared capability.

@@ -2,7 +2,7 @@ import { EmailValidationError } from "./errors.js";
 import { firstString, jsonProvider } from "./http.js";
 import { isString } from "./internal/decode.js";
 import { base64Attachments, emailParts } from "./payloads.js";
-import type { EmailAddress, EmailAdapter, OneOrMany } from "./types.js";
+import type { EmailAddress, EmailAdapter, OneOrMany, EmailNativePassthrough } from "./types.js";
 import { SUPPORTED_MESSAGE_FIELDS, assertSupportedMessageFields } from "./utils.js";
 
 export type ZeptoMailAdapterOptions = {
@@ -13,7 +13,7 @@ export type ZeptoMailAdapterOptions = {
 
 export function zeptomail(
   options: ZeptoMailAdapterOptions,
-): EmailAdapter<"zeptomail", { baseUrl: string }> {
+): EmailAdapter<"zeptomail", { baseUrl: string }, unknown, EmailNativePassthrough> {
   // Fail at construction for a bad token, then read it again on every send so rotation works.
   zeptoAuthorization(options.token);
 

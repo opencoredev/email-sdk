@@ -2,7 +2,12 @@ import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { jsonString, responseJson } from "./internal/decode.js";
 import { sendAtIso } from "./payloads.js";
-import type { EmailAttachment, EmailMessage, EmailAdapter } from "./types.js";
+import type {
+  EmailAttachment,
+  EmailMessage,
+  EmailAdapter,
+  EmailNativePassthrough,
+} from "./types.js";
 import {
   builtInAdapterDefinition,
   attachmentToBase64,
@@ -17,6 +22,8 @@ import {
   SUPPORTED_MESSAGE_FIELDS,
   mapAttachments,
   validateBuiltInAdapter,
+  IDEMPOTENCY_HEADERS,
+  withNativeRequestHeaders,
 } from "./utils.js";
 
 export type ResendAdapterOptions = {
@@ -26,9 +33,30 @@ export type ResendAdapterOptions = {
   headers?: Record<string, string>;
 };
 
+/**
+ * Experimental. Resend-only send options, passed as `native: { resend: { ... } }`.
+ * https://resend.com/docs/api-reference/emails/send-email
+ */
+export type ResendNativeOptions = EmailNativePassthrough & {
+  /**
+   * Send a published Resend template. Resend rejects `html` and `text` alongside a template, so
+   * the adapter drops them. The message subject is still sent and overrides the template's
+   * default subject, unless `useTemplateSubject` is set.
+   */
+  template?: {
+    /** Template ID or alias. */
+    id: string;
+    variables?: Readonly<Record<string, string | number>>;
+    /** Leave `message.subject` out so the template's own default subject applies. */
+    useTemplateSubject?: boolean;
+  };
+  /** Subscription topic the recipient must be opted in to (`topic_id`). */
+  topicId?: string;
+};
+
 export function resend(
   options: ResendAdapterOptions,
-): EmailAdapter<"resend", { baseUrl: string }> {
+): EmailAdapter<"resend", { baseUrl: string }, unknown, ResendNativeOptions> {
   const baseUrl = options.baseUrl ?? "https://api.resend.com";
   const fetcher = options.fetch ?? fetch;
 
@@ -50,12 +78,16 @@ export function resend(
 
       const safeMessage = snapshotMessageForSend(message);
       validateBuiltInAdapter("resend", safeMessage);
+      const native = context.native;
+      const payload = await toResendPayload(safeMessage);
 
       const response = await fetcher(`${baseUrl}/emails`, {
         method: "POST",
         signal: context.signal,
-        headers,
-        body: JSON.stringify(await toResendPayload(safeMessage)),
+        headers: native?.headers
+          ? withNativeRequestHeaders("resend", headers, native.headers, IDEMPOTENCY_HEADERS)
+          : headers,
+        body: JSON.stringify(native ? withResendNative(payload, native) : payload),
       });
 
       if (!response.ok) {
@@ -96,6 +128,24 @@ async function toResendPayload(message: EmailMessage) {
     tags: message.tags?.map((tag) => ({ name: tag.name, value: tag.value })),
     scheduled_at: sendAtIso(message),
   };
+}
+
+type ResendPayload = Awaited<ReturnType<typeof toResendPayload>>;
+
+function withResendNative(payload: ResendPayload, native: ResendNativeOptions) {
+  const template = native.template && {
+    id: native.template.id,
+    variables: native.template.variables,
+  };
+
+  const withNative = {
+    ...payload,
+    ...(template && { html: undefined, text: undefined, template }),
+    ...(native.template?.useTemplateSubject && { subject: undefined }),
+    topic_id: native.topicId,
+  };
+
+  return native.body ? { ...withNative, ...native.body } : withNative;
 }
 
 async function toResendAttachment(attachment: EmailAttachment) {

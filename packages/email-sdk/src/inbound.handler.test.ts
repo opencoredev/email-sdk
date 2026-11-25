@@ -118,7 +118,7 @@ function expectedS3Authorization(request: { url: URL; headers: Headers }, secret
   const hmac = (key: string | Buffer, value: string) => createHmac("sha256", key).update(value).digest();
 
   const signed = [...request.headers.entries(), ["host", request.url.host]]
-    .flatMap(([name = "", value = ""]) => (name === "authorization" ? [] : [[name.toLowerCase(), value.trim()]]))
+    .flatMap(([name = "", value = ""]) => (name === "authorization" ? [] : [[name.toLowerCase(), value.trim().split(/\s+/).join(" ")]]))
     .sort(([left = ""], [right = ""]) => (left < right ? -1 : left > right ? 1 : 0));
 
   const signedHeaders = signed.map(([name]) => name).join(";");
