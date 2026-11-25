@@ -24,6 +24,7 @@ import type {
   WorkflowJsonValue,
   WorkflowRun,
   WorkflowSendContext,
+  WorkflowSendOptions,
   ManualClock,
   WorkflowEngine,
   WorkflowScheduler,
@@ -556,6 +557,25 @@ describe("workflows: retries and failures", () => {
     const second = setup([stepFails]);
 
     expect((await second.engine.start(stepFails, null)).error).toEqual({ message: "card declined", step: "charge" });
+  });
+
+  test("ctx.send refuses native options and sends nothing", async () => {
+    const options: WorkflowSendOptions = JSON.parse('{"native":{"sendgrid":{"body":{"personalizations":[]}}}}');
+
+    const withNative = defineWorkflow({
+      name: "with-native",
+      run: async (ctx, input: Input) => {
+        await ctx.send("welcome", mail(input.email, "Welcome"), options);
+      },
+    });
+
+    const { engine, sender } = setup([withNative]);
+
+    const run = await engine.start(withNative, ada);
+
+    expect(run.status).toBe("failed");
+    expect(run.error).toEqual({ message: "ctx.send doesn't accept native options yet.", step: "welcome" });
+    expect(sender.calls).toHaveLength(0);
   });
 
   test("a throwing definition fails the run, and a throwing hook changes nothing", async () => {

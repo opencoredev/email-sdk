@@ -803,6 +803,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           const idempotencyKey = await whileLive(workflowIdempotencyKey(loaded.id, name));
 
           const sent = await sideEffect(name, "send", undefined, async (primaryOnly) => {
+            // A native body or fields passthrough can send to recipients the suppression check never
+            // saw, so workflows refuse native options until they support them deliberately.
+            if (sendOptions !== undefined && Object.hasOwn(sendOptions, "native")) {
+              throw new WorkflowNonRetryableError("ctx.send doesn't accept native options yet.");
+            }
+
             const routed = primaryOnly ? { ...sendOptions, fallback: { adapters: [] } } : sendOptions;
 
             const response = await email.send(message, { ...routed, idempotencyKey }, { runId: loaded.id, step: name });
