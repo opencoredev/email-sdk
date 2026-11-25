@@ -81,7 +81,7 @@ Each adapter module exports its options type, for example `PostmarkNativeOptions
 - **Brevo:** `batchId`
 - **Loops:** `addToAudience`
 
-Sandbox and test modes (`sendgrid.sandboxMode`, `mailgun.testMode`) make the provider validate the request without delivering it, but the result still lists the recipients as accepted, because the provider answers the same way it does for a real send. They also apply to that adapter alone: if the request fails and the route falls back, the next adapter sends for real. Leave fallback off for sandbox sends.
+Sandbox and test modes (`sendgrid.sandboxMode`, `mailgun.testMode`) make the provider validate the request without delivering it. The send still resolves successfully. `sendPersonalized` builds its `accepted` list from the recipients it submitted, so with either mode on that list names people who were validated, not sent to. Telemetry doesn't count these sends as provider volume. Both modes apply to that adapter alone: if the request fails and the route falls back, the next adapter sends for real, so leave fallback off for sandbox sends.
 
 ## Fields the SDK doesn't model
 

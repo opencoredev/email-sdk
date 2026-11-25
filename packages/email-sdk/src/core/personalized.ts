@@ -81,6 +81,8 @@ export async function attemptNativePersonalized(
         ? cloneMetadataRecord(sendOptions.metadata)
         : undefined;
 
+      const native = nativeEntryFor(sendOptions?.native, adapter.name);
+
       const personalized = await measureAttempt(
         adapter,
         "personalized_native",
@@ -95,9 +97,10 @@ export async function attemptNativePersonalized(
               signal: sendOptions?.signal,
               idempotencyKey: sendOptions?.idempotencyKey,
               metadata: attemptMetadata,
-              native: nativeEntryFor(sendOptions?.native, adapter.name),
+              native,
             }),
           ),
+        native,
       );
 
       throwIfAborted(sendOptions?.signal);

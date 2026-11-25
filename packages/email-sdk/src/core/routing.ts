@@ -10,7 +10,7 @@ import {
   isNonArrayObject,
   isStringMember,
 } from "../internal/decode.js";
-import { copyBoundedArray } from "../internal/snapshot.js";
+import { copyBoundedArray, snapshotNativeMap } from "../internal/snapshot.js";
 import { headerList } from "../utils.js";
 import type {
   EmailAdapter,
@@ -301,7 +301,7 @@ export function cloneNestedSendOptions(options: EmailNativeSendOptions): EmailNa
 
   const native = options.native;
 
-  if (present("native", native)) copy.native = isNonArrayObject(native) ? cloneMetadataRecord(native) : native;
+  if (present("native", native)) copy.native = native && isNonArrayObject(native) ? snapshotNativeMap(native) : native;
 
   return copy;
 }

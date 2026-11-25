@@ -3,7 +3,7 @@ import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
 import { utf8ToBase64 } from "./internal/bytes.js";
 import { jsonString } from "./internal/decode.js";
-import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
+import { snapshotNativeObject, snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import { recipientVariablesMap, sendAtRfc2822 } from "./payloads.js";
 import type { EmailAdapter, EmailMessage, EmailNativeObject } from "./types.js";
 import {
@@ -188,7 +188,9 @@ export function mailgun(
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
       validatePersonalizedInput(safeInput);
-      assertNativeKeepsRecipients(["mailgun"], { mailgun: context.native });
+      const rawNative = context.native;
+      const native = rawNative && snapshotNativeObject(rawNative);
+      assertNativeKeepsRecipients(["mailgun"], { mailgun: native });
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [
@@ -205,7 +207,7 @@ export function mailgun(
           to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
-        context,
+        { ...context, native },
       );
 
       return {

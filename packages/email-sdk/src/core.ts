@@ -1,5 +1,6 @@
 import {
   acceptanceCounts,
+  nativeAttemptFacts,
   attemptAdapter,
   type AttemptPath,
   type MeasureAttempt,
@@ -81,6 +82,7 @@ import type {
   EmailSendItem,
   EmailNativeSendManyOptions,
   EmailSendMiddleware,
+  EmailNativeObject,
   EmailNativeOptionsMap,
   EmailNativeSendOptions,
   EmailSendResult,
@@ -419,10 +421,10 @@ export function createEmailClient<
   const telemetrySource = getTelemetrySource();
   const hooks = [...pluginHooks, ...(clientHooks ? [clientHooks] : [])];
 
-  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke, recipientsReplaced) => {
+  const measureAttempt: MeasureAttempt = (adapter, path, recipients, invoke, native) => {
     if (!telemetry?.enabled) return invoke();
 
-    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke, recipientsReplaced);
+    return measureAttemptTelemetry(telemetry, adapter, path, recipients, invoke, native);
   };
 
   const measureAttemptTelemetry = async <T extends EmailSendResult>(
@@ -431,8 +433,9 @@ export function createEmailClient<
     path: AttemptPath,
     recipients: number,
     invoke: () => T | PromiseLike<T>,
-    recipientsReplaced = false,
+    native: EmailNativeObject | undefined,
   ): Promise<T> => {
+    const { recipientsReplaced, validationOnly } = nativeAttemptFacts(native);
     const startedAt = Date.now();
     const adapterName = normalizeAdapterName(adapter.name);
 
@@ -443,7 +446,10 @@ export function createEmailClient<
           ? "custom"
           : "provider";
 
-    const provider = telemetry.realProviderVolume === true && adapterKind !== "test";
+    // A validation-only request reaches the provider but sends nothing, so it isn't provider volume.
+    const provider =
+      telemetry.realProviderVolume === true && adapterKind !== "test" && !validationOnly;
+
     let result: EmailSendResult | undefined;
     let failure: unknown;
     let resolved = false;
@@ -505,9 +511,8 @@ export function createEmailClient<
         path === "personalized_native" ? submittedRecipients : Number(submittedRecipients > 0);
 
       // A passthrough that replaced the recipients can send to more addresses than the message had.
-      const attemptedRecipients = recipientsReplaced
-        ? Math.max(recipients, accepted + rejected)
-        : recipients;
+      const attemptedRecipients =
+        recipientsReplaced && counts.explicit ? accepted + rejected : recipients;
 
       const notSent = adapterError?.delivery === "not_sent" && accepted === 0;
       const unknownRecipients = notSent ? 0 : Math.max(0, attemptedRecipients - accepted - rejected);

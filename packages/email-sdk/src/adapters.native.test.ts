@@ -10,7 +10,7 @@ import { postmark, type PostmarkNativeOptions } from "./postmark.js";
 import { resend } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
 import { ses } from "./ses.js";
-import type { EmailAdapter, EmailAdapterContext, EmailMessage } from "./types.js";
+import type { EmailAdapter, EmailAdapterContext, EmailMessage, EmailNativeValue } from "./types.js";
 import {
   context,
   formCapture,
@@ -854,5 +854,67 @@ describe("native entries stay isolated per adapter and attempt", () => {
 
     expect(result.accepted).toEqual(["ada@example.com"]);
     expect(capture.calls[0]?.json.To).toBe("ada@example.com");
+  });
+});
+
+describe("native entries are snapshotted as plain data", () => {
+  test("a class-instance entry changed by middleware leaves the caller's instance alone", async () => {
+    class ResendEntry {
+      [key: string]: EmailNativeValue;
+      topicId = "original";
+    }
+
+    const capture = jsonCapture({ id: "re_1" });
+    const entry = new ResendEntry();
+
+    const client = createEmailClient({
+      adapters: [resend({ apiKey: "re", fetch: capture.fetch })],
+      plugins: [
+        {
+          id: "mutate-native",
+          middleware: [
+            {
+              beforeSend(event) {
+                const native = event.options?.native?.resend;
+
+                if (native) Object.assign(native, { topicId: "changed" });
+
+                return {};
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await client.send(simple, { native: { resend: entry } });
+
+    expect(capture.calls[0]?.json.topic_id).toBe("changed");
+    expect(entry.topicId).toBe("original");
+  });
+
+  test("direct SendGrid sendPersonalized reads a getter-backed native entry once", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+    let reads = 0;
+
+    const attemptContext = {
+      ...context,
+      get native() {
+        reads += 1;
+
+        return reads === 1 ? {} : { body: { personalizations: [{ to: [{ email: "other@example.com" }] }] } };
+      },
+    };
+
+    const result = await sendgrid({ apiKey: "sg", fetch: capture.fetch }).sendPersonalized?.(
+      {
+        message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+        recipients: [{ to: "a@example.com", variables: { name: "Ada" } }],
+      },
+      attemptContext,
+    );
+
+    expect(capture.calls[0]?.json.personalizations[0].to).toEqual([{ email: "a@example.com" }]);
+    expect(result?.accepted).toEqual(["a@example.com"]);
   });
 });

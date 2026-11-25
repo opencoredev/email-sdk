@@ -7,7 +7,7 @@ import {
   isRetryableEmailError,
 } from "../errors.js";
 import { cloneMetadataRecord, isFunction } from "../internal/decode.js";
-import { snapshotMessage } from "../internal/snapshot.js";
+import { snapshotMessage, snapshotNativeObject } from "../internal/snapshot.js";
 import type {
   EmailAdapter,
   EmailHooks,
@@ -67,31 +67,36 @@ export function acceptanceCounts(
 export type AttemptPath = "single" | "personalized_native" | "personalized_expanded";
 
 /**
- * Runs one adapter call, timing it for telemetry when telemetry is on. `recipientsReplaced` marks
- * a call whose native options may send to recipients other than the message's, so a success
- * without recipient lists can't be read as a submission to `recipients` addresses, and recipient
- * lists the provider does report are kept even when they don't match `recipients`.
+ * Runs one adapter call, timing it for telemetry when telemetry is on. `native` is the entry the
+ * adapter received; see `nativeAttemptFacts` for how it changes what the attempt reports.
  */
 export type MeasureAttempt = <T extends EmailSendResult>(
   adapter: EmailAdapter,
   path: AttemptPath,
   recipients: number,
   invoke: () => T | PromiseLike<T>,
-  recipientsReplaced?: boolean,
+  native?: EmailNativeObject,
 ) => T | PromiseLike<T>;
 
 // The raw passthroughs can replace any top-level request field, recipients included. Typed
 // native options can't.
 export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
 
-function replacesRecipients(native: EmailNativeObject | undefined) {
-  if (!native) return false;
-
-  return RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
+/**
+ * What an attempt's native entry means for telemetry. `recipientsReplaced`: a raw passthrough may
+ * send to recipients other than the message's. `validationOnly`: SendGrid's `sandboxMode` and
+ * Mailgun's `testMode` make the provider validate the request without delivering it.
+ */
+export function nativeAttemptFacts(native: EmailNativeObject | undefined) {
+  return {
+    recipientsReplaced:
+      native !== undefined && RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined),
+    validationOnly: native?.sandboxMode === true || native?.testMode === true,
+  };
 }
 
 /**
- * This adapter's own entry from the send's `native` map, deep-copied so an adapter or a retry
+ * This adapter's own entry from the send's `native` map, snapshotted so an adapter or a retry
  * can't change what the caller, a later attempt, or another adapter sees.
  */
 export function nativeEntryFor(
@@ -102,7 +107,7 @@ export function nativeEntryFor(
 
   const entry = native[adapter];
 
-  return entry === undefined ? undefined : cloneMetadataRecord(entry);
+  return entry === undefined ? undefined : snapshotNativeObject(entry);
 }
 
 export type AttemptInput = {
@@ -177,7 +182,7 @@ export async function attemptAdapter(input: AttemptInput): Promise<EmailSendResu
               native,
             }),
           ),
-        replacesRecipients(native),
+        native,
       );
 
       throwIfAborted(input.options?.signal);

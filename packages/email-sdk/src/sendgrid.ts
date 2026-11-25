@@ -1,6 +1,6 @@
 import { assertNativeKeepsRecipients, validatePersonalizedInput } from "./core/personalized.js";
 import { firstString, jsonProvider } from "./http.js";
-import { snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
+import { snapshotNativeObject, snapshotPersonalizedInputForSend } from "./internal/snapshot.js";
 import {
   apiAddress,
   apiAddresses,
@@ -94,7 +94,9 @@ export function sendgrid(
     async sendPersonalized(input, context) {
       const safeInput = snapshotPersonalizedInputForSend(input);
       validatePersonalizedInput(safeInput);
-      assertNativeKeepsRecipients(["sendgrid"], { sendgrid: context.native });
+      const rawNative = context.native;
+      const native = rawNative && snapshotNativeObject(rawNative);
+      assertNativeKeepsRecipients(["sendgrid"], { sendgrid: native });
 
       const recipientVariables = Object.fromEntries(
         safeInput.recipients.map((recipient) => [
@@ -111,7 +113,7 @@ export function sendgrid(
           to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
-        context,
+        { ...context, native },
       );
 
       return {

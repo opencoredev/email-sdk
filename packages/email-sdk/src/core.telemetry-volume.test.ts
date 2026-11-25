@@ -636,3 +636,55 @@ describe("createEmailClient v1", () => {
     await expect(client.flush()).resolves.toBeUndefined();
   });
 });
+
+describe("native attempt telemetry", () => {
+  test("a SendGrid sandbox send is not counted as provider volume", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const client = createEmailClient({
+        adapters: [sendgrid({ apiKey: "sg", fetch: stubFetch(async () => new Response(null, { status: 200 })) })],
+      });
+
+      await client.send(message, { native: { sendgrid: { sandboxMode: true } } });
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({
+        adapter: "sendgrid",
+        adapter_resolved_count: 1,
+        provider_volume_eligible: false,
+        provider_submitted_recipient_count: 0,
+        provider_accepted_recipient_count: 0,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
+  test("a passthrough that narrows the recipients reports the provider's count as attempted", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const response = { success: true, jobId: "1", to: ["a@example.com"] };
+
+      const client = createEmailClient({
+        adapters: [sequenzy({ apiKey: "sq", fetch: stubFetch(async () => Response.json(response)) })],
+      });
+
+      await client.send(
+        { ...message, to: ["a@example.com", "b@example.com", "c@example.com"] },
+        { native: { sequenzy: { body: { to: ["a@example.com"] } } } },
+      );
+
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({
+        attempted_recipient_count: 1,
+        accepted_recipient_count: 1,
+        unknown_recipient_count: 0,
+      });
+    } finally {
+      resetTelemetry();
+    }
+  });
+});

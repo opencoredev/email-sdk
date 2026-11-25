@@ -3,6 +3,9 @@ import type {
   EmailAddress,
   EmailAttachment,
   EmailMessage,
+  EmailNativeObject,
+  EmailNativeOptionsMap,
+  EmailNativeValue,
   EmailPersonalizedInput,
   OneOrMany,
 } from "../types.js";
@@ -12,6 +15,7 @@ import {
   isDateLike,
   isFunction,
   isNonArrayObject,
+  isObjectLike,
   isStringMember,
 } from "./decode.js";
 
@@ -384,4 +388,51 @@ export function snapshotPersonalizedInputForSend(
     if (error instanceof EmailValidationError) throw error;
     throw new EmailValidationError("sendPersonalized input could not be read.", error);
   }
+}
+
+const MAX_NATIVE_DEPTH = 64;
+
+function isNativeList(value: EmailNativeValue): value is readonly EmailNativeValue[] {
+  return Array.isArray(value);
+}
+
+function snapshotNativeValue(value: EmailNativeValue, depth: number): EmailNativeValue {
+  if (!isObjectLike(value)) return value;
+
+  if (depth > MAX_NATIVE_DEPTH) {
+    throw new EmailValidationError("Native options exceed the maximum nesting depth.");
+  }
+
+  if (isNativeList(value)) return value.map((item) => snapshotNativeValue(item, depth + 1));
+
+  return snapshotNativeRecord(value, depth);
+}
+
+function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNativeObject {
+  const copy: Record<string, EmailNativeValue> = {};
+
+  for (const key of Object.keys(record)) copy[key] = snapshotNativeValue(record[key], depth + 1);
+
+  return copy;
+}
+
+/**
+ * Copies one adapter's native entry into plain SDK-owned objects and arrays, reading each field
+ * once. Class instances and getters become plain data, so nothing the caller, a hook, or an
+ * adapter holds can change the copy that was checked and sent.
+ */
+export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObject {
+  return snapshotNativeRecord(entry, 0);
+}
+
+/** Copies a send's `native` map with `snapshotNativeObject` for each own entry. */
+export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
+  const copy: Record<string, EmailNativeObject | undefined> = {};
+
+  for (const key of Object.keys(native)) {
+    const entry = native[key];
+    copy[key] = isObjectLike(entry) ? snapshotNativeObject(entry) : entry;
+  }
+
+  return copy;
 }
