@@ -858,39 +858,23 @@ describe("native entries stay isolated per adapter and attempt", () => {
 });
 
 describe("native entries are snapshotted as plain data", () => {
-  test("a class-instance entry changed by middleware leaves the caller's instance alone", async () => {
-    class ResendEntry {
+  test("a class-instance entry is rejected before any request", async () => {
+    class SendGridEntry {
       [key: string]: EmailNativeValue;
-      topicId = "original";
+
+      get sandboxMode() {
+        return true;
+      }
     }
 
-    const capture = jsonCapture({ id: "re_1" });
-    const entry = new ResendEntry();
+    const capture = jsonCapture({});
+    const client = createEmailClient({ adapters: [sendgrid({ apiKey: "sg", fetch: capture.fetch })] });
 
-    const client = createEmailClient({
-      adapters: [resend({ apiKey: "re", fetch: capture.fetch })],
-      plugins: [
-        {
-          id: "mutate-native",
-          middleware: [
-            {
-              beforeSend(event) {
-                const native = event.options?.native?.resend;
+    await expect(client.send(simple, { native: { sendgrid: new SendGridEntry() } })).rejects.toBeInstanceOf(
+      EmailValidationError,
+    );
 
-                if (native) Object.assign(native, { topicId: "changed" });
-
-                return {};
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    await client.send(simple, { native: { resend: entry } });
-
-    expect(capture.calls[0]?.json.topic_id).toBe("changed");
-    expect(entry.topicId).toBe("original");
+    expect(capture.calls).toHaveLength(0);
   });
 
   test("direct SendGrid sendPersonalized reads a getter-backed native entry once", async () => {

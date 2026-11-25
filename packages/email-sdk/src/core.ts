@@ -435,7 +435,7 @@ export function createEmailClient<
     invoke: () => T | PromiseLike<T>,
     native: EmailNativeObject | undefined,
   ): Promise<T> => {
-    const { recipientsReplaced, validationOnly } = nativeAttemptFacts(native);
+    const { recipientsReplaced, validationOnly } = nativeAttemptFacts(adapter.name, native);
     const startedAt = Date.now();
     const adapterName = normalizeAdapterName(adapter.name);
 

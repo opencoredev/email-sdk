@@ -87,14 +87,17 @@ export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
  * send to recipients other than the message's. `validationOnly`: SendGrid's `sandboxMode` and
  * Mailgun's `testMode` make the provider validate the request without delivering it.
  */
-export function nativeAttemptFacts(native: EmailNativeObject | undefined) {
+export function nativeAttemptFacts(adapter: string, native: EmailNativeObject | undefined) {
   const rawOverride =
     native !== undefined && RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
 
   return {
     recipientsReplaced: rawOverride,
     // A raw override can switch the mode back off, so only the typed flag alone counts.
-    validationOnly: !rawOverride && (native?.sandboxMode === true || native?.testMode === true),
+    validationOnly:
+      !rawOverride &&
+      ((adapter === "sendgrid" && native?.sandboxMode === true) ||
+        (adapter === "mailgun" && native?.testMode === true)),
   };
 }
 

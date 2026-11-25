@@ -414,6 +414,13 @@ function snapshotNativeValue(value: EmailNativeValue, depth: number): EmailNativ
 }
 
 function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNativeObject {
+  const prototype = Object.getPrototypeOf(record);
+
+  // A class instance can hold settings in getters that a field copy would silently drop.
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new EmailValidationError("Native options must be plain objects and arrays.");
+  }
+
   const copy: Record<string, EmailNativeValue> = {};
 
   for (const key of Object.keys(record)) {
@@ -425,8 +432,8 @@ function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNa
 
 /**
  * Copies one adapter's native entry into plain SDK-owned objects and arrays, reading each field
- * once. Class instances and getters become plain data, so nothing the caller, a hook, or an
- * adapter holds can change the copy that was checked and sent.
+ * once, so nothing the caller, a hook, or an adapter holds can change the copy that was checked
+ * and sent. Class instances are rejected with an `EmailValidationError`.
  */
 export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObject {
   return snapshotNativeRecord(entry, 0);
