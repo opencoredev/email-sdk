@@ -148,6 +148,13 @@ Setup guides: [${a.name} adapter](${a.docs}) and [${b.name} adapter](${b.docs}).
 ${guides ? `\n${guides}\n` : ""}`;
 }
 
+// scripts/generate-lastmod.ts dates the index from its git history, so a
+// matrix-only change moves it too; keep that date instead of writing one here.
+const indexLastmod =
+  /^lastModified: (\S+)$/m.exec(
+    existsSync(join(outputDir, "index.mdx")) ? readFileSync(join(outputDir, "index.mdx"), "utf8") : "",
+  )?.[1] ?? comparePairs.map(comparePairLastmod).toSorted().at(-1);
+
 function indexPage() {
   const bigFour = comparePairs.filter((pair) => bigFourSlugs.has(pair.slug));
 
@@ -174,6 +181,7 @@ seo:
 sidebar:
   label: Overview
   icon: git-compare-arrows
+lastModified: ${indexLastmod}
 ---
 
 ${header}

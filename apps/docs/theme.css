@@ -123,6 +123,42 @@ body :not(.email-landing *):is([class*="rounded"], button, input, select, textar
   line-height: 1.75rem;
 }
 
+/* Workflow viewer --------------------------------------------------------- */
+
+/* Toolcraft theme variables (components/toolcraft), mapped onto the docs
+   palette so the vendored components follow light and dark mode. Scoped to
+   the viewer root. */
+.toolcraft {
+  --background: var(--blume-background);
+  --foreground: var(--blume-foreground);
+  --panel: var(--email-panel);
+  --node: var(--email-panel);
+  --accent: var(--blume-accent);
+  --accent-foreground: var(--blume-accent-foreground);
+  --border: var(--blume-foreground);
+  --input: var(--blume-foreground);
+  --ring: var(--blume-accent);
+  --destructive: #b4412f;
+}
+
+:root[data-theme="dark"] .toolcraft {
+  --node: #15140f;
+  --destructive: #e0735f;
+}
+
+/* Blume's prose heading sizes outrank utility classes, so restate the
+   panel title (text-xs) and section title (text-[11px] mb-2) sizes. */
+.prose .toolcraft h2 {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.prose .toolcraft h3 {
+  margin-bottom: 0.5rem;
+  font-size: 11px;
+  line-height: 1rem;
+}
+
 /* Step headings ----------------------------------------------------------- */
 
 /* Keep markdown headings inside <Step> blocks at step-title scale so numbered

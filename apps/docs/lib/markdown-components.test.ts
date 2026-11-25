@@ -35,6 +35,7 @@ describe("markdown component serializers", () => {
       "ProviderBadge",
       "ProviderGrid",
       "SponsorSpotlight",
+      "WorkflowViewer",
     ]);
   });
 

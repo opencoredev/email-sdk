@@ -79,6 +79,7 @@ export const markdownComponents = {
   ProviderBadge: ({ props }) => renderProviderBadge(attrsOf(props)),
   ProviderGrid: currentData("/docs/adapters", () => renderProviderGrid()),
   SponsorSpotlight: currentData("/docs/adapters", () => renderSponsorSpotlight()),
+  WorkflowViewer: () => renderWorkflowViewer(),
 } satisfies Record<string, ComponentMarkdown>;
 
 // region adapters
@@ -274,6 +275,12 @@ function renderEmailExample(attrs: Attrs) {
   const header = `**Email preview: ${example.title}.** Subject: "${example.subject}". Preview text: "${example.preview}".`;
 
   return `\n\n${header} The rendered email is at ${siteUrl}${example.path}.\n\n`;
+}
+
+// The viewer's graph comes from an async inspectWorkflow call, and serializers are synchronous,
+// so the mirror describes the viewer and the page carries the graph itself as Mermaid and JSON.
+function renderWorkflowViewer() {
+  return `\n\n**Interactive workflow viewer** (on the web page): the onboarding workflow as \`inspectWorkflow\` sees it. The Definition view draws every path, step, delay, event branch, and rendered email; the Sample run view replays \`describeRun\` keyframes from an engine run on a fake clock. The same graph appears on this page as Mermaid and as the full \`inspectWorkflow\` JSON.\n\n`;
 }
 
 function renderEmailGallery() {

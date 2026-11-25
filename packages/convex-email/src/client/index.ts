@@ -19,6 +19,7 @@ import type {
   ConvexEmailMessage,
   ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
+  ConvexWorkflowSendArgs,
 } from "../shared/types.js";
 import {
   vCancelEmailArgs,
@@ -284,6 +285,19 @@ export class ConvexEmail {
   async send(ctx: MutationCtx, args: ConvexEmailSendArgs) {
     return await ctx.runMutation(this.component.lib.enqueue, {
       ...this.withDefaults(args),
+      sender: await this.senderHandle(),
+    });
+  }
+
+  /**
+   * Queues a workflow step's email once per idempotency key. The component records the send with
+   * the run, so a replayed step gets the same email id even after email cleanup removed the email.
+   * `@opencoredev/convex-email/workflows` calls this; apps don't need to.
+   */
+  async sendWorkflowStep(ctx: MutationCtx, args: ConvexWorkflowSendArgs) {
+    return await ctx.runMutation(this.component.workflows.enqueueSend, {
+      runId: args.runId,
+      email: { ...this.withDefaults(args.email), idempotencyKey: args.email.idempotencyKey },
       sender: await this.senderHandle(),
     });
   }
@@ -558,4 +572,5 @@ export type {
   ConvexEmailMessage,
   ConvexEmailProviderFailure,
   ConvexEmailSendArgs,
+  ConvexWorkflowSendArgs,
 };

@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel.js";
 import { internalMutation, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import { cleanupReleasedWorkflowSends } from "./workflows.js";
 import {
   markFailedOrRetryArgs,
   markProcessingArgs,
@@ -252,6 +253,7 @@ export const getConfig = query({
       maxAttempts: config.maxAttempts,
       retryBaseMs: config.retryBaseMs,
       cleanupAfterDays: config.cleanupAfterDays,
+      workflowSendRetentionDays: config.workflowSendRetentionDays,
     };
   },
 });
@@ -398,6 +400,7 @@ export const processDueEmails = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     await cleanupExpiredEmailRecords(ctx, now, cleanupBatchSize);
+    await cleanupReleasedWorkflowSends(ctx, now, cleanupBatchSize);
     const sender = await readSender(ctx);
 
     // Every enqueue registers the sender first, so no sender means no email was ever queued.
@@ -510,13 +513,17 @@ type EnqueueEmailOptions = {
   /** The shared config, when the caller already read it for a whole batch. */
   config?: ConvexEmailConfig;
   ownerId?: string;
+  /** Set for a workflow step's email, which `workflowSends` dedupes instead of the key index. */
+  workflowRunId?: string;
 };
 
-async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
-  const { email: args, sender, ownerId } = options;
+export async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
+  const { email: args, sender, ownerId, workflowRunId } = options;
   const idempotencyKey = args.idempotencyKey?.trim() ? args.idempotencyKey : undefined;
 
-  if (idempotencyKey) {
+  // A workflow step's email is deduped by its `workflowSends` record in the caller's transaction,
+  // so it never adopts a caller's email that happens to carry the same key.
+  if (idempotencyKey && workflowRunId === undefined) {
     const existing = ownerId
       ? await ctx.db
           .query("emails")
@@ -526,7 +533,9 @@ async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
           .first()
       : await ctx.db
           .query("emails")
-          .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
+          .withIndex("by_idempotencyKey_and_workflowRunId", (q) =>
+            q.eq("idempotencyKey", idempotencyKey).eq("workflowRunId", undefined),
+          )
           .first();
 
     if (existing) {
@@ -542,6 +551,7 @@ async function enqueueEmail(ctx: MutationCtx, options: EnqueueEmailOptions) {
     status: "queued",
     message,
     ownerId,
+    workflowRunId,
     adapter: args.adapter,
     attemptedAdapters: [],
     fallbackAdapters: args.fallbackAdapters ?? [],
@@ -590,7 +600,7 @@ async function getSenderDoc(ctx: QueryCtx) {
  * queued and retrying emails pointing at a dead function once the app renames or moves its sender
  * action. Apps that need two senders mount the component twice under different names.
  */
-async function registerSender(ctx: MutationCtx, handle: string) {
+export async function registerSender(ctx: MutationCtx, handle: string) {
   const existing = await getSenderDoc(ctx);
 
   if (existing?.handle !== handle) {
@@ -626,7 +636,7 @@ async function requireSender(ctx: QueryCtx) {
   return sender;
 }
 
-async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
+export async function readConfig(ctx: QueryCtx): Promise<ConvexEmailConfig> {
   const config = await getConfigDoc(ctx);
 
   return config ?? {};

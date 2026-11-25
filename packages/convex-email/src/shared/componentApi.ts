@@ -30,6 +30,17 @@ import {
   vRetryWithSenderArgs,
   vStatusArgs,
 } from "./validators.js";
+import {
+  vCreateWorkflowRunArgs,
+  vEnqueueWorkflowSendArgs,
+  vGetWorkflowRunArgs,
+  vListActiveWorkflowRunsArgs,
+  vListDueWorkflowRunsArgs,
+  vMaybeWorkflowRunRecord,
+  vSaveWorkflowRunArgs,
+  vWorkflowRunIdPage,
+  vWorkflowRunPage,
+} from "./workflowValidators.js";
 
 // The lease mutations take the component's own `emails` id, which reaches the app as a string.
 const vAppEmailId = { emailId: v.string() };
@@ -103,6 +114,19 @@ export type ConvexEmailComponentApi<TName extends string | undefined = string | 
     >;
     markSent: ComponentRef<"mutation", typeof vMarkSentArgs, typeof vFlag, TName>;
     markFailedOrRetry: ComponentRef<"mutation", typeof vMarkFailedOrRetryArgs, typeof vFlag, TName>;
+  };
+  workflows: {
+    createRun: ComponentRef<"mutation", typeof vCreateWorkflowRunArgs, typeof vFlag, TName>;
+    getRun: ComponentRef<"query", typeof vGetWorkflowRunArgs, typeof vMaybeWorkflowRunRecord, TName>;
+    saveRun: ComponentRef<"mutation", typeof vSaveWorkflowRunArgs, typeof vFlag, TName>;
+    listActiveRunsBySubject: ComponentRef<
+      "query",
+      typeof vListActiveWorkflowRunsArgs,
+      typeof vWorkflowRunPage,
+      TName
+    >;
+    listDueRuns: ComponentRef<"query", typeof vListDueWorkflowRunsArgs, typeof vWorkflowRunIdPage, TName>;
+    enqueueSend: ComponentRef<"mutation", typeof vEnqueueWorkflowSendArgs, typeof vEmailId, TName>;
   };
   worker: {
     handleWebhook: ComponentRef<

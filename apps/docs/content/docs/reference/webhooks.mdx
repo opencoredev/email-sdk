@@ -1,6 +1,7 @@
 ---
 title: Webhooks
 description: Verify Resend, Mailgun, and SendGrid webhook requests and normalize Resend, Postmark, Mailgun, SendGrid, and SES delivery events.
+lastModified: 2026-11-23
 ---
 
 Import webhook helpers from `@opencoredev/email-sdk/webhooks`, not the root SDK. These cover delivery events for mail you sent; to receive mail, see [Receive email](/docs/guides/receive-email). They use Web Crypto and do not create an email client, send email, or emit telemetry.

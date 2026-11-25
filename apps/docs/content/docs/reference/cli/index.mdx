@@ -1,6 +1,7 @@
 ---
 title: CLI reference
 description: Commands, runtime, aliases, telemetry, adapter detection, and exit behavior for the email-sdk binary.
+lastModified: 2026-11-25
 ---
 
 The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node shebang. It supports Node.js 20+ and Bun 1.1+. Without a project install, run it as `npx --package @opencoredev/email-sdk email-sdk`; the unscoped `email-sdk` package on npm is unrelated.
@@ -13,6 +14,7 @@ The `@opencoredev/email-sdk` package installs the `email-sdk` binary with a Node
 | `adapters` | List bundled adapter names, required environment, and notes; `--json` returns JSON.                                                    |
 | `doctor`   | Check whether required values are present for one adapter. `--live` authenticates without sending; `--json` returns structured checks. |
 | `send`     | Build, validate, and optionally send one message.                                                                                      |
+| `workflows inspect` | Print every path an experimental workflow can take as JSON, Mermaid, or text, without sending.                               |
 
 `providers` aliases `adapters`. `--provider` aliases `--adapter` in CLI input, but new examples use adapter vocabulary.
 
@@ -36,4 +38,7 @@ CLI runs use the same default telemetry and opt-outs as the SDK. `email-sdk tele
 </Card>
 <Card title="Validate or send" href="/docs/reference/cli/send">
   See every message and adapter flag.
+</Card>
+<Card title="Inspect a workflow" href="/docs/reference/cli/workflows">
+  Map an email workflow's paths from the terminal.
 </Card>
