@@ -121,7 +121,9 @@ selects every live gate for a manual release rehearsal. `bun run live:run --
 <adapter list>` executes the selected checks with every `*_LIVE_SEND` flag
 removed from the child environment. CI sets `LIVE_ADAPTERS_EXCLUDE=graph` so
 `live:plan` never selects Graph there: CI has no Microsoft Graph credentials.
-Run `bun run live:graph` locally to check that adapter.
+Run `bun run live:graph` locally to check that adapter. The CI live job runs
+only on manual `workflow_dispatch`, because CI has no provider credentials; run
+live gates locally with `bun run live:run` or `bun run live:<adapter>`.
 
 ## Telemetry
 

@@ -121,7 +121,7 @@ jobs:
 
   live-adapters:
     name: Live adapter verification
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@v4
