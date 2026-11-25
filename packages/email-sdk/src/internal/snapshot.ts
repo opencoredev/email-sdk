@@ -392,6 +392,11 @@ export function snapshotPersonalizedInputForSend(
 
 const MAX_NATIVE_DEPTH = 64;
 
+// Defined, not assigned, so a key such as "__proto__" stays data instead of setting the prototype.
+function defineNativeField<V>(record: Record<string, V>, key: string, value: V) {
+  Object.defineProperty(record, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 function isNativeList(value: EmailNativeValue): value is readonly EmailNativeValue[] {
   return Array.isArray(value);
 }
@@ -411,7 +416,9 @@ function snapshotNativeValue(value: EmailNativeValue, depth: number): EmailNativ
 function snapshotNativeRecord(record: EmailNativeObject, depth: number): EmailNativeObject {
   const copy: Record<string, EmailNativeValue> = {};
 
-  for (const key of Object.keys(record)) copy[key] = snapshotNativeValue(record[key], depth + 1);
+  for (const key of Object.keys(record)) {
+    defineNativeField(copy, key, snapshotNativeValue(record[key], depth + 1));
+  }
 
   return copy;
 }
@@ -431,7 +438,7 @@ export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOpt
 
   for (const key of Object.keys(native)) {
     const entry = native[key];
-    copy[key] = isObjectLike(entry) ? snapshotNativeObject(entry) : entry;
+    defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeObject(entry) : entry);
   }
 
   return copy;

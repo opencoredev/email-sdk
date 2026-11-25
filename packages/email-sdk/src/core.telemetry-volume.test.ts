@@ -661,6 +661,26 @@ describe("native attempt telemetry", () => {
     }
   });
 
+  test("a SendGrid sandbox flag overridden by a raw body still counts as provider volume", async () => {
+    const capture = telemetryCapture();
+    setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });
+
+    try {
+      const client = createEmailClient({
+        adapters: [sendgrid({ apiKey: "sg", fetch: stubFetch(async () => new Response(null, { status: 202 })) })],
+      });
+
+      await client.send(message, {
+        native: { sendgrid: { sandboxMode: true, body: { mail_settings: { sandbox_mode: { enable: false } } } } },
+      });
+
+      const attempt = capture.events.find((item) => item.event === "email adapter attempted");
+      expect(attempt?.properties).toMatchObject({ provider_volume_eligible: true });
+    } finally {
+      resetTelemetry();
+    }
+  });
+
   test("a passthrough that narrows the recipients reports the provider's count as attempted", async () => {
     const capture = telemetryCapture();
     setSharedTelemetry({ ...capture.telemetry, realProviderVolume: true });

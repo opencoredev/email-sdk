@@ -88,10 +88,13 @@ export const RECIPIENT_REPLACING_NATIVE_KEYS = ["body", "fields"] as const;
  * Mailgun's `testMode` make the provider validate the request without delivering it.
  */
 export function nativeAttemptFacts(native: EmailNativeObject | undefined) {
+  const rawOverride =
+    native !== undefined && RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined);
+
   return {
-    recipientsReplaced:
-      native !== undefined && RECIPIENT_REPLACING_NATIVE_KEYS.some((key) => native[key] !== undefined),
-    validationOnly: native?.sandboxMode === true || native?.testMode === true,
+    recipientsReplaced: rawOverride,
+    // A raw override can switch the mode back off, so only the typed flag alone counts.
+    validationOnly: !rawOverride && (native?.sandboxMode === true || native?.testMode === true),
   };
 }
 

@@ -113,7 +113,15 @@ export function sendgrid(
           to: safeInput.recipients.map((recipient) => recipient.to),
           recipientVariables,
         } as EmailMessage,
-        { ...context, native },
+        {
+          adapter: context.adapter,
+          operation: context.operation,
+          attempt: context.attempt,
+          signal: context.signal,
+          idempotencyKey: context.idempotencyKey,
+          metadata: context.metadata,
+          native,
+        },
       );
 
       return {

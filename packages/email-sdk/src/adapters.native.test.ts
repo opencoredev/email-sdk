@@ -7,7 +7,7 @@ import { mailgun } from "./mailgun.js";
 import { EmailAdapterError, EmailValidationError } from "./errors.js";
 import { defaultsPlugin } from "./plugins-defaults.js";
 import { postmark, type PostmarkNativeOptions } from "./postmark.js";
-import { resend } from "./resend.js";
+import { resend, type ResendNativeOptions } from "./resend.js";
 import { sendgrid } from "./sendgrid.js";
 import { ses } from "./ses.js";
 import type { EmailAdapter, EmailAdapterContext, EmailMessage, EmailNativeValue } from "./types.js";
@@ -916,5 +916,47 @@ describe("native entries are snapshotted as plain data", () => {
 
     expect(capture.calls[0]?.json.personalizations[0].to).toEqual([{ email: "a@example.com" }]);
     expect(result?.accepted).toEqual(["a@example.com"]);
+    expect(reads).toBe(1);
+  });
+
+  test("direct Mailgun sendPersonalized forwards a signal exposed through a getter", async () => {
+    const controller = new AbortController();
+    const signals: Array<AbortSignal | null | undefined> = [];
+
+    class AttemptContext {
+      readonly adapter = "mailgun";
+      readonly operation = "personalized";
+      readonly attempt = 1;
+
+      get signal() {
+        return controller.signal;
+      }
+    }
+
+    const fetch = stubFetch(async (_input, init) => {
+      signals.push(init?.signal);
+
+      return Response.json({ id: "<mg_1>" });
+    });
+
+    await mailgun({ apiKey: "mg", domain: "mg.example.com", fetch }).sendPersonalized?.(
+      {
+        message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+        recipients: [{ to: "a@example.com", variables: { name: "Ada" } }],
+      },
+      new AttemptContext(),
+    );
+
+    expect(signals).toEqual([controller.signal]);
+  });
+
+  test("a native key named __proto__ reaches the request as data", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const entry: ResendNativeOptions = JSON.parse('{"body":{"tags":[{"name":"__proto__","value":"x"}],"__proto__":{"a":1}}}');
+
+    await client.send(simple, { native: { resend: entry } });
+
+    expect(Object.hasOwn(capture.calls[0]?.json, "__proto__")).toBe(true);
   });
 });
