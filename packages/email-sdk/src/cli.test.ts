@@ -1208,6 +1208,13 @@ describe("smtp send credentials", () => {
     expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
   });
 
+  test("--allow-insecure-auth=1 still opts in, as before", async () => {
+    const { exitCode, commands } = await sendAgainst(["--allow-insecure-auth=1"]);
+
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
+
   test("--allow-insecure-auth=false overrides SMTP_ALLOW_INSECURE_AUTH=true", async () => {
     const { exitCode, commands } = await sendAgainst(["--allow-insecure-auth=false"], {
       SMTP_ALLOW_INSECURE_AUTH: "true",

@@ -851,9 +851,9 @@ function smtpBoolean(flags: CliFlags, flag: string, env: string) {
     return process.env[env] === undefined ? undefined : process.env[env] === "true";
   }
 
-  if (value === true || value === "true") return true;
+  if (value === true || value === "true" || value === "1") return true;
 
-  if (value === "false") return false;
+  if (value === "false" || value === "0") return false;
 
   fail(`--${flag} must be true or false.`);
 }
