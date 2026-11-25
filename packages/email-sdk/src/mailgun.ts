@@ -87,7 +87,8 @@ export function mailgun(
   ) => {
     const message = snapshotMessageForSend(rawMessage);
     validateBuiltInAdapter("mailgun", message);
-    const native = context.native;
+    const rawNative = context.native;
+    const native = rawNative && snapshotNativeObject(rawNative);
 
     const body = new FormData();
     body.set("from", formatAddress(message.from));

@@ -1064,6 +1064,21 @@ describe("native entries are snapshotted as plain data", () => {
     );
   });
 
+  test.each([
+    ["resend", () => resend({ apiKey: "re", fetch: jsonCapture({ id: "re_1" }).fetch })],
+    ["postmark", () => postmark({ serverToken: "t", fetch: jsonCapture({ MessageID: "pm_1" }).fetch })],
+    ["ses", () => ses({ accessKeyId: "a", secretAccessKey: "s", region: "us-east-1", fetch: jsonCapture({ MessageId: "ses_1" }).fetch })],
+    ["mailgun", () => mailgun({ apiKey: "mg", domain: "mg.example.com", fetch: jsonCapture({ id: "<mg_1>" }).fetch })],
+    ["brevo", () => brevo({ apiKey: "br", fetch: jsonCapture({ messageId: "br_1" }).fetch })],
+  ] as const)("direct %s send rejects a cyclic native entry", async (_name, makeAdapter) => {
+    const loop: Record<string, EmailNativeValue> = {};
+    loop.self = loop;
+
+    await expect(makeAdapter().send(simple, { ...context, native: { body: { loop } } })).rejects.toThrow(
+      "Native options must not contain cycles.",
+    );
+  });
+
   test("every adapter entry in a send's native map draws on one budget", async () => {
     const capture = jsonCapture({ id: "re_1" });
 

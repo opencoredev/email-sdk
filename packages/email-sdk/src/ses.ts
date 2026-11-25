@@ -1,5 +1,6 @@
 import { EmailAdapterError } from "./errors.js";
 import { snapshotMessageForSend } from "./http.js";
+import { snapshotNativeObject } from "./internal/snapshot.js";
 import { createSigningKeyCache, signAwsRequest } from "./internal/aws-sigv4.js";
 import { jsonString } from "./internal/decode.js";
 import {
@@ -98,7 +99,8 @@ export function ses(
       const fetcher = options.fetch ?? fetch;
       // Built per send so an invalid baseUrl still fails the send, not the adapter factory.
       const endpoint = new URL("/v2/email/outbound-emails", baseUrl);
-      const native = context.native;
+      const rawNative = context.native;
+      const native = rawNative && snapshotNativeObject(rawNative);
       const payload = await toSesPayload(safeMessage, options);
       const body = JSON.stringify(native ? withSesNative(payload, native) : payload);
 

@@ -523,11 +523,12 @@ function snapshotNativeRecord(
  * once, so nothing the caller, a hook, or an adapter holds can change the copy that was checked
  * and sent. Class instances are rejected with an `EmailValidationError`.
  */
-export function snapshotNativeObject(entry: EmailNativeObject): EmailNativeObject {
+export function snapshotNativeObject<T extends EmailNativeObject>(entry: T): T {
   const budget = nativeBudget();
   chargeNativeSlots(budget, 1);
 
-  return snapshotNativeRecord(entry, 0, budget);
+  // SAFETY: the copy has the same own keys and values as `entry`, read once, so it has T's shape.
+  return snapshotNativeRecord(entry, 0, budget) as T;
 }
 
 /** Copies a send's `native` map like `snapshotNativeObject`, with one budget for every entry. */
