@@ -1214,7 +1214,34 @@ describe("smtp send credentials", () => {
     });
 
     expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
     expect(commands).not.toContain("AUTH");
+  });
+
+  test("SMTP_ALLOW_INSECURE_AUTH=true alone authenticates over plaintext", async () => {
+    const { exitCode, commands } = await sendAgainst([], { SMTP_ALLOW_INSECURE_AUTH: "true" });
+
+    expect(exitCode).toBe(0);
+    expect(commands.filter((command) => command === "AUTH")).toHaveLength(1);
+  });
+
+  test("SMTP_ALLOW_INSECURE_AUTH=1 still requires TLS", async () => {
+    const { exitCode, commands } = await sendAgainst([], { SMTP_ALLOW_INSECURE_AUTH: "1" });
+
+    expect(exitCode).toBe(1);
+    expect(commands).toContain("STARTTLS");
+    expect(commands).not.toContain("AUTH");
+  });
+
+  test.each([
+    ["--require-tls=yes", { SMTP_REQUIRE_TLS: "true" }],
+    ["--secure=maybe", { SMTP_SECURE: "true" }],
+  ])("rejects malformed %s instead of dropping the env TLS setting", async (flag, env) => {
+    const { stderr, exitCode, commands } = await sendAgainst([flag], env);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("must be true or false");
+    expect(commands).toEqual([]);
   });
 });
 
