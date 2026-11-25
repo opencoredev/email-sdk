@@ -1254,9 +1254,12 @@ describe("smtp send credentials", () => {
 });
 
 describe("empty flag values", () => {
-  test.each([["--dry-run", ""], ["--fallback", ""]])(
+  test.each([
+    ["--dry-run", 0, ""],
+    ["--fallback", 1, "--fallback needs comma-separated adapter names."],
+  ] as const)(
     "%s with an empty value never sends",
-    async (flag, value) => {
+    async (flag, expectedExit, expectedStderr) => {
       let calls = 0;
 
       const server = Bun.serve({
@@ -1270,7 +1273,7 @@ describe("empty flag values", () => {
       });
 
       try {
-        await runCli([
+        const result = await runCli([
           "send",
           "--adapter",
           "unosend",
@@ -1287,9 +1290,11 @@ describe("empty flag values", () => {
           "--text",
           "It works",
           flag,
-          value,
+          "",
         ]);
 
+        expect(result.exitCode).toBe(expectedExit);
+        expect(result.stderr.trim()).toBe(expectedStderr);
         expect(calls).toBe(0);
       } finally {
         server.stop(true);

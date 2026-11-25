@@ -23,6 +23,8 @@ const containerName = `email-sdk-smtp-check-${process.pid}`;
 
 const authContainerName = `${containerName}-auth`;
 
+const startedContainers: string[] = [];
+
 const address = z.object({ Name: z.string(), Address: z.string() });
 
 const summarySchema = z.object({
@@ -346,21 +348,23 @@ async function checkCliSend(smtpPort: number, apiBase: string): Promise<void> {
 // STARTTLS, so the CLI must refuse to send credentials unless
 // --allow-insecure-auth opts in, and the opt-in must really authenticate.
 async function checkCliAuth(): Promise<void> {
-  docker([
-    "run",
-    "-d",
-    "--rm",
-    "--name",
-    authContainerName,
-    "-e",
-    "MP_SMTP_AUTH=check-user:check-pass",
-    "-p",
-    "127.0.0.1::1025",
-    "-p",
-    "127.0.0.1::8025",
-    MAILPIT_IMAGE,
-    "--smtp-auth-allow-insecure",
-  ]);
+  startedContainers.push(
+    docker([
+      "run",
+      "-d",
+      "--rm",
+      "--name",
+      authContainerName,
+      "-e",
+      "MP_SMTP_AUTH=check-user:check-pass",
+      "-p",
+      "127.0.0.1::1025",
+      "-p",
+      "127.0.0.1::8025",
+      MAILPIT_IMAGE,
+      "--smtp-auth-allow-insecure",
+    ]),
+  );
 
   const smtpPort = hostPort(authContainerName, 1025);
   const apiBase = `http://127.0.0.1:${hostPort(authContainerName, 8025)}`;
@@ -402,7 +406,11 @@ async function checkCliAuth(): Promise<void> {
   const refused = send(refusedSubject, "check-pass", []);
 
   expectEqual("cli auth: refuses plaintext AUTH by default", refused.status, 1);
-  expectEqual("cli auth: refusal is the STARTTLS upgrade", refused.stdout.includes("STARTTLS"), true);
+  expectEqual(
+    "cli auth: refusal is the STARTTLS upgrade",
+    refused.stdout.includes("STARTTLS"),
+    true,
+  );
 
   const wrongPassword = send("Email SDK CLI SMTP auth wrong password", "wrong-pass", [
     "--allow-insecure-auth",
@@ -443,28 +451,32 @@ function assertFreshCli(): void {
 let containerRemoved = false;
 
 function removeContainer(): void {
-  if (containerRemoved || process.env.KEEP_MAILPIT === "1") return;
+  if (containerRemoved || process.env.KEEP_MAILPIT === "1" || startedContainers.length === 0) {
+    return;
+  }
 
   containerRemoved = true;
 
-  spawnSync("docker", ["rm", "-f", containerName, authContainerName], { stdio: "ignore" });
+  spawnSync("docker", ["rm", "-f", ...startedContainers], { stdio: "ignore" });
 }
 
 async function main(): Promise<void> {
   assertFreshCli();
 
-  docker([
-    "run",
-    "-d",
-    "--rm",
-    "--name",
-    containerName,
-    "-p",
-    "127.0.0.1::1025",
-    "-p",
-    "127.0.0.1::8025",
-    MAILPIT_IMAGE,
-  ]);
+  startedContainers.push(
+    docker([
+      "run",
+      "-d",
+      "--rm",
+      "--name",
+      containerName,
+      "-p",
+      "127.0.0.1::1025",
+      "-p",
+      "127.0.0.1::8025",
+      MAILPIT_IMAGE,
+    ]),
+  );
 
   // finally blocks don't run when the process is killed, so remove the
   // container from the signal handlers too.
@@ -492,6 +504,10 @@ async function main(): Promise<void> {
   } finally {
     if (process.env.KEEP_MAILPIT === "1") {
       console.error(`Kept ${containerName}: Mailpit UI ${apiBase}, SMTP 127.0.0.1:${smtpPort}`);
+
+      if (startedContainers.length > 1) {
+        console.error(`Kept ${authContainerName}: ${docker(["port", authContainerName]).replace(/\n/g, ", ")}`);
+      }
     }
 
     removeContainer();
