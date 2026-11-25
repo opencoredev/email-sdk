@@ -1017,6 +1017,57 @@ describe("native entries are snapshotted as plain data", () => {
     expect(capture.calls).toHaveLength(0);
   });
 
+  test("a sparse array longer than the node budget is rejected before it is walked", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+    const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });
+    const sparse: EmailNativeValue[] = [];
+    sparse.length = 2_000_000;
+
+    await expect(client.send(simple, { native: { resend: { body: { sparse } } } })).rejects.toThrow(
+      "Native options are too large.",
+    );
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("every adapter entry in a send's native map draws on one budget", async () => {
+    const capture = jsonCapture({ id: "re_1" });
+
+    const client = createEmailClient({
+      adapters: [
+        resend({ apiKey: "re", fetch: capture.fetch }),
+        postmark({ serverToken: "t", fetch: capture.fetch }),
+      ],
+    });
+
+    let fanout: EmailNativeValue = "x";
+
+    for (let level = 0; level < 18; level += 1) fanout = [fanout, fanout];
+
+    await expect(
+      client.send(simple, {
+        native: { resend: { body: { fanout } }, postmark: { body: { fanout } } },
+      }),
+    ).rejects.toThrow("Native options are too large.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
+  test("direct SendGrid sendPersonalized rejects a cyclic native entry", async () => {
+    const capture = jsonCapture({}, { headers: { "x-message-id": "sg_batch" } });
+    const loop: Record<string, EmailNativeValue> = {};
+    loop.self = loop;
+
+    await expect(
+      sendgrid({ apiKey: "sg", fetch: capture.fetch }).sendPersonalized?.(
+        {
+          message: { from: "hello@acme.com", subject: "Hi", text: "Hi" },
+          recipients: [{ to: "a@example.com", variables: { name: "Ada" } }],
+        },
+        { ...context, native: { body: { loop } } },
+      ),
+    ).rejects.toThrow("Native options must not contain cycles.");
+    expect(capture.calls).toHaveLength(0);
+  });
+
   test("a value shared by sibling fields is still copied to each", async () => {
     const capture = jsonCapture({ id: "re_1" });
     const client = createEmailClient({ adapters: [resend({ apiKey: "re", fetch: capture.fetch })] });

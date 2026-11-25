@@ -396,12 +396,12 @@ const MAX_NATIVE_NODES = 1_000_000;
 
 const MAX_NATIVE_TEXT_LENGTH = 32 * 1024 * 1024;
 
-/**
- * Work left for one native snapshot. Shared references are copied once per path, so a small
- * object graph can expand into far more values than it holds; this caps the expanded result.
- */
 type NativeContainer = EmailNativeObject | readonly EmailNativeValue[];
 
+/**
+ * Work done so far by one native snapshot. Shared references are copied once per path, so a small
+ * object graph can expand into far more values than it holds; this caps the expanded result.
+ */
 interface NativeBudget {
   nodes: number;
   textLength: number;
@@ -413,10 +413,18 @@ function nativeBudget(): NativeBudget {
 }
 
 function chargeNative(budget: NativeBudget, textLength: number) {
+  reserveNative(budget, 1);
   budget.nodes += 1;
   budget.textLength += textLength;
 
-  if (budget.nodes > MAX_NATIVE_NODES || budget.textLength > MAX_NATIVE_TEXT_LENGTH) {
+  if (budget.textLength > MAX_NATIVE_TEXT_LENGTH) {
+    throw new EmailValidationError("Native options are too large.");
+  }
+}
+
+// Checked before walking a container, so a huge or sparse array or key set fails before any copy.
+function reserveNative(budget: NativeBudget, count: number) {
+  if (budget.nodes + count > MAX_NATIVE_NODES) {
     throw new EmailValidationError("Native options are too large.");
   }
 }
@@ -455,8 +463,15 @@ function snapshotNativeValue(
 
   if (!isNativeList(value)) return snapshotNativeRecord(value, depth, budget);
 
+  const length = value.length;
+  reserveNative(budget, length);
   enterNative(value, budget);
-  const copy = value.map((item) => snapshotNativeValue(item, depth + 1, budget));
+  const copy: EmailNativeValue[] = [];
+
+  for (let index = 0; index < length; index += 1) {
+    copy.push(snapshotNativeValue(value[index], depth + 1, budget));
+  }
+
   budget.ancestors.delete(value);
 
   return copy;
@@ -477,9 +492,11 @@ function snapshotNativeRecord(
 ): EmailNativeObject {
   assertPlainNative(record);
   enterNative(record, budget);
+  const keys = Object.keys(record);
+  reserveNative(budget, keys.length);
   const copy: Record<string, EmailNativeValue> = {};
 
-  for (const key of Object.keys(record)) {
+  for (const key of keys) {
     chargeNative(budget, key.length);
     defineNativeField(copy, key, snapshotNativeValue(record[key], depth + 1, budget));
   }
@@ -498,6 +515,8 @@ export function snapshotNativeObject(
   entry: EmailNativeObject,
   budget: NativeBudget = nativeBudget(),
 ): EmailNativeObject {
+  chargeNative(budget, 0);
+
   return snapshotNativeRecord(entry, 0, budget);
 }
 
@@ -505,9 +524,12 @@ export function snapshotNativeObject(
 export function snapshotNativeMap(native: EmailNativeOptionsMap): EmailNativeOptionsMap {
   assertPlainNative(native);
   const budget = nativeBudget();
+  const keys = Object.keys(native);
+  reserveNative(budget, keys.length);
   const copy: Record<string, EmailNativeObject | undefined> = {};
 
-  for (const key of Object.keys(native)) {
+  for (const key of keys) {
+    chargeNative(budget, key.length);
     const entry = native[key];
     defineNativeField(copy, key, isObjectLike(entry) ? snapshotNativeObject(entry, budget) : entry);
   }
