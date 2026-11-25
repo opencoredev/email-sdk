@@ -1,0 +1,10 @@
+---
+// Runs the onboarding workflow through inspectWorkflow and a sample engine run while the page
+// renders, then hydrates the viewer with the result. The engine stays on the server.
+import { buildOnboardingViewerData } from "../../lib/workflow-viewer/build.ts";
+import { WorkflowViewer as Viewer } from "../workflow-viewer.tsx";
+
+const data = await buildOnboardingViewerData();
+---
+
+<Viewer client:visible data={data} />
