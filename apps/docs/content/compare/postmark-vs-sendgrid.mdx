@@ -67,7 +67,7 @@ const client = createEmailClient({
     sendgrid({ apiKey: process.env.SENDGRID_API_KEY! }),
   ],
   defaultAdapter: "postmark",
-  fallback: ["sendgrid"],
+  fallback: { adapters: ["sendgrid"] },
 });
 ```
 

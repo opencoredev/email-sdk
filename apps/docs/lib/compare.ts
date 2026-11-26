@@ -86,7 +86,7 @@ export type CompareSearchCopy = {
  * page dependencies change (renderer, field matrix, FAQ data, config snippets),
  * since those change every pair's rendered output without touching its entry.
  */
-export const compareRenderLastmod = "2026-10-31";
+export const compareRenderLastmod = "2026-11-26";
 
 /** Published modification date for a compare page: its own edit or the latest shared-render change, whichever is newer. */
 export function comparePairLastmod(pair: ComparePair): string {
@@ -153,11 +153,11 @@ export const comparePairs: ComparePair[] = [
     b: "loops",
     lastmod: "2026-11-26",
     search: {
-      title: "Resend vs Loops: Build Emails in Code or Send Saved Templates?",
+      title: "Resend vs Loops: Which Transactional Email API Fits Your App?",
       description:
-        "Resend or Loops? Resend sends emails you build in code, with CC, BCC, headers and scheduling. Loops sends a saved template with data variables. Fields compared.",
+        "Resend or Loops? Resend sends email built in code or from a template, with CC, BCC, headers and scheduling. Loops sends a published template. Fields compared.",
       verdict:
-        "Use Resend if you build transactional messages in code and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if the same tool should also run your lifecycle and marketing email: its transactional API sends a saved template with data variables and attachments, and supports none of those other fields.",
+        "Use Resend if you send content built in code or from a template and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if every transactional email can be a published Loops template: its transactional API sends that template with data variables and attachments, and supports none of those other fields.",
     },
     intro:
       "Resend and Loops both target modern SaaS teams but solve different problems. Resend is a transactional email API in the classic sense: you construct a message — recipients, subject, HTML, attachments — and it delivers it, with scheduling, tags, and full header control. Loops is an email platform for product companies where transactional sends are one feature next to marketing loops and audience management; its transactional API is intentionally minimal and template-driven, so the unified message shape maps onto a much smaller surface — no CC or BCC, no custom headers, no tags, and no scheduled sending, though it does carry per-message metadata (data variables) and attachments. Pick Loops when the same tool should own lifecycle and marketing email; pick Resend when you want a full-fidelity send API.",

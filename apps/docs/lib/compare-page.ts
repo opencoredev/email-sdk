@@ -111,7 +111,7 @@ const client = createEmailClient({
     ${getAdapterConfigSnippet(pair.b)},
   ],
   defaultAdapter: "${pair.a}",
-  fallback: ["${pair.b}"],
+  fallback: { adapters: ["${pair.b}"] },
 });`;
 }
 

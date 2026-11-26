@@ -69,7 +69,7 @@ const client = createEmailClient({
     postmark({ serverToken: process.env.POSTMARK_SERVER_TOKEN! }),
   ],
   defaultAdapter: "resend",
-  fallback: ["postmark"],
+  fallback: { adapters: ["postmark"] },
 });
 ```
 

@@ -29,21 +29,21 @@ Each block below stands on its own: what the provider is best for, its entry pri
 
 - **Best for:** apps under 3,000 emails a month, or teams that want native idempotency keys and scheduled sends.
 - **Price:** free for 3,000 emails a month (100 a day), then Pro at $20 a month for 50,000 ([Resend pricing](https://resend.com/pricing)).
-- **Gains over Postmark:** [scheduled sends up to 30 days ahead](https://resend.com/docs/dashboard/emails/schedule-email), several tags per message, and native idempotency keys.
+- **Gains over Postmark:** [scheduled sends up to 30 days ahead](https://resend.com/docs/dashboard/emails/schedule-email), several tags per message, and [idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys) that drop a repeat sent within 24 hours.
 - **Gaps against Postmark:** no metadata field in Email SDK, Email SDK rejects repeated header names on Resend, and the free plan keeps 30 days of data against 45 days on Postmark Basic.
 
 ### Mailgun
 
 - **Best for:** scheduled sends and metadata at the same $15 entry price as Postmark Basic.
 - **Price:** free for 100 emails a day, then Basic from $15 a month for 10,000, extra emails from $1.80 per 1,000 ([Mailgun pricing](https://www.mailgun.com/pricing/)).
-- **Gains over Postmark:** scheduled sends (up to 3 days ahead on most plans, 7 with extended storage), several tags per message, metadata kept, and repeated header names accepted.
+- **Gains over Postmark:** [scheduled sends](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/schedule-delivery) (up to 3 days ahead, or 7 on plans with 7 or more days of storage), several tags per message, and a free tier counted per day. Metadata and repeated header names work as they do on Postmark.
 - **Gaps against Postmark:** the free plan and Basic keep 1 day of logs, and there are no idempotency keys.
 
 ### SendGrid
 
 - **Best for:** teams already on Twilio that want scheduled sends and metadata.
 - **Price:** a 60-day trial at 100 emails a day, then Essentials from $19.95 a month ([SendGrid pricing](https://www.twilio.com/en-us/products/email-api/pricing)). Twilio [began retiring the free plan in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan).
-- **Gains over Postmark:** scheduled sends up to 72 hours ahead, several tags per message, and metadata kept.
+- **Gains over Postmark:** [scheduled sends up to 72 hours ahead](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/scheduling-parameters) and several tags per message. Metadata works as it does on Postmark.
 - **Gaps against Postmark:** no idempotency keys, and Email SDK rejects repeated header names on SendGrid, which Postmark accepts.
 
 ### Amazon SES
@@ -51,19 +51,19 @@ Each block below stands on its own: what the provider is best for, its entry pri
 - **Best for:** high volume, where the per-email rate matters more than the dashboard.
 - **Price:** Essentials at $0.16 per 1,000 or à la carte at $0.10 per 1,000, with no monthly fee ([SES pricing](https://aws.amazon.com/ses/pricing/)). New accounts have had no SES free tier since July 21, 2026.
 - **Gains over Postmark:** the lowest per-email price here, and several tags per message.
-- **Gaps against Postmark:** no metadata, no scheduled send, no idempotency keys, and you run bounce handling and logging yourself through configuration sets.
+- **Gaps against Postmark:** no metadata, no scheduled send, no idempotency keys, and more setup: [bounce and complaint notifications](https://docs.aws.amazon.com/ses/latest/dg/monitor-sending-activity-using-notifications.html) go to SNS or email, and full event publishing needs a configuration set.
 
 ### Lettermint
 
 - **Best for:** an [EU-only email service](https://lettermint.co/european-email) that keeps the Postmark fields most apps use.
 - **Price:** free for 300 emails a month, then Starter at €10 a month for 10,000, extra emails €1.50 per 1,000 ([Lettermint pricing](https://lettermint.co/pricing)).
-- **Gains over Postmark:** native idempotency keys, a larger free tier, and data processed and stored in the EU.
+- **Gains over Postmark:** [idempotency keys](https://lettermint.co/docs/platform/emails/idempotency) that drop a repeat sent within 24 hours, a larger free tier, and data processed and stored in the EU.
 - **Gaps against Postmark:** one tag per message, the same as Postmark, no scheduled send, and Email SDK rejects repeated header names on Lettermint.
 
 ## Where Postmark is better
 
 - **Message streams.** [Transactional and broadcast mail run on separate streams](https://postmarkapp.com/message-streams), so a marketing send doesn't share a stream with password resets.
-- **History.** Basic keeps 45 days of data, and Pro and Platform can extend retention up to 365 days ([Postmark pricing](https://postmarkapp.com/pricing)). Mailgun's free plan and Basic keep 1 day of logs.
+- **History.** Basic keeps 45 days of data, and Pro and Platform can extend retention up to 365 days as a paid add-on ([Postmark pricing](https://postmarkapp.com/pricing)). Mailgun's free plan and Basic keep 1 day of logs.
 - **Metadata.** Postmark stores per-message metadata. Resend and Amazon SES have no metadata field in Email SDK, so code that uses it has to change.
 - **Inbound.** Pro and Platform include inbound email processing on the same account.
 
@@ -125,15 +125,15 @@ npm install @opencoredev/email-sdk
 
 `src/email.ts` in the complete code below registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `postmark`, so the same provider keeps sending until you flip the variable. The fallback list names both providers, and the SDK skips whichever one is primary.
 
-Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `metadata` throws `EmailValidationError`, even while Postmark is still primary, because Resend has no metadata field. Run your real messages through `email.validate()` in a test first. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason.
+Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `metadata` throws `EmailValidationError`, even while Postmark is still primary, because Resend has no metadata field. Run your real messages through `email.validate()` in a test first. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason. [Resend tag values](https://resend.com/docs/api-reference/emails/send-email) take only ASCII letters, numbers, `_` and `-`, so an id like `ord_123` works. Encode any id with other characters first.
 
 ### 3. Decide which emails may fail over
 
 A provider can time out or return a 5xx, 408, 409 or 429 after it already accepted your message. The SDK marks those failures as delivery `unknown`, and by default it stops instead of trying the fallback, because the fallback could send a second copy. The [fallback guide](/docs/concepts/fallbacks-and-retries) explains the rule.
 
-The client in `src/email.ts` keeps that default. Only the sign-in link in `src/send.ts` passes `onUnknownDelivery: "continue"`, because a duplicate sign-in link is harmless and a missing one locks someone out. A receipt keeps the default, so an unknown failure throws `EmailRouteError`. Before your queue retries it, check Resend's logs or delivery webhooks, because the provider may already have sent it.
+The client in `src/email.ts` keeps that default. Only the sign-in link in `src/send.ts` passes `onUnknownDelivery: "continue"`, because a duplicate sign-in link is harmless and a missing one locks someone out. A receipt keeps the default, so an unknown failure throws `EmailRouteError`. A definite rejection, such as a 400, still moves it to the other provider, because nothing was sent. Before your queue retries after an unknown failure, check the logs or delivery webhooks of the adapter named in the last entry of `EmailRouteError.failures`, because that provider may already have sent it.
 
-Resend's native `idempotencyKey` can't help while Postmark is in the same route: the SDK rejects the key for Postmark unless you pass `idempotency: "best-effort"`, which sends without deduplication on Postmark.
+Resend's native `idempotencyKey` can't help while Postmark is in the same route: the SDK rejects the key for Postmark unless you pass `idempotency: "best-effort"`, which still sends the key to Resend but gives no deduplication when Postmark sends.
 
 ### 4. Cut over
 
@@ -224,7 +224,7 @@ export async function sendReceipt(to: string, orderId: string) {
 }
 ```
 
-The test swaps `fetch` for a fake that answers like Resend and Postmark, then checks four things: a normal send goes to Resend, a sign-in link falls back to Postmark's outbound stream when Resend returns a 503, a receipt doesn't fall back, and a message with metadata is rejected before any request.
+The test swaps `fetch` for a fake that answers like Resend and Postmark, then checks four things: a normal send goes to Resend, a sign-in link falls back to Postmark's outbound stream when Resend returns a 503, a receipt stops when Resend's outcome is unknown, and a message with metadata is rejected before any request.
 
 `src/email.test.ts`:
 

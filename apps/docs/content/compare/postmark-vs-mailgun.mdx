@@ -67,7 +67,7 @@ const client = createEmailClient({
     mailgun({ apiKey: process.env.MAILGUN_API_KEY!, domain: "mg.yourdomain.com" }),
   ],
   defaultAdapter: "postmark",
-  fallback: ["mailgun"],
+  fallback: { adapters: ["mailgun"] },
 });
 ```
 

@@ -71,7 +71,7 @@ const client = createEmailClient({
   }),
   ],
   defaultAdapter: "postmark",
-  fallback: ["ses"],
+  fallback: { adapters: ["ses"] },
 });
 ```
 
