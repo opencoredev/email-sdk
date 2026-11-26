@@ -349,7 +349,7 @@ describe("Postmark to Resend migration example", () => {
 });
 ```
 
-Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.1.0. They run with Resend as primary. To check the Postmark-first deploy, set `EMAIL_PRIMARY` to `postmark` in `testEnv` and expect Postmark's host first. They prove the routing and the main fields of each provider request. They don't prove delivery, which needs a real send from your own accounts.
+Run it with `bun test src/email.test.ts`. All four tests pass against `@opencoredev/email-sdk` 3.1.0. They prove the routing and the main fields of each provider request. They don't prove delivery, which needs a real send from your own accounts.
 
 ## Related
 
