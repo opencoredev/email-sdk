@@ -86,7 +86,7 @@ export type CompareSearchCopy = {
  * page dependencies change (renderer, field matrix, FAQ data, config snippets),
  * since those change every pair's rendered output without touching its entry.
  */
-export const compareRenderLastmod = "2026-10-31";
+export const compareRenderLastmod = "2026-11-26";
 
 /** Published modification date for a compare page: its own edit or the latest shared-render change, whichever is newer. */
 export function comparePairLastmod(pair: ComparePair): string {
@@ -98,7 +98,7 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-postmark",
     a: "resend",
     b: "postmark",
-    lastmod: "2026-11-14",
+    lastmod: "2026-11-26",
     search: {
       title: "Resend vs Postmark: Which Transactional Email API?",
       description:
@@ -151,16 +151,16 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-loops",
     a: "resend",
     b: "loops",
-    lastmod: "2026-11-01",
+    lastmod: "2026-11-26",
     search: {
-      title: "Resend vs Loops: Which Should You Use for Transactional Email?",
+      title: "Resend vs Loops: Which Transactional Email API Fits Your App?",
       description:
-        "Should you use Resend or Loops? Resend is a full transactional send API; Loops pairs template-based sends with lifecycle email. Field support and code compared.",
+        "Resend or Loops? Resend sends email built in code or from a template, with CC, BCC, headers and scheduling. Loops sends a published template. Fields compared.",
       verdict:
-        "Use Resend if you build transactional messages in code and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if the same tool should also run your lifecycle and marketing email: its transactional API sends a saved template with data variables and attachments, and supports none of those other fields.",
+        "Use Resend if you send content built in code or from a template and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if every transactional email can be a published Loops template: its transactional API sends that template with data variables and attachments, and supports none of those other fields.",
     },
     intro:
-      "Resend and Loops both target modern SaaS teams but solve different problems. Resend is a transactional email API in the classic sense: you construct a message — recipients, subject, HTML, attachments — and it delivers it, with scheduling, tags, and full header control. Loops is an email platform for product companies where transactional sends are one feature next to marketing loops and audience management; its transactional API is intentionally minimal and template-driven, so the unified message shape maps onto a much smaller surface — no CC or BCC, no custom headers, no tags, and no scheduled sending, though it does carry per-message metadata (data variables) and attachments. Pick Loops when the same tool should own lifecycle and marketing email; pick Resend when you want a full-fidelity send API.",
+      "Resend and Loops both target modern SaaS teams but solve different problems. Resend is a transactional email API in the classic sense: you construct a message — recipients, subject, HTML, attachments — and it delivers it, with scheduling, tags, and custom headers. Loops is an email platform for product companies where transactional sends are one feature next to marketing loops and audience management; its transactional API is intentionally minimal and template-driven, so the unified message shape maps onto a much smaller surface — no CC or BCC, no custom headers, no tags, and no scheduled sending, though it does carry per-message metadata (data variables) and attachments. Pick Loops when every transactional email can be a published Loops template; pick Resend when you want to send content built in code, with an optional template, through a full-fidelity send API. A fallback to Loops sends its configured template, with the original subject and body passed only as data variables, so the template decides what the recipient sees.",
   },
   {
     slug: "resend-vs-mailersend",
@@ -182,7 +182,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-sendgrid",
     a: "postmark",
     b: "sendgrid",
-    lastmod: "2026-11-16",
+    lastmod: "2026-11-26",
     search: {
       title: "Postmark vs SendGrid: Which Transactional Email API?",
       description:
@@ -197,7 +197,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-11-15",
+    lastmod: "2026-11-26",
     search: {
       title: "Postmark vs Mailgun: Which Email API for Developers?",
       description:
@@ -212,7 +212,7 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-ses",
     a: "postmark",
     b: "ses",
-    lastmod: "2026-11-23",
+    lastmod: "2026-11-26",
     search: {
       title: "Postmark vs Amazon SES: Managed Email or Raw AWS?",
       description:
@@ -385,6 +385,13 @@ export const providerBlogGuides: Partial<Record<ProviderKey, readonly ProviderBl
       slug: "resend-alternatives",
       title: "Resend alternatives guide",
       lead: "Moving off Resend?",
+    },
+  ],
+  postmark: [
+    {
+      slug: "postmark-alternatives",
+      title: "Postmark alternatives guide",
+      lead: "Moving off Postmark?",
     },
   ],
   ses: [

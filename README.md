@@ -83,6 +83,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Email API pricing compared](https://email-sdk.dev/blog/email-api-pricing)
 - [Mailgun alternatives for developers](https://email-sdk.dev/blog/mailgun-alternatives)
 - [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
+- [Postmark alternatives for developers](https://email-sdk.dev/blog/postmark-alternatives)
 - [MailHog and Mailpit: test email locally in Node.js](https://email-sdk.dev/blog/mailpit-mailhog-nodejs)
 - [Send email from a Next.js server action](https://email-sdk.dev/blog/nextjs-server-action-send-email)
 

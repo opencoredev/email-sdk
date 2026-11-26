@@ -3,7 +3,7 @@ title: "SendGrid Alternatives for Developers, and How to Switch"
 description: "Compare SendGrid alternatives by price, log retention, and field support, then switch providers in TypeScript with SendGrid kept as the fallback."
 type: blog
 date: 2026-10-29
-lastModified: 2026-11-16
+lastModified: 2026-11-26
 search:
   tags: ["SendGrid", "Migration", "TypeScript"]
 ---
@@ -315,3 +315,4 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 - [Mailgun alternatives](/blog/mailgun-alternatives): the same migration, starting from Mailgun.
 - [Resend alternatives](/blog/resend-alternatives): the same migration, starting from Resend.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.
+- [Postmark alternatives](/blog/postmark-alternatives): the same migration, starting from Postmark.
