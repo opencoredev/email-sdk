@@ -81,7 +81,7 @@ Brevo supports every message field that SendGrid supports, so nothing is lost mo
 
 ### Can I use Brevo as a fallback for SendGrid?
 
-Yes. SendGrid and Brevo support the same message fields, so Email SDK's field checks pass a fallback in either direction. Adapter limits also apply. SendGrid: Native personalized delivery caps one request at 1,000 recipients. SendGrid: Tag names are discarded; tag values are sent as categories. Brevo: Accepts one reply-to address.
+Yes. SendGrid and Brevo support the same message fields, so Email SDK's field checks pass a fallback in either direction. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue". Adapter limits also apply. SendGrid: Native personalized delivery caps one request at 1,000 recipients. SendGrid: Tag names are discarded; tag values are sent as categories. Brevo: Accepts one reply-to address.
 
 ## Adapter docs
 

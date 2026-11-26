@@ -54,14 +54,17 @@ export function buildCompareFaq(pair: ComparePair) {
     ...getAdapterLimits(pair.b).map((limit) => `${b.name}: ${limit}`),
   ];
 
+  const deliveryNote =
+    ' A failed send still falls back only when the SDK knows the first provider didn\'t send it, unless you set onUnknownDelivery: "continue".';
+
   const limitsNote = limits.length > 0 ? ` Adapter limits also apply. ${limits.join(" ")}` : "";
 
   const fallbackAnswer =
     rejectedDirections.length === 0
-      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK's field checks pass a fallback in either direction.${limitsNote}`
+      ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK's field checks pass a fallback in either direction.${deliveryNote}${limitsNote}`
       : `Partially. Email SDK checks field support before every send: a fallback is rejected ${rejectedDirections.join(
           ", and ",
-        )}. Messages that avoid those pass the field checks. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue".${limitsNote}`;
+        )}. Messages that avoid those pass the field checks.${deliveryNote}${limitsNote}`;
 
   const verdict = pair.search
     ? [{ question: `Should I use ${a.name} or ${b.name}?`, answer: pair.search.verdict }]

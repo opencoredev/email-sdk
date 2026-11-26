@@ -81,7 +81,7 @@ MailerSend supports every message field that Resend supports, so nothing is lost
 
 ### Can I use MailerSend as a fallback for Resend?
 
-Yes. Resend and MailerSend support the same message fields, so Email SDK's field checks pass a fallback in either direction. Adapter limits also apply. MailerSend: Accepts one reply-to address. MailerSend: Tag names are discarded; tag values are sent as tags.
+Yes. Resend and MailerSend support the same message fields, so Email SDK's field checks pass a fallback in either direction. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue". Adapter limits also apply. MailerSend: Accepts one reply-to address. MailerSend: Tag names are discarded; tag values are sent as tags.
 
 ## Adapter docs
 
