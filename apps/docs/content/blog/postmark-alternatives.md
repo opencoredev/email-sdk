@@ -36,14 +36,14 @@ Each block below stands on its own: what the provider is best for, its entry pri
 
 - **Best for:** scheduled sends and metadata at the same $15 entry price as Postmark Basic.
 - **Price:** free for 100 emails a day, then Basic from $15 a month for 10,000, extra emails from $1.80 per 1,000 ([Mailgun pricing](https://www.mailgun.com/pricing/)).
-- **Gains over Postmark:** [scheduled sends](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/schedule-delivery) (up to 3 days ahead, or 7 on plans with 7 or more days of storage), several tags per message, and a free tier counted per day. Metadata and repeated header names work as they do on Postmark.
+- **Gains over Postmark:** [scheduled sends](https://documentation.mailgun.com/docs/mailgun/user-manual/sending-messages/schedule-delivery) (up to 3 days ahead, or 7 on plans with 7 or more days of storage), several tags per message, and a free tier counted per day. Repeated header names work as on Postmark, and metadata is accepted, but Mailgun stores every value as a string, so check the values your webhooks read back.
 - **Gaps against Postmark:** the free plan and Basic keep 1 day of logs, and there are no idempotency keys.
 
 ### SendGrid
 
 - **Best for:** teams already on Twilio that want scheduled sends and metadata.
 - **Price:** a 60-day trial at 100 emails a day, then Essentials from $19.95 a month ([SendGrid pricing](https://www.twilio.com/en-us/products/email-api/pricing)). Twilio [began retiring the free plan in May 2025](https://www.twilio.com/en-us/changelog/sendgrid-free-plan).
-- **Gains over Postmark:** [scheduled sends up to 72 hours ahead](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/scheduling-parameters) and several tags per message. Metadata works as it does on Postmark.
+- **Gains over Postmark:** [scheduled sends up to 72 hours ahead](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/scheduling-parameters) and several tags per message. Metadata is accepted as `custom_args`, which turns a null value into an empty string, so check the values your webhooks read back.
 - **Gaps against Postmark:** no idempotency keys, and Email SDK rejects repeated header names on SendGrid, which Postmark accepts.
 
 ### Amazon SES
@@ -78,7 +78,7 @@ These come from Postmark's pricing page and from what the [Postmark Email API](h
 
 ### Which Postmark fields survive the move
 
-This table comes from the SDK's adapter declarations. A "No" means the SDK rejects that message before sending instead of silently dropping the field.
+This table comes from the SDK's adapter declarations. For message fields, a "No" means the SDK rejects that message before sending instead of silently dropping the field. Native idempotency is different: it decides whether an `idempotencyKey` send can run in the default strict mode.
 
 | Field                     | Postmark              | Resend | Mailgun | SendGrid | Amazon SES | Lettermint            |
 | ------------------------- | --------------------- | ------ | ------- | -------- | ---------- | --------------------- |
@@ -125,7 +125,7 @@ npm install @opencoredev/email-sdk
 
 `src/email.ts` in the complete code below registers both adapters. `defaultAdapter` reads `EMAIL_PRIMARY` and defaults to `postmark`, so the same provider keeps sending until you flip the variable. The fallback list names both providers, and the SDK skips whichever one is primary.
 
-Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `metadata` throws `EmailValidationError`, even while Postmark is still primary, because Resend has no metadata field. Run your real messages through `email.validate()` in a test first. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason. [Resend tag values](https://resend.com/docs/api-reference/emails/send-email) take only ASCII letters, numbers, `_` and `-`, so an id like `ord_123` works. Encode any id with other characters first.
+Before any request leaves your server, the client checks the message against every adapter in its route, the fallback included. That check starts the day you deploy: a message with `metadata` throws `EmailValidationError`, even while Postmark is still primary, because Resend has no metadata field. Run your real messages through `email.validate()` in a test first. The receipt in `src/send.ts` moves its order id from metadata to a tag for that reason. [Resend tag values](https://resend.com/docs/api-reference/emails/send-email) take only ASCII letters, numbers, `_` and `-`, up to 256 characters, so an id like `ord_123` works. Map any other id to a short token that fits first.
 
 ### 3. Decide which emails may fail over
 
@@ -133,7 +133,7 @@ A provider can time out or return a 5xx, 408, 409 or 429 after it already accept
 
 The client in `src/email.ts` keeps that default. Only the sign-in link in `src/send.ts` passes `onUnknownDelivery: "continue"`, because a duplicate sign-in link is harmless and a missing one locks someone out. A receipt keeps the default, so an unknown failure throws `EmailRouteError`. A definite rejection, such as a 400, still moves it to the other provider, because nothing was sent. Before your queue retries after an unknown failure, check the logs or delivery webhooks of the adapter named in the last entry of `EmailRouteError.failures`, because that provider may already have sent it.
 
-Resend's native `idempotencyKey` can't help while Postmark is in the same route: the SDK rejects the key for Postmark unless you pass `idempotency: "best-effort"`, which still sends the key to Resend but gives no deduplication when Postmark sends.
+Strict idempotency needs every adapter in the route to support it. With Postmark in the route, the SDK rejects an `idempotencyKey` send unless you pass `idempotency: "best-effort"`, which still sends the key to Resend but gives no deduplication when Postmark sends.
 
 ### 4. Cut over
 
@@ -149,7 +149,7 @@ export const email = createEmailClient({
 });
 ```
 
-Drop the `fallback` option from the sign-in link too. After that deploy is live, revoke the Postmark server token and remove its DNS records.
+Drop the `fallback` option from the sign-in link too. After that deploy is live, revoke the Postmark server token. Remove Postmark DNS records only if no inbound stream or other sender still uses them.
 
 ## Complete code
 
