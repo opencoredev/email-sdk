@@ -107,7 +107,7 @@
     "@opencoredev/email-sdk": "workspace:*",
     "@types/bun": "~1.4.4",
     "convex": "^1.51.0",
-    "convex-test": "0.0.73"
+    "convex-test": "0.0.75"
   },
   "peerDependencies": {
     "@opencoredev/email-sdk": "^3.1.0",

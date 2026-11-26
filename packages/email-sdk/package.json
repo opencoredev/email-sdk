@@ -307,10 +307,10 @@
   "devDependencies": {
     "@react-email/render": "^2.3.1",
     "@types/bun": "~1.4.4",
-    "@types/node": "^25.9.9",
+    "@types/node": "^25.9.12",
     "@types/nodemailer": "^8.0.2",
-    "@types/react": "^19.3.0",
-    "ai": "^7.0.177",
+    "@types/react": "^19.3.3",
+    "ai": "^7.0.183",
     "postal-mime": "4.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
