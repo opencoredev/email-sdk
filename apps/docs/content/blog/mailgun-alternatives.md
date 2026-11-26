@@ -3,7 +3,7 @@ title: "Mailgun Alternatives in 2026: 5 APIs and How to Switch"
 description: "Mailgun alternatives in 2026: Resend, Postmark, SendGrid, Amazon SES and Lettermint by price, log retention and fields, plus a TypeScript switch with fallback."
 type: blog
 date: 2026-10-29
-lastModified: 2026-11-23
+lastModified: 2026-11-26
 search:
   tags: ["Mailgun", "Migration", "TypeScript"]
 ---
@@ -325,3 +325,4 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 - [SendGrid API guide for Node.js and TypeScript](/blog/sendgrid-api-nodejs-typescript): API keys, Mail Send requests, scheduling, and event webhooks.
 - [Resend alternatives](/blog/resend-alternatives): the same migration, starting from Resend.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, a provider's HTTP API, or one client for any provider.
+- [Postmark alternatives](/blog/postmark-alternatives): the same migration, starting from Postmark.

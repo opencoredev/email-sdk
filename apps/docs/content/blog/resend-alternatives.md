@@ -3,7 +3,7 @@ title: "Resend Alternatives for Developers, and How to Switch"
 description: "Compare Resend alternatives by price, field support, and duplicate protection, then move to Amazon SES in TypeScript with Resend kept as the fallback."
 type: blog
 date: 2026-11-01
-lastModified: 2026-11-01
+lastModified: 2026-11-26
 search:
   tags: ["Resend", "Migration", "TypeScript"]
 ---
@@ -336,3 +336,4 @@ Run it with `bun test src/email.test.ts`. All four tests pass against `@opencore
 - [Resend adapter](/docs/adapters/resend) and [Amazon SES adapter](/docs/adapters/ses): options and field mapping.
 - [Retries and fallback](/docs/concepts/fallbacks-and-retries): how delivery certainty decides when fallback runs.
 - [SendGrid alternatives](/blog/sendgrid-alternatives) and [Mailgun alternatives](/blog/mailgun-alternatives): the same migration, starting from another provider.
+- [Postmark alternatives](/blog/postmark-alternatives): the same migration, starting from Postmark.
