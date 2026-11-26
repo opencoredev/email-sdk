@@ -85,7 +85,7 @@ MailerSend supports Scheduled sending (sendAt) in the unified message shape, whi
 
 ### Can I use AWS SES as a fallback for MailerSend?
 
-Partially. Email SDK checks field support before every send: a fallback is rejected from MailerSend to AWS SES for messages using Scheduled sending (sendAt), and from AWS SES to MailerSend for messages using repeated header names. Messages that avoid those fail over cleanly. Adapter limits also apply. MailerSend: Accepts one reply-to address. MailerSend: Tag names are discarded; tag values are sent as tags. AWS SES: Accepts at most 15 headers per message.
+Partially. Email SDK checks field support before every send: a fallback is rejected from MailerSend to AWS SES for messages using Scheduled sending (sendAt), and from AWS SES to MailerSend for messages using repeated header names. Messages that avoid those pass the field checks. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue". Adapter limits also apply. MailerSend: Accepts one reply-to address. MailerSend: Tag names are discarded; tag values are sent as tags. AWS SES: Accepts at most 15 headers per message.
 
 ## Adapter docs
 

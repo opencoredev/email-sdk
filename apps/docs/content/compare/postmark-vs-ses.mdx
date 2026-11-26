@@ -91,7 +91,7 @@ Postmark supports Metadata in the unified message shape, which AWS SES does not.
 
 ### Can I use AWS SES as a fallback for Postmark?
 
-Partially. Email SDK checks field support before every send: a fallback is rejected from Postmark to AWS SES for messages using Metadata. Messages that avoid those fail over cleanly. Adapter limits also apply. Postmark: Accepts one tag and flattens one name:value tag for the provider payload. AWS SES: Accepts at most 15 headers per message.
+Partially. Email SDK checks field support before every send: a fallback is rejected from Postmark to AWS SES for messages using Metadata. Messages that avoid those pass the field checks. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue". Adapter limits also apply. Postmark: Accepts one tag and flattens one name:value tag for the provider payload. AWS SES: Accepts at most 15 headers per message.
 
 ## Adapter docs
 

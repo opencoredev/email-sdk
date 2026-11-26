@@ -61,7 +61,7 @@ export function buildCompareFaq(pair: ComparePair) {
       ? `Yes. ${a.name} and ${b.name} support the same message fields, so Email SDK's field checks pass a fallback in either direction.${limitsNote}`
       : `Partially. Email SDK checks field support before every send: a fallback is rejected ${rejectedDirections.join(
           ", and ",
-        )}. Messages that avoid those fail over cleanly.${limitsNote}`;
+        )}. Messages that avoid those pass the field checks. A failed send still falls back only when the SDK knows the first provider didn't send it, unless you set onUnknownDelivery: "continue".${limitsNote}`;
 
   const verdict = pair.search
     ? [{ question: `Should I use ${a.name} or ${b.name}?`, answer: pair.search.verdict }]

@@ -153,9 +153,9 @@ export const comparePairs: ComparePair[] = [
     b: "loops",
     lastmod: "2026-11-26",
     search: {
-      title: "Resend vs Loops: Transactional API or Lifecycle Email Platform?",
+      title: "Resend vs Loops: Build Emails in Code or Send Saved Templates?",
       description:
-        "Resend or Loops? Pick Resend to build transactional email in code with CC, BCC, headers and scheduling; pick Loops to run lifecycle email too. Fields and code compared.",
+        "Resend or Loops? Resend sends emails you build in code, with CC, BCC, headers and scheduling. Loops sends a saved template with data variables. Fields compared.",
       verdict:
         "Use Resend if you build transactional messages in code and need CC, BCC, custom headers, tags or scheduled sending. Use Loops if the same tool should also run your lifecycle and marketing email: its transactional API sends a saved template with data variables and attachments, and supports none of those other fields.",
     },
