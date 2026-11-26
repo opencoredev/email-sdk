@@ -149,7 +149,7 @@ export const email = createEmailClient({
 });
 ```
 
-Drop the `fallback` option from the sign-in link too. After that deploy is live, revoke the Postmark server token. Remove Postmark DNS records only if no inbound stream or other sender still uses them.
+Drop the `fallback` option from the sign-in link too. After that deploy is live, revoke the Postmark server token and remove Postmark DNS records, but only once no inbound stream or other sender still uses them.
 
 ## Complete code
 
