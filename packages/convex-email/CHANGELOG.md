@@ -1,5 +1,37 @@
 # @opencoredev/convex-email
 
+## 7.0.0
+
+### Minor Changes
+
+- 44548f0: Add experimental Convex support for Email SDK workflows at `@opencoredev/convex-email/workflows`. A new `workflowRuns` table with revision-checked `workflows:*` functions backs `convexWorkflowStore`, `convexWorkflowScheduler` uses `ctx.scheduler.runAt` for waits, and `convexWorkflowEmail` sends each step through the new `ConvexEmail.sendWorkflowStep` and `workflows:enqueueSend`. That mutation records each send in a new `workflowSends` table, keyed by the step's idempotency key, in the same transaction that queues the email, so a replayed step never queues a second email, even after `cleanupAfterDays` deleted the first. Records are kept while the run is active and for the new `workflowSendRetentionDays` config option (default 30) after it finishes; a send that lands after its run ended starts that clock at once. Workflow emails are deduped only through `workflowSends`, so a caller's `send` with the same idempotency key never becomes a workflow's send, and the reverse. The resume function `convexWorkflowScheduler` calls takes `{ runId, owner? }` and should call `engine.resume(runId, { owner })`, so lease-expiry jobs left by earlier claims stop instead of re-arming. Ordinary sends are unchanged. Using workflows requires the `@opencoredev/email-sdk` release that adds `createWorkflowEngine`. The entry imports only types from `@opencoredev/email-sdk/workflows`, so the component's peer range does not change for workflows. `workflows:enqueueSend` takes the app's sender handle like every other enqueue, and `sendWorkflowStep` passes the client's `sender`, so workflow emails are delivered by the app's `emailSender()` action.
+
+### Patch Changes
+
+- e2a2f64: The sender action passes `idempotency: "best-effort"` with each email's `idempotencyKey`. The component already deduplicates by that key, so emails keep sending through adapters without provider-side idempotency, such as SendGrid or SES, when `@opencoredev/email-sdk` rejects a strict key on those adapters.
+- Updated dependencies [e2a2f64]
+- Updated dependencies [6b56f95]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [44548f0]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [0b6a7fe]
+- Updated dependencies [c77fd08]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [445d658]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [e2a2f64]
+- Updated dependencies [44548f0]
+  - @opencoredev/email-sdk@4.0.0
+
 ## 6.0.0
 
 ### Major Changes

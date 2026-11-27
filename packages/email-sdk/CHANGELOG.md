@@ -1,5 +1,91 @@
 # @opencoredev/email-sdk
 
+## 4.0.0
+
+### Major Changes
+
+- e2a2f64: `idempotencyKey` is no longer dropped silently. When any adapter on the route (primary or fallback) reports `capabilities.idempotency: "none"`, `send`, `sendMany` items, `sendPersonalized`, and `validate` now throw `EmailValidationError` before any request, because that adapter cannot deduplicate a retried send. Twenty built-in adapters report `"none"`, including SendGrid, Postmark, SES, Mailgun, and Brevo.
+
+  Behavior change: a send that passed `idempotencyKey` to one of those adapters used to succeed without deduplication and now fails. To keep sending, either remove the key, route to an adapter with native idempotency (Resend, JetEmail, Lettermint, Primitive, SendHeron, Helo) or SMTP, or pass the new send option `idempotency: "best-effort"`:
+
+  ```ts
+  // Before: the key was ignored on SendGrid.
+  await email.send(message, {
+    adapter: "sendgrid",
+    idempotencyKey: "receipt:42",
+  });
+
+  // After: say that provider deduplication is optional.
+  await email.send(message, {
+    adapter: "sendgrid",
+    idempotencyKey: "receipt:42",
+    idempotency: "best-effort",
+  });
+  ```
+
+  `createEmailTools` from `@opencoredev/email-sdk/ai` and the `@opencoredev/email-sdk/compat` client set a key on every send, so they pass `idempotency: "best-effort"` and keep working on every adapter.
+
+  `client.adapters` and the `adapters` map in plugin contexts are now frozen read-only views at runtime instead of raw `Map` instances. They no longer expose `set`, `delete`, or `clear`, and `client.adapters instanceof Map` is now `false`. Reads, iteration (`forEach` with `thisArg`, `entries`, `keys`, `values`), and adapters added through `extendClient` keep working as before:
+
+  ```ts
+  // Before: casting client.adapters to Map worked at runtime.
+  const copy = client.adapters instanceof Map ? client.adapters : new Map();
+
+  // After: copy into a new Map if you need a mutable snapshot.
+  const copy = new Map(client.adapters);
+  ```
+
+### Minor Changes
+
+- e2a2f64: `sendMany` takes a `concurrency` option: `email.sendMany(items, { concurrency: 5 })` sends up to five items at once. It defaults to `1`, so existing batches still send one at a time. Results always come back in input order with the same settled `{ ok, index, result | error }` shape. `concurrency` must be a positive integer and is not passed to each send. The new `EmailSendManyOptions` type is exported from the package root.
+- e2a2f64: `email-sdk send` gains routing and machine-readable output flags:
+
+  - `--fallback name,name` tries more adapters, in order, after the primary definitely did not send. Fallback adapters read their configuration from environment variables only; credential flags such as `--api-key` stay with the primary.
+  - `--max-attempts n` sets attempts per adapter, including the first.
+  - `--json` prints `{ ok: true, result }` on success and `{ ok: false, error }` on failure, both on stdout, with route failures listed per adapter. Without `--json`, output is unchanged.
+
+  `--dry-run` validates the message against every adapter on the route and adds `fallback` and `maxAttempts` to the plan when they are set.
+
+- 44548f0: Add experimental durable email workflows at `@opencoredev/email-sdk/workflows`. Define drips and onboarding sequences as step functions with `ctx.send`, `ctx.sleep`, `ctx.waitForEvent` (with timeouts), and `ctx.step`; branch with plain TypeScript; cancel runs by id, by `cancelOn` events such as `unsubscribed`, or through an `isSuppressed` check. Each send carries a stable idempotency key, `wf_` plus the hex SHA-256 of the JSON-encoded `[runId, step]` pair (67 characters, from `workflowIdempotencyKey`), completed steps are journaled so replays never repeat them, failed steps retry on timers, and workers claim runs with revision-checked leases so several processes can share one store. A worker trusts its lease only until the time it sent the claim or renewal plus `leaseDuration`, minus the new `leaseSafetyMargin` option (default a tenth of the lease, at most 30s), so a slow store reply never lets a step or send start after another worker may have taken the run over. A late reply only delays the next effect until a fresh renewal returns in time; a step result the store's revision check accepts is always kept. Storage and timers plug in through small `WorkflowStore` and `WorkflowScheduler` interfaces (lease-expiry timers carry an `owner` to pass back as `engine.resume(runId, { owner })`), with in-memory versions and a manual clock for tests. While a `ctx.step` callback is in flight, any other `ctx` call on that run, from inside the callback or beside the pending step, fails the run at once with `invalid_definition`, so a nested call can never wait on its own step. `WorkflowEmailSender.send` gets the run id and step name as an optional third argument (`WorkflowSendContext`), which an `EmailClient` ignores. The package root does not import the new entry, so the main bundle is unchanged.
+- 0b6a7fe: Add an experimental `native` send option for provider-specific features. Its keys are adapter names, TypeScript infers the accepted keys and shapes from the client's adapters, and each adapter in a fallback chain receives only its own entry. Resend, Postmark, SendGrid, SES, Mailgun, Brevo, and Loops get typed options for templates, tracking, streams, configuration sets, sandbox and test modes, and more. Resend and Brevo template sends still send the message `subject` as an override; set `useTemplateSubject: true` to keep the template's subject. Most HTTP JSON adapters accept a typed `body`/`headers` passthrough (Mailgun: `fields`) for fields the SDK doesn't model. `sendPersonalized` rejects that passthrough because it can replace the recipients the result reports, and a native request header can't name one the adapter or transport sets itself, such as credentials, `Content-Type`, or SES's SigV4 signing headers. Resend reserves `Idempotency-Key` on every send, so per-send keys always come from the `idempotencyKey` option and each `sendPersonalized` recipient keeps its own key. Telemetry doesn't infer submitted recipients for a send whose `body` or `fields` passthrough may have replaced them. Existing `EmailSendOptions` annotations keep compiling, and sends without `native` are unchanged.
+- e2a2f64: `@opencoredev/email-sdk/webhooks` supports SendGrid and SES delivery events:
+
+  - `verifySendGridWebhook({ body, headers, publicKey })` checks a Signed Event Webhook request (ECDSA P-256 over the timestamp header and raw body) and its timestamp. It returns `false` on any bad input, and `publicKey` accepts an array for rotation.
+  - `normalizeWebhookEvents({ provider, body })` returns every event in a body. SendGrid batches events per request; the other providers return one. `normalizeWebhookEvent` accepts `"sendgrid"` for a one-event body and `"ses"` for an SNS notification, an EventBridge event, or a bare SES event.
+  - SendGrid `delivered`, `spamreport`, and hard `bounce` events map to `delivered`, `complained`, and `bounced`; SES `Delivery`, `Complaint`, and `Permanent` bounces do the same. SendGrid `providerMessageId` matches the id the SendGrid adapter returns, and SES uses `mail.messageId`.
+
+  `WebhookProvider` now includes `"sendgrid"` and `"ses"`. An exhaustive `switch` over it needs the two new cases.
+
+- 44548f0: Add a workflow inspector and CLI. `inspectWorkflow(definition, { input, events, steps })` explores every path a workflow can take without sending anything, forking each timed `waitForEvent` into `received` and `timeout` branches, and returns a JSON graph of rendered emails, delays, event waits, mocked steps, and end states, capped by `maxPaths` and `maxDepth`. `toMermaid` and `formatWorkflowGraph` render it, and `describeRun` turns a stored `WorkflowRun` into a timeline with the current wait and deadline. `email-sdk workflows inspect <module> --export <name> --input <json|@file>` prints the same graph as JSON, Mermaid, or text.
+
+### Patch Changes
+
+- e2a2f64: Harden client and adapter input boundaries: isolate plain `metadata`, `message`, error/response snapshots (`accepted`/`rejected`), and attachment byte snapshots across observational hooks (`afterSend`, `onError`, `onRetry`), middleware, retries, fallbacks, and `sendMany` (note: hooks can no longer share mutable state by mutating plain `metadata` objects; wrap shared state in a custom class instance if shared references are required); cap array snapshot lengths and metadata nesting depth; reject CR/LF characters in header names; bind plugin/hook/retry callables via `Function.prototype.bind`; and validate direct `mailgun`/`sendgrid` `sendPersonalized` inputs before network requests.
+- 6b56f95: `native` send options passed through the client (and to SendGrid's and Mailgun's `sendPersonalized`) are now rejected with an `EmailValidationError` (wrapped in `EmailMiddlewareError` when they come from options a `beforeSend` middleware returned) when they contain a cycle, or when the SDK's copy of them goes over a budget of 1,000,000 units (each value, array slot including sparse ones, object key, and native map entry counts as one) or 32 Mi UTF-16 code units of strings and keys. All adapter entries of one send share the budget. Calling an adapter's `send` directly still passes `native` through unchecked, as before. It measures the copied data, not the serialized request size. Before, the snapshot limited only nesting depth, so an object reused across many fields could be copied into far more data than it held before provider validation ran.
+- e2a2f64: `defaultsPlugin` headers now yield to a message header with the same name (compared case-insensitively) instead of being sent alongside it. Before, `defaultsPlugin({ headers: [{ name: "X-Tenant", value: "a" }] })` plus a message that set `X-Tenant` failed with "does not support repeated email header names" on the 21 adapters without repeated-header support, and sent both values on the rest. Legacy name-to-value header objects from JavaScript callers now merge too.
+- e2a2f64: `@opencoredev/email-sdk/cloudflare` and the other HTTP adapter entry points now bundle for Cloudflare Workers without `nodejs_compat` when called directly (the client's optional telemetry still uses Node built-ins unless `nodejs_compat` is enabled). Attachment encoding uses Web APIs (`btoa`, `TextEncoder`) instead of `Buffer`, and `node:fs/promises` loads only when an attachment is given by `path`. On a runtime without it, a `path` attachment fails with an `EmailValidationError` that says to pass `content` instead. Attachment `content` with `contentEncoding: "base64"` is now decoded strictly: input with wrong padding (`"QUJ="`, `"QQ="`) or non-canonical pad bits (`"QR=="`) throws `EmailValidationError` instead of being silently repaired the way `Buffer.from(value, "base64")` did (whitespace, missing padding, and URL-safe input are still accepted).
+- e2a2f64: The Microsoft Graph adapter no longer requests a new OAuth token on every send when the token response has an unusable `expires_in`, such as `0`, a negative number, an empty string, or a non-numeric string. Those now fall back to a one-hour lifetime, like a missing value already did. Numeric strings such as `"3600"` still work.
+- e2a2f64: `handleInbound` from `@opencoredev/email-sdk/inbound` caps the request body it reads before verifying the signature. The new `maxBodyBytes` option defaults to `DEFAULT_INBOUND_MAX_BODY_BYTES` (50 MiB). A larger `Content-Length` is refused before reading, and a chunked or mislabeled body is cancelled once it passes the limit, both with the new `InboundError` reason `payload_too_large` (respond 413). `Infinity` disables the limit.
+- c77fd08: CLI: `email-sdk send --adapter smtp` with `--user`/`--pass` now requires TLS before authenticating, matching the SDK default. Previously the CLI passed `requireTLS: false` when `--require-tls` was absent, so credentials could be sent over a plaintext connection to a server without STARTTLS. Pass `--allow-insecure-auth` (or `SMTP_ALLOW_INSECURE_AUTH=true`) to keep plaintext AUTH for a trusted local test server.
+
+  The SMTP boolean flags now win over their env vars in both directions (`--allow-insecure-auth=false` overrides `SMTP_ALLOW_INSECURE_AUTH=true`), malformed or empty values fail instead of being read as a bare flag, and leaving `--secure`/`SMTP_SECURE` unset keeps the SDK default of implicit TLS on port 465.
+
+- e2a2f64: The one-time telemetry opt-out notice now prints only when stderr is a terminal. Servers, CI jobs, and test harnesses that assert on stderr no longer get an unsolicited multi-line message from the library. A run that skips the notice does not mark it as shown, so the first interactive run, such as the CLI in a terminal, still prints it. Telemetry itself and its opt-outs (`EMAIL_SDK_TELEMETRY=0`, `DO_NOT_TRACK=1`, `telemetry: false`) are unchanged.
+- e2a2f64: Every built-in adapter now reads its credential on each send. SendGrid, Brevo, MailerSend, Cloudflare (REST), Iterable, Loops, MailPace, Plunk, SparkPost, Scaleway, Mailtrap, Unosend, Sequenzy, and ZeptoMail used to copy the key into their request headers when the adapter was created, so a rotated key or a getter on the options object was ignored until the client was rebuilt. They now behave like Resend, Postmark, SES, and the other adapters that already re-read it.
+- e2a2f64: SendGrid now sends `message.metadata` as string `custom_args`. Number, boolean, and `null` values (allowed by `EmailMessage.metadata`) used to reach SendGrid unchanged, and SendGrid rejects non-string `custom_args` with a 400. `null` becomes an empty string, matching Mailgun, Mailtrap, and the other adapters that map metadata.
+- e2a2f64: The SES adapter now rejects a message with more than 15 headers with `EmailValidationError` before signing or sending, matching the SES v2 `Message.Headers` limit. Before, SES rejected the request after it was sent. The check runs in client validation and in a direct `adapter.send`.
+- 445d658: `send`, `sendMany`, and `validate` now reject a missing message, a non-array `attachments` value (other than `null`, which still means no attachments), or a `null`/non-object entry inside `attachments` with an `EmailValidationError`. `sendPersonalized` gets the same attachment-entry check. Before, these crashed inside the SDK's own validation and surfaced as an `EmailAdapterError` (`adapter: "unknown"`) wrapping a `TypeError`, which looked like a provider failure.
+- e2a2f64: Fixes in `sendPersonalized` and send telemetry:
+
+  - A native personalized adapter that resolves without an `accepted` list (possible from plain JavaScript or a custom adapter) now fails with `EmailAllRecipientsFailedError` wrapping an `EmailAdapterError` with `unknown` delivery, instead of a `TypeError`. Fallback does not run, because the provider may have sent. A missing `rejected` list now reads as nothing rejected.
+  - `sendPersonalized` checks the abort signal again after `beforeSend` middleware, so a signal aborted during a slow hook stops the send before validation, like `send` already did.
+  - The `email sent` telemetry event now describes the message after `beforeSend` middleware, so recipients, attachments, and `sendAt` added by plugins such as `defaultsPlugin` are counted.
+
+- e2a2f64: Routing and option fixes:
+
+  - A fallback list that repeats an adapter name, such as `fallback: { adapters: ["backup", "backup"] }`, now attempts that adapter once instead of once per entry.
+  - In `sendMany`, item `retry` and `fallback` options merge one level deep with the method options. An item with `{ retry: { delay } }` used to drop the batch's `retry.maxAttempts`; an item's `fallback.adapters` still replaces the batch list.
+
 ## 3.1.0
 
 ### Minor Changes
