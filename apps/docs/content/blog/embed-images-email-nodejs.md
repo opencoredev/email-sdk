@@ -38,6 +38,7 @@ import nodemailer from "nodemailer";
 const transport = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: 587,
+  requireTLS: true,
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
@@ -51,7 +52,7 @@ await transport.sendMail({
 });
 ```
 
-Replace the sender and recipient with an address your SMTP server lets you send from and an inbox you can read. Nodemailer builds the `multipart/related` part for you, and the [Nodemailer embedded images docs](https://nodemailer.com/message/embedded-images) cover the `cid` option in full. To send the same image through a provider's HTTP API instead, use that provider's field for the Content-ID.
+`requireTLS` makes Nodemailer refuse to send the password unless the server upgrades the connection with STARTTLS. Replace the sender and recipient with an address your SMTP server lets you send from and an inbox you can read. Nodemailer builds the `multipart/related` part for you, and the [Nodemailer embedded images docs](https://nodemailer.com/message/embedded-images) cover the `cid` option in full. To send the same image through a provider's HTTP API instead, use that provider's field for the Content-ID.
 
 ## Embed images through an email API
 

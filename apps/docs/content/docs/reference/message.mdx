@@ -68,7 +68,7 @@ type EmailAttachment = {
 
 Exactly one source is required. String content is raw by default and is encoded by adapters that require Base64. `path` is server-side filesystem input.
 
-To show an image in the HTML body, set `contentId` and `disposition: "inline"` and reference it as `<img src="cid:...">`. Adapters that support inline images map these fields; [Embed images in email from Node.js](/blog/embed-images-email-nodejs) shows the Resend, SendGrid, Postmark and Mailgun payloads.
+To show an image in the HTML body, set `contentId` and `disposition: "inline"` and reference it as `<img src="cid:...">`. Adapters that support inline images map these fields, but the ID format is provider-specific: Postmark's docs use a `cid:` prefix in the ID, and Mailgun matches the reference to `filename`. [Embed images in email from Node.js](/blog/embed-images-email-nodejs) shows the Resend, SendGrid, Postmark and Mailgun payloads.
 
 ## Tags and metadata
 
