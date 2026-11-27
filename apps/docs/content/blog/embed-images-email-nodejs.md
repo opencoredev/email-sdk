@@ -127,7 +127,13 @@ Not every adapter supports inline images. Lettr and SendHeron throw an `EmailVal
 
 ## Test that the image is embedded
 
-Send the message to a local SMTP inbox such as Mailpit, then check the message source, not only how it looks. The decoded HTML part should contain `src="cid:logo.png"` (in the raw source, quoted-printable encoding shows it as `src=3D"cid:logo.png"`) and the image part should carry `Content-ID: <logo.png>` and `Content-Disposition: inline`. Seeing the image in Mailpit's viewer isn't proof on its own, because Mailpit also loads remote images. With the defaults from the [Mailpit guide](/blog/mailpit-mailhog-nodejs), point Nodemailer or Email SDK's SMTP adapter at `127.0.0.1` port `1025` with no auth.
+Send the message to a local SMTP inbox such as Mailpit, then check the message source, not only how it looks. The decoded HTML part should contain `src="cid:logo.png"` (in the raw source, quoted-printable encoding shows it as `src=3D"cid:logo.png"`) and the image part should carry `Content-ID: <logo.png>` and `Content-Disposition: inline`. Seeing the image in Mailpit's viewer isn't proof on its own, because Mailpit also loads remote images. With the defaults from the [Mailpit guide](/blog/mailpit-mailhog-nodejs), use a separate local transport with no `auth` and no `requireTLS`, because Mailpit doesn't offer STARTTLS by default:
+
+```ts title="local.ts"
+const local = nodemailer.createTransport({ host: "127.0.0.1", port: 1025, secure: false });
+```
+
+With Email SDK, `smtp({ host: "127.0.0.1", port: 1025 })` from `@opencoredev/email-sdk/smtp` does the same.
 
 If the image shows up only as an attachment, one common cause is a `cid:` value in the HTML that doesn't match the attachment's Content-ID: a typo, a missing `cid:` prefix in the `src`, or, on Mailgun, a file name that differs from the reference. Clients also differ in how they show inline parts, so send a test to the clients your users actually read mail in.
 
