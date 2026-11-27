@@ -1,6 +1,6 @@
 ---
 title: "Embed Images in Email from Node.js: CID Inline Attachments"
-description: "Embed images in Node.js email with CID inline attachments: Nodemailer's cid field and working Resend, SendGrid, Postmark and Mailgun payloads."
+description: "Embed images in Node.js email with CID inline attachments: Nodemailer's cid field and example Resend, SendGrid, Postmark and Mailgun payloads."
 type: blog
 date: 2026-11-27
 lastModified: 2026-11-27
@@ -8,7 +8,7 @@ search:
   tags: ["Attachments", "HTML email", "Node.js"]
 ---
 
-To embed an image in an email from Node.js, attach the image with a Content-ID and point an `<img>` tag at it with `src="cid:<that id>"`. The image travels inside the message, so most email clients show it in the body without fetching anything from a server.
+To embed an image in an email from Node.js, attach the image with a Content-ID and point an `<img>` tag at it with `src="cid:<that id>"`. The image travels inside the message, so a client that supports CID images can show it in the body without fetching anything from a server.
 
 This guide covers the three ways to put an image in an HTML email, the CID method with Nodemailer, and the same message sent through the Resend, SendGrid, Postmark and Mailgun APIs with [Email SDK](/docs). The provider payloads below were checked on 2026-11-27 against `@opencoredev/email-sdk` 3.1.0 with a stubbed `fetch`, so no real email was sent.
 
@@ -65,7 +65,7 @@ The major email APIs accept inline images, but each names the Content-ID field d
 | [Mailgun](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages) | none; the file name is the CID | an `inline` form part instead of `attachment` |
 | [Amazon SES (v2 API)](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_Attachment.html) | `ContentId` | `ContentDisposition: "INLINE"` |
 
-Two of these catch people out. Mailgun has no Content-ID field: you send the image as a form part named `inline`, and its file name, `logo.png`, is what the HTML references as `cid:logo.png`. Resend [doesn't accept attachments, inline images included, on its batch endpoint](https://resend.com/docs/dashboard/emails/embed-inline-images), so a receipt with a logo has to go through the single-send endpoint.
+Two of these catch people out. Mailgun has no Content-ID field: you send the image as a form part named `inline`, and its file name, `logo.png`, is what the HTML references as `cid:logo.png`. Resend [doesn't accept attachments, inline images included, on its batch endpoint](https://resend.com/docs/dashboard/emails/embed-inline-images), so a receipt with a CID-embedded logo has to go through the single-send endpoint.
 
 ## Send an inline image with Email SDK
 
@@ -104,7 +104,7 @@ await email.send({
 });
 ```
 
-Use a sender on a domain you verified in Resend and a recipient you can read. With the SendGrid or Mailgun adapter in place of `resend`, the message stays the same. This is what each adapter sent for the attachment above in our check (image bytes shortened):
+Use a sender on a domain you verified in Resend and a recipient you can read. With the SendGrid or Mailgun adapter in place of `resend`, the message stays the same. This is what each adapter sent for the attachment in our stubbed check (image bytes shortened):
 
 ```json title="Resend: attachments"
 [{ "filename": "logo.png", "content": "<base64>", "content_type": "image/png", "content_id": "logo.png" }]
@@ -115,10 +115,10 @@ Use a sender on a domain you verified in Resend and a recipient you can read. Wi
 ```
 
 ```json title="Postmark: Attachments"
-[{ "Name": "logo.png", "Content": "<base64>", "ContentType": "image/png", "ContentID": "logo.png" }]
+[{ "Name": "logo.png", "Content": "<base64>", "ContentType": "image/png", "ContentID": "cid:logo.png" }]
 ```
 
-The SDK passes `contentId` to Postmark unchanged, and Postmark's docs write the `ContentID` with a `cid:` prefix. When Postmark is the adapter, follow their format and set `contentId: "cid:logo.png"`, keeping `src="cid:logo.png"` in the HTML.
+The Postmark block was sent with `contentId: "cid:logo.png"`. The SDK passes `contentId` to Postmark unchanged, and Postmark's docs write the `ContentID` with a `cid:` prefix, so when Postmark is the adapter, use that value and keep `src="cid:logo.png"` in the HTML.
 
 Mailgun got a multipart form with the image as a part named `inline` and file name `logo.png`. The SMTP adapter passes `contentId` to Nodemailer as `cid`, and the SES, Microsoft Graph, MailerSend, Mailtrap, Lettermint and Cloudflare adapters map it to their own fields as well.
 
@@ -126,7 +126,7 @@ Not every adapter supports inline images. Lettr and SendHeron throw an `EmailVal
 
 ## Test that the image is embedded
 
-Send the message to a local SMTP inbox such as Mailpit, then check the raw message, not only how it looks. The HTML part should contain `src="cid:logo.png"` and the image part should carry `Content-ID: <logo.png>` and `Content-Disposition: inline`. Seeing the image in Mailpit's viewer isn't proof on its own, because Mailpit also loads remote images. With the defaults from the [Mailpit guide](/blog/mailpit-mailhog-nodejs), point Nodemailer or Email SDK's SMTP adapter at `127.0.0.1` port `1025` with no auth.
+Send the message to a local SMTP inbox such as Mailpit, then check the message source, not only how it looks. The decoded HTML part should contain `src="cid:logo.png"` (in the raw source, quoted-printable encoding shows it as `src=3D"cid:logo.png"`) and the image part should carry `Content-ID: <logo.png>` and `Content-Disposition: inline`. Seeing the image in Mailpit's viewer isn't proof on its own, because Mailpit also loads remote images. With the defaults from the [Mailpit guide](/blog/mailpit-mailhog-nodejs), point Nodemailer or Email SDK's SMTP adapter at `127.0.0.1` port `1025` with no auth.
 
 If the image shows up only as an attachment, one common cause is a `cid:` value in the HTML that doesn't match the attachment's Content-ID: a typo, a missing `cid:` prefix in the `src`, or, on Mailgun, a file name that differs from the reference. Clients also differ in how they show inline parts, so send a test to the clients your users actually read mail in.
 
