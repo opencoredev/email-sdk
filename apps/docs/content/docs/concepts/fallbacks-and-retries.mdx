@@ -86,7 +86,7 @@ Retries can make a failure `unknown` even when the last attempt was a definite r
 | `not_sent`     | The adapter can prove the provider did not accept the message. | Continue to the next configured adapter. |
 | `unknown`      | Dispatch may have started, so delivery cannot be ruled out.    | Stop to avoid an automatic duplicate.    |
 
-Every HTTP adapter reports `not_sent` for a 4xx response other than 408, 409 and 429, and `unknown` for those three, for 5xx, and for timeouts and network errors. A few adapters know more about their provider: Helo also treats a 429 as `not_sent`, SendHeron treats every 4xx except 409 and a 503 as `not_sent`, and Lettr and Microsoft Graph treat every 4xx as `not_sent`. The SMTP adapter reports `not_sent` when the server answers with an SMTP error code. A 2xx response the adapter can't read as a success, such as `success: false` in the body, stays `unknown`.
+Every HTTP adapter reports `not_sent` for a 4xx response other than 408, 409 and 429, and `unknown` for those three, for 5xx, and for timeouts and network errors. A few adapters know more about their provider: Helo and Nightmail also treat a 429 as `not_sent`, SendHeron treats every 4xx except 409 and a 503 as `not_sent`, and Lettr and Microsoft Graph treat every 4xx as `not_sent`. The SMTP adapter reports `not_sent` when the server answers with an SMTP error code. A 2xx response the adapter can't read as a success, such as `success: false` in the body, stays `unknown`.
 
 You can also opt in for one send instead of the whole client:
 

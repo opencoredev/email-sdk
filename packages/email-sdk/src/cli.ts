@@ -28,6 +28,7 @@ import { mailgun } from "./mailgun.js";
 import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
 import { plunk } from "./plunk.js";
+import { nightmail } from "./nightmail.js";
 import { postmark } from "./postmark.js";
 import { primitive } from "./primitive.js";
 import { resend } from "./resend.js";
@@ -120,6 +121,7 @@ const providerDocs = [
   { name: "mailpace", env: ["MAILPACE_API_KEY"], note: "MailPace send API" },
   { name: "sendheron", env: ["SENDHERON_API_KEY"], note: "SendHeron transactional email API" },
   { name: "helo", env: ["HELO_API_KEY"], note: "Helo transactional send API" },
+  { name: "nightmail", env: ["NIGHTMAIL_API_KEY"], note: "Nightmail email API on Amazon SES" },
   { name: "smtp", env: ["SMTP_HOST"], note: "Built-in SMTP transport" },
 ] as const satisfies ReadonlyArray<{
   name: SupportedAdapterName;
@@ -241,6 +243,11 @@ const factories = {
       channelId: stringFlag(flags, "channel-id") ?? process.env.HELO_CHANNEL_ID,
       baseUrl: stringFlag(flags, "base-url") ?? process.env.HELO_BASE_URL,
     }),
+  nightmail: (flags) =>
+    nightmail({
+      apiKey: flagOrEnv(flags, "api-key", "NIGHTMAIL_API_KEY"),
+      baseUrl: stringFlag(flags, "base-url") ?? process.env.NIGHTMAIL_BASE_URL,
+    }),
   smtp: (flags) =>
     smtp({
       host: flagOrEnv(flags, "host", "SMTP_HOST"),
@@ -297,6 +304,7 @@ const envFlagNames = new Map<string, string>([
   ["MAILPACE_API_KEY", "api-key"],
   ["SENDHERON_API_KEY", "api-key"],
   ["HELO_API_KEY", "api-key"],
+  ["NIGHTMAIL_API_KEY", "api-key"],
   ["SMTP_HOST", "host"],
 ]);
 

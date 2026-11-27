@@ -2,12 +2,9 @@ import { type JsonObject, type JsonValue, isJsonString } from "../internal/decod
 import { parseAddress, parseAddressList } from "./mime.js";
 import {
   type InboundFetchOptions,
-  concatBytes,
-  decodeBase64Strict,
   fetchBytes,
   fetchJson,
   firstMessageId,
-  hmac,
   jsonList,
   jsonNumber,
   jsonObject,
@@ -16,16 +13,9 @@ import {
   parseDate,
   parseJsonObjectBody,
   payloadError,
-  readHeader,
-  rejected,
   remoteAttachment,
-  signingSecrets,
-  timestampFresh,
-  timingSafeEqual,
-  toBytes,
-  utf8Bytes,
   verdict,
-  verified,
+  verifyStandardWebhook,
 } from "./shared.js";
 import {
   type InboundAddress,
@@ -51,60 +41,11 @@ export interface ResendInboundApiOptions extends InboundFetchOptions {
  * Verify a Resend (Svix) webhook signature over `svix-id.svix-timestamp.body`.
  * The secret is the `whsec_` signing secret from the webhook settings.
  */
-export async function verifyResendInbound(
+export function verifyResendInbound(
   payload: InboundRequestPayload,
   options: InboundSignatureOptions,
 ): Promise<InboundVerification> {
-  const secrets = signingSecrets(options.secret);
-
-  if (!secrets.length) return rejected("secret_missing");
-
-  const id = readHeader(payload.headers, "svix-id");
-  const timestamp = readHeader(payload.headers, "svix-timestamp");
-  const header = readHeader(payload.headers, "svix-signature");
-
-  if (!id || !timestamp || !header) return rejected("signature_missing");
-
-  if (!timestampFresh(timestamp, options)) return rejected("timestamp_expired");
-
-  const candidates: Uint8Array[] = [];
-
-  for (const entry of header.split(" ")) {
-    const match = /^v1,(.+)$/.exec(entry);
-
-    if (!match) continue;
-
-    try {
-      candidates.push(decodeBase64Strict(match[1]!));
-    } catch {
-      return rejected("signature_invalid");
-    }
-  }
-
-  if (!candidates.length) return rejected("signature_missing");
-
-  const content = concatBytes(utf8Bytes(`${id}.${timestamp}.`), toBytes(payload.body));
-
-  // A malformed secret is skipped, so one bad entry in a rotation list cannot block the valid one.
-  let usable = 0;
-
-  for (const secret of secrets) {
-    let key: Uint8Array<ArrayBuffer>;
-
-    try {
-      key = decodeBase64Strict(secret.replace(/^whsec_/, ""));
-    } catch {
-      continue;
-    }
-
-    usable += 1;
-
-    const expected = await hmac("SHA-256", key, content);
-
-    if (candidates.some(candidate => timingSafeEqual(candidate, expected))) return verified;
-  }
-
-  return rejected(usable ? "signature_invalid" : "secret_missing");
+  return verifyStandardWebhook(payload, options, "svix");
 }
 
 function addresses(value: JsonValue | undefined): InboundAddress[] {

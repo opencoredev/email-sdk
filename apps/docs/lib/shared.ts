@@ -9,7 +9,7 @@ export const siteUrl = "https://email-sdk.dev";
 
 // Agent guidance for llms.txt (Blume's agents.llmsTxt.details). Blume writes the
 // site description above it, so this starts with what the project is.
-export const llmsOverview = `Email SDK is an open-source, server-side TypeScript library (npm: \`@opencoredev/email-sdk\`) for transactional email. Send with your existing provider account, validate message fields, test with no-network adapters, and inspect common error types. It ships 26 provider API adapters plus SMTP, 27 adapters total, so changing providers later is optional. It is a library installed in your app, not a hosted API or a service you sign up for. Your provider still handles credentials, billing, and delivery.
+export const llmsOverview = `Email SDK is an open-source, server-side TypeScript library (npm: \`@opencoredev/email-sdk\`) for transactional email. Send with your existing provider account, validate message fields, test with no-network adapters, and inspect common error types. It ships 27 provider API adapters plus SMTP, 28 adapters total, so changing providers later is optional. It is a library installed in your app, not a hosted API or a service you sign up for. Your provider still handles credentials, billing, and delivery.
 
 ## When to use Email SDK
 

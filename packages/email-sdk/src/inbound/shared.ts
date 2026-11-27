@@ -719,3 +719,65 @@ export async function verifyTimestampedHmac(
 
   return rejected("signature_invalid");
 }
+
+/**
+ * Verify a Standard Webhooks signature (Svix's scheme): base64 HMAC-SHA256 over
+ * `<id>.<timestamp>.<raw body>` with the base64 key after `whsec_`, read from the
+ * `<prefix>-id`, `<prefix>-timestamp`, and `<prefix>-signature` headers (Resend, Nightmail).
+ */
+export async function verifyStandardWebhook(
+  payload: InboundRequestPayload,
+  options: InboundSignatureOptions,
+  prefix: "svix" | "webhook",
+): Promise<InboundVerification> {
+  const secrets = signingSecrets(options.secret);
+
+  if (!secrets.length) return rejected("secret_missing");
+
+  const id = readHeader(payload.headers, `${prefix}-id`);
+  const timestamp = readHeader(payload.headers, `${prefix}-timestamp`);
+  const header = readHeader(payload.headers, `${prefix}-signature`);
+
+  if (!id || !timestamp || !header) return rejected("signature_missing");
+
+  if (!timestampFresh(timestamp, options)) return rejected("timestamp_expired");
+
+  const candidates: Uint8Array[] = [];
+
+  for (const entry of header.split(" ")) {
+    const match = /^v1,(.+)$/.exec(entry);
+
+    if (!match) continue;
+
+    try {
+      candidates.push(decodeBase64Strict(match[1]!));
+    } catch {
+      return rejected("signature_invalid");
+    }
+  }
+
+  if (!candidates.length) return rejected("signature_missing");
+
+  const content = concatBytes(utf8Bytes(`${id}.${timestamp}.`), toBytes(payload.body));
+
+  // A malformed secret is skipped, so one bad entry in a rotation list cannot block the valid one.
+  let usable = 0;
+
+  for (const secret of secrets) {
+    let key: Uint8Array<ArrayBuffer>;
+
+    try {
+      key = decodeBase64Strict(secret.replace(/^whsec_/, ""));
+    } catch {
+      continue;
+    }
+
+    usable += 1;
+
+    const expected = await hmac("SHA-256", key, content);
+
+    if (candidates.some(candidate => timingSafeEqual(candidate, expected))) return verified;
+  }
+
+  return rejected(usable ? "signature_invalid" : "secret_missing");
+}

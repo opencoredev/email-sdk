@@ -61,6 +61,8 @@ const probes = {
   // Helo has no account endpoint a send-only key can read. An empty send fails validation
   // with 422 once the key authenticates, and nothing is queued without from and to.
   helo: { base: "https://api.helohq.com", path: "/send/transactional" },
+  // GET /v1/me describes the calling key and needs no extra permission, so it sends nothing.
+  nightmail: { base: "https://nightmail.dev", path: "/v1/me" },
 } as const;
 
 class TransportFailure extends Error {}
@@ -489,6 +491,13 @@ function validAuthentication(adapter: ProbeName, body: JsonValue | undefined): b
 
   if (adapter === "primitive")
     return body.success === true && jsonString(body.data, "id") !== undefined;
+
+  if (adapter === "nightmail")
+    return (
+      jsonString(body, "id") !== undefined &&
+      jsonString(body, "workspaceId") !== undefined &&
+      Array.isArray(body.permissions)
+    );
 
   if (adapter === "lettr")
     return (

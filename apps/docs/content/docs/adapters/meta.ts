@@ -31,6 +31,7 @@ export default defineMeta({
     "mailpace",
     "sendheron",
     "helo",
+    "nightmail",
     "smtp",
     "field-support",
     "capability-groups",

@@ -25,6 +25,7 @@ import {
   observabilityPlugin,
   type EmailObservabilityEvent,
 } from "@opencoredev/email-sdk/plugins/observability";
+import { nightmail } from "@opencoredev/email-sdk/nightmail";
 import { postmark } from "@opencoredev/email-sdk/postmark";
 import { primitive } from "@opencoredev/email-sdk/primitive";
 import { resend } from "@opencoredev/email-sdk/resend";
@@ -199,6 +200,7 @@ const ADAPTER_FACTORIES: Record<ConvexEmailAdapterKind, AdapterFactory> = {
   mailgun: fromOptions(mailgun),
   mailpace: fromOptions(mailpace),
   mailtrap: fromOptions(mailtrap),
+  nightmail: fromOptions(nightmail),
   plunk: fromOptions(plunk),
   postmark: fromOptions(postmark),
   primitive: fromOptions(primitive),

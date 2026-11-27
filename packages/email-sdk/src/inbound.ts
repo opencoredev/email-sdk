@@ -6,6 +6,7 @@ import { isMandrillWebhookTest, parseMandrillInbound, verifyMandrillInbound } fr
 import { isMailerSendRouteTest, parseMailerSendInbound, verifyMailerSendInbound } from "./inbound/mailersend.js";
 import { parseMailgunInbound, verifyMailgunInbound } from "./inbound/mailgun.js";
 import { parseMailPaceInbound, verifyMailPaceInbound } from "./inbound/mailpace.js";
+import { parseNightmailInbound, verifyNightmailInbound } from "./inbound/nightmail.js";
 import { parsePostmarkInbound } from "./inbound/postmark.js";
 import { parsePrimitiveInbound, verifyPrimitiveInbound, type PrimitiveInboundOptions } from "./inbound/primitive.js";
 import { fetchResendInboundEmail, parseResendInbound, verifyResendInbound, type ResendInboundApiOptions } from "./inbound/resend.js";
@@ -106,6 +107,8 @@ export { fetchMailtrapInboundEmail, verifyMailtrapInbound } from "./inbound/mail
 
 export type { MailtrapInboundApiOptions } from "./inbound/mailtrap.js";
 
+export { parseNightmailInbound, verifyNightmailInbound } from "./inbound/nightmail.js";
+
 export { fetchPostmarkInboundEmail, parsePostmarkInbound } from "./inbound/postmark.js";
 
 export type { PostmarkInboundApiOptions } from "./inbound/postmark.js";
@@ -188,6 +191,7 @@ export type InboundHandlerConfig = InboundClockOptions & InboundFetchOptions & I
   | { provider: "lettermint"; secret: Secret }
   | ({ provider: "primitive"; secret: Secret } & Pick<PrimitiveInboundOptions, "downloadOrigins">)
   | { provider: "jetemail"; secret: Secret }
+  | { provider: "nightmail"; secret: Secret }
   | ({ provider: "brevo"; auth: InboundEndpointAuth } & BrevoInboundOptions)
 );
 
@@ -245,6 +249,8 @@ export async function parseInbound(
       return [await parsePrimitiveInbound(payload, options)];
     case "jetemail":
       return [parseJetEmailInbound(payload)];
+    case "nightmail":
+      return [parseNightmailInbound(payload)];
     case "brevo":
       return parseBrevoInbound(payload, options);
     default:
@@ -483,6 +489,10 @@ export async function handleInbound(request: Request, config: InboundHandlerConf
       assertVerified("jetemail", await verifyJetEmailInbound(payload, { ...clock, secret: config.secret }));
 
       return { type: "emails", emails: [parseJetEmailInbound(payload)] };
+    case "nightmail":
+      assertVerified("nightmail", await verifyNightmailInbound(payload, { ...clock, secret: config.secret }));
+
+      return { type: "emails", emails: [parseNightmailInbound(payload)] };
     case "brevo":
       assertVerified("brevo", endpointAuth(payload, config.auth));
 

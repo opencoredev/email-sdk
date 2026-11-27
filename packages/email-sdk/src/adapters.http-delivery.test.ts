@@ -14,6 +14,7 @@ import { mailersend } from "./mailersend.js";
 import { mailgun } from "./mailgun.js";
 import { mailpace } from "./mailpace.js";
 import { mailtrap } from "./mailtrap.js";
+import { nightmail } from "./nightmail.js";
 import { plunk } from "./plunk.js";
 import { postmark } from "./postmark.js";
 import { primitive } from "./primitive.js";
@@ -82,6 +83,11 @@ const HTTP_ADAPTERS = {
   mailgun: { create: (fetch) => mailgun({ apiKey: "key", domain: "example.com", fetch }) },
   mailpace: { create: (fetch) => mailpace({ apiKey: "key", fetch }) },
   mailtrap: { create: (fetch) => mailtrap({ apiKey: "key", fetch }) },
+  nightmail: {
+    create: (fetch) => nightmail({ apiKey: "key", fetch }),
+    // Nightmail refuses a 429 (rate, ramp, or built-in domain limit) with nothing queued.
+    overrides: { 429: "not_sent" },
+  },
   plunk: { create: (fetch) => plunk({ apiKey: "key", fetch }) },
   postmark: { create: (fetch) => postmark({ serverToken: "token", fetch }) },
   primitive: { create: (fetch) => primitive({ apiKey: "key", fetch }) },

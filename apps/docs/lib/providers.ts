@@ -253,6 +253,16 @@ export const providers = [
     logo: "https://www.google.com/s2/favicons?domain=helohq.com&sz=64",
     currentOnly: true,
   },
+  {
+    name: "Nightmail",
+    key: "nightmail",
+    importPath: "@opencoredev/email-sdk/nightmail",
+    docs: "/docs/adapters/nightmail",
+    website: "https://nightmail.dev",
+    summary: "Email API on Amazon SES that sends, receives, and replies on your own domains.",
+    logo: "https://www.google.com/s2/favicons?domain=nightmail.dev&sz=64",
+    currentOnly: true,
+  },
 ] as const;
 
 export type Provider = (typeof providers)[number];

@@ -47,8 +47,8 @@ const docsIds = ADAPTER_SUPPORT_ENTRIES.map((adapter) => adapter.id);
 
 const duplicateIds = docsIds.filter((id, index) => docsIds.indexOf(id) !== index);
 
-if (ADAPTER_SUPPORT_ENTRIES.length !== 27) {
-  fail(`Expected 27 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
+if (ADAPTER_SUPPORT_ENTRIES.length !== 28) {
+  fail(`Expected 28 adapter docs entries, found ${ADAPTER_SUPPORT_ENTRIES.length}.`);
 }
 
 if (duplicateIds.length > 0) {
@@ -157,6 +157,10 @@ requireIncludes(entry("helo"), "5 tags");
 requireIncludes(entry("helo"), "10 metadata fields");
 
 requireIncludes(entry("helo"), "256 characters");
+
+requireIncludes(entry("nightmail"), "plain email addresses");
+
+requireIncludes(entry("nightmail"), "uploaded to POST /v1/attachments");
 
 requireIncludes(entry("sendgrid"), "1,000 recipients");
 
