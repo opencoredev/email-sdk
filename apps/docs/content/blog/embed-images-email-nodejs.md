@@ -1,6 +1,6 @@
 ---
 title: "Embed Images in Email from Node.js: CID Inline Attachments"
-description: "Embed images in email from Node.js with CID inline attachments: the cid: reference, Nodemailer's cid field, and the same image through the Resend, SendGrid, Postmark and Mailgun APIs."
+description: "Embed images in Node.js email with CID inline attachments: Nodemailer's cid field and working Resend, SendGrid, Postmark and Mailgun payloads."
 type: blog
 date: 2026-11-27
 lastModified: 2026-11-27
@@ -8,25 +8,29 @@ search:
   tags: ["Attachments", "HTML email", "Node.js"]
 ---
 
-To embed an image in an email from Node.js, attach the image with a Content-ID and point an `<img>` tag at it with `src="cid:<that id>"`. The image travels inside the message, so the email client shows it in the body instead of as a download, and nothing has to be hosted.
+To embed an image in an email from Node.js, attach the image with a Content-ID and point an `<img>` tag at it with `src="cid:<that id>"`. The image travels inside the message, so most email clients show it in the body without fetching anything from a server.
 
-This guide shows the three ways to put an image in an HTML email, the CID method with Nodemailer, and the same message sent through the Resend, SendGrid, Postmark and Mailgun APIs with [Email SDK](/docs). The provider payloads below were checked on 2026-11-27 against `@opencoredev/email-sdk` 3.1.0 with a stubbed `fetch`, so no real email was sent.
+This guide covers the three ways to put an image in an HTML email, the CID method with Nodemailer, and the same message sent through the Resend, SendGrid, Postmark and Mailgun APIs with [Email SDK](/docs). The provider payloads below were checked on 2026-11-27 against `@opencoredev/email-sdk` 3.1.0 with a stubbed `fetch`, so no real email was sent.
 
 ## Which way should you add images to an email?
 
-Link to a hosted image for most marketing and newsletter email, and use a CID inline attachment when the image must show up without the reader clicking "load images" or when you can't host files. Avoid base64 `data:` URIs: some clients, Gmail among them, don't display them.
+Link to a hosted image for most newsletter email, and use a CID inline attachment for small images that must travel with the message, such as a logo on a receipt or a QR code. Avoid base64 `data:` URIs: [Gmail doesn't display them](https://www.caniemail.com/features/image-base64/).
 
 | Method | How it works | Good for | Watch out for |
 | --- | --- | --- | --- |
 | Hosted image | `<img src="https://...">` | Newsletters, large images | Many clients hide remote images until the reader allows them |
-| CID inline attachment | Image attached with a Content-ID, `<img src="cid:logo">` | Logos, receipts, QR codes, signatures | Every image adds to the message size |
-| Base64 `data:` URI | Image bytes inside the `src` attribute | Nothing in email | Not displayed by some clients, Gmail among them |
+| CID inline attachment | Image attached with a Content-ID, `<img src="cid:logo.png">` | Logos, receipts, QR codes, signatures | Every image adds to the message size, and some clients also list it as an attachment |
+| Base64 `data:` URI | Image bytes inside the `src` attribute | Nothing in email | Not displayed in Gmail |
 
-A CID image is a MIME part of the message, usually inside a `multipart/related` section next to the HTML, with a `Content-ID` header and `Content-Disposition: inline`. The client matches `cid:logo` in the HTML to the part whose Content-ID is `logo`. Base64 adds about a third to each image's size in transit, so keep inline images small: a logo or a QR code, not a photo gallery.
+A CID image is a MIME part of the message, usually inside a `multipart/related` section next to the HTML, with a `Content-ID` header and `Content-Disposition: inline`. The client matches `cid:logo.png` in the HTML to the part whose Content-ID is `logo.png`. Base64 encoding adds about a third to each image's size in transit, so keep inline images small: a logo or a QR code, not a photo gallery.
 
 ## Embed an image with Nodemailer
 
-Nodemailer takes the Content-ID in a `cid` field on the attachment:
+Nodemailer takes the Content-ID in a `cid` field on the attachment. Install it and put a real PNG at `./emails/logo.png`:
+
+```bash
+npm install nodemailer
+```
 
 ```ts title="send.ts"
 import nodemailer from "nodemailer";
@@ -47,25 +51,25 @@ await transport.sendMail({
 });
 ```
 
-Nodemailer builds the `multipart/related` part for you. The [Nodemailer embedded images docs](https://nodemailer.com/message/embedded-images) cover the `cid` option in full. This works for any SMTP server. To send the same image through a provider's HTTP API instead, each provider has its own field for the Content-ID.
+Replace the sender and recipient with an address your SMTP server lets you send from and an inbox you can read. Nodemailer builds the `multipart/related` part for you, and the [Nodemailer embedded images docs](https://nodemailer.com/message/embedded-images) cover the `cid` option in full. To send the same image through a provider's HTTP API instead, use that provider's field for the Content-ID.
 
 ## Embed images through an email API
 
-Every major email API accepts inline images, but each names the Content-ID field differently:
+The major email APIs accept inline images, but each names the Content-ID field differently:
 
 | Provider | Field for the Content-ID | Inline marker |
 | --- | --- | --- |
 | [Resend](https://resend.com/docs/dashboard/emails/embed-inline-images) | `content_id` on the attachment | the `content_id` itself |
-| SendGrid | `content_id` | `disposition: "inline"` |
-| [Postmark](https://postmarkapp.com/developer/user-guide/send-email-with-api/send-a-single-email) | `ContentID` | the `ContentID` itself |
+| [SendGrid](https://github.com/twilio/sendgrid-oai/blob/main/spec/yaml/tsg_mail_v3.yaml) | `content_id` | `disposition: "inline"` |
+| [Postmark](https://postmarkapp.com/developer/api/email-api) | `ContentID`, written as `"cid:logo.png"` in Postmark's docs | the `ContentID` itself |
 | [Mailgun](https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/messages/post-v3--domain-name--messages) | none; the file name is the CID | an `inline` form part instead of `attachment` |
-| Amazon SES (v2 API) | `ContentId` | `ContentDisposition: "INLINE"` |
+| [Amazon SES (v2 API)](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_Attachment.html) | `ContentId` | `ContentDisposition: "INLINE"` |
 
-Two of these catch people out. Mailgun has no Content-ID field: you send the image as an `inline` part and reference it by its file name, `cid:logo.png`. Resend [doesn't accept attachments, inline images included, on its batch endpoint](https://resend.com/docs/dashboard/emails/embed-inline-images), so a receipt with a logo has to go through the single-send endpoint.
+Two of these catch people out. Mailgun has no Content-ID field: you send the image as a form part named `inline`, and its file name, `logo.png`, is what the HTML references as `cid:logo.png`. Resend [doesn't accept attachments, inline images included, on its batch endpoint](https://resend.com/docs/dashboard/emails/embed-inline-images), so a receipt with a logo has to go through the single-send endpoint.
 
-## Send one inline image to any provider with Email SDK
+## Send an inline image with Email SDK
 
-[Email SDK](/docs/reference/message) gives every attachment a `contentId` and a `disposition`, and each adapter turns them into its provider's fields. Set `contentId` to the same value as `filename` and the `cid:` reference in your HTML works on Mailgun too.
+[Email SDK](/docs/reference/message) gives every attachment a `contentId` and a `disposition`, and adapters that support inline images turn them into their provider's fields. Set `contentId` to the same value as `filename` so the `cid:` reference also works on Mailgun.
 
 ```bash
 npm install @opencoredev/email-sdk
@@ -100,7 +104,7 @@ await email.send({
 });
 ```
 
-Swap `resend` for another adapter and the message stays the same. This is what each adapter sent for the attachment above in our check (image bytes shortened):
+Use a sender on a domain you verified in Resend and a recipient you can read. With the SendGrid or Mailgun adapter in place of `resend`, the message stays the same. This is what each adapter sent for the attachment above in our check (image bytes shortened):
 
 ```json title="Resend: attachments"
 [{ "filename": "logo.png", "content": "<base64>", "content_type": "image/png", "content_id": "logo.png" }]
@@ -114,13 +118,17 @@ Swap `resend` for another adapter and the message stays the same. This is what e
 [{ "Name": "logo.png", "Content": "<base64>", "ContentType": "image/png", "ContentID": "logo.png" }]
 ```
 
-Mailgun got a multipart form with the image as an `inline` part named `logo.png`. The SMTP adapter passes `contentId` to Nodemailer as `cid`, and the SES, Microsoft Graph, MailerSend, Mailtrap, Lettermint and Cloudflare adapters map it to their own fields too. The [field support table](/docs/adapters/field-support) shows which message fields each adapter supports.
+The SDK passes `contentId` to Postmark unchanged, and Postmark's docs write the `ContentID` with a `cid:` prefix. When Postmark is the adapter, follow their format and set `contentId: "cid:logo.png"`, keeping `src="cid:logo.png"` in the HTML.
 
-Two adapters refuse inline images: Lettr and SendHeron throw an `EmailValidationError` before any request when an attachment has a `contentId` or `disposition: "inline"`, so the image is never dropped without you knowing. Host the image at a public URL for those.
+Mailgun got a multipart form with the image as a part named `inline` and file name `logo.png`. The SMTP adapter passes `contentId` to Nodemailer as `cid`, and the SES, Microsoft Graph, MailerSend, Mailtrap, Lettermint and Cloudflare adapters map it to their own fields as well.
+
+Not every adapter supports inline images. Lettr and SendHeron throw an `EmailValidationError` before any request when an attachment has a `contentId` or `disposition: "inline"`, and the Loops adapter sends the image as a regular attachment without a Content-ID. Check your adapter's page in the [adapter docs](/docs/adapters) before relying on CID images, and host the image at a public URL where they aren't supported.
 
 ## Test that the image is embedded
 
-Send the message to a local SMTP inbox such as Mailpit and open it there. An image that shows in the body with no "load images" prompt is embedded. If it shows up as a separate attachment, the `cid:` value in the HTML and the attachment's Content-ID don't match, often because of a typo, a missing `cid:` prefix in the `src`, or, on Mailgun, a file name that differs from the reference. The [Mailpit guide](/blog/mailpit-mailhog-nodejs) sets up the local inbox and checks messages through its API in a test.
+Send the message to a local SMTP inbox such as Mailpit, then check the raw message, not only how it looks. The HTML part should contain `src="cid:logo.png"` and the image part should carry `Content-ID: <logo.png>` and `Content-Disposition: inline`. Seeing the image in Mailpit's viewer isn't proof on its own, because Mailpit also loads remote images. With the defaults from the [Mailpit guide](/blog/mailpit-mailhog-nodejs), point Nodemailer or Email SDK's SMTP adapter at `127.0.0.1` port `1025` with no auth.
+
+If the image shows up only as an attachment, one common cause is a `cid:` value in the HTML that doesn't match the attachment's Content-ID: a typo, a missing `cid:` prefix in the `src`, or, on Mailgun, a file name that differs from the reference. Clients also differ in how they show inline parts, so send a test to the clients your users actually read mail in.
 
 For unit tests that shouldn't touch SMTP at all, the [memory adapter](/docs/guides/test-email-behavior) records each message, attachments included, so you can assert on `contentId` directly.
 
@@ -132,15 +140,15 @@ CID stands for Content-ID, a MIME header that names one part of an email. `src="
 
 ### Why does my embedded image show up as an attachment?
 
-The client couldn't match the `cid:` reference to an inline part. Check that the `src` value after `cid:` equals the attachment's Content-ID exactly, and that the part is sent as inline. On SendGrid that needs `disposition: "inline"`; on Mailgun it needs the `inline` form part and a reference by file name.
+Usually the client couldn't match the `cid:` reference to an inline part. Check that the value after `cid:` in the `src` equals the attachment's Content-ID exactly and that the part is sent as inline: on SendGrid that needs `disposition: "inline"`, on Mailgun the `inline` form part and a reference by file name. Some clients list inline images as attachments even when the match is right.
 
 ### Can I embed an SVG in an email?
 
-You can attach one, but support for SVG in email clients is poor, so use PNG or JPEG for logos and icons in email.
+Support for SVG varies by email client and by how the SVG is included, so use PNG or JPEG for logos and icons unless you have tested SVG in the clients you send to.
 
 ### Do inline images count against attachment size limits?
 
-Yes. An inline image is an attachment with a different disposition, so it counts toward the provider's message size limit, after base64 encoding.
+Yes. An inline image is an attachment with a different disposition, so it counts toward the provider's message size limit after base64 encoding.
 
 ## Related
 
