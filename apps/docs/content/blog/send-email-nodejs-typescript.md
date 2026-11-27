@@ -226,6 +226,7 @@ With plain Nodemailer, `nodemailer.createTransport({ jsonTransport: true })` ret
 - [Migrate from Nodemailer](/docs/guides/migrate/nodemailer): move existing Nodemailer code to Email SDK and keep SMTP.
 - [SMTP adapter reference](/docs/adapters/smtp): host, port, TLS and authentication options.
 - [MailHog and Mailpit](/blog/mailpit-mailhog-nodejs): a local SMTP inbox and REST API checks for email tests.
+- [Embed images in email](/blog/embed-images-email-nodejs): CID inline attachments with Nodemailer and provider APIs.
 - [Resend SMTP settings](/blog/resend-smtp-nodejs): Nodemailer pointed at Resend's SMTP server.
 - [Resend API guide](/blog/resend-api-nodejs-typescript) and [Mailgun API guide](/blog/mailgun-api-nodejs-typescript): raw HTTP API walkthroughs.
 - [Compare email providers](/compare): field support and code for each provider pair.
