@@ -85,6 +85,7 @@ Longer walkthroughs on the [Email SDK blog](https://email-sdk.dev/blog):
 - [Resend alternatives for developers](https://email-sdk.dev/blog/resend-alternatives)
 - [Postmark alternatives for developers](https://email-sdk.dev/blog/postmark-alternatives)
 - [MailHog and Mailpit: test email locally in Node.js](https://email-sdk.dev/blog/mailpit-mailhog-nodejs)
+- [Embed images in email from Node.js](https://email-sdk.dev/blog/embed-images-email-nodejs)
 - [Send email from a Next.js server action](https://email-sdk.dev/blog/nextjs-server-action-send-email)
 
 ## Telemetry

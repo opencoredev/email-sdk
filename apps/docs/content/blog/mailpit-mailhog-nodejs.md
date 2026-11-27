@@ -267,5 +267,6 @@ Start it with `--enable-chaos` and set a trigger, for example `{"Recipient": {"E
 
 - [Test email sending without sending real email](/docs/guides/test-email-behavior): the memory adapter, failing adapters and the capture plugin.
 - [How to send email from Node.js and TypeScript](/blog/send-email-nodejs-typescript): SMTP, HTTP APIs and one client for any provider.
+- [Embed images in email from Node.js](/blog/embed-images-email-nodejs): CID inline attachments and how to check them in Mailpit.
 - [SMTP adapter reference](/docs/adapters/smtp): host, port, TLS and authentication options.
 - [Migrate from Nodemailer](/docs/guides/migrate/nodemailer): keep SMTP and add provider APIs and fallback.

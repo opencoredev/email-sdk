@@ -1,7 +1,7 @@
 ---
 title: Message reference
 description: Exact v1 address, envelope, body, header, attachment, metadata, tag, and schedule types.
-lastModified: 2026-09-24
+lastModified: 2026-11-27
 ---
 
 ## `EmailMessage`
@@ -67,6 +67,8 @@ type EmailAttachment = {
 ```
 
 Exactly one source is required. String content is raw by default and is encoded by adapters that require Base64. `path` is server-side filesystem input.
+
+To show an image in the HTML body, set `contentId` and `disposition: "inline"` and reference it as `<img src="cid:...">`; [Embed images in email from Node.js](/blog/embed-images-email-nodejs) shows the payload each provider receives.
 
 ## Tags and metadata
 
