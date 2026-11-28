@@ -136,11 +136,11 @@ export const comparePairs: ComparePair[] = [
     slug: "resend-vs-mailgun",
     a: "resend",
     b: "mailgun",
-    lastmod: "2026-11-15",
+    lastmod: "2026-11-27",
     search: {
-      title: "Resend vs Mailgun: Which Email API Should Developers Use?",
+      title: "Resend vs Mailgun: Which Email API Is Better for Developers?",
       description:
-        "Resend vs Mailgun for developers: a short verdict, side-by-side message field support, and the same TypeScript send code for both providers.",
+        "Resend vs Mailgun for developers: when Resend's simple API and React Email win, when Mailgun's metadata and inbound Routes matter. Fields and code compared.",
       verdict:
         'Pick Resend for a small, modern outbound API with React Email templates and a fast first send. Pick Mailgun when you need per-message metadata or its mature routing and inbound parsing. Both support CC, BCC, custom headers, attachments, tags and scheduled sending, so Email SDK\'s field checks pass a Resend-to-Mailgun fallback for any message, and Mailgun-to-Resend for messages without metadata or repeated header names. Falling back after a failed request also needs onUnknownDelivery: "continue", which can send a duplicate.',
     },
@@ -197,11 +197,11 @@ export const comparePairs: ComparePair[] = [
     slug: "postmark-vs-mailgun",
     a: "postmark",
     b: "mailgun",
-    lastmod: "2026-11-26",
+    lastmod: "2026-11-27",
     search: {
-      title: "Postmark vs Mailgun: Which Email API for Developers?",
+      title: "Postmark vs Mailgun: Which Transactional Email API to Pick?",
       description:
-        "Postmark vs Mailgun for transactional email: a short verdict, side-by-side message field support, and one TypeScript send call that works with either API.",
+        "Postmark vs Mailgun: when Postmark's message streams and default 45-day history win, when Mailgun's Routes, EU region and scheduling matter. Code included.",
       verdict:
         'Pick Postmark for transactional-only mail with separate message streams and 45 days of message history. Pick Mailgun for inbound routing, EU region hosting, scheduled sending and native batch personalization. Both support metadata and repeated header names, so Email SDK\'s field checks pass a Postmark-to-Mailgun fallback for any message, and Mailgun-to-Postmark for messages with no sendAt and at most one tag (Postmark accepts one). Falling back when delivery is unknown also needs onUnknownDelivery: "continue", which can send a duplicate.',
     },
@@ -242,11 +242,11 @@ export const comparePairs: ComparePair[] = [
     slug: "sendgrid-vs-ses",
     a: "sendgrid",
     b: "ses",
-    lastmod: "2026-11-23",
+    lastmod: "2026-11-27",
     search: {
-      title: "SendGrid vs Amazon SES: Which Email API Fits Your App?",
+      title: "SendGrid vs AWS SES: Which Email Service Should You Use?",
       description:
-        "SendGrid vs Amazon SES (AWS SES) compared: price model, what each platform bundles, message field support, and one TypeScript send call for both.",
+        "SendGrid vs AWS SES: SES costs less per email at comparable volumes; SendGrid adds a dynamic template editor. Field support, fallback and code compared.",
       verdict:
         "Pick Amazon SES if you are on AWS and want the lowest cost per message, and can handle deliverability yourself. Pick SendGrid if you want templates, analytics and marketing email bundled in one product and accept a higher per-message price. SendGrid supports per-message metadata and scheduled sending and SES supports neither, so a SendGrid-to-SES fallback only works for messages that skip both.",
     },
