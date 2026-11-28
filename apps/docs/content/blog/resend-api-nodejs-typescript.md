@@ -5,7 +5,7 @@ seo:
   title: "Resend API in Node.js: Send, Schedule and Batch Email"
 type: blog
 date: 2026-10-29
-lastModified: 2026-11-12
+lastModified: 2026-11-27
 search:
   tags: ["Resend", "Node.js", "TypeScript"]
 ---

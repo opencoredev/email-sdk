@@ -5,7 +5,7 @@ seo:
   title: "SendGrid API in Node.js: v3 Mail Send Setup and Code"
 type: blog
 date: 2026-11-03
-lastModified: 2026-11-23
+lastModified: 2026-11-27
 search:
   tags: ["SendGrid", "Node.js", "TypeScript"]
 ---
