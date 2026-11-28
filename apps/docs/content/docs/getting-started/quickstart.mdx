@@ -8,6 +8,8 @@ Install the package:
 
 <PackageInstallTabs />
 
+No provider account yet? [Send to the memory adapter](#no-provider-account-yet) first; it needs no API key.
+
 Set a server-only Resend key:
 
 ```bash title=".env.local"
@@ -48,6 +50,32 @@ npx tsx --env-file=.env.local src/send-welcome.ts
 
 That is the whole happy path. The result tells you which adapter ran and includes the provider receipt when one is available.
 
+## No provider account yet?
+
+Use `memoryAdapter()` from `@opencoredev/email-sdk/testing`. It keeps each message in memory and never calls a provider, so this script runs without an account or API key. The SDK sends anonymous usage telemetry by default; `telemetry: false` turns it off, so the run makes no network requests.
+
+```ts title="src/try-email.ts"
+import { createEmailClient } from "@opencoredev/email-sdk";
+import { memoryAdapter } from "@opencoredev/email-sdk/testing";
+
+const memory = memoryAdapter();
+const email = createEmailClient({ adapters: [memory], telemetry: false });
+
+const result = await email.send({
+  from: "Acme <hello@acme.com>",
+  to: "user@example.com",
+  subject: "Welcome",
+  text: "Your account is ready.",
+});
+
+console.log(result.adapter, result.id);
+console.log(memory.raw?.sent[0]?.message);
+```
+
+Run it with `bun src/try-email.ts` or `npx tsx src/try-email.ts` (the same `"type": "module"` note applies). It prints `memory mem_1`, then the message it captured.
+
+`memory.raw.sent` holds one `{ message, response }` entry per send, in order. `raw` is optional on the shared adapter type, so TypeScript needs `memory.raw?.sent`; a memory adapter always sets it. When you have a provider key, swap `memoryAdapter()` for that provider's adapter. The `send` call stays the same.
+
 ## Check a message without sending
 
 Use `validate` when you want the same message and routing checks without a provider send request:
@@ -81,7 +109,7 @@ Sending from a Next.js form? See [Send email from a Next.js server action](/blog
   title="Standalone starter"
   href="https://github.com/opencoredev/email-sdk/tree/main/packages/email-sdk/examples/first-send"
 >
-  A runnable copy of this page for Node 20+ or Bun, with .env loading.
+  A runnable copy of this page for Node 20+ or Bun, on GitHub. By default it only validates the message, so it needs no API key and makes no request to Resend. It sends only with `--send`, a real `RESEND_API_KEY`, and your own `EMAIL_FROM` and `EMAIL_TO`.
 </Card>
 <Card title="Add retries and fallback" href="/docs/concepts/fallbacks-and-retries">
   Choose retry counts and unknown-delivery policy deliberately.
