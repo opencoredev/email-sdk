@@ -1,6 +1,6 @@
 ---
 title: "SendGrid API Guide for Node.js and TypeScript"
-description: "Set up the Twilio SendGrid v3 API in Node.js: create an API key, send with fetch in TypeScript, and add templates, scheduled sends, rate limits and webhooks."
+description: "Set up the Twilio SendGrid v3 API in Node.js: an API key, a fetch send in TypeScript, templates, scheduled sends, rate limit handling and signed webhooks."
 seo:
   title: "SendGrid API in Node.js: v3 Mail Send Setup and Code"
 type: blog

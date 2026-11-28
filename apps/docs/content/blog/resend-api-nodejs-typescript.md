@@ -1,6 +1,6 @@
 ---
 title: "Resend API Guide for Node.js and TypeScript"
-description: "Send email with the Resend API from Node.js and TypeScript: fetch code for API keys, attachments, scheduling up to 30 days ahead, batches of 100 and webhooks."
+description: "Use the Resend API from Node.js and TypeScript: fetch examples for sending and attachments, plus scheduling up to 30 days ahead, batches of 100 and webhooks."
 seo:
   title: "Resend API in Node.js: Send, Schedule and Batch Email"
 type: blog
