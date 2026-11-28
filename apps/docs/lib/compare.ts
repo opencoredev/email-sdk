@@ -246,7 +246,7 @@ export const comparePairs: ComparePair[] = [
     search: {
       title: "SendGrid vs AWS SES: Which Email Service Should You Use?",
       description:
-        "SendGrid vs AWS SES: SES costs less per email at comparable volumes; SendGrid adds dynamic templates and analytics in its UI. Field support and code compared.",
+        "SendGrid vs AWS SES: SES costs less per email at comparable volumes; SendGrid adds a dynamic template editor. Field support, fallback and code compared.",
       verdict:
         "Pick Amazon SES if you are on AWS and want the lowest cost per message, and can handle deliverability yourself. Pick SendGrid if you want templates, analytics and marketing email bundled in one product and accept a higher per-message price. SendGrid supports per-message metadata and scheduled sending and SES supports neither, so a SendGrid-to-SES fallback only works for messages that skip both.",
     },
